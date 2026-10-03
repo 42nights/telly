@@ -1,6 +1,8 @@
 # health
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Router, Hono, and more.
+The health app: web HUD and family dashboard, Expo phone app, and a Node server (Hono for HTTP, Effect 4 for service logic). The plan is [`docs/plan.md`](../docs/plan.md); work is coordinated through GitHub issues as described in [`CONTRIBUTING.md`](CONTRIBUTING.md). Every feature works without glasses.
+
+This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack) 3.44.2 (`--frontend tanstack-router native-bare --backend hono --runtime node --addons biome --package-manager bun`), then extended with shared contracts, Effect, and the CI gates.
 
 ## Features
 
@@ -29,8 +31,10 @@ bun run dev
 ```
 
 Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-Use the Expo Go app to run the mobile application.
-The API is running at [http://localhost:3000](http://localhost:3000).
+Use the Expo Go app to run the mobile application. On a physical phone, set `EXPO_PUBLIC_SERVER_URL` in `apps/native/.env` to your computer's LAN address (for example `http://192.168.1.20:3000`), and start the server with `HOST=0.0.0.0`.
+The API is running at [http://localhost:3000](http://localhost:3000): `GET /health` and `GET /api/sources`.
+
+The NOOP-to-server connection is a stub: `GET /api/sources` reports NOOP as `not_connected`, and the clients show "NOOP not connected". It never returns readings or WHOOP-based nudges.
 
 ## UI Customization
 
@@ -79,10 +83,14 @@ health/
 ├── apps/
 │   ├── web/         # Frontend application (React + TanStack Router)
 │   ├── native/      # Mobile application (React Native, Expo)
-│   └── server/      # Backend API (Hono)
+│   └── server/      # Backend API (Hono + Effect); src/integrations/noop.ts is the NOOP stub
 ├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
+│   ├── contracts/   # Effect Schema API contracts, shared by every app
+│   ├── config/      # Strict shared TypeScript configuration
+│   ├── ui/          # Shared shadcn/ui components and styles (web only)
 ```
+
+Clients import only `@health/contracts` (and the web app `@health/ui`). Only the server may import database code. Fallow and Sentrux enforce these boundaries in CI.
 
 ## Available Scripts
 
@@ -92,4 +100,9 @@ health/
 - `bun run dev:server`: Start only the server
 - `bun run check-types`: Check TypeScript types across all apps
 - `bun run dev:native`: Start the React Native/Expo development server
-- `bun run check`: Run Biome formatting and linting
+- `bun run check`: Run Biome formatting and linting (writes fixes)
+- `bun run lint`: Biome in CI mode (no writes)
+- `bun run test`: Behavior tests (`bun test`)
+- `bun run smoke`: Run the built server under Node and check its real responses (run `bun run --filter server build` first)
+- `bun run check:quality`: Fallow (unused code, duplication, complexity, import boundaries)
+- `bun run check:structure`: Sentrux rules and regression gate (needs the `sentrux` binary)

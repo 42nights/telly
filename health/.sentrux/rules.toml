@@ -1,0 +1,21 @@
+# Structural rules for the health app. `sentrux check .` enforces them; `sentrux gate .`
+# compares against the committed baseline (.sentrux/baseline.json) and fails on regression.
+# Move the baseline only in a reviewed commit (`sentrux gate --save .`), never to make a red check pass.
+[constraints]
+max_cycles = 0
+no_god_files = true
+
+[[boundaries]]
+from = "apps/web/**"
+to = "packages/db/**"
+reason = "Clients never import database code"
+
+[[boundaries]]
+from = "apps/native/**"
+to = "packages/db/**"
+reason = "Clients never import database code"
+
+[[boundaries]]
+from = "packages/contracts/**"
+to = "apps/**"
+reason = "Contracts import no application code"

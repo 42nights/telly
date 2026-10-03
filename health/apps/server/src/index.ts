@@ -1,32 +1,29 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { logger } from "hono/logger";
-
+import { NodeRuntime } from "@effect/platform-node";
+import { type ServerType, serve } from "@hono/node-server";
+import { Effect, Layer } from "effect";
+import { createApp } from "./app";
 import { ENV } from "./env.server";
 
-const app = new Hono();
+const listen = (port: number) =>
+	Effect.callback<ServerType, Error>((resume) => {
+		const app = createApp(ENV.CORS_ORIGIN);
+		const server = serve({ fetch: app.fetch, hostname: ENV.HOST, port }, () =>
+			resume(Effect.succeed(server)),
+		);
+		server.once("error", (error) => resume(Effect.fail(error)));
+	});
 
-app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: ENV.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
-  }),
+const close = (server: ServerType) =>
+	Effect.callback<void>((resume) => {
+		server.close(() => resume(Effect.void));
+	});
+
+// The server is a scoped resource: SIGINT/SIGTERM interrupt the layer, which closes the listener.
+const HttpServer = Layer.effectDiscard(
+	Effect.gen(function* () {
+		yield* Effect.acquireRelease(listen(ENV.PORT), close);
+		yield* Effect.log(`server listening on http://${ENV.HOST}:${ENV.PORT}`);
+	}),
 );
 
-app.get("/", (c) => {
-  return c.text("OK");
-});
-
-import { serve } from "@hono/node-server";
-
-serve(
-  {
-    fetch: app.fetch,
-    port: 3000,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-  },
-);
+NodeRuntime.runMain(Layer.launch(HttpServer));

@@ -1,3 +1,3 @@
 {
-  "extends": "@health/config/tsconfig.base.json"
+	"extends": "@health/config/tsconfig.base.json"
 }
