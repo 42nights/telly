@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Health glasses · hackathon board</title>
+<style>
+  :root {
+    --bg: #f6f6f3; --card: #ffffff; --ink: #18181b; --muted: #74747c; --line: #d6d6d2;
+    --soft: #eeeeea; --accent: #5048e5; --warn: #d9480f;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111113; --card: #1a1a1d; --ink: #f2f2f3; --muted: #a0a0a8; --line: #3a3a40;
+            --soft: #26262a; --accent: #8f8af7; --warn: #ff8a50; }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  body { margin: 0; }
+  main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  svg { display: block; width: 100%; height: auto; }
+
+  header.hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
+  .mark { width: 64px; height: 64px; flex: none; color: var(--accent); }
+  .hero h1 { font-family: var(--serif); font-size: 56px; font-weight: 500; margin: 0; letter-spacing: -0.01em; line-height: 1; }
+  .hero .tag { color: var(--muted); font-size: 18px; margin: 6px 0 0; }
+  .chip { display: inline-block; font: 12px var(--sans); padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); vertical-align: middle; }
+  .chip.acc { color: var(--accent); border-color: var(--accent); }
+  nav { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 8px; }
+  nav a { color: var(--ink); text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 99px; background: var(--soft); }
+  nav a:hover { background: var(--line); }
+
+  section { margin-top: 64px; }
+  .sh { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .sh .no { font-family: var(--serif); color: var(--accent); font-size: 22px; }
+  .sh h2 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .sh p { margin: 0; color: var(--muted); font-size: 14px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 14px; }
+  .legend i { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--muted); vertical-align: middle; margin-right: 6px; }
+  .legend i.d { border-top-style: dashed; }
+  .legend i.w { border-top-color: var(--warn); }
+  .legend b { color: var(--accent); font-weight: 600; }
+
+  /* names */
+  .names { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .name { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; position: relative; }
+  .name.rec { border: 2px solid var(--accent); }
+  .name .n { font-family: var(--serif); font-size: 34px; line-height: 1.1; }
+  .name .say { color: var(--muted); font-size: 12px; letter-spacing: .04em; }
+  .name .why { margin-top: 12px; font-size: 14px; }
+  .name .myth { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .name .badge { position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 600; color: var(--card); background: var(--accent); padding: 3px 9px; border-radius: 99px; }
+
+  /* flows */
+  .flows { display: grid; gap: 10px; }
+  .flow { display: grid; grid-template-columns: 210px 1fr; gap: 18px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; }
+  .flow h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .flow .own { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  /* wireframes */
+  .wf-grid { display: grid; grid-template-columns: 0.72fr 1.5fr 1fr; gap: 14px; margin-top: 14px; align-items: start; }
+  .wf { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .wf h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+  .wf h3 span { color: var(--muted); font-weight: 400; }
+  .callouts { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .callouts b { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 50%; background: var(--ink); color: var(--card); font-size: 11px; margin-right: 6px; }
+  .integrations { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 18px; }
+  .integration { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--card); }
+  .integration strong { color: var(--accent); font-size: 14px; }
+  .integration p { margin: 6px 0 0; font-size: 13px; line-height: 1.45; }
+  .settled { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+  details.stack-notes { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  details.stack-notes summary { cursor: pointer; font-weight: 600; }
+  details.stack-notes p { font-size: 13px; line-height: 1.5; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+  .sources a, .integration a, .stack-notes a { color: var(--accent); }
+  #repo-tree { overflow-x: auto; }
+  #repo-tree pre { white-space: pre; overflow-wrap: normal; }
+
+  /* svg classes */
+  .n  { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .nd { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 8 7; }
+  .rg { fill: var(--soft); stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 5; }
+  .cp { fill: var(--soft); }
+  .t  { fill: var(--ink); font: 600 15px var(--sans); }
+  .s  { fill: var(--muted); font: 12px var(--sans); }
+  .c  { fill: var(--ink); font: 12.5px var(--sans); }
+  .sp { fill: var(--accent); font-weight: 600; }
+  .cl { fill: var(--muted); font: 600 11px var(--sans); letter-spacing: .14em; }
+  .e  { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+  .ew { fill: none; stroke: var(--warn); stroke-width: 2; }
+  .el { fill: var(--muted); font: 11px var(--sans); }
+  .elw { fill: var(--warn); font: 600 11px var(--sans); }
+  .ah { fill: var(--muted); }
+  .ahw { fill: var(--warn); }
+  /* wireframe strokes: grayscale only */
+  .wf-f { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+  .wf-l { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .wf-k { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+  .wf-s { fill: var(--soft); }
+  .wf-m { fill: var(--muted); }
+  .wf-i { fill: var(--ink); }
+  .wf-t { fill: var(--ink); font: 13px var(--sans); }
+  .wf-b { fill: var(--ink); font: 600 14px var(--sans); }
+  .wf-x { fill: var(--muted); font: 11px var(--sans); }
+  .wf-v { fill: var(--ink); font: 600 18px var(--sans); }
+  .wf-inv { fill: var(--card); font: 600 12px var(--sans); }
+  .hatch { stroke: var(--ink); stroke-width: 2; }
+
+  @media (max-width: 960px) {
+    .names { grid-template-columns: 1fr 1fr; }
+    .wf-grid { grid-template-columns: 1fr 1fr; }
+    .wf-grid .wf:nth-child(2) { grid-column: 1 / -1; order: 3; }
+  }
+  @media (max-width: 640px) {
+    main { padding: 24px 14px 60px; }
+    .hero h1 { font-size: 42px; }
+    .names, .wf-grid { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: 1fr; }
+    .panel { padding: 14px; }
+    .panel, .flow, #wf-hud { overflow-x: auto; }
+    #system svg, #team svg, #stack svg, #keys svg, #quality-flow svg { min-width: 860px; }
+    .flow svg { min-width: 720px; }
+    #wf-hud svg { min-width: 620px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header class="hero">
+  <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="18" cy="34" r="12" fill="none" stroke="currentColor" stroke-width="3.5"/>
+    <circle cx="46" cy="34" r="12" fill="none" stroke="currentColor" stroke-width="3.5"/>
+    <path d="M30 32 q2 -4 4 0" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="46" cy="34" r="3.5" fill="currentColor"/>
+  </svg>
+  <div>
+    <h1>Health glasses <span class="chip acc">name later</span></h1>
+    <p class="tag">Every feature without glasses. An optional display, not a dependency.</p>
+    <p class="tag" style="font-size:14px">Static archive of the approved planning board. Implementation is tracked in GitHub issues; see docs/plan.md.</p>
+  </div>
+</header>
+<nav>
+  <a href="#name">Name</a><a href="#system">System</a><a href="#flows">Flows</a>
+  <a href="#screens">Screens</a><a href="#team">Team</a><a href="#stack">Stack</a><a href="#files">Files</a><a href="#checks">Checks</a><a href="#keys">Keys</a><a href="#decide">Decide</a>
+</nav>
+
+<!-- 01 NAME -->
+<section id="name">
+  <div class="sh"><span class="no">01</span><h2>Name · later</h2><p>Shortlist only. No name selected.</p></div>
+  <div class="names">
+    <div class="name rec" id="name-mnemo"><span class="badge">Idea</span>
+      <div class="n">Mnemo</div><div class="say">NEE-mo</div>
+      <div class="why">Memory assist. Mother of the Muses.</div>
+      <div class="myth">from Mnemosyne, memory</div></div>
+    <div class="name" id="name-iris">
+      <div class="n">Iris</div><div class="say">EYE-ris</div>
+      <div class="why">The eye + the messenger.</div>
+      <div class="myth">common name, crowded</div></div>
+    <div class="name" id="name-vesta">
+      <div class="n">Vesta</div><div class="say">VES-tuh</div>
+      <div class="why">Care that stays home.</div>
+      <div class="myth">goddess of the hearth</div></div>
+    <div class="name" id="name-theia">
+      <div class="n">Theia</div><div class="say">THAY-uh</div>
+      <div class="why">Sees the room for you.</div>
+      <div class="myth">goddess of sight</div></div>
+    <div class="name" id="name-aegle">
+      <div class="n">Aegle</div><div class="say">EE-glee</div>
+      <div class="why">Health, in a glow.</div>
+      <div class="myth">goddess of radiant health</div></div>
+    <div class="name" id="name-argus">
+      <div class="n">Argus</div><div class="say">AR-gus</div>
+      <div class="why">Watches over, never sleeps.</div>
+      <div class="myth">hundred-eyed guard · feels watchful</div></div>
+  </div>
+</section>
+
+<!-- 02 SYSTEM -->
+<section id="system">
+  <div class="sh"><span class="no">02</span><h2>System</h2><p>Phone + web first. Optional glasses. Cloud computation.</p></div>
+  <div class="panel">
+  <svg viewBox="0 0 1170 760" role="img" aria-labelledby="sys-title">
+    <title id="sys-title">System diagram</title>
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker>
+      <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahw" d="M0 0 L10 5 L0 10 z"/></marker>
+    </defs>
+
+    <text class="cl" x="30" y="34">HOME</text>
+    <text class="cl" x="380" y="34">PHONE / ADAPTERS</text>
+    <text class="cl" x="990" y="34">PEOPLE</text>
+
+    <!-- glasses -->
+    <g id="sys-glasses"><title>Optional glasses input and display; the phone and web work without pairing or a DAT session</title>
+      <rect class="n" x="30" y="60" width="300" height="210" rx="16"/>
+      <text class="t" x="50" y="86">Optional glasses</text>
+      <text class="s" x="50" y="103">Meta Ray-Ban Display · DAT 1.0 target</text>
+      <rect class="cp" x="50" y="112" width="260" height="28" rx="14"/><text class="c" x="64" y="131">camera · microphone · motion</text>
+      <rect class="cp" x="50" y="150" width="260" height="28" rx="14"/><text class="c" x="64" y="169">600 × 600 display · AR fit to verify</text>
+      <rect class="cp" x="50" y="188" width="260" height="28" rx="14"/><text class="c" x="64" y="207">speaker · multilingual replies</text>
+      <rect class="cp" x="50" y="226" width="260" height="28" rx="14"/><text class="c" x="64" y="245">No Gemma / Gemini on the glasses</text>
+    </g>
+    <g id="sys-whoop"><title>WHOOP band</title>
+      <rect class="n" x="30" y="330" width="300" height="80" rx="16"/>
+      <text class="t" x="50" y="364"><tspan class="sp">WHOOP</tspan> band</text>
+      <text class="s" x="50" y="384">External connector · friend-owned</text>
+    </g>
+
+    <!-- phone -->
+    <g id="sys-phone"><title>The phone provides camera, microphone, sensors, screen, and audio without glasses; the web uses the same services</title>
+      <rect class="n" x="380" y="70" width="220" height="200" rx="16"/>
+      <text class="t" x="400" y="104">Phone app</text>
+      <text class="s" x="400" y="128">Camera · microphone</text>
+      <text class="s" x="400" y="152">Screen markers · audio</text>
+      <text class="s" x="400" y="176">Phone sensor inputs</text>
+      <text class="s" x="400" y="200">No pairing required</text>
+      <text class="s" x="400" y="224">Web: same cloud services</text>
+      <text class="s" x="400" y="248">DAT: optional adapter</text>
+    </g>
+    <g id="sys-healthkit"><title>Preserve the existing NOOP application; stub only its connection to the new server</title>
+      <rect class="n" x="380" y="330" width="220" height="80" rx="16"/>
+      <text class="t" x="400" y="358">NOOP · friend-owned</text>
+      <text class="s" x="400" y="380">Existing source preserved</text>
+      <text class="s" x="400" y="398">Server connection stubbed</text>
+    </g>
+    <g id="sys-noop-stub"><title>Server-side NOOP connection adapter only: not connected, no transport, no ingestion; the rest of the server remains real</title>
+      <rect class="n" x="380" y="440" width="220" height="78" rx="16"/>
+      <text class="t" x="400" y="470">Server link stub</text>
+      <text class="s" x="400" y="494">Not connected · no I/O</text>
+    </g>
+
+    <!-- cloud -->
+    <rect class="rg" x="628" y="46" width="296" height="682" rx="18"/>
+    <text class="cl" x="652" y="34">CLOUD SERVICES</text>
+    <g id="sys-store"><title>Health data store</title>
+      <rect class="n" x="652" y="70" width="256" height="66" rx="14"/>
+      <text class="t" x="670" y="98">Health data</text>
+      <text class="s" x="670" y="118"><tspan class="sp">SpacetimeDB</tspan> · selected store</text>
+    </g>
+    <g id="sys-rules"><title>Threshold rules that raise family alerts</title>
+      <rect class="n" x="652" y="176" width="256" height="58" rx="14"/>
+      <text class="t" x="670" y="201">Threshold rules</text>
+      <text class="s" x="670" y="220">fall · breath · heart</text>
+    </g>
+    <g id="sys-muse"><title>Grokbot runs family agents; Fetch.ai routes agent requests; Muse carries family messages</title>
+      <rect class="n" x="652" y="270" width="256" height="76" rx="14"/>
+      <text class="t" x="670" y="296"><tspan class="sp">Grokbot</tspan> family agents</text>
+      <text class="s" x="670" y="316"><tspan class="sp">Fetch.ai</tspan> Agentverse · required</text>
+      <text class="s" x="670" y="334"><tspan class="sp">Muse</tspan> messages · Grokbot replies</text>
+    </g>
+    <g id="sys-lab"><title>Lab report generator</title>
+      <rect class="n" x="652" y="372" width="256" height="66" rx="14"/>
+      <text class="t" x="670" y="400">Lab report gen</text>
+      <text class="s" x="670" y="420">fillable template</text>
+    </g>
+    <g id="sys-models"><title>Cloud inference services; no models execute on Ray-Ban glasses</title>
+      <rect class="n" x="652" y="476" width="256" height="86" rx="14"/>
+      <text class="t" x="670" y="500">Cloud inference</text>
+      <text class="s" x="670" y="522"><tspan class="sp">Gemma</tspan> cues · <tspan class="sp">Gemini</tspan> vision</text>
+      <text class="s" x="670" y="542"><tspan class="sp">ElevenLabs</tspan> voice · required</text>
+    </g>
+    <g id="sys-training"><title>Train Gemma on River AI, then deploy the model to cloud inference</title>
+      <rect class="n" x="652" y="618" width="256" height="70" rx="14"/>
+      <text class="t" x="670" y="646"><tspan class="sp">River AI</tspan> training</text>
+      <text class="s" x="670" y="668">Gemma 3B post-train · J + A</text>
+      <path class="e" d="M780 616 V564" marker-end="url(#ah)"/>
+    </g>
+
+    <!-- people -->
+    <g id="sys-family"><title>Family: phone app and web dashboard</title>
+      <rect class="n" x="990" y="70" width="160" height="164" rx="16"/>
+      <text class="t" x="1008" y="98">Family</text>
+      <text class="s" x="1008" y="120">phone app</text>
+      <text class="s" x="1008" y="138">web dashboard</text>
+      <text class="s" x="1008" y="160">any time zone</text>
+    </g>
+    <g id="sys-finch"><title>Proposed Finchnode report handoff; verify the API before using patient data</title>
+      <rect class="n" x="990" y="372" width="160" height="66" rx="14"/>
+      <text class="t" x="1008" y="400"><tspan class="sp">Finchnode</tspan></text>
+      <text class="s" x="1008" y="420">report handoff</text>
+    </g>
+    <g id="sys-hospital"><title>Hospital</title>
+      <rect class="n" x="990" y="476" width="160" height="66" rx="14"/>
+      <text class="t" x="1008" y="514">Hospital</text>
+    </g>
+
+    <!-- edges -->
+    <g id="edge-glasses-phone"><title>Optional DAT path; disconnecting glasses must not interrupt the phone or cloud</title>
+      <path class="e" d="M332 125 H378" stroke-dasharray="5 5" marker-start="url(#ah)" marker-end="url(#ah)"/></g>
+    <path id="edge-whoop-hk" class="e" d="M332 370 H378" stroke-dasharray="5 5" marker-end="url(#ah)"><title>External WHOOP connection handled by the friend, not this implementation</title></path>
+    <path id="edge-noop-stub" class="e" d="M490 412 V438" stroke-dasharray="4 4" marker-end="url(#ah)"><title>Stub boundary only; no live NOOP-to-server transport</title></path>
+    <text class="s" x="510" y="430">stub only</text>
+    <path id="edge-phone-models" class="e" d="M600 145 H608 V520 H650" marker-start="url(#ah)" marker-end="url(#ah)"><title>Phone sends inputs to cloud inference and receives results</title></path>
+    <path id="edge-phone-store" class="e" d="M602 100 H650" marker-start="url(#ah)" marker-end="url(#ah)"><title>Sync vitals up, nudges down</title></path>
+    <g id="edge-bus"><title>Data store feeds rules, agent and lab reports</title>
+      <path class="e" d="M652 125 H642 V405"/>
+      <path class="e" d="M642 205 H650" marker-end="url(#ah)"/>
+      <path class="e" d="M642 303 H650" marker-end="url(#ah)"/>
+      <path class="e" d="M642 405 H650" marker-end="url(#ah)"/></g>
+    <g id="edge-alert"><title>Alert pushed to family</title>
+      <path class="ew" d="M910 205 H988" marker-end="url(#ahw)"/><text class="elw" x="949" y="197" text-anchor="middle">alert</text></g>
+    <g id="edge-ask"><title>Family asks Grokbot agents through Muse; agents use data tools through Fetch.ai</title>
+      <path class="e" d="M910 303 H1070 V236" marker-start="url(#ah)" marker-end="url(#ah)"/><text class="el" x="985" y="295" text-anchor="middle">ask · answer</text></g>
+    <g id="edge-report"><title>Report to Finchnode</title>
+      <path class="e" d="M910 405 H988" marker-end="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">report</text></g>
+    <path id="edge-hospital" class="e" d="M1070 440 V474" marker-end="url(#ah)"><title>Finchnode to hospital</title></path>
+  </svg>
+  <div class="legend"><span><b>Blue</b> = sponsor / tool</span><span><i></i>data</span><span><i class="w"></i>alert</span><span>Proposed service boundaries; verify APIs and device access.</span></div>
+  </div>
+  <div class="sh" style="margin-top:24px"><h2>Why each integration exists</h2><p>Concrete roles, not prize-only additions.</p></div>
+  <div class="integrations" id="integration-reasons">
+    <div class="integration"><strong>River AI</strong><p>Train Gemma on health-cue examples. Deploy the resulting model for inference.</p></div>
+    <div class="integration"><strong>Gemma 3B</strong><p>Turn health context into a bounded cue, such as a walk reminder.</p></div>
+    <div class="integration"><strong>Grokbot · agent runtime</strong><p>Answer family questions with data tools. Coordinate report and notification actions.</p></div>
+    <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Grokbot calls these tools for family questions.</p></div>
+    <div class="integration"><strong>Muse</strong><p>Carry family questions, replies, and alerts. Grokbot supplies the agent behavior.</p></div>
+    <div class="integration"><strong>Gemini vision</strong><p>Locate the medicine box in the current frame. Draw its marker without a 3D map.</p></div>
+    <div class="integration"><strong>ElevenLabs · required</strong><p>Speak reminders and agent replies in the user's language.</p></div>
+    <div class="integration"><strong>NOOP → server · stub only</strong><p>Preserve NOOP itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
+    <div class="integration"><strong>HealthKit · conditional bridge</strong><p>Aggregate other phone health sources. Do not force WHOOP through this bridge.</p></div>
+    <div class="integration"><strong>Tiger Data · not selected</strong><p>Alternative for historical health analytics. No second store in the selected demo.</p></div>
+    <div class="integration"><strong>SpacetimeDB · selected</strong><p>Store health samples and sync alerts, messages, and acknowledgements.</p></div>
+    <div class="integration"><strong>Finchnode</strong><p>Hand an approved report to the hospital. Validate the API with synthetic data first.</p></div>
+    <div class="integration"><strong>3D home map · not required</strong><p>Optional future room navigation. The current demo has no map dependency.</p></div>
+    <div class="integration"><strong>Meta · optional adapter</strong><p>Mirror the phone session when glasses are available. No pairing, DAT permission, or glasses connection may gate another feature.</p></div>
+  </div>
+</section>
+
+<!-- 03 FLOWS -->
+<section id="flows">
+  <div class="sh"><span class="no">03</span><h2>Flows</h2><p>Five demo moments. No 3D map required.</p></div>
+  <div class="flows" id="flow-list"></div>
+  <p class="tag" style="font-size:13px">Use the phone camera for markers and validated phone or health-source signals for alerts. Missing signals mean unavailable monitoring, never “all clear”.</p>
+</section>
+
+<!-- 04 SCREENS -->
+<section id="screens">
+  <div class="sh"><span class="no">04</span><h2>Screens</h2><p>Grayscale wireframes.</p></div>
+
+  <div class="wf" id="wf-hud">
+    <h3>Wearer HUD · phone / browser <span>· original glasses sketch; optional glasses mirror</span></h3>
+    <svg viewBox="0 0 820 440" role="img" aria-labelledby="hud-t">
+      <title id="hud-t">Wearer HUD with status, request, camera marker, and messages; no glasses required</title>
+      <defs>
+        <pattern id="hatch" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(45)"><line class="hatch" x1="0" y1="0" x2="0" y2="14"/></pattern>
+        <marker id="wah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path class="wf-i" d="M0 0 L10 5 L0 10 z"/></marker>
+      </defs>
+      <rect class="wf-f" x="10" y="10" width="800" height="420" rx="44"/>
+      <line class="wf-k" x1="600" y1="26" x2="600" y2="414"/>
+      <!-- 1 status -->
+      <g id="hud-status"><title>Status: heart rate, time, health bar</title>
+        <path class="wf-i" d="M52 56 c-6 -6 -14 0 -8 7 l8 8 l8 -8 c6 -7 -2 -13 -8 -7 z"/>
+        <text class="wf-b" x="68" y="68">72 · 2:00 pm</text>
+        <rect class="wf-s" x="44" y="80" width="120" height="7" rx="3.5"/><rect class="wf-m" x="44" y="80" width="84" height="7" rx="3.5"/>
+      </g>
+      <!-- 2 request -->
+      <g id="hud-request"><title>Request bar: what the user just asked</title>
+        <rect class="wf-k" x="210" y="34" width="330" height="50" rx="25"/>
+        <rect class="wf-i" x="232" y="50" width="10" height="16" rx="5"/><path class="wf-k" d="M228 62 q9 12 18 0 M237 70 v5"/>
+        <text class="wf-t" x="258" y="64">"Where are my meds?"</text>
+      </g>
+      <!-- 3 marker -->
+      <g id="hud-marker"><title>AR marker on the found object, with arrow</title>
+        <rect x="90" y="214" width="140" height="120" rx="10" class="wf-k" style="fill:url(#hatch)"/>
+        <rect class="wf-f" x="100" y="176" width="120" height="26" rx="13"/>
+        <text class="wf-t" x="160" y="194" text-anchor="middle">Meds · 2 pm</text>
+        <path class="wf-k" d="M392 404 C 360 380, 300 356, 242 338" marker-end="url(#wah)" stroke-width="2.4"/>
+      </g>
+      <!-- 4 column -->
+      <g id="hud-column"><title>Chat and notifications column</title>
+        <rect class="wf-s" x="624" y="42" width="150" height="8" rx="4"/>
+        <rect class="wf-s" x="624" y="58" width="110" height="8" rx="4"/>
+        <path class="wf-k" d="M636 82 h132 a14 14 0 0 1 14 14 v12 a14 14 0 0 1 -14 14 h-8 l2 10 l-14 -10 h-112 a14 14 0 0 1 -14 -14 v-12 a14 14 0 0 1 14 -14 z"/>
+        <text class="wf-t" x="702" y="107" text-anchor="middle">Check saved label</text>
+        <rect class="wf-s" x="624" y="160" width="160" height="8" rx="4"/>
+        <rect class="wf-s" x="624" y="176" width="124" height="8" rx="4"/>
+        <rect class="wf-s" x="624" y="192" width="144" height="8" rx="4"/>
+        <path class="wf-k" d="M636 216 h132 a14 14 0 0 1 14 14 v12 a14 14 0 0 1 -14 14 h-8 l2 10 l-14 -10 h-112 a14 14 0 0 1 -14 -14 v-12 a14 14 0 0 1 14 -14 z"/>
+        <text class="wf-t" x="702" y="241" text-anchor="middle">Priya: call at 6?</text>
+        <rect class="wf-k" x="622" y="300" width="164" height="44" rx="12" stroke-dasharray="5 4"/>
+        <text class="wf-t" x="704" y="327" text-anchor="middle">Walk 10 min?</text>
+      </g>
+      <!-- callouts -->
+      <g class="co">
+        <circle class="wf-i" cx="182" cy="62" r="11"/><text class="wf-inv" x="182" y="66" text-anchor="middle">1</text>
+        <circle class="wf-i" cx="560" cy="59" r="11"/><text class="wf-inv" x="560" y="63" text-anchor="middle">2</text>
+        <circle class="wf-i" cx="252" cy="230" r="11"/><text class="wf-inv" x="252" y="234" text-anchor="middle">3</text>
+        <circle class="wf-i" cx="784" cy="54" r="11"/><text class="wf-inv" x="784" y="58" text-anchor="middle">4</text>
+      </g>
+    </svg>
+    <div class="callouts"><span><b>1</b>status</span><span><b>2</b>request</span><span><b>3</b>AR marker + arrow</span><span><b>4</b>chat + alerts</span></div>
+  </div>
+  <div class="wf" id="wf-display" style="margin-top:18px">
+    <h3>Optional glasses display <span>· 600 × 600 · native DAT, not a core requirement</span></h3>
+    <svg viewBox="0 0 600 600" style="max-width:600px;display:block;margin:auto" role="img" aria-labelledby="display-t">
+      <title id="display-t">Proposed square display with status, request, image marker, and message column</title>
+      <rect x="1" y="1" width="598" height="598" rx="24" fill="#090909" stroke="#888"/>
+      <g fill="#fff" font-family="sans-serif">
+        <text x="24" y="40" font-size="20">Connected</text><text x="385" y="40" font-size="18">Data age: 12 s</text>
+        <rect x="24" y="64" width="552" height="60" rx="12" fill="none" stroke="#ddd"/>
+        <text x="42" y="101" font-size="24">Where are my meds?</text>
+        <rect x="24" y="148" width="350" height="308" rx="12" fill="#242424" stroke="#aaa"/>
+        <text x="42" y="178" font-size="18">Captured image · example</text>
+        <rect x="72" y="248" width="130" height="112" rx="8" fill="none" stroke="#fff" stroke-width="3"/>
+        <path d="M290 404 L218 365 M218 365 L243 366 M218 365 L225 388" fill="none" stroke="#fff" stroke-width="3"/>
+        <text x="72" y="229" font-size="22">Saved medicine</text>
+        <line x1="394" y1="148" x2="394" y2="456" stroke="#aaa"/>
+        <text x="414" y="178" font-size="20">Messages</text>
+        <text x="414" y="220" font-size="18">Priya</text><text x="414" y="247" font-size="18">Call at 6?</text>
+        <text x="414" y="318" font-size="20">Alerts</text><text x="414" y="351" font-size="18">None shown</text>
+        <rect x="24" y="480" width="552" height="72" rx="12" fill="none" stroke="#fff" stroke-width="3"/>
+        <text x="300" y="524" text-anchor="middle" font-size="24">Back</text>
+        <text x="300" y="579" text-anchor="middle" font-size="16">Layout only · not world-locked AR</text>
+      </g>
+    </svg>
+    <p class="tag" style="font-size:13px">Black adds no light on the real display. The image marker is not proof of alignment with the wearer's view.</p>
+  </div>
+
+  <div class="wf-grid">
+    <div class="wf" id="wf-phone">
+      <h3>Family app</h3>
+      <svg viewBox="0 0 320 600" role="img" aria-labelledby="ph-t">
+        <title id="ph-t">Family phone app wireframe</title>
+        <rect class="wf-f" x="10" y="10" width="300" height="580" rx="40"/>
+        <rect class="wf-i" x="125" y="24" width="70" height="16" rx="8"/>
+        <g id="ph-head"><title>Who and how they are</title>
+          <circle class="wf-s" cx="52" cy="82" r="20"/>
+          <text class="wf-b" x="82" y="78">Mom</text>
+          <circle class="wf-m" cx="86" cy="93" r="3.5"/><text class="wf-x" x="94" y="97">all good</text>
+        </g>
+        <g id="ph-tiles"><title>Today at a glance</title>
+          <rect class="wf-l" x="30" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="42" y="144">Sleep</text><text class="wf-v" x="42" y="174">6h40</text>
+          <rect class="wf-l" x="120" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="132" y="144">Heart</text><text class="wf-v" x="132" y="174">72</text>
+          <rect class="wf-l" x="210" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="222" y="144">Steps</text><text class="wf-v" x="222" y="174">2.1k</text>
+        </g>
+        <g id="ph-alert"><title>Threshold alert card</title>
+          <rect class="wf-k" x="30" y="212" width="260" height="98" rx="14" stroke-width="2.4"/>
+          <text class="wf-b" x="48" y="240">Fall detected</text>
+          <text class="wf-x" x="48" y="258">2:14 pm · kitchen</text>
+          <rect class="wf-i" x="48" y="270" width="104" height="28" rx="14"/><text class="wf-inv" x="100" y="288" text-anchor="middle">Call</text>
+          <rect class="wf-k" x="162" y="270" width="110" height="28" rx="14"/><text class="wf-t" x="217" y="288" text-anchor="middle">Seen</text>
+        </g>
+        <g id="ph-chat"><title>Ask the Muse agent</title>
+          <text class="wf-x" x="30" y="344">MUSE</text>
+          <rect class="wf-s" x="96" y="356" width="194" height="38" rx="16"/><text class="wf-t" x="193" y="380" text-anchor="middle">How is she sleeping?</text>
+          <rect class="wf-l" x="30" y="406" width="206" height="56" rx="16"/><text class="wf-t" x="46" y="430">6h 40m · 2 wake-ups</text><text class="wf-x" x="46" y="450">better than Tuesday</text>
+        </g>
+        <g id="ph-input"><title>Message box</title>
+          <rect class="wf-l" x="30" y="530" width="260" height="42" rx="21"/><text class="wf-x" x="52" y="556">Ask Muse…</text>
+          <circle class="wf-i" cx="268" cy="551" r="13"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="wf" id="wf-dash">
+      <h3>Web dashboard</h3>
+      <svg viewBox="0 0 680 440" role="img" aria-labelledby="db-t">
+        <title id="db-t">Family web dashboard wireframe</title>
+        <rect class="wf-f" x="10" y="10" width="660" height="420" rx="14"/>
+        <line class="wf-l" x1="10" y1="44" x2="670" y2="44"/>
+        <circle class="wf-s" cx="32" cy="27" r="5"/><circle class="wf-s" cx="48" cy="27" r="5"/><circle class="wf-s" cx="64" cy="27" r="5"/>
+        <rect class="wf-s" x="90" y="18" width="300" height="18" rx="9"/>
+        <g id="db-side"><title>Navigation</title>
+          <line class="wf-l" x1="140" y1="44" x2="140" y2="430"/>
+          <rect class="wf-i" x="30" y="68" width="18" height="18" rx="5"/>
+          <rect class="wf-m" x="30" y="108" width="84" height="9" rx="4.5"/>
+          <rect class="wf-s" x="30" y="132" width="70" height="9" rx="4.5"/>
+          <rect class="wf-s" x="30" y="156" width="78" height="9" rx="4.5"/>
+          <rect class="wf-s" x="30" y="180" width="60" height="9" rx="4.5"/>
+        </g>
+        <text class="wf-b" x="164" y="78">Mom · this week</text>
+        <g id="db-stats"><title>Key numbers</title>
+          <rect class="wf-l" x="164" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="178" y="112">HRV</text><text class="wf-v" x="178" y="138">54 ms</text>
+          <rect class="wf-l" x="326" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="340" y="112">Sleep</text><text class="wf-v" x="340" y="138">6.6 h</text>
+          <rect class="wf-l" x="488" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="502" y="112">Alerts</text><text class="wf-v" x="502" y="138">1</text>
+        </g>
+        <g id="db-hrv"><title>HRV trend</title>
+          <rect class="wf-l" x="164" y="162" width="312" height="140" rx="10"/>
+          <text class="wf-x" x="178" y="182">HRV · 7 days</text>
+          <line class="wf-l" x1="178" y1="286" x2="462" y2="286"/>
+          <polyline class="wf-k" points="182,260 226,248 270,254 314,232 358,240 402,218 446,226" stroke-width="2.4"/>
+        </g>
+        <g id="db-sleep"><title>Sleep per night</title>
+          <rect class="wf-l" x="488" y="162" width="150" height="140" rx="10"/>
+          <text class="wf-x" x="502" y="182">Sleep</text>
+          <rect class="wf-m" x="504" y="236" width="12" height="50" rx="3"/><rect class="wf-m" x="522" y="226" width="12" height="60" rx="3"/>
+          <rect class="wf-m" x="540" y="246" width="12" height="40" rx="3"/><rect class="wf-m" x="558" y="220" width="12" height="66" rx="3"/>
+          <rect class="wf-m" x="576" y="232" width="12" height="54" rx="3"/><rect class="wf-m" x="594" y="216" width="12" height="70" rx="3"/>
+          <rect class="wf-i" x="612" y="224" width="12" height="62" rx="3"/>
+        </g>
+        <g id="db-thresh"><title>Alert thresholds, editable</title>
+          <text class="wf-x" x="164" y="330">THRESHOLDS</text>
+          <text class="wf-t" x="164" y="356">Heart &gt; 110</text><line class="wf-l" x1="290" y1="352" x2="470" y2="352" stroke-width="4"/><circle class="wf-i" cx="400" cy="352" r="7"/>
+          <text class="wf-t" x="164" y="384">SpO₂ &lt; 92</text><line class="wf-l" x1="290" y1="380" x2="470" y2="380" stroke-width="4"/><circle class="wf-i" cx="330" cy="380" r="7"/>
+          <text class="wf-t" x="164" y="412">Still 2 h</text><line class="wf-l" x1="290" y1="408" x2="470" y2="408" stroke-width="4"/><circle class="wf-i" cx="372" cy="408" r="7"/>
+        </g>
+        <g id="db-alerts"><title>Recent alerts</title>
+          <text class="wf-x" x="488" y="330">ALERTS</text>
+          <rect class="wf-l" x="488" y="340" width="150" height="30" rx="8"/><circle class="wf-i" cx="504" cy="355" r="4"/><text class="wf-t" x="516" y="360">Fall · Tue</text>
+          <rect class="wf-l" x="488" y="378" width="150" height="30" rx="8"/><circle class="wf-m" cx="504" cy="393" r="4"/><text class="wf-t" x="516" y="398">HR high · Mon</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="wf" id="wf-lab">
+      <h3>Lab report <span>· fillable</span></h3>
+      <svg viewBox="0 0 440 580" role="img" aria-labelledby="lab-t">
+        <title id="lab-t">Lab report layout with fillable fields</title>
+        <rect class="wf-f" x="20" y="10" width="400" height="560" rx="6"/>
+        <g id="lab-head"><title>Header and date</title>
+          <circle class="wf-k" cx="58" cy="50" r="16"/><path class="wf-k" d="M58 42 v16 M50 50 h16"/>
+          <text class="wf-b" x="84" y="56" style="font-size:18px">Lab Report</text>
+          <text class="wf-x" x="300" y="42">Date</text><rect class="wf-l" x="300" y="48" width="100" height="22" rx="4"/>
+          <line class="wf-l" x1="40" y1="86" x2="400" y2="86"/>
+        </g>
+        <g id="lab-fields"><title>Patient fields</title>
+          <text class="wf-x" x="44" y="108">Name</text><rect class="wf-l" x="44" y="114" width="170" height="24" rx="4"/>
+          <text class="wf-x" x="228" y="108">DOB</text><rect class="wf-l" x="228" y="114" width="80" height="24" rx="4"/>
+          <text class="wf-x" x="320" y="108">ID</text><rect class="wf-l" x="320" y="114" width="80" height="24" rx="4"/>
+          <text class="wf-x" x="44" y="158">Physician</text><rect class="wf-l" x="44" y="164" width="170" height="24" rx="4"/>
+          <text class="wf-x" x="228" y="158">Hospital</text><rect class="wf-l" x="228" y="164" width="172" height="24" rx="4"/>
+        </g>
+        <g id="lab-table"><title>Markers table: value, range, flag</title>
+          <rect class="wf-s" x="44" y="206" width="356" height="26" rx="4"/>
+          <text class="wf-x" x="56" y="223">MARKER</text><text class="wf-x" x="204" y="223">VALUE</text><text class="wf-x" x="276" y="223">RANGE</text><text class="wf-x" x="362" y="223">FLAG</text>
+          <g class="rows">
+            <text class="wf-t" x="56" y="257">HRV</text><rect class="wf-l" x="200" y="241" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="257">20–70 ms</text><circle class="wf-k" cx="374" cy="252" r="7"/>
+            <line class="wf-l" x1="44" y1="270" x2="400" y2="270"/>
+            <text class="wf-t" x="56" y="291">Resting HR</text><rect class="wf-l" x="200" y="275" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="291">60–100</text><circle class="wf-k" cx="374" cy="286" r="7"/>
+            <line class="wf-l" x1="44" y1="304" x2="400" y2="304"/>
+            <text class="wf-t" x="56" y="325">Sleep</text><rect class="wf-l" x="200" y="309" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="325">7–9 h</text><circle class="wf-i" cx="374" cy="320" r="7"/>
+            <line class="wf-l" x1="44" y1="338" x2="400" y2="338"/>
+            <text class="wf-t" x="56" y="359">SpO₂</text><rect class="wf-l" x="200" y="343" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="359">95–100 %</text><circle class="wf-k" cx="374" cy="354" r="7"/>
+            <line class="wf-l" x1="44" y1="372" x2="400" y2="372"/>
+            <text class="wf-t" x="56" y="393">Resp. rate</text><rect class="wf-l" x="200" y="377" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="393">12–20</text><circle class="wf-k" cx="374" cy="388" r="7"/>
+            <line class="wf-l" x1="44" y1="406" x2="400" y2="406"/>
+            <text class="wf-t" x="56" y="427">Falls</text><rect class="wf-l" x="200" y="411" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="427">0 / week</text><circle class="wf-k" cx="374" cy="422" r="7"/>
+          </g>
+        </g>
+        <g id="lab-notes"><title>Notes field</title>
+          <text class="wf-x" x="44" y="460">Notes</text><rect class="wf-l" x="44" y="466" width="356" height="46" rx="4"/>
+        </g>
+        <g id="lab-send"><title>Sign and send to hospital via Finchnode</title>
+          <line class="wf-k" x1="44" y1="550" x2="200" y2="550"/><text class="wf-x" x="44" y="564">Signed</text>
+          <rect class="wf-i" x="244" y="528" width="156" height="32" rx="16"/><text class="wf-inv" x="322" y="548" text-anchor="middle">Send · Finchnode</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- 05 TEAM -->
+<section id="team">
+  <div class="sh"><span class="no">05</span><h2>Team + build order</h2><p>Prove every flow without glasses. Train the model in parallel.</p></div>
+  <div class="panel">
+  <svg viewBox="0 0 1000 340" role="img" aria-labelledby="team-t" id="team-svg">
+    <title id="team-t">Owners by build phase</title>
+  </svg>
+  </div>
+  <div class="panel" style="margin-top:14px" id="repo-plan">
+    <svg viewBox="0 0 1000 170" role="img" aria-labelledby="repo-t">
+      <title id="repo-t">One repository with parallel work areas and shared data contracts</title>
+      <rect class="n" x="350" y="4" width="300" height="38" rx="12"/>
+      <text class="t" x="500" y="29" text-anchor="middle">ayaangazali/telly · one repository</text>
+      <path class="e" d="M500 42 V84 M166 64 H834 M166 64 V84 M834 64 V84"/>
+      <rect class="n" x="16" y="84" width="300" height="48" rx="12"/><text class="c" x="166" y="113" text-anchor="middle">Apps · phone / HUD / web</text>
+      <rect class="n" x="350" y="84" width="300" height="48" rx="12"/><text class="c" x="500" y="113" text-anchor="middle">Services · data / agents / reports</text>
+      <rect class="n" x="684" y="84" width="300" height="48" rx="12"/><text class="c" x="834" y="113" text-anchor="middle">Training · Gemma on River AI</text>
+      <text class="s" x="500" y="159" text-anchor="middle">Shared contracts: health samples · alerts · messages · reports</text>
+    </svg>
+  </div>
+  <div class="sh" style="margin-top:24px"><h3>Build in telly</h3><p>Approved plan. GitHub issues track implementation.</p></div>
+  <div class="integrations" id="repo-delivery">
+    <div class="integration"><strong>Application setup</strong><p>Use the stack below in <a href="https://github.com/ayaangazali/telly">ayaangazali/telly</a>. Preserve one repository and shared contracts.</p></div>
+    <div class="integration"><strong>Fast CI/CD</strong><p>Parallel checks, cached installs, and cancelled superseded PR runs. Build once; deploy that exact revision after merge.</p></div>
+    <div class="integration"><strong>Issue-first teamwork</strong><p>One issue per task. Claim it before editing. Record owned paths, dependencies, progress, blockers, and the linked PR.</p></div>
+  </div>
+  <div class="settled" id="github-owners" aria-label="Verified GitHub assignees">
+    <span class="chip">J · undeemed</span>
+    <span class="chip">A · ayaangazali</span>
+    <span class="chip">M · maheshwarmurugesan</span>
+  </div>
+  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. Deployment needs an approved target and credentials.</p>
+</section>
+
+<!-- 06 STACK -->
+<section id="stack">
+  <div class="sh"><span class="no">06</span><h2>Stability-first architecture</h2><p>Phone + web own the features. DAT only adds an optional device.</p></div>
+  <div class="settled">
+    <span class="chip acc">React + Vite</span><span class="chip acc">Expo</span>
+    <span class="chip acc">Hono</span><span class="chip acc">Effect 4.0.0</span><span class="chip acc">Node LTS</span><span class="chip acc">Optional DAT 1.0.0</span>
+    <span class="chip acc">SpacetimeDB</span><span class="chip acc">Bun workspaces</span>
+  </div>
+  <div class="panel">
+    <svg viewBox="0 0 1000 510" role="img" aria-labelledby="stack-title">
+      <title id="stack-title">Recommended application stack and service boundaries</title>
+      <defs><marker id="stack-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <g id="stack-web">
+        <rect class="n" x="20" y="20" width="430" height="90" rx="14"/>
+        <text class="t" x="40" y="48">Web · React + Vite + TanStack Router</text>
+        <text class="s" x="40" y="71">Wearer HUD · family dashboard</text>
+        <text class="s" x="40" y="92">Tailwind + shadcn/ui · no SSR requirement</text>
+      </g>
+      <g id="stack-native">
+        <rect class="n" x="550" y="20" width="430" height="90" rx="14"/>
+        <text class="t" x="570" y="48">Phone · Expo + React Native</text>
+        <text class="s" x="570" y="71">Wearer + family · camera, audio, sensors · optional DAT</text>
+        <text class="s" x="570" y="92">Development build for native SDKs, not Expo Go</text>
+      </g>
+      <path class="e" d="M235 112 V138 H390 V158" marker-start="url(#stack-arrow)" marker-end="url(#stack-arrow)"/>
+      <path class="e" d="M765 112 V138 H610 V158" marker-start="url(#stack-arrow)" marker-end="url(#stack-arrow)"/>
+      <g id="stack-effect">
+        <rect class="n" x="270" y="160" width="460" height="100" rx="16" style="stroke:var(--accent)"/>
+        <text class="t sp" x="290" y="191">Hono + Effect 4 · Node LTS</text>
+        <text class="s" x="290" y="215">Hono owns HTTP · Effect owns service logic</text>
+        <text class="s" x="290" y="239">Shared schemas · explicit errors · no HttpApi</text>
+      </g>
+      <path class="e" d="M380 262 V289 H160 V318" marker-start="url(#stack-arrow)" marker-end="url(#stack-arrow)"/>
+      <path class="e" d="M620 262 V318" marker-start="url(#stack-arrow)" marker-end="url(#stack-arrow)"/>
+      <g id="stack-db">
+        <rect class="n" x="20" y="320" width="280" height="100" rx="14"/>
+        <text class="t" x="40" y="350">SpacetimeDB · TypeScript</text>
+        <text class="s" x="40" y="374">Tables · reducers · scoped views</text>
+        <text class="s" x="40" y="398">Generated bindings · no ORM</text>
+      </g>
+      <g id="stack-integrations">
+        <rect class="n" x="360" y="320" width="620" height="100" rx="14"/>
+        <text class="t" x="380" y="350">Required integrations, behind the service</text>
+        <text class="s" x="380" y="374">Grokbot · Gemini · ElevenLabs · Muse · Finchnode</text>
+        <text class="s" x="380" y="398">Fetch.ai: Python uAgents worker · River: Python Gemma training</text>
+      </g>
+      <rect class="cp" x="20" y="450" width="960" height="48" rx="12"/>
+      <text class="c" x="500" y="480" text-anchor="middle">OIDC login → verified identity → family membership checks · never public health tables</text>
+    </svg>
+  </div>
+  <div class="integrations" id="stack-reasons">
+    <div class="integration"><strong>Why this web stack</strong><p>The HUD and dashboard are interactive apps. Vite avoids an unneeded SSR server.</p></div>
+    <div class="integration"><strong>Why Effect 4</strong><p>Keep typed service logic, schemas, and resource cleanup. Hono owns HTTP; do not depend on the unstable HttpApi module.</p></div>
+    <div class="integration"><strong>Why Node + Bun workspaces</strong><p>Node has documented SpacetimeDB SDK support. Bun workspaces share packages across web, native, and server. Biome handles formatting and lint.</p></div>
+    <div class="integration"><strong>Why no SQL ORM</strong><p>SpacetimeDB is already selected. Use its schema and generated bindings, not a second database.</p></div>
+    <div class="integration"><strong>Authentication</strong><p>Use verified OIDC identities and family permissions in both API and database. SpacetimeAuth beta remains a release risk, not a waived check.</p></div>
+    <div class="integration"><strong>Release gate</strong><p>Pin tested versions. Prove access control, reconnects, stale-data behavior, and alert delivery before calling the system reliable.</p></div>
+  </div>
+  <details class="stack-notes" id="hono-choice">
+    <summary>Why Hono now?</summary>
+    <p><b>Stability changes the choice:</b> Round 10 kept HttpApi. Round 11 prioritizes stability, so this plan replaces its unstable HTTP module with Hono.</p>
+    <p><b>One owner per boundary:</b> Hono handles routes and middleware. Effect handles service logic and schemas. Validate requests and provider responses explicitly.</p>
+    <p><b>No hidden shortcut:</b> Implement error-to-HTTP mapping, request cancellation, and runtime cleanup. Share endpoint schemas with clients; do not maintain competing validators.</p>
+    <p><b>Scope:</b> this board records the approved plan. GitHub issues track implementation.</p>
+  </details>
+  <details class="stack-notes">
+    <summary>Alternatives and generator boundary</summary>
+    <p><b>Next.js / TanStack Start:</b> useful for SSR; no such requirement here. <b>tRPC / oRPC:</b> not required for the Hono HTTP boundary.</p>
+    <p><b>Bun runtime:</b> viable; Node is the conservative SDK choice. Bun is the package manager only. <b>Convex / Postgres:</b> not selected because they replace or duplicate SpacetimeDB.</p>
+    <p>Better-T-Stack 3.44.2 has no Effect or SpacetimeDB preset. Generate the app workspace only; add the real service and database modules separately.</p>
+    <p><code>backend=none</code>, <code>database=none</code>, and <code>auth=none</code> describe the generator seed, not the finished application.</p>
+    <p>The <a href="#files">file structure plan</a> below defines the workspace, imports, ownership, and delivery files.</p>
+    <p>The TypeScript SDK documents browser and Node support. Use the typed API from native until its direct database transport is verified.</p>
+    <p>Optional native DAT needs a Swift/Kotlin bridge and a development build. Its absence must not block startup or core services.</p>
+  </details>
+  <details class="stack-notes">
+    <summary>Generator seed · dry run only</summary>
+    <pre>bunx create-better-t-stack@3.44.2 create-json --json '{
+  "projectName": "telly-health",
+  "frontend": ["tanstack-router", "native-bare"],
+  "backend": "none", "runtime": "none",
+  "database": "none", "orm": "none", "api": "none",
+  "auth": "none", "payments": "none",
+  "addons": ["biome"], "examples": [],
+  "dbSetup": "none", "webDeploy": "none", "serverDeploy": "none",
+  "packageManager": "bun", "git": false, "install": false,
+  "dryRun": true, "disableAnalytics": true,
+  "directoryConflict": "error"
+}'</pre>
+    <p>A dry run validates the seed configuration, not the full integration. The installed CLI uses <code>--json</code>; its web guide still shows <code>--input</code>.</p>
+  </details>
+  <div class="legend sources">
+    <a href="https://www.better-t-stack.dev/docs/cli/options.mdx">BTS options</a>
+    <a href="https://www.better-t-stack.dev/docs/cli/compatibility.mdx">Compatibility</a>
+    <a href="https://effect.website/blog/releases/effect/40">Effect 4 release</a>
+    <a href="https://effect.website/docs/v4/api/effect/http-api/HttpApi">HttpApi status</a>
+    <a href="https://hono.dev/docs/">Hono capabilities</a>
+    <a href="https://spacetimedb.com/docs/sdks/typescript/">Database SDK</a>
+    <a href="https://spacetimedb.com/docs/core-concepts/authentication/spacetimeauth/">Auth beta</a>
+    <a href="https://docs.expo.dev/develop/development-builds/introduction/">Native builds</a>
+    <a href="https://uagents.fetch.ai/docs">uAgents</a>
+  </div>
+  <details class="stack-notes" id="device-evidence">
+    <summary>Optional glasses evidence · not a core release gate</summary>
+    <p><b>Meta DAT 1.0:</b> the version table lists Meta AI v290 and glasses firmware v128. Check actual access; versions alone do not guarantee a capability.</p>
+    <p><b>Display:</b> Meta Ray-Ban Display only; 600 × 600 pixels. The phone owns state. One display per user-started session; send complete views only after the display starts.</p>
+    <p><b>Lifecycle:</b> handle starting, started, stopping, stopped, interruption, sleep, and denied capabilities. Release camera and display resources on exit.</p>
+    <p><b>AR:</b> the reviewed guides do not establish a world-anchor or camera-to-eye projection API. Prove calibration and frame freshness before claiming aligned markers.</p>
+    <p><b>NOOP scope:</b> preserve the existing NOOP application. Stub only its connection to the new server, not NOOP itself or the rest of the server.</p>
+    <p><b>Earlier research:</b> NOOP uses PolyForm Noncommercial. Do not delete, overwrite, or integrate the existing code during app setup.</p>
+    <p><b>Unavailable data:</b> show the missing source. Do not return sample readings, infer health status, or generate a WHOOP nudge from the stub.</p>
+    <p><b>Without glasses:</b> use phone camera frames, microphone input, screen markers, and speaker output. Keep session state independent of DAT.</p>
+    <p><b>Web:</b> provide camera or image input, voice or text requests, HUD, chat, alerts, and reports through the same API.</p>
+    <p><b>Monitoring:</b> validate phone and health-source signals for each detector. A phone on a table cannot prove that its owner has fallen.</p>
+    <p><b>Breathing:</b> prove the selected non-glasses signal and detector before claiming automatic monitoring. A manual alert is not detection.</p>
+    <p><b>Permissions:</b> show stopped monitoring on suspension or permission loss. Browser background capture is not a guaranteed monitoring source.</p>
+    <div class="legend sources">
+      <a href="https://wearables.developer.meta.com/docs/develop/dat/display-overview">Display API</a>
+      <a href="https://wearables.developer.meta.com/docs/develop/dat/version-dependencies/">Version matrix</a>
+      <a href="https://wearables.developer.meta.com/docs/develop/dat/display-simulation">Display testing</a>
+      <a href="https://wearables.developer.meta.com/docs/develop/webapps/build/">Web limits</a>
+      <a href="https://github.com/ryanbr/noop/blob/main/docs/PUSH_PROTOCOL.md">NOOP push contract</a>
+      <a href="https://github.com/ryanbr/noop/blob/main/LICENSE">NOOP license</a>
+    </div>
+  </details>
+  <div class="panel" style="margin-top:18px" id="reliability-flow">
+    <svg viewBox="0 0 1000 236" role="img" aria-labelledby="reliability-t">
+      <title id="reliability-t">Separate sensor ingestion, persistent alert delivery, and optional AI explanation</title>
+      <g class="n">
+        <rect x="15" y="20" width="190" height="66" rx="12"/><rect x="275" y="20" width="190" height="66" rx="12"/>
+        <rect x="535" y="20" width="190" height="66" rx="12"/><rect x="795" y="20" width="190" height="66" rx="12"/>
+        <rect x="535" y="151" width="190" height="66" rx="12"/><rect x="795" y="151" width="190" height="66" rx="12"/>
+      </g>
+      <g class="t" text-anchor="middle">
+        <text x="110" y="48">Connected sensors</text><text x="370" y="48">Validate + persist</text>
+        <text x="630" y="48">Rules + outbox</text><text x="890" y="48">Family delivery</text>
+        <text x="630" y="179">AI explanation</text><text x="890" y="179">Delivery state</text>
+      </g>
+      <g class="s" text-anchor="middle">
+        <text x="110" y="70">Consent + source time</text><text x="370" y="70">Identity + dedupe</text>
+        <text x="630" y="70">One durable transaction</text><text x="890" y="70">Bounded retry</text>
+        <text x="630" y="201">Not in the alert gate</text><text x="890" y="201">Sent ≠ acknowledged</text>
+      </g>
+      <g class="e" marker-end="url(#stack-arrow)">
+        <path d="M205 53 H275"/><path d="M465 53 H535"/><path d="M725 53 H795"/>
+        <path d="M630 86 V151"/><path d="M890 86 V151"/>
+      </g>
+    </svg>
+  </div>
+  <div class="integrations" id="reliability-gates">
+    <div class="integration"><strong>Identity + privacy</strong><p>Fail closed on invalid tokens or family membership. Keep secrets server-side. Require consent for camera and health uploads.</p></div>
+    <div class="integration"><strong>Freshness + quality</strong><p>Keep source time, receive time, units, and quality. Show missing or stale data explicitly. Never invent unavailable metrics.</p></div>
+    <div class="integration"><strong>Durable delivery</strong><p>Persist each alert and pending delivery together. Dedupe retries. Record provider delivery separately from family acknowledgement.</p></div>
+    <div class="integration"><strong>Failure + recovery</strong><p>Bound timeouts, retries, queues, and retention. Surface permission loss and outages. Verify restart recovery and backup restoration.</p></div>
+  </div>
+</section>
+
+<!-- 07 FILE STRUCTURE -->
+<section id="files">
+  <div class="sh"><span class="no">07</span><h2>One repo. Clear boundaries.</h2><p>New app layout for private telly, under health/. Preserve its existing NOOP source.</p></div>
+  <div class="panel" id="repo-tree">
+    <pre style="font-size:15px;line-height:1.7">telly/
+├── (existing NOOP source, unchanged)
+├── health/           New app · Bun workspace root
+│   ├── apps/
+│   │   ├── web/          HUD + dashboard
+│   │   ├── native/       Phone app
+│   │   └── server/       Hono HTTP + Effect services
+│   ├── packages/
+│   │   ├── contracts/    Public API schemas
+│   │   └── db/           Generated DB client
+│   ├── spacetimedb/      Tables + reducers + views
+│   ├── agents/fetch/     Python Agentverse worker
+│   ├── training/gemma/   Python River training
+│   └── scripts/          One end-to-end smoke
+└── .github/          CI/CD + task templates</pre>
+    <p class="tag" style="font-size:13px">health/ avoids a case collision between packages/ and NOOP's Packages/ on macOS, and keeps Sentrux scoped to the new app.</p>
+  </div>
+  <div class="integrations" id="repo-boundaries">
+    <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
+    <div class="integration"><strong>One schema owner</strong><p>Database source lives in health/spacetimedb. Generate health/packages/db from it. Commit both together; never edit generated files.</p></div>
+    <div class="integration"><strong>No dependency cycles</strong><p>Contracts import no apps, database code, or secrets. Apps never import each other. Python workers use the API, not TypeScript internals.</p></div>
+    <div class="integration"><strong>Parallel ownership</strong><p>M owns HUD and reports. A owns data and Fetch.ai. J owns native, dashboard, and Gemma. Claim shared-file edits in an issue.</p></div>
+  </div>
+  <details class="stack-notes" id="repo-app-files">
+    <summary>App files · shallow until the code grows</summary>
+    <pre>health/apps/web/
+  package.json · vite.config.ts · index.html
+  src/
+    main.tsx · router.tsx
+    routes/         __root.tsx · index.tsx · hud.tsx
+                    dashboard.tsx · reports.tsx
+    components/     Web-only controls and live feature views
+    lib/            api.ts · session.ts
+
+health/apps/native/
+  package.json · app.json
+  app/              _layout.tsx · index.tsx
+  src/
+    components/     Native-only controls
+    lib/            api.ts · session.ts
+    devices/        phone.ts · healthkit.ts · glasses.ts (optional)
+  modules/meta-dat/  Optional native bridge; no core startup dependency
+
+health/apps/server/
+  package.json · Dockerfile
+  src/
+    main.ts         Node startup and managed Effect runtime
+    api.ts          Hono routes, validation, HTTP errors
+    auth.ts         Verified identity and family access
+    config.ts       Validated, redacted runtime configuration
+    db.ts           Server database connection
+    integrations/   noop.ts (connection stub) · gemini.ts · elevenlabs.ts
+                    grokbot.ts · muse.ts · finchnode.ts
+                    fetch.ts · gemma.ts</pre>
+    <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
+    <p>Keep HUD and reports under web routes. Preserve the existing NOOP source and root files; add the new app without connecting it.</p>
+    <p>The NOOP connection stub returns { status: "not_connected", source: "noop" }. It performs no transport or ingestion and supplies no readings.</p>
+    <p>Phone capture and wearable capture feed the same feature contracts. Keep optional DAT lifecycle outside core session and cloud state.</p>
+  </details>
+  <details class="stack-notes" id="repo-shared-files">
+    <summary>Shared contracts · database · Python workers</summary>
+    <pre>health/packages/contracts/
+  package.json      @telly/contracts
+  src/
+    schema.ts       Health, alert, message, report schemas
+    api.ts          HTTP endpoint schemas and DTOs
+    index.ts        Public package exports
+
+health/packages/db/
+  package.json      @telly/db
+  src/              Generated SpacetimeDB bindings only
+
+health/spacetimedb/
+  package.json · tsconfig.json
+  src/index.ts      Tables, reducers, and scoped views
+
+health/agents/fetch/
+  requirements.txt  Pinned Python dependencies
+  main.py           Agentverse entry point
+
+health/training/gemma/
+  requirements.txt  Pinned Python training dependencies
+  train.py          River training entry point</pre>
+    <p>The API validates external data with contracts. Database reducers enforce access and state rules again.</p>
+    <p>Translate database rows at the server boundary. Keep database types out of mobile and web bundles.</p>
+    <p>Generate OpenAPI from the shared endpoint schemas for Python. Verify schema conversion and client decoding; do not hand-maintain a second contract.</p>
+    <p>Model weights, recordings, lab PDFs, personal data, and credentials stay outside Git.</p>
+  </details>
+  <details class="stack-notes" id="repo-delivery-files">
+    <summary>Root files · CI/CD · issue-first coordination</summary>
+    <pre>health/
+  package.json        Bun workspaces: apps/* · packages/* · spacetimedb; private: true
+  bun.lock            One JavaScript lockfile
+  biome.json          One formatter and lint configuration
+  tsconfig.base.json  Strict types across TypeScript packages
+  .sentrux/rules.toml Structural constraints
+  .fallowrc.json      Entry points, boundaries, quality rules
+  .gitignore          Build output, secrets, data, model weights
+  .dockerignore       Env files, private data, local artifacts
+  .env.example        Variable names and safe example values
+  README.md           Setup, local run, verification
+  CONTRIBUTING.md     Claim rules, imports, ownership, handoffs
+  scripts/smoke.ts    Synthetic sample → persisted data → alert
+
+.github/              (repository root)
+  ISSUE_TEMPLATE/task.yml
+  pull_request_template.md
+  workflows/
+    ci.yml          PR checks and the stable required gate
+    deploy.yml      Merged artifact → target → smoke check</pre>
+    <p>Root commands: dev:web, dev:native, dev:server, db:generate, lint, typecheck, test, build, smoke, check:structure, and check:quality. Run them with <code>bun run</code> in health/.</p>
+    <p>Python stays outside the Bun workspace. CI installs each worker's own pinned requirements.</p>
+    <p>CI rejects stale generated bindings, then runs independent checks in parallel. Keep focused behavior tests beside their code.</p>
+    <p>The task template records owner, paths, acceptance, and dependencies. Comments carry progress, blockers, verification, and handoffs.</p>
+    <p>Declare one owner for shared root files in an issue. Do not add a bot, shared UI package, or task runner yet.</p>
+    <p>Deployment needs the approved target and credentials. A workflow that only uploads files is not completed CD.</p>
+  </details>
+  <div class="settled" aria-label="Implementation order">
+    <span class="chip acc">1 · Workspace + contracts</span>
+    <span class="chip acc">2 · Database + generated client</span>
+    <span class="chip acc">3 · API + app shells in parallel</span>
+    <span class="chip acc">4 · Real integrations + smoke</span>
+  </div>
+  <p class="tag" style="font-size:13px">Setup, CI, and task issues are tracked in GitHub issues. Check existing deployment configuration before requesting a hosting decision.</p>
+  <div id="checks" style="margin-top:28px">
+    <div class="sh"><h2>Strict types. Small test suite.</h2><p>Required implementation gates.</p></div>
+    <div class="panel" id="quality-flow">
+      <svg viewBox="0 0 1000 260" role="img" aria-labelledby="quality-title">
+        <title id="quality-title">Prepare dependencies, run three independent check groups, then require all checks before merging</title>
+        <rect class="n" x="20" y="92" width="220" height="76" rx="12"/>
+        <rect class="n" x="350" y="10" width="300" height="68" rx="12"/>
+        <rect class="n" x="350" y="96" width="300" height="68" rx="12"/>
+        <rect class="n" x="350" y="182" width="300" height="68" rx="12"/>
+        <rect class="n" x="760" y="92" width="220" height="76" rx="12"/>
+        <g class="t" text-anchor="middle">
+          <text x="130" y="122">Pinned tools</text><text x="500" y="38">Types + lint</text>
+          <text x="500" y="124">Sentrux + Fallow</text><text x="500" y="210">Behavior + build</text>
+          <text x="870" y="122">Required CI gate</text>
+        </g>
+        <g class="s" text-anchor="middle">
+          <text x="130" y="148">Cache + frozen lockfile</text><text x="500" y="61">Shared contracts · no unsafe casts</text>
+          <text x="500" y="147">Structure · unused code · copies</text><text x="500" y="233">Risk tests · one runtime smoke</text>
+          <text x="870" y="148">Every applicable check passes</text>
+        </g>
+        <g class="e" marker-end="url(#stack-arrow)">
+          <path d="M240 130 H288 V44 H348"/><path d="M240 130 H348"/><path d="M240 130 H288 V216 H348"/>
+          <path d="M650 44 H710 V130 H758"/><path d="M650 130 H758"/><path d="M650 216 H710 V130 H758"/>
+        </g>
+      </svg>
+    </div>
+    <div class="integrations" id="quality-rules">
+      <div class="integration"><strong>Types end to end</strong><p>Infer DTOs from shared schemas. Decode external data and client responses. Strict TypeScript does not validate network data.</p></div>
+      <div class="integration"><strong>Small tests, real risks</strong><p>Keep access, stale-data, alert replay, and contract checks. Skip snapshot churn and tests that only copy the implementation.</p></div>
+      <div class="integration"><strong>Two requested gates</strong><p>Sentrux enforces structural rules. Fallow checks unused code, copies, complexity, and import boundaries. Neither replaces the compiler or runtime smoke.</p></div>
+      <div class="integration"><strong>Fast, not weaker</strong><p>Run independent groups concurrently. Build once. Cancel superseded runs. Keep native checks for native changes and release validation.</p></div>
+    </div>
+    <details class="stack-notes" id="quality-config">
+      <summary>Gate commands, type rules, and exclusions</summary>
+      <pre>check:structure  sentrux check .   (run in health/)
+check:quality    fallow --fail-on-issues --fail-on-parse-error
+typecheck        Each package's strict TypeScript check
+test             Focused behavior checks, once
+build            Production outputs, once
+smoke            Real local service + database, synthetic data</pre>
+      <p><b>TypeScript:</b> use strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes, and noEmit for type-only checks. Extend the native framework configuration rather than replacing it.</p>
+      <p><b>Contracts:</b> infer request, response, and error types from health/packages/contracts. Decode unknown JSON and native events. Do not use any, assertions, or suppression comments to bypass checks.</p>
+      <p><b>Sentrux:</b> pin the binary and parser plugins. Start with max_cycles = 0 and no_god_files = true in .sentrux/rules.toml. No moving score target or automatically renewed baseline.</p>
+      <p><b>Fallow:</b> pin 3.31.0. Configure all real entry points and six zones: web, native, server, contracts, db, and database module. Clients may import contracts, not server or db code.</p>
+      <p><b>Accuracy:</b> keep generated bindings in the boundary graph, but exclude generated copies from duplicate and complexity checks. Review each narrow exception. Do not ignore all of health/packages/db.</p>
+      <p><b>No coverage quota:</b> disable the estimated CRAP gate with health.maxCrap = 0. Keep compiler checks, complexity checks, and tests for behavior risks.</p>
+      <p><b>Startup:</b> use one full Fallow scan per change while this repository is small. It needs no comparison worktree or baseline. Measure real CI before adding incremental machinery.</p>
+      <p><b>Proof:</b> isolated Sentrux 0.5.7 and Fallow 3.31.0 checks accepted a simple graph and rejected an injected cycle.</p>
+    </details>
+    <details class="stack-notes" id="quality-tests">
+      <summary>Minimum behavior checks and build scope</summary>
+      <p><b>Access:</b> another family cannot read data or acknowledge alerts. Invalid tokens fail closed.</p>
+      <p><b>Data:</b> malformed, stale, duplicate, or reordered samples do not create false reassurance or duplicate alerts.</p>
+      <p><b>Delivery:</b> persist the alert and pending delivery together. Retry after interruption without losing work; keep sent and acknowledged separate.</p>
+      <p><b>Contracts:</b> reject invalid external values and preserve units, source time, nullable fields, and error responses across the API.</p>
+      <p><b>No glasses:</b> run every feature with no paired device and DAT unavailable. Cover camera markers, voice, chat, alerts, and reports.</p>
+      <p><b>Disconnect:</b> remove glasses during a session. Phone capture, messages, and pending alert delivery must continue without data loss.</p>
+      <p><b>One runtime smoke:</b> ingest a synthetic sample through the actual service and database, then observe the family alert. Fake providers do not prove real delivery.</p>
+      <p><b>Native:</b> verify phone permissions and suspension for the core release. Verify DAT hardware separately before enabling the optional glasses adapter.</p>
+      <p><b>CI:</b> cache by lockfile and tool version. Regenerate database bindings and reject drift. A stable final job must reject any failed or unexpectedly skipped prerequisite.</p>
+      <p><b>No hidden work:</b> no model training, paid APIs, coverage collection, broad browser matrix, or duplicate build in ordinary checks. Release validation still checks real provider and hardware behavior.</p>
+    </details>
+    <div class="legend sources">
+      <a href="https://github.com/sentrux/sentrux">Sentrux</a>
+      <a href="https://github.com/fallow-rs/fallow">Fallow</a>
+      <a href="https://fallow.tools/docs/analysis/boundaries/">Boundary rules</a>
+      <a href="https://fallow.tools/docs/configuration/rules/">Rule severity</a>
+    </div>
+  </div>
+</section>
+
+<!-- 08 KEYS -->
+<section id="keys">
+  <div class="sh"><span class="no">08</span><h2>Cloudflare secrets. Individual logins.</h2><p>Share one account through member access, not one password.</p></div>
+  <div class="panel">
+    <svg viewBox="0 0 1000 270" role="img" aria-labelledby="keys-title">
+      <title id="keys-title">Cloudflare secrets feed supported Cloudflare workloads; external Node and Python processes need their own runtime secrets</title>
+      <rect class="n" x="10" y="20" width="270" height="76" rx="14"/>
+      <text class="t" x="145" y="51" text-anchor="middle">One Cloudflare account</text>
+      <text class="s" x="145" y="76" text-anchor="middle">Individual members · MFA</text>
+      <path class="e" d="M282 58 H358" marker-end="url(#stack-arrow)"/>
+      <rect class="n" x="360" y="20" width="280" height="76" rx="14"/>
+      <text class="t" x="500" y="51" text-anchor="middle">Cloudflare secrets</text>
+      <text class="s" x="500" y="76" text-anchor="middle">Private binding · dev / production</text>
+      <path class="e" d="M642 58 H718" marker-end="url(#stack-arrow)"/>
+      <rect class="n" x="720" y="20" width="270" height="76" rx="14"/>
+      <text class="t" x="855" y="51" text-anchor="middle">Cloudflare Worker</text>
+      <text class="s" x="855" y="76" text-anchor="middle">Only its required provider keys</text>
+      <rect class="n" x="360" y="145" width="280" height="66" rx="14"/>
+      <text class="t" x="500" y="172" text-anchor="middle">External host secrets</text>
+      <text class="s" x="500" y="193" text-anchor="middle">No automatic Cloudflare sync</text>
+      <path class="e" d="M642 178 H718" marker-end="url(#stack-arrow)"/>
+      <rect class="n" x="720" y="145" width="270" height="66" rx="14"/>
+      <text class="t" x="855" y="172" text-anchor="middle">Node / Python runtime</text>
+      <text class="s" x="855" y="193" text-anchor="middle">Current application plan</text>
+      <text class="c" x="500" y="251" text-anchor="middle">Web + phone → authenticated API · never send provider keys to clients</text>
+    </svg>
+  </div>
+  <div class="integrations" id="key-rules">
+    <div class="integration"><strong>One account, named members</strong><p>Invite each teammate through Members. Use MFA and narrow roles. Sharing a password prevents individual revocation and attribution.</p></div>
+    <div class="integration"><strong>Cloudflare runtime secrets</strong><p>Use per-Worker secrets for a Worker. Use account-level Secrets Store when supported workloads need shared secrets.</p></div>
+    <div class="integration"><strong>Existing Node + Python</strong><p>Cloudflare bindings do not populate external processes. Keep their host secrets or protected env files. No backend migration is implied.</p></div>
+    <div class="integration"><strong>Separate CI access</strong><p>Use an account-scoped deployment token in GitHub Environment secrets. Do not share a Global API Key or personal login.</p></div>
+  </div>
+  <p class="tag" style="font-size:14px">Never paste real keys into this board, GitHub issues, agent prompts, logs, or VITE_ / EXPO_PUBLIC_ variables.</p>
+  <details class="stack-notes" id="key-cloudflare">
+    <summary>Cloudflare setup and limits</summary>
+    <p><b>Members:</b> the account administrator invites teammates with only the roles and scope they need. Keep each login and MFA separate.</p>
+    <p><b>Worker secrets:</b> read per-Worker bindings through <code>env.GEMINI_API_KEY</code>. Never use plaintext Wrangler <code>vars</code> for secrets.</p>
+    <p><b>Secrets Store:</b> account-level secrets use a binding and asynchronous <code>get()</code>. The documented scopes are Workers and AI Gateway.</p>
+    <p><b>Permissions:</b> Secrets Store Admin manages values; Deployer can bind them. CI needs Account Secrets Store Edit when deploying these bindings.</p>
+    <p><b>Not a download vault:</b> the dashboard hides stored values. Secrets Store Read returns metadata, not key values for laptops or external servers.</p>
+    <p><b>Local work:</b> use separate development keys in ignored <code>.dev.vars</code> or <code>.env</code> files. Local bindings cannot read production Secrets Store values.</p>
+    <p><b>Trust:</b> anyone who can deploy code using a binding can make that code read the secret. Limit deployment access too.</p>
+  </details>
+  <details class="stack-notes" id="key-examples">
+    <summary>Existing Node / Python runtime · no Cloudflare binding</summary>
+    <p>After building the planned server, run from the repository root:</p>
+    <pre>chmod 600 health/apps/server/.env.local
+node --env-file=health/apps/server/.env.local health/apps/server/dist/main.js</pre>
+    <p>For a Linux deployment, provision the file privately under the service account first:</p>
+    <pre>node --env-file=/run/secrets/telly.env health/apps/server/dist/main.js</pre>
+    <p>The host or operator supplies the file; the command does not create secrets.</p>
+    <p>Existing environment variables override Node's env-file values. Remove stale injected values when rotating a file-based key.</p>
+    <p>In the planned health/apps/server/src/config.ts, validate and redact each required key with Effect 4:</p>
+    <pre>import { Config, Schema } from "effect"
+
+export const GeminiKey = Config.schema(
+  Schema.RedactedFromValue(
+    Schema.String.check(Schema.isMinLength(1))
+  ),
+  "GEMINI_API_KEY"
+)</pre>
+    <p>Load it with <code>yield* GeminiKey</code> during Effect startup. Missing or empty values fail configuration. Unwrap only for the provider call.</p>
+    <p>Redaction prevents accidental value display; it is not encryption. The process and host administrators can still access injected secrets.</p>
+    <p>Python workers read their own injected environment with <code>os.environ</code>. Do not pass the entire server key set to every worker.</p>
+  </details>
+  <details class="stack-notes" id="key-operations">
+    <summary>GitHub setup, rotation, and agent access</summary>
+    <p>In telly, open Settings → Environments → the deployment environment → Environment secrets. Let the repository owner configure access.</p>
+    <p>Reference a needed value through <code>${{ secrets.GEMINI_API_KEY }}</code> in that trusted job's <code>env</code> mapping.</p>
+    <p>Protect the deployment branch and environment. Run ordinary PR checks without provider keys; never run untrusted PR code with deployment secrets.</p>
+    <p>Where the deployment provider supports it, use GitHub OIDC for short-lived deployment access instead of a stored cloud master key.</p>
+    <p>Record only key names, owners, and environment names in issues. Give agents scoped credentials; never put secret values in their prompts.</p>
+    <p>An agent that can execute commands with injected credentials can read them. Environment injection is not an agent security boundary.</p>
+    <p>Give each provider separate development and production keys where supported. Set scopes, quotas, and expiry. Revoke departing users' access.</p>
+    <p>For routine rotation: issue a replacement, update the runtime source, restart, verify a real request, then revoke the old key.</p>
+    <p>For an exposed key: revoke it immediately. Removing it from a comment or Git history does not make it safe.</p>
+    <p>Do not put secrets in Docker ARG/ENV instructions or build artifacts. Add env files to both .gitignore and .dockerignore.</p>
+  </details>
+  <div class="legend sources">
+    <a href="https://developers.cloudflare.com/fundamentals/api/get-started/keys/">Rotate a Global API Key</a>
+    <a href="https://developers.cloudflare.com/fundamentals/manage-members/manage/">Cloudflare members</a>
+    <a href="https://developers.cloudflare.com/workers/configuration/secrets/">Worker secrets</a>
+    <a href="https://developers.cloudflare.com/secrets-store/integrations/workers/">Secrets Store bindings</a>
+    <a href="https://developers.cloudflare.com/secrets-store/access-control/">Secret permissions</a>
+    <a href="https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets">GitHub secrets</a>
+    <a href="https://nodejs.org/api/cli.html#--env-filefile">Node env files</a>
+    <a href="https://effect.website/docs/v4/configuration">Effect configuration</a>
+    <a href="https://vite.dev/guide/env-and-mode">Vite warning</a>
+    <a href="https://docs.expo.dev/guides/environment-variables">Expo warning</a>
+  </div>
+</section>
+
+<!-- 09 DECIDE -->
+<section id="decide">
+  <div class="sh"><span class="no">09</span><h2>Confirmed direction</h2><p>Everything must work without glasses. NOOP stays with the friend. The name stays deferred.</p></div>
+  <div class="settled" aria-label="Confirmed direction">
+    <span class="chip acc">River AI training</span><span class="chip acc">Grokbot agents</span>
+    <span class="chip acc">No 3D map dependency</span><span class="chip acc">Glasses optional</span>
+    <span class="chip acc">NOOP server link stubbed</span><span class="chip acc">One repository</span><span class="chip acc">Stability first</span>
+    <span class="chip acc">Fetch.ai Agentverse required</span><span class="chip acc">ElevenLabs required</span>
+    <span class="chip acc">Phone + web first</span><span class="chip acc">SpacetimeDB selected</span>
+    <span class="chip acc">Alzheimer's first</span><span class="chip acc">Grokbot family chat</span>
+  </div>
+  <p class="tag" style="font-size:14px">No hardware answer is needed to start. Glasses verification applies only to the optional adapter.</p>
+</section>
+
+</main>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, text) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  return e;
+};
+
+/* 03 flows */
+const flows = [
+  { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · M", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
+  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · A, J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
+  { id: "ask", title: '"How is Mom sleeping?"', own: "Muse → Grokbot → data tools · J", steps: ['Family asks', 'Grokbot agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
+  { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'] },
+  { id: "lab", title: "Lab report → hospital", own: "Grokbot → report tool · M, A", steps: ['Health markers', 'Report tool', 'Review report', 'Finchnode', 'Hospital'] },
+];
+const list = document.getElementById("flow-list");
+for (const f of flows) {
+  const row = document.createElement("div");
+  row.className = "flow"; row.id = "flow-" + f.id;
+  row.innerHTML = `<div><h3></h3><div class="own"></div></div>`;
+  row.querySelector("h3").textContent = f.title;
+  row.querySelector(".own").textContent = f.own;
+  const W = 1000, H = 64, gap = 34, n = f.steps.length, w = (W - gap * (n - 1)) / n;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
+  svg.appendChild(el("title", {}, f.title));
+  const defs = el("defs", {});
+  const m = el("marker", { id: "fa-" + f.id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto" });
+  m.appendChild(el("path", { d: "M0 0 L10 5 L0 10 z", class: f.warn ? "ahw" : "ah" }));
+  defs.appendChild(m); svg.appendChild(defs);
+  f.steps.forEach((s, i) => {
+    const x = i * (w + gap);
+    const g = el("g", { id: `flow-${f.id}-${i + 1}` });
+    g.appendChild(el("title", {}, s));
+    const last = i === n - 1;
+    g.appendChild(el("rect", { x: x + 1, y: 8, width: w - 2, height: 48, rx: 24, class: "n", style: last ? "stroke:var(--ink);stroke-width:2" : "" }));
+    g.appendChild(el("circle", { cx: x + 26, cy: 32, r: 11, class: "cp" }));
+    g.appendChild(el("text", { x: x + 26, y: 36, "text-anchor": "middle", class: "s", style: "font-weight:600" }, i + 1));
+    g.appendChild(el("text", { x: x + 44, y: 37, class: "c", style: "font-size:13px" }, s));
+    svg.appendChild(g);
+    if (!last) svg.appendChild(el("path", { d: `M${x + w + 4} 32 H${x + w + gap - 4}`, class: f.warn ? "ew" : "e", "marker-end": `url(#fa-${f.id})` }));
+  });
+  row.appendChild(svg);
+  list.appendChild(row);
+}
+
+/* 05 team swimlanes */
+const team = document.getElementById("team-svg");
+const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows", "camera + validated data"], ["3 · Family loop", "durable alert + ask"], ["4 · Recovery", "report + failure checks"]];
+const lanes = [
+  ["M", "Mahesh", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
+  ["A", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
+  ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot + Muse"], ["Dashboard + recovery"]]],
+];
+const CX = 110, CW = 222, LY = 74, LH = 84;
+phases.forEach(([a, b], i) => {
+  const x = CX + i * CW;
+  team.appendChild(el("text", { x: x + 8, y: 26, class: "t" }, a));
+  team.appendChild(el("text", { x: x + 8, y: 46, class: "s" }, b));
+});
+lanes.forEach(([k, name, cells], r) => {
+  const y = LY + r * LH;
+  const g = el("g", { id: "lane-" + k });
+  g.appendChild(el("title", {}, name));
+  g.appendChild(el("rect", { x: 0, y: y, width: 1000, height: LH - 10, rx: 14, class: "cp" }));
+  g.appendChild(el("circle", { cx: 34, cy: y + 30, r: 17, style: "fill:var(--ink)" }));
+  g.appendChild(el("text", { x: 34, y: y + 35, "text-anchor": "middle", class: "t", style: "fill:var(--card)" }, k));
+  g.appendChild(el("text", { x: 34, y: y + 63, "text-anchor": "middle", class: "s" }, name));
+  cells.forEach((items, c) => {
+    const x = CX + c * CW + 6;
+    items.forEach((t, j) => {
+      const yy = items.length === 1 ? y + 23 : y + 8 + j * 30;
+      g.appendChild(el("rect", { x, y: yy, width: CW - 18, height: 26, rx: 13, class: "n" }));
+      g.appendChild(el("text", { x: x + 14, y: yy + 17.5, class: "c" }, t));
+    });
+  });
+  team.appendChild(g);
+});
+
+</script>
+</body>
+</html>
