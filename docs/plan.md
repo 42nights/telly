@@ -32,7 +32,7 @@ A 3D home map is not required.
 | Tool routing | Fetch.ai Agentverse (required) | Routes agent tool requests to the service API |
 | Voice | ElevenLabs (required) | Multilingual speech |
 | Vision | Gemini | Object detection for medicine boxes |
-| Messaging | Muse | Carries family messages |
+| Messaging | Grokbot | Carries family messages (Muse is not used) |
 | Reports | Finchnode | Hospital report handoff |
 | WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
 
@@ -73,7 +73,7 @@ Issues add `health/spacetimedb/` (database module), `health/packages/db/` (gener
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Grokbot and Muse conversations, service reliability, optional glasses bridge |
+| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Grokbot family conversations, service reliability, optional glasses bridge |
 | Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
 | Mahesh | `maheshwarmurugesan` | Web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, optional square glasses layout |
 

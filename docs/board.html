@@ -247,11 +247,11 @@
       <text class="t" x="670" y="201">Threshold rules</text>
       <text class="s" x="670" y="220">fall · breath · heart</text>
     </g>
-    <g id="sys-muse"><title>Grokbot runs family agents; Fetch.ai routes agent requests; Muse carries family messages</title>
+    <g id="sys-muse"><title>Grokbot runs family agents and carries family messages; Fetch.ai routes agent requests</title>
       <rect class="n" x="652" y="270" width="256" height="76" rx="14"/>
       <text class="t" x="670" y="296"><tspan class="sp">Grokbot</tspan> family agents</text>
       <text class="s" x="670" y="316"><tspan class="sp">Fetch.ai</tspan> Agentverse · required</text>
-      <text class="s" x="670" y="334"><tspan class="sp">Muse</tspan> messages · Grokbot replies</text>
+      <text class="s" x="670" y="334"><tspan class="sp">Grokbot</tspan> messages · replies</text>
     </g>
     <g id="sys-lab"><title>Lab report generator</title>
       <rect class="n" x="652" y="372" width="256" height="66" rx="14"/>
@@ -304,7 +304,7 @@
       <path class="e" d="M642 405 H650" marker-end="url(#ah)"/></g>
     <g id="edge-alert"><title>Alert pushed to family</title>
       <path class="ew" d="M910 205 H988" marker-end="url(#ahw)"/><text class="elw" x="949" y="197" text-anchor="middle">alert</text></g>
-    <g id="edge-ask"><title>Family asks Grokbot agents through Muse; agents use data tools through Fetch.ai</title>
+    <g id="edge-ask"><title>Family asks Grokbot agents; agents use data tools through Fetch.ai</title>
       <path class="e" d="M910 303 H1070 V236" marker-start="url(#ah)" marker-end="url(#ah)"/><text class="el" x="985" y="295" text-anchor="middle">ask · answer</text></g>
     <g id="edge-report"><title>Report to Finchnode</title>
       <path class="e" d="M910 405 H988" marker-end="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">report</text></g>
@@ -318,7 +318,6 @@
     <div class="integration"><strong>Gemma 3B</strong><p>Turn health context into a bounded cue, such as a walk reminder.</p></div>
     <div class="integration"><strong>Grokbot · agent runtime</strong><p>Answer family questions with data tools. Coordinate report and notification actions.</p></div>
     <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Grokbot calls these tools for family questions.</p></div>
-    <div class="integration"><strong>Muse</strong><p>Carry family questions, replies, and alerts. Grokbot supplies the agent behavior.</p></div>
     <div class="integration"><strong>Gemini vision</strong><p>Locate the medicine box in the current frame. Draw its marker without a 3D map.</p></div>
     <div class="integration"><strong>ElevenLabs · required</strong><p>Speak reminders and agent replies in the user's language.</p></div>
     <div class="integration"><strong>NOOP → server · stub only</strong><p>Preserve NOOP itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
@@ -445,13 +444,13 @@
           <rect class="wf-i" x="48" y="270" width="104" height="28" rx="14"/><text class="wf-inv" x="100" y="288" text-anchor="middle">Call</text>
           <rect class="wf-k" x="162" y="270" width="110" height="28" rx="14"/><text class="wf-t" x="217" y="288" text-anchor="middle">Seen</text>
         </g>
-        <g id="ph-chat"><title>Ask the Muse agent</title>
-          <text class="wf-x" x="30" y="344">MUSE</text>
+        <g id="ph-chat"><title>Ask the Grokbot agent</title>
+          <text class="wf-x" x="30" y="344">FAMILY CHAT</text>
           <rect class="wf-s" x="96" y="356" width="194" height="38" rx="16"/><text class="wf-t" x="193" y="380" text-anchor="middle">How is she sleeping?</text>
           <rect class="wf-l" x="30" y="406" width="206" height="56" rx="16"/><text class="wf-t" x="46" y="430">6h 40m · 2 wake-ups</text><text class="wf-x" x="46" y="450">better than Tuesday</text>
         </g>
         <g id="ph-input"><title>Message box</title>
-          <rect class="wf-l" x="30" y="530" width="260" height="42" rx="21"/><text class="wf-x" x="52" y="556">Ask Muse…</text>
+          <rect class="wf-l" x="30" y="530" width="260" height="42" rx="21"/><text class="wf-x" x="52" y="556">Ask…</text>
           <circle class="wf-i" cx="268" cy="551" r="13"/>
         </g>
       </svg>
@@ -631,7 +630,7 @@
       <g id="stack-integrations">
         <rect class="n" x="360" y="320" width="620" height="100" rx="14"/>
         <text class="t" x="380" y="350">Required integrations, behind the service</text>
-        <text class="s" x="380" y="374">Grokbot · Gemini · ElevenLabs · Muse · Finchnode</text>
+        <text class="s" x="380" y="374">Grokbot · Gemini · ElevenLabs · Finchnode</text>
         <text class="s" x="380" y="398">Fetch.ai: Python uAgents worker · River: Python Gemma training</text>
       </g>
       <rect class="cp" x="20" y="450" width="960" height="48" rx="12"/>
@@ -801,7 +800,7 @@ health/apps/server/
     config.ts       Validated, redacted runtime configuration
     db.ts           Server database connection
     integrations/   noop.ts (connection stub) · gemini.ts · elevenlabs.ts
-                    grokbot.ts · muse.ts · finchnode.ts
+                    grokbot.ts · finchnode.ts
                     fetch.ts · gemma.ts</pre>
     <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
     <p>Keep HUD and reports under web routes. Preserve the existing NOOP source and root files; add the new app without connecting it.</p>
@@ -1066,7 +1065,7 @@ const el = (tag, attrs, text) => {
 const flows = [
   { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · M", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
   { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · A, J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
-  { id: "ask", title: '"How is Mom sleeping?"', own: "Muse → Grokbot → data tools · J", steps: ['Family asks', 'Grokbot agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
+  { id: "ask", title: '"How is Mom sleeping?"', own: "Grokbot → data tools · J", steps: ['Family asks', 'Grokbot agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
   { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'] },
   { id: "lab", title: "Lab report → hospital", own: "Grokbot → report tool · M, A", steps: ['Health markers', 'Report tool', 'Review report', 'Finchnode', 'Hospital'] },
 ];
@@ -1106,7 +1105,7 @@ const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows",
 const lanes = [
   ["M", "Mahesh", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
   ["A", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
-  ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot + Muse"], ["Dashboard + recovery"]]],
+  ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot family chat"], ["Dashboard + recovery"]]],
 ];
 const CX = 110, CW = 222, LY = 74, LH = 84;
 phases.forEach(([a, b], i) => {
