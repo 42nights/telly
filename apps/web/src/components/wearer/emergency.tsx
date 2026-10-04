@@ -249,6 +249,7 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 	};
 
 	const family = () => {
+		if (familyId === null || step.kind === "calling") return;
 		setStep({ kind: "calling", what: "family" });
 		void post("/emergency", { kind: "family", report: null }, 0);
 	};
@@ -323,7 +324,7 @@ export function Emergency({
 						className={cn(buttonVariants(), xl)}
 						data-slot="button"
 						href={telHref(FAMILY_PHONE)}
-						onClick={off ? undefined : family}
+						onClick={family}
 					>
 						{step.kind === "calling" && step.what === "family" ? (
 							<Loader2 aria-hidden className="animate-spin" />

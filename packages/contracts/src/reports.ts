@@ -98,6 +98,7 @@ export const Report = Schema.Struct({
 		Schema.NullOr(Schema.Array(ReminderOccurrenceDetail)),
 		null,
 	),
+	restingHeartRate: added(Schema.NullOr(Schema.Array(HealthSample)), null),
 	fields: ReportFields,
 	/** `null` while the report is a draft. A reviewed report no longer changes. */
 	review: Schema.NullOr(ReportReview),
@@ -186,9 +187,16 @@ export type ReportPdfs = typeof ReportPdfs.Type;
 /** `GET …/report-pdfs/:id`: a presigned download link for one of the caller's PDFs. */
 export const ReportPdfLink = Schema.Struct({
 	url: Schema.String,
+	viewUrl: Schema.String,
 	expiresAt: Schema.String,
 });
 export type ReportPdfLink = typeof ReportPdfLink.Type;
+
+export const ReportDelivery = Schema.Struct({
+	recipient: Schema.String,
+	route: Schema.Literal("email"),
+});
+export type ReportDelivery = typeof ReportDelivery.Type;
 
 // FinchNode (https://finchnode.com/docs): read-only, patient-authorized health records. A patient
 // connects a health system and approves sharing in FinchNode Connect; FinchNode checks that consent

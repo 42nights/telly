@@ -134,6 +134,7 @@ export default function WebApp() {
 			}}
 			mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
 			allowsInlineMediaPlayback
+			mediaPlaybackRequiresUserAction={false}
 			style={styles.fill}
 		/>
 	);

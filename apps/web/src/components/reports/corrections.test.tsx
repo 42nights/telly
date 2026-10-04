@@ -71,6 +71,7 @@ function Harness({
 		confirmed: false,
 		setConfirmed: () => {},
 		sendFailure: null,
+		sentTo: null,
 		save: noop,
 		review: noop,
 		submit: noop,

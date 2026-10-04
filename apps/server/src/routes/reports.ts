@@ -3,6 +3,7 @@
 import type { HealthSample } from "@health/contracts";
 import {
 	Report,
+	type ReportDelivery,
 	type ReportEmail,
 	ReportEmailSettings,
 	ReportFields,
@@ -18,7 +19,7 @@ import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
-import type { Mailer } from "../integrations/resend";
+import type { Mail, Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
 import { readAccess, requireHealthRecords } from "./care-profile";
@@ -39,6 +40,7 @@ const Snapshot = Schema.Struct({
 	markers: Report.fields.markers,
 	meals: Report.fields.meals,
 	unresolved: Report.fields.unresolved,
+	restingHeartRate: Report.fields.restingHeartRate,
 });
 type Snapshot = typeof Snapshot.Type;
 const Evidence = Schema.fromJsonString(
@@ -48,7 +50,12 @@ const readSnapshot = (json: string): Snapshot => {
 	const evidence = Schema.decodeUnknownSync(Evidence)(json);
 	return "markers" in evidence
 		? evidence
-		: { markers: evidence, meals: null, unresolved: null };
+		: {
+				markers: evidence,
+				meals: null,
+				unresolved: null,
+				restingHeartRate: null,
+			};
 };
 const Fields = Schema.fromJsonString(ReportFields);
 const emptyFields: ReportFields = {
@@ -160,6 +167,34 @@ const needStorage = (storage: R2Bucket | undefined) => {
 	return storage;
 };
 
+const needMailer = (mailer: Mailer | undefined) => {
+	if (mailer === undefined)
+		throw new ApiFailure("unavailable", "Email is not set up on this server");
+	return mailer;
+};
+
+const HOSPITAL_EMAIL = "ayaan.gazly@gmail.com";
+
+const reportMail = async (
+	report: Report,
+	to: string,
+	idempotencyKey: string,
+	madeAt: Date,
+): Promise<Mail> => ({
+	to,
+	subject: "Reviewed lab report from Telly",
+	text: [
+		`A family member marked this lab report as reviewed on ${report.review?.reviewedAt ?? ""}.`,
+		"The report is attached as a PDF.",
+		"A family review is not a clinician review. Nothing in this report is medical advice.",
+	].join("\n\n"),
+	attachment: {
+		filename: `lab-report-${report.id.slice(0, 8)}.pdf`,
+		content: await reportPdf(report, madeAt),
+	},
+	idempotencyKey,
+});
+
 /**
  * Queues an email of a reviewed report, sends it with the PDF attached, and records the result. The
  * module decides whether anything is queued: an automatic send happens once per report, and only
@@ -182,20 +217,14 @@ const emailReport = async (
 	if (mailer === undefined) failure = "Email is not set up on this server";
 	else
 		try {
-			await mailer({
-				to: report.email?.recipient ?? "",
-				subject: "Reviewed lab report from Telly",
-				text: [
-					`A family member marked this lab report as reviewed on ${report.review?.reviewedAt ?? ""}.`,
-					"The report is attached as a PDF.",
-					"A family review is not a clinician review. Nothing in this report is medical advice.",
-				].join("\n\n"),
-				attachment: {
-					filename: `lab-report-${report.id.slice(0, 8)}.pdf`,
-					content: reportPdf(report, new Date()),
-				},
-				idempotencyKey: sendId,
-			});
+			await mailer(
+				await reportMail(
+					report,
+					report.email?.recipient ?? "",
+					sendId,
+					new Date(),
+				),
+			);
 		} catch (error) {
 			failure = error instanceof Error ? error.message : "The email failed";
 		}
@@ -233,8 +262,13 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 			const samples = readFamilyRecords(db).samples.filter(
 				(sample) => sample.familyId === familyId.toString(),
 			);
+			const markers = generateMarkers(samples);
+			const resting = markers.find(
+				(m) => m.metric === "resting_heart_rate",
+			)?.sample;
+			const since = Date.now() - 30 * 24 * 3_600_000;
 			const snapshot: Snapshot = {
-				markers: generateMarkers(samples),
+				markers,
 				// Meal facts are health records (#26): without the scope the report leaves them out.
 				meals: readAccess(c).mine.includes("health_records")
 					? readMeals(c)
@@ -242,6 +276,14 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 				unresolved: readReminderHistory(db, familyId.toString()).filter(
 					({ occurrence }) => occurrence.state === "unresolved",
 				),
+				restingHeartRate: samples
+					.filter(
+						(s) =>
+							s.metric === "resting_heart_rate" &&
+							s.source === resting?.source &&
+							Date.parse(s.sourceTime) >= since,
+					)
+					.sort((a, b) => a.sourceTime.localeCompare(b.sourceTime)),
 			};
 			await callReducer(db, (connection) =>
 				connection.reducers.createReport({
@@ -290,35 +332,40 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 		})
 		.post("/reports/:reportId/email", async (c) => {
 			const { id } = findReport(c);
-			if (mailer === undefined)
-				throw new ApiFailure(
-					"unavailable",
-					"Email is not set up on this server",
-				);
-			await emailReport(c, id, false, mailer);
+			await emailReport(c, id, false, needMailer(mailer));
 			return c.json(findReport(c) satisfies Report);
 		})
-		.post("/reports/:reportId/submit", (c) => {
-			if (findReport(c).review === null)
+		.post("/reports/:reportId/submit", async (c) => {
+			const report = findReport(c);
+			if (report.review === null)
 				throw new ApiFailure(
 					"conflict",
 					"Review the report before you submit it",
 				);
-			// FinchNode is a read-only, patient-authorized EHR API: "It reads records. It never writes
-			// back to a health system" (https://finchnode.com/docs). Its API reference
-			// (https://finchnode.com/docs/api, contract 2026-09-22) has no operation that delivers a
-			// report to a hospital, so hospital delivery stays unavailable until #8 picks a real path.
-			throw new ApiFailure(
-				"unavailable",
-				"Hospital delivery is unavailable: Finchnode has no report delivery API",
+			const deliver = needMailer(mailer);
+			const mail = await reportMail(
+				report,
+				HOSPITAL_EMAIL,
+				`submit-${report.id}`,
+				new Date(report.review.reviewedAt),
 			);
+			await deliver(mail).catch((error: unknown) => {
+				throw new ApiFailure(
+					"upstream_error",
+					error instanceof Error ? error.message : "The email failed",
+				);
+			});
+			return c.json({
+				recipient: HOSPITAL_EMAIL,
+				route: "email",
+			} satisfies ReportDelivery);
 		})
 		.post("/reports/:reportId/pdfs", async (c) => {
 			const bucket = needStorage(storage);
 			const report = findReport(c);
 			const madeAt = new Date();
 			const id = `${report.id}.${crypto.randomUUID()}`;
-			const pdf = reportPdf(report, madeAt);
+			const pdf = await reportPdf(report, madeAt);
 			await bucket.put(`${pdfPrefix(c)}${id}.pdf`, pdf, "application/pdf");
 			return c.json(
 				{
@@ -354,11 +401,11 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 			if (!(PDF_ID.test(id) && (await bucket.exists(key))))
 				throw new ApiFailure("not_found", "No such PDF");
 			const seconds = 300;
-			const url = await bucket.presign(
-				key,
-				`lab-report-${id.slice(0, 8)}.pdf`,
-				seconds,
-			);
+			const filename = `lab-report-${id.slice(0, 8)}.pdf`;
+			const [url, viewUrl] = await Promise.all([
+				bucket.presign(key, filename, seconds, "attachment"),
+				bucket.presign(key, filename, seconds, "inline"),
+			]);
 			const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
-			return c.json({ url, expiresAt } satisfies ReportPdfLink);
+			return c.json({ url, viewUrl, expiresAt } satisfies ReportPdfLink);
 		});

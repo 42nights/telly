@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { ReminderHistory } from "@health/contracts/reminders";
 import {
 	Report,
+	ReportDelivery,
 	ReportPdf,
 	ReportPdfLink,
 	ReportPdfs,
@@ -11,6 +12,7 @@ import {
 } from "@health/contracts/reports";
 import { Effect, Schema } from "effect";
 import type { Hono } from "hono";
+import { PDFDocument } from "pdf-lib";
 import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import { openFamilyDb, readFamilyRecords } from "../db";
@@ -144,7 +146,6 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				);
 				expect(direct).toBe("SenderError: report is already reviewed");
 
-				// Hospital delivery has no provider API, so submission is an explicit unavailable error.
 				const submitted = yield* send(app, "POST", `${path}/submit`);
 				expect(failure(submitted)).toEqual([503, "unavailable"]);
 
@@ -310,9 +311,10 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				expect(key).toBe(
 					`report-pdfs/${familyId}/${owner.identity}/${pdf.id}.pdf`,
 				);
-				const text = new TextDecoder("latin1").decode(objects.get(key)?.body);
-				expect(text.startsWith("%PDF-1.4")).toBe(true);
-				expect(text).toContain(`(Layout version 2 - report ${report.id})`);
+				const stored = yield* Effect.promise(() =>
+					PDFDocument.load(objects.get(key)?.body ?? new Uint8Array()),
+				);
+				expect(stored.getTitle()).toBe(`Lab report ${report.id}`);
 
 				// A later PDF of the same report lists first.
 				yield* Effect.sleep("5 millis");
@@ -403,7 +405,10 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 		const state = { failWith: null as string | null };
 		const mailer: Mailer = async (mail) => {
 			if (state.failWith !== null) throw new Error(state.failWith);
-			sent.push(mail);
+			const same = sent.find((m) => m.idempotencyKey === mail.idempotencyKey);
+			if (same === undefined) sent.push(mail);
+			else if (!Bun.deepEquals(same, mail))
+				throw new Error("The email service refused the email (HTTP 409)");
 		};
 		return { sent, state, mailer };
 	};
@@ -493,10 +498,10 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 				const again = yield* send(app, "POST", `/reports/${report.id}/review`);
 				expect(again.status).toBe(200);
 				expect(sent.map((mail) => mail.to)).toEqual([recipient]);
-				const pdf = new TextDecoder("latin1").decode(
-					sent[0]?.attachment.content,
+				const pdf = yield* Effect.promise(() =>
+					PDFDocument.load(sent[0]?.attachment.content ?? new Uint8Array()),
 				);
-				expect(pdf).toContain(`report ${report.id}`);
+				expect(pdf.getTitle()).toBe(`Lab report ${report.id}`);
 
 				// A draft cannot be emailed by hand.
 				const created = yield* send(app, "POST", "/reports");
@@ -534,6 +539,38 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 				const unset = familyApp(db, familyId, reportRoutes());
 				const none = yield* send(unset, "POST", `/reports/${report.id}/email`);
 				expect(failure(none)).toEqual([503, "unavailable"]);
+			}),
+		));
+
+	test("submit emails the reviewed report's PDF to the hospital stand-in once, and says when it failed", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Submit");
+				const { sent, state, mailer } = spyMailer();
+				const app = familyApp(db, familyId, reportRoutes(undefined, mailer));
+				const report = yield* reviewedReport(app);
+				const path = `/reports/${report.id}/submit`;
+
+				state.failWith = "The email service did not answer";
+				const failed = yield* send(app, "POST", path);
+				expect(failure(failed)).toEqual([502, "upstream_error"]);
+				expect(failed.json).toMatchObject({
+					message: "The email service did not answer",
+				});
+
+				state.failWith = null;
+				for (const _ of [1, 2]) {
+					const submitted = yield* send(app, "POST", path);
+					expect(submitted.status).toBe(200);
+					expect(
+						Schema.decodeUnknownSync(ReportDelivery)(submitted.json),
+					).toEqual({ recipient: "ayaan.gazly@gmail.com", route: "email" });
+				}
+				expect(sent.map((mail) => [mail.to, mail.idempotencyKey])).toEqual([
+					["ayaan.gazly@gmail.com", `submit-${report.id}`],
+				]);
+				const pdf = sent[0]?.attachment.content ?? new Uint8Array();
+				expect(new TextDecoder("latin1").decode(pdf.slice(0, 5))).toBe("%PDF-");
 			}),
 		));
 });
