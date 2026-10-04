@@ -23,9 +23,25 @@ export const Sources = Schema.Struct({
 });
 export type Sources = typeof Sources.Type;
 
-/** Every non-2xx JSON response from the server. */
+/**
+ * Every non-2xx JSON response from the server. `unauthorized` (401): no valid sign-in.
+ * `forbidden` (403): signed in, but not a member of the family. `invalid_request` (400): the body or
+ * path failed its schema. `unavailable` (503): a provider or the database is not configured or not
+ * reachable; never a substitute result. `upstream_error` (502): a provider replied with an error.
+ */
+export const ApiErrorCode = Schema.Literals([
+	"not_found",
+	"internal",
+	"unauthorized",
+	"forbidden",
+	"invalid_request",
+	"unavailable",
+	"upstream_error",
+]);
+export type ApiErrorCode = typeof ApiErrorCode.Type;
+
 export const ApiError = Schema.Struct({
-	error: Schema.Literals(["not_found", "internal"]),
+	error: ApiErrorCode,
 	message: Schema.String,
 });
 export type ApiError = typeof ApiError.Type;

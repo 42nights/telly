@@ -2,11 +2,12 @@ import { NodeRuntime } from "@effect/platform-node";
 import { type ServerType, serve } from "@hono/node-server";
 import { Effect, Layer } from "effect";
 import { createApp } from "./app";
+import { serverConfig } from "./config";
 import { ENV } from "./env.server";
 
 const listen = (port: number) =>
 	Effect.callback<ServerType, Error>((resume) => {
-		const app = createApp(ENV.CORS_ORIGIN);
+		const app = createApp(serverConfig(ENV));
 		const server = serve({ fetch: app.fetch, hostname: ENV.HOST, port }, () =>
 			resume(Effect.succeed(server)),
 		);

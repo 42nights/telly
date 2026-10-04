@@ -38,7 +38,8 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Server endpoints `GET /health` and `GET /api/sources` | Ready |
 | CI: lint, types, tests, Fallow, Sentrux, server build and runtime smoke | Runs on Namespace runners ([runs](https://github.com/ayaangazali/telly/actions/workflows/health.yml)) |
 | NOOP-to-server connection | Stub only. Reports `not_connected`, with no transport, readings, or nudges |
-| Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database. No sign-in or HTTP route uses them yet |
+| Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database |
+| Sign-in check and family data API (server only) | OIDC token check and family access on every `/api` route except `/api/sources`. Tested with a local test issuer only. The production issuer is not chosen, and no sign-in screen exists ([#4](https://github.com/ayaangazali/telly/issues/4)) |
 | Product features from the overview | Planned |
 | Providers: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
@@ -66,7 +67,7 @@ bun run dev
 | App | Address |
 | --- | --- |
 | Web HUD and family dashboard | <http://localhost:3001> |
-| Server | <http://localhost:3000> (`GET /health`, `GET /api/sources`) |
+| Server | <http://localhost:3000> (`GET /health`, `GET /api/sources`, and the signed-in `/api` routes below) |
 | Phone app | Open it in Expo Go |
 
 To start one app only, use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native`.
@@ -74,6 +75,20 @@ To start one app only, use `bun run dev:web`, `bun run dev:server`, or `bun run 
 On a physical phone, set `EXPO_PUBLIC_SERVER_URL` in `apps/native/.env` to the LAN address of your computer, for example `http://192.168.1.20:3000`. Then start the server with `HOST=0.0.0.0`.
 
 Each app keeps its environment schema in `.env.schema`. Varlock generates `src/env.ts` during `bun install`. After you change a schema, run `bun run env:generate`. Keep secrets in ignored env files, never in Git.
+
+### Server API
+
+All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER`, `OIDC_AUDIENCE`, `SPACETIMEDB_URI`, and `SPACETIMEDB_DATABASE` in `apps/server/.env` (all four, or none). The database must trust the same issuer. Without them, these routes answer `503 unavailable`. Every error body is the `ApiError` contract.
+
+| Route | Result |
+| --- | --- |
+| `GET /api/me` | The verified caller: issuer, subject, and database identity |
+| `GET /api/families`, `POST /api/families` | The caller's families; create a family with the caller as its first member |
+| `GET /api/families/:familyId` | That family's samples, alerts, messages, and acknowledgements |
+| `POST /api/families/:familyId/members` | Add a person by their database identity |
+| `POST /api/families/:familyId/samples` | Record a health sample; the database sets the receive time |
+
+A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 
 ## Checks
 
