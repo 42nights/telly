@@ -17,7 +17,7 @@ const localTime = (minute: number) =>
 export const minuteOfDay = (time: string) =>
 	Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 
-const views = ({ connection }: FamilyDb) => {
+export const views = ({ connection }: FamilyDb) => {
 	if (!connection.isActive)
 		throw new DbUnavailable({
 			reason: "connection closed; cached rows are stale",

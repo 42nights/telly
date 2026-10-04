@@ -694,7 +694,7 @@
     <div class="integration"><strong>Why Effect 4</strong><p>Keep typed service logic, schemas, and resource cleanup. Hono owns HTTP; do not depend on the unstable HttpApi module.</p></div>
     <div class="integration"><strong>Why Node + Bun workspaces</strong><p>Node has documented SpacetimeDB SDK support. Bun workspaces share packages across web, native, and server. Biome handles formatting and lint.</p></div>
     <div class="integration"><strong>Why no SQL ORM</strong><p>SpacetimeDB is already selected. Use its schema and generated bindings, not a second database.</p></div>
-    <div class="integration"><strong>Authentication</strong><p>Use verified OIDC identities and family permissions in both API and database. SpacetimeAuth beta remains a release risk, not a waived check.</p></div>
+    <div class="integration"><strong>Authentication</strong><p>Use verified OIDC identities and family permissions in both API and database. Google is the sign-in issuer (decided 2026-10-04).</p></div>
     <div class="integration"><strong>Release gate</strong><p>Pin tested versions. Prove access control, reconnects, stale-data behavior, and alert delivery before calling the system reliable.</p></div>
   </div>
   <details class="stack-notes" id="hono-choice">
@@ -1099,7 +1099,7 @@ export const GeminiKey = Config.schema(
     <span class="chip acc">Alzheimer's first</span><span class="chip acc">Gemini chat · ElevenLabs voice</span>
   </div>
   <p class="tag" style="font-size:14px">No hardware answer is needed to start. Glasses verification applies only to the optional adapter.</p>
-  <p class="tag" style="font-size:14px">Still open, outside this plan: the production sign-in issuer, the deployment target, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication.</p>
+  <p class="tag" style="font-size:14px">Decided on 2026-10-04: Google sign-in, deployment on the team's Cloudflare account, and SpacetimeDB Maincloud. Still open, outside this plan: data retention, hospital delivery, the River base model and spend, live NOOP data, Photon iMessage access, and public source or agent publication.</p>
 </section>
 
 </main>

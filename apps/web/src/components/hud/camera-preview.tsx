@@ -115,7 +115,12 @@ export function CameraPreview({
 					autoPlay
 					className="absolute inset-0 size-full bg-black object-contain"
 					muted
-					onLoadedData={(event) => onVideo?.(event.currentTarget)}
+					onLoadedData={(event) => {
+						// For a camera stream, `loadeddata` can fire before any frame is painted, and a
+						// capture then reads a blank image. Wait for the first presented frame.
+						const video = event.currentTarget;
+						video.requestVideoFrameCallback(() => onVideo?.(video));
+					}}
 					playsInline
 					ref={(video) => {
 						if (video && video.srcObject !== state.stream)

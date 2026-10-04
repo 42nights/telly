@@ -15,6 +15,7 @@ import {
 import { noopConnection } from "./integrations/noop";
 import { accountRoutes } from "./routes/families";
 import { familyDomainRoutes } from "./routes/index";
+import { signInRoutes } from "./routes/sign-in";
 
 export const createApp = (config: ServerConfig) => {
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
@@ -41,6 +42,8 @@ export const createApp = (config: ServerConfig) => {
 			});
 			return c.json({ sources: [noop] } satisfies Sources);
 		})
+		// Sign-in itself cannot require sign-in.
+		.route("/api/sign-in", signInRoutes(config.auth))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())

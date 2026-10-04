@@ -11,12 +11,14 @@ const links = [
 	{ to: "/hud", label: "Home" },
 	{ to: "/medicine", label: "Medicine" },
 	{ to: "/bedtime", label: "Bedtime" },
+	{ to: "/trip", label: "Going out" },
 	{ to: "/family", label: "Family" },
 	{ to: "/care-profile", label: "Care plan" },
 	{ to: "/chat", label: "Chat" },
 	{ to: "/care", label: "Care" },
 	{ to: "/dashboard", label: "Dashboard" },
 	{ to: "/reports", label: "Reports" },
+	{ to: "/appointments", label: "Visits" },
 	{ to: "/settings", label: "Settings" },
 ] as const;
 

@@ -237,6 +237,147 @@ const finchnodeLink = table(
 	},
 );
 
+const TripStep = t.enum("TripStep", {
+	// The wearer was asked "Are you heading out now?".
+	Asked: t.unit(),
+	// The wearer confirmed and stated a plan. A later `Leaving` in the same trip is a changed plan.
+	Leaving: t.unit(),
+	Cancelled: t.unit(),
+	Arrived: t.unit(),
+});
+
+// A leaving-home check-in, one row per step. Rows are never changed, so an earlier plan stays in
+// the history and a later one never gets overwritten. No location is stored.
+const tripEvent = table(
+	{ name: "trip_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server for the `Asked` row, so it knows which trip it started.
+		tripId: t.string().index("btree"),
+		step: TripStep,
+		// What started or changed the trip: `manual` or `departure_signal`.
+		source: t.string(),
+		purpose: t.option(t.string()),
+		destination: t.option(t.string()),
+		// The wearer's choice of family notices, set on `Leaving`.
+		notifyDeparture: t.bool(),
+		notifyArrival: t.bool(),
+		by: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
+// What a person's device last said about its position. `NoFix` covers a timeout or no signal.
+const LocationStatus = t.enum("LocationStatus", {
+	Fix: t.unit(),
+	GpsDenied: t.unit(),
+	NoFix: t.unit(),
+});
+
+// One position from a device; `fixTime` is when the device took it, by the device clock.
+const LocationFix = t.object("LocationFix", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+	accuracyMeters: t.f64(),
+	fixTime: t.timestamp(),
+});
+
+// A person's latest location report in one family: one row per sharer, replaced by each report,
+// so no trail is kept. `fix` is the last good fix; a later GPS-denied or no-fix report changes
+// only `status` and `reportedAt`, so the fix stays readable as the last known location.
+const location = table(
+	{
+		name: "location",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		status: LocationStatus,
+		fix: t.option(LocationFix),
+		// When the database accepted the latest report.
+		reportedAt: t.timestamp(),
+	},
+);
+
+// One person allows one other family member to see their location. Deleting it revokes access.
+const locationShare = table(
+	{
+		name: "location_share",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		viewer: t.identity().index("btree"),
+		sharedAt: t.timestamp(),
+	},
+);
+
+// One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
+// report, or caregiver help. The photo itself is never stored. The server validates `fact` against
+// `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
+// Meal facts are health records (#26 `health_records`); photo facts also need `media`.
+const mealFact = table(
+	{ name: "meal_fact" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The client's id for one meal occasion; it groups the meal's facts.
+		mealId: t.string(),
+		fact: t.string(),
+		recordedBy: t.identity(),
+		recordedAt: t.timestamp(),
+	},
+);
+
+// A family's permission to remember where medicine containers were last seen (issue #29). Without
+// this row no sighting is stored, and removing it deletes the family's sightings.
+const medicineMemory = table(
+	{ name: "medicine_memory" },
+	{
+		familyId: t.u64().primaryKey(),
+		// Agreed familiar places to search when a container is not where it was last seen.
+		places: t.array(t.string()),
+		setBy: t.identity(),
+		setAt: t.timestamp(),
+	},
+);
+
+// Where a medicine container was last seen: one row per family and container description. Only a
+// newer camera observation that the person confirmed changes it; `notFoundAt` marks it outdated.
+const medicineSighting = table(
+	{ name: "medicine_sighting" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		container: t.string(),
+		place: t.string(),
+		// When the camera captured the frame the container was found in.
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+		savedBy: t.identity(),
+		notFoundAt: t.option(t.timestamp()),
+	},
+);
+
 // The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
 // the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
 const NeedKind = t.enum("NeedKind", {
@@ -484,6 +625,19 @@ const reminderTimer = table(
 	},
 );
 
+// Home-speaker handoff settings (issue #46), one row per family. No row means off.
+const speakerSettings = table(
+	{ name: "speaker_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // The wearer's care profile (#26). Each save is a new version, so the history keeps who changed
 // it and when. JSON that the server validates against `@health/contracts/care-profile`.
 const careProfileVersion = table(
@@ -546,6 +700,141 @@ const careGrantEvent = table(
 		changedAt: t.timestamp(),
 	},
 );
+
+// An activity the family agreed with the wearer, from a named source such as a physiotherapist's
+// handout (#41). The app never writes exercise steps and never picks one from a health reading.
+// Only a verified plan is offered to the wearer; a plan never changes after it is created.
+const exercisePlan = table(
+	{ name: "exercise_plan" },
+	{
+		// Chosen by the server, so it knows which plan it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts/exercise` schemas.
+		plan: t.string(),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+		verifiedBy: t.option(t.identity()),
+		verifiedAt: t.option(t.timestamp()),
+	},
+);
+
+// One wearer answer or control in one exercise session. Ids are chosen by the client, so an event
+// sent again after a lost reply is stored once.
+const exerciseEvent = table(
+	{ name: "exercise_event" },
+	{
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		planId: t.string(),
+		sessionId: t.string().index("btree"),
+		kind: t.string(),
+		// Why a `stopped` session stopped; empty for every other kind.
+		reason: t.option(t.string()),
+		actor: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
+// A food-delivery proposal's status (#43). The provider is simulated; no row means a real order.
+const OrderStatus = t.enum("OrderStatus", {
+	Proposed: t.unit(),
+	Approved: t.unit(),
+	Replaced: t.unit(),
+	Placed: t.unit(),
+	Uncertain: t.unit(),
+	Failed: t.unit(),
+	Delivered: t.unit(),
+	Eaten: t.unit(),
+});
+
+// Append-only: each row is one status change of one proposal. The first row (`Proposed`) holds the
+// proposal as JSON that the server validates against `@health/contracts/delivery`.
+const deliveryEvent = table(
+	{ name: "delivery_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server; also the provider's idempotency key for the order.
+		proposalId: t.string().index("btree"),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+		actor: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
+// A proposed visit (#44). `visit` is fixed when it is suggested. A request and a provider
+// confirmation each keep who recorded them and when, so a suggestion or a request is never a
+// booking. Nothing here contacts a provider: every step is a member's record.
+const appointment = table(
+	{ name: "appointment" },
+	{
+		// Chosen by the server, so it knows which appointment it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts` appointment schemas.
+		visit: t.string(),
+		prep: t.string(),
+		// "model" or "member": who proposed the visit.
+		source: t.string(),
+		suggestedBy: t.identity(),
+		suggestedAt: t.timestamp(),
+		requestedBy: t.option(t.identity()),
+		requestedAt: t.option(t.timestamp()),
+		// The provider's confirmation as a member received it (JSON).
+		confirmation: t.option(t.string()),
+		confirmedBy: t.option(t.identity()),
+		confirmedAt: t.option(t.timestamp()),
+		cancelledBy: t.option(t.identity()),
+		cancelledAt: t.option(t.timestamp()),
+		// The summary a member reviewed (JSON); replaced by each new review.
+		summary: t.option(t.string()),
+		summaryReviewedBy: t.option(t.identity()),
+		summaryReviewedAt: t.option(t.timestamp()),
+	},
+);
+
+// A member's consent to send an appointment's reviewed summary to one clinician. `explicit` covers
+// one send of the summary as reviewed at approval; `standing` covers repeated sends at the agreed
+// frequency. Sends are simulated: no clinician delivery path is approved.
+const clinicianShare = table(
+	{ name: "clinician_share" },
+	{
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		appointmentId: t.string(),
+		// JSON: the recipient and the chosen summary sections.
+		recipient: t.string(),
+		sections: t.string(),
+		// "explicit" (frequency "once") or "standing" (frequency "weekly" or "monthly").
+		consent: t.string(),
+		frequency: t.string(),
+		approvedBy: t.identity(),
+		approvedAt: t.timestamp(),
+		// For explicit consent: the summary review it covers.
+		approvedSummaryAt: t.option(t.timestamp()),
+		revokedBy: t.option(t.identity()),
+		revokedAt: t.option(t.timestamp()),
+		sends: t.u32(),
+		lastSentAt: t.option(t.timestamp()),
+	},
+);
+
+// The wearer's agreed kitchen abilities and food dislikes (#42): one current row per family, with
+// who saved it last. JSON that the server validates against `CookingProfile` in
+// `@health/contracts/cooking`.
+const cookingProfile = table(
+	{ name: "cooking_profile" },
+	{
+		familyId: t.u64().primaryKey(),
+		profile: t.string(),
+		editedBy: t.identity(),
+		editedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -559,6 +848,10 @@ const spacetimedb = schema({
 	alertDelivery,
 	report,
 	finchnodeLink,
+	location,
+	locationShare,
+	medicineMemory,
+	medicineSighting,
 	contactLadder,
 	careNeed,
 	contactAttempt,
@@ -569,9 +862,18 @@ const spacetimedb = schema({
 	reminderEvent,
 	reminderRequest,
 	reminderTimer,
+	speakerSettings,
+	mealFact,
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	tripEvent,
+	exercisePlan,
+	exerciseEvent,
+	deliveryEvent,
+	appointment,
+	clinicianShare,
+	cookingProfile,
 });
 export default spacetimedb;
 
@@ -1262,6 +1564,347 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+// Debounce: an unanswered question stays open for 30 minutes and a confirmed trip for 12 hours. A
+// departure signal within 30 minutes of the family's last trip step asks nothing.
+const ASK_OPEN_MICROS = 30n * 60_000_000n;
+const TRIP_OPEN_MICROS = 12n * 3_600_000_000n;
+const SIGNAL_QUIET_MICROS = 30n * 60_000_000n;
+
+const tripNotice = (
+	ctx: Ctx,
+	familyId: bigint,
+	clientId: string,
+	body: string,
+) =>
+	ctx.db.message.insert({
+		id: 0n,
+		familyId,
+		sender: ctx.sender,
+		body,
+		sentAt: ctx.timestamp,
+		clientId,
+	});
+
+type TripRow = Infer<typeof tripEvent.rowType>;
+
+// ponytail: scans the family's trip history per step; index by time if it grows large.
+const tripHistory = (ctx: Ctx, familyId: bigint): TripRow[] =>
+	[...ctx.db.tripEvent.familyId.filter(familyId)].sort((a, b) =>
+		a.id < b.id ? -1 : 1,
+	);
+
+const TripPlan = t.object("TripPlan", {
+	purpose: t.string(),
+	destination: t.option(t.string()),
+	notifyDeparture: t.bool(),
+	notifyArrival: t.bool(),
+});
+type TripPlan = Infer<typeof TripPlan>;
+
+/** Whether a new question may start: no trip is open and a departure signal is not repeating. */
+const mayAsk = (ctx: Ctx, latest: TripRow | undefined, source: string) => {
+	if (latest === undefined) return true;
+	const age =
+		ctx.timestamp.microsSinceUnixEpoch - latest.at.microsSinceUnixEpoch;
+	if (latest.step.tag === "Asked" && age < ASK_OPEN_MICROS) return false;
+	if (latest.step.tag === "Leaving" && age < TRIP_OPEN_MICROS) return false;
+	return !(source === "departure_signal" && age < SIGNAL_QUIET_MICROS);
+};
+
+/** A stated plan. The first one sends the departure notice when the wearer chose it. */
+const leave = (
+	ctx: Ctx,
+	trip: TripRow[],
+	plan: TripPlan | undefined,
+	record: () => void,
+) => {
+	if (plan === undefined) throw new SenderError("purpose is required");
+	requireText("purpose", plan.purpose);
+	const last = trip[trip.length - 1];
+	if (
+		last?.step.tag === "Leaving" &&
+		last.purpose === plan.purpose &&
+		last.destination === plan.destination &&
+		last.notifyDeparture === plan.notifyDeparture &&
+		last.notifyArrival === plan.notifyArrival
+	)
+		return; // a resend
+	const first = !trip.some((e) => e.step.tag === "Leaving");
+	record();
+	if (first && plan.notifyDeparture && last !== undefined)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-left`,
+			`I'm leaving home: ${plan.purpose}${plan.destination === undefined ? "" : ` (${plan.destination})`}.`,
+		);
+};
+
+/** `Cancelled` or `Arrived`. Arrival sends the arrival notice when the wearer chose it. */
+const endTrip = (
+	ctx: Ctx,
+	last: TripRow,
+	arrived: boolean,
+	record: () => void,
+) => {
+	if (arrived && last.step.tag !== "Leaving")
+		throw new SenderError("the trip has not started");
+	record();
+	if (arrived && last.notifyArrival)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-arrived`,
+			`I arrived: ${last.destination ?? last.purpose ?? "my trip"}.`,
+		);
+};
+
+/**
+ * One step of a leaving-home check-in. `Asked` starts a trip unless one is open or a departure
+ * signal repeats within the quiet time; then it records nothing. `Leaving` needs the plan. The
+ * chosen family notices are family messages, written in the same transaction as the step.
+ */
+export const recordTripEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		tripId: t.string(),
+		step: TripStep,
+		source: t.string(),
+		plan: t.option(TripPlan),
+	},
+	(ctx, { familyId, tripId, step, source, plan }) => {
+		requireMember(ctx, familyId);
+		requireText("tripId", tripId);
+		if (source !== "manual" && source !== "departure_signal")
+			throw new SenderError("source must be manual or departure_signal");
+		const history = tripHistory(ctx, familyId);
+		const trip = history.filter((e) => e.tripId === tripId);
+		const last = trip[trip.length - 1];
+		const record = () => {
+			ctx.db.tripEvent.insert({
+				id: 0n,
+				familyId,
+				tripId,
+				step,
+				source,
+				purpose: plan?.purpose,
+				destination: plan?.destination,
+				notifyDeparture: plan?.notifyDeparture === true,
+				notifyArrival: plan?.notifyArrival === true,
+				by: ctx.sender,
+				at: ctx.timestamp,
+			});
+		};
+		if (step.tag === "Asked") {
+			// A resend of the question finds its trip and records nothing.
+			if (
+				last === undefined &&
+				mayAsk(ctx, history[history.length - 1], source)
+			)
+				record();
+			return;
+		}
+		if (last === undefined) throw new SenderError("no such trip");
+		if (step.tag !== "Leaving" && last.step.tag === step.tag) return; // a resend
+		if (last.step.tag === "Cancelled" || last.step.tag === "Arrived")
+			throw new SenderError("the trip has ended");
+		if (step.tag === "Leaving") return leave(ctx, trip, plan, record);
+		endTrip(ctx, last, step.tag === "Arrived", record);
+	},
+);
+
+const sharesOf = (ctx: Ctx, familyId: bigint) => [
+	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
+];
+
+/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+export const shareLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		if (viewer.isEqual(ctx.sender))
+			throw new SenderError("viewer must be another family member");
+		const member = ctx.db.familyMember.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (member.next().done)
+			throw new SenderError("viewer is not a member of this family");
+		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
+		ctx.db.locationShare.insert({
+			id: 0n,
+			familyId,
+			sharer: ctx.sender,
+			viewer,
+			sharedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Whether a fact comes from a photo: the photo was taken, or an estimate was made from it.
+const fromPhoto = (fact: string) => {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(fact);
+	} catch {
+		throw new SenderError("fact must be JSON");
+	}
+	if (typeof parsed !== "object" || parsed === null || !("type" in parsed))
+		throw new SenderError("fact must have a type");
+	if (parsed.type === "photo_taken") return true;
+	return (
+		parsed.type === "food_estimate" &&
+		"estimate" in parsed &&
+		typeof parsed.estimate === "object" &&
+		parsed.estimate !== null &&
+		"source" in parsed.estimate &&
+		parsed.estimate.source === "photo"
+	);
+};
+
+export const recordMealFact = spacetimedb.reducer(
+	{ familyId: t.u64(), mealId: t.string(), fact: t.string() },
+	(ctx, recorded) => {
+		requireCareScope(ctx, recorded.familyId, "health_records");
+		requireText("mealId", recorded.mealId);
+		if (fromPhoto(recorded.fact))
+			requireCareScope(ctx, recorded.familyId, "media");
+		ctx.db.mealFact.insert({
+			...recorded,
+			id: 0n,
+			recordedBy: ctx.sender,
+			recordedAt: ctx.timestamp,
+		});
+	},
+);
+
+/** Stops one member seeing the sender's location. After the last revoke the stored location is deleted. */
+export const revokeLocationShare = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		const shares = sharesOf(ctx, familyId);
+		for (const share of shares)
+			if (share.viewer.isEqual(viewer))
+				ctx.db.locationShare.id.delete(share.id);
+		if (shares.some((s) => !s.viewer.isEqual(viewer))) return;
+		for (const row of ctx.db.location.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.location.id.delete(row.id);
+	},
+);
+
+const requireValidFix = (ctx: Ctx, fix: Infer<typeof LocationFix>) => {
+	if (!(Math.abs(fix.latitude) <= 90 && Math.abs(fix.longitude) <= 180))
+		throw new SenderError("coordinates out of range");
+	if (!(fix.accuracyMeters > 0 && Number.isFinite(fix.accuracyMeters)))
+		throw new SenderError("accuracyMeters must be positive");
+	if (
+		fix.fixTime.microsSinceUnixEpoch >
+		ctx.timestamp.microsSinceUnixEpoch + MAX_CLOCK_AHEAD_MICROS
+	)
+		throw new SenderError("fixTime is in the future");
+};
+
+/**
+ * Stores the sender's latest location report. Refused while the sender shares with nobody, so
+ * nothing is collected without a share. A report without a fix keeps the last fix.
+ */
+export const reportLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), status: LocationStatus, fix: t.option(LocationFix) },
+	(ctx, { familyId, status, fix }) => {
+		requireMember(ctx, familyId);
+		if (sharesOf(ctx, familyId).length === 0)
+			throw new SenderError("location is not shared with anyone");
+		if ((status.tag === "Fix") !== (fix !== undefined))
+			throw new SenderError("a fix is required exactly when status is Fix");
+		if (fix !== undefined) requireValidFix(ctx, fix);
+		const existing = ctx.db.location.byFamilySharer
+			.filter([familyId, ctx.sender])
+			.next().value;
+		const row = {
+			id: existing?.id ?? 0n,
+			familyId,
+			sharer: ctx.sender,
+			status,
+			fix: fix ?? existing?.fix,
+			reportedAt: ctx.timestamp,
+		};
+		if (existing === undefined) ctx.db.location.insert(row);
+		else ctx.db.location.id.update(row);
+	},
+);
+
+export const setMedicineMemory = spacetimedb.reducer(
+	{ familyId: t.u64(), enabled: t.bool(), places: t.array(t.string()) },
+	(ctx, { familyId, enabled, places }) => {
+		requireMember(ctx, familyId);
+		if (!enabled) {
+			ctx.db.medicineMemory.familyId.delete(familyId);
+			ctx.db.medicineSighting.familyId.delete(familyId);
+			return;
+		}
+		for (const place of places) requireText("place", place);
+		const row = { familyId, places, setBy: ctx.sender, setAt: ctx.timestamp };
+		if (ctx.db.medicineMemory.familyId.find(familyId) === null)
+			ctx.db.medicineMemory.insert(row);
+		else ctx.db.medicineMemory.familyId.update(row);
+	},
+);
+
+// A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
+const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+
+export const rememberMedicine = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		container: t.string(),
+		place: t.string(),
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+	},
+	(ctx, seen) => {
+		requireMember(ctx, seen.familyId);
+		if (ctx.db.medicineMemory.familyId.find(seen.familyId) === null)
+			throw new SenderError("medicine memory is off for this family");
+		requireText("container", seen.container);
+		requireText("place", seen.place);
+		requireText("source", seen.source);
+		if (!(seen.confidence >= 0 && seen.confidence <= 1))
+			throw new SenderError("confidence must be between 0 and 1");
+		const age =
+			ctx.timestamp.microsSinceUnixEpoch - seen.seenAt.microsSinceUnixEpoch;
+		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
+			throw new SenderError("seenAt must be a current observation");
+		const key = seen.container.trim().toLowerCase();
+		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
+			if (old.container.trim().toLowerCase() !== key) continue;
+			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
+				throw new SenderError("a newer sighting is already stored");
+			ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+			return;
+		}
+		ctx.db.medicineSighting.insert({ ...row, id: 0n });
+	},
+);
+
+// The person looked at the remembered place and the container was not there. The place stays as
+// the last sighting, marked outdated, until a new sighting replaces it.
+export const markMedicineNotFound = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		const found = ctx.db.medicineSighting.id.find(id);
+		if (found === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, found.familyId);
+		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
 const MAX_CONTACTS = 5;
 
 export const setContactLadder = spacetimedb.reducer(
@@ -1516,6 +2159,9 @@ const REMINDER_RESPONSES = [
 	"repeat",
 ];
 const CLIENT_SOURCES = ["phone", "web", "glasses"];
+// A home speaker only delivers: it cannot hear an answer (#46). The server records its deliveries.
+const DELIVERY_SOURCES = [...CLIENT_SOURCES, "speaker"];
+const SPEAKER_ROOMS = ["private", "shared"];
 const COMPLETE_STATES = ["self_reported_complete", "caregiver_confirmed"];
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -1755,7 +2401,8 @@ export const recordReminderDelivery = spacetimedb.reducer(
 	{ occurrenceId: t.u64(), clientId: t.string(), source: t.string() },
 	(ctx, { occurrenceId, clientId, source }) => {
 		const occurrence = requireOccurrence(ctx, occurrenceId);
-		requireClientSource(source);
+		if (!DELIVERY_SOURCES.includes(source))
+			throw new SenderError("source must be phone, web, glasses, or speaker");
 		if (seenRequest(ctx, occurrenceId, clientId, `delivery:${source}`)) return;
 		if (!occurrence.promptDue) return;
 		recordReminderEvent(ctx, occurrence, "delivered", { source });
@@ -1911,6 +2558,31 @@ export const runReminderTimer = spacetimedb.reducer(
 	},
 );
 
+export const setSpeakerSettings = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+	},
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		if (!SPEAKER_ROOMS.includes(settings.room))
+			throw new SenderError("room must be private or shared");
+		if (settings.sharedRoomKinds.some((k) => !REMINDER_KINDS.includes(k)))
+			throw new SenderError("sharedRoomKinds must be reminder kinds");
+		const row = {
+			...settings,
+			sharedRoomKinds: [...new Set(settings.sharedRoomKinds)],
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.speakerSettings.familyId.find(settings.familyId) === null)
+			ctx.db.speakerSettings.insert(row);
+		else ctx.db.speakerSettings.familyId.update(row);
+	},
+);
+
 export const saveCareProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
@@ -2021,6 +2693,396 @@ export const setCareGrant = spacetimedb.reducer(
 		});
 	},
 );
+
+const requireExercisePlan = (ctx: Ctx, id: string) => {
+	const found = ctx.db.exercisePlan.id.find(id);
+	// A missing plan fails like another family's plan, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	return found;
+};
+
+export const createExercisePlan = spacetimedb.reducer(
+	{ id: t.string(), familyId: t.u64(), plan: t.string() },
+	(ctx, created) => {
+		requireMember(ctx, created.familyId);
+		requireText("id", created.id);
+		requireText("plan", created.plan);
+		if (ctx.db.exercisePlan.id.find(created.id) !== null)
+			throw new SenderError("exercise plan id already exists");
+		ctx.db.exercisePlan.insert({
+			...created,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+			verifiedBy: undefined,
+			verifiedAt: undefined,
+		});
+	},
+);
+
+// A member confirms the plan matches its source. Verifying again keeps the first verification.
+export const verifyExercisePlan = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireExercisePlan(ctx, id);
+		if (found.verifiedAt !== undefined) return;
+		ctx.db.exercisePlan.id.update({
+			...found,
+			verifiedBy: ctx.sender,
+			verifiedAt: ctx.timestamp,
+		});
+	},
+);
+
+// The wearer's answer opens a session: `declined` or `started`. Only a started session takes
+// controls, and `stopped` or `completed` ends it. No answer records nothing, so silence is never a
+// completed exercise.
+const exerciseControls = ["paused", "resumed", "repeated", "slowed", "help"];
+const exerciseEnds = ["stopped", "completed"];
+const stopReasons = ["wearer", "pain", "dizziness", "distress"];
+
+export const recordExerciseEvent = spacetimedb.reducer(
+	{
+		id: t.string(),
+		planId: t.string(),
+		sessionId: t.string(),
+		kind: t.string(),
+		reason: t.option(t.string()),
+	},
+	(ctx, event) => {
+		const plan = requireExercisePlan(ctx, event.planId);
+		requireText("id", event.id);
+		requireText("sessionId", event.sessionId);
+		const resent = ctx.db.exerciseEvent.id.find(event.id);
+		if (resent !== null) {
+			if (
+				resent.planId !== event.planId ||
+				resent.sessionId !== event.sessionId ||
+				resent.kind !== event.kind ||
+				resent.reason !== event.reason
+			)
+				throw new SenderError("id is already used for another event");
+			return;
+		}
+		if (plan.verifiedAt === undefined)
+			throw new SenderError("the exercise plan is not verified");
+		const stopped = event.kind === "stopped";
+		if (
+			stopped !== (event.reason !== undefined) ||
+			(stopped && !stopReasons.includes(event.reason ?? ""))
+		)
+			throw new SenderError(
+				"only a stop has a reason: wearer, pain, dizziness, or distress",
+			);
+		const earlier = [...ctx.db.exerciseEvent.sessionId.filter(event.sessionId)];
+		if (earlier.some((e) => e.planId !== event.planId))
+			throw new SenderError("the session belongs to another plan");
+		const opened = earlier.some((e) => e.kind === "started");
+		const ended = earlier.some(
+			(e) => e.kind === "declined" || exerciseEnds.includes(e.kind),
+		);
+		const allowed =
+			event.kind === "declined" || event.kind === "started"
+				? earlier.length === 0
+				: [...exerciseControls, ...exerciseEnds].includes(event.kind) &&
+					opened &&
+					!ended;
+		if (!allowed)
+			throw new SenderError(`${event.kind} is not allowed in this session now`);
+		ctx.db.exerciseEvent.insert({
+			...event,
+			reason: event.reason,
+			familyId: plan.familyId,
+			actor: ctx.sender,
+			at: ctx.timestamp,
+		});
+	},
+);
+
+type OrderStatusTag = Infer<typeof OrderStatus>["tag"];
+
+// The statuses each status may follow. A retry after `Uncertain` or `Failed` may record either again.
+const ORDER_STEPS: Record<OrderStatusTag, readonly OrderStatusTag[]> = {
+	Proposed: [],
+	Approved: ["Proposed"],
+	Replaced: ["Proposed", "Approved", "Failed"],
+	Placed: ["Approved", "Uncertain", "Failed"],
+	Uncertain: ["Approved", "Uncertain", "Failed"],
+	Failed: ["Approved", "Uncertain", "Failed"],
+	Delivered: ["Placed"],
+	Eaten: ["Delivered"],
+};
+
+export const recordDeliveryEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		proposalId: t.string(),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+	},
+	(ctx, event) => {
+		requireMember(ctx, event.familyId);
+		requireText("proposalId", event.proposalId);
+		let last: Infer<typeof deliveryEvent.rowType> | undefined;
+		for (const row of ctx.db.deliveryEvent.proposalId.filter(event.proposalId))
+			if (last === undefined || row.id > last.id) last = row;
+		if (last !== undefined && last.familyId !== event.familyId)
+			throw new SenderError("proposal id already exists");
+		if ((event.status.tag === "Proposed") !== (event.proposal !== undefined))
+			throw new SenderError("only a new proposal carries proposal JSON");
+		if (event.status.tag === "Proposed") {
+			if (last !== undefined)
+				throw new SenderError("proposal id already exists");
+			requireText("proposal", event.proposal ?? "");
+		} else if (
+			last === undefined ||
+			!ORDER_STEPS[event.status.tag].includes(last.status.tag)
+		)
+			throw new SenderError(
+				`a ${last?.status.tag ?? "missing"} proposal cannot become ${event.status.tag}`,
+			);
+		ctx.db.deliveryEvent.insert({
+			...event,
+			id: 0n,
+			proposal: event.proposal,
+			actor: ctx.sender,
+			at: ctx.timestamp,
+		});
+	},
+);
+
+const requireAppointment = (ctx: Ctx, id: string) => {
+	const found = ctx.db.appointment.id.find(id);
+	// A missing appointment fails like another family's, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.cancelledAt !== undefined)
+		throw new SenderError("appointment is cancelled");
+	return found;
+};
+
+export const suggestAppointment = spacetimedb.reducer(
+	{
+		id: t.string(),
+		familyId: t.u64(),
+		visit: t.string(),
+		prep: t.string(),
+		source: t.string(),
+	},
+	(ctx, suggested) => {
+		requireMember(ctx, suggested.familyId);
+		requireText("id", suggested.id);
+		requireText("visit", suggested.visit);
+		requireText("prep", suggested.prep);
+		if (suggested.source !== "model" && suggested.source !== "member")
+			throw new SenderError("source must be model or member");
+		if (ctx.db.appointment.id.find(suggested.id) !== null)
+			throw new SenderError("appointment id already exists");
+		ctx.db.appointment.insert({
+			...suggested,
+			suggestedBy: ctx.sender,
+			suggestedAt: ctx.timestamp,
+			requestedBy: undefined,
+			requestedAt: undefined,
+			confirmation: undefined,
+			confirmedBy: undefined,
+			confirmedAt: undefined,
+			cancelledBy: undefined,
+			cancelledAt: undefined,
+			summary: undefined,
+			summaryReviewedBy: undefined,
+			summaryReviewedAt: undefined,
+		});
+	},
+);
+
+export const updateAppointmentPrep = spacetimedb.reducer(
+	{ id: t.string(), prep: t.string() },
+	(ctx, { id, prep }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("prep", prep);
+		ctx.db.appointment.id.update({ ...found, prep });
+	},
+);
+
+// A member's explicit request. It records intent only; nothing reaches the provider.
+export const requestAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt !== undefined)
+			throw new SenderError("appointment is already requested");
+		ctx.db.appointment.id.update({
+			...found,
+			requestedBy: ctx.sender,
+			requestedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Only a requested appointment takes the provider's confirmation: a suggestion never skips ahead.
+export const confirmAppointment = spacetimedb.reducer(
+	{ id: t.string(), confirmation: t.string() },
+	(ctx, { id, confirmation }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt === undefined)
+			throw new SenderError("only a requested appointment can be confirmed");
+		if (found.confirmedAt !== undefined)
+			throw new SenderError("appointment is already confirmed");
+		requireText("confirmation", confirmation);
+		ctx.db.appointment.id.update({
+			...found,
+			confirmation,
+			confirmedBy: ctx.sender,
+			confirmedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const cancelAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		ctx.db.appointment.id.update({
+			...found,
+			cancelledBy: ctx.sender,
+			cancelledAt: ctx.timestamp,
+		});
+	},
+);
+
+export const reviewAppointmentSummary = spacetimedb.reducer(
+	{ id: t.string(), summary: t.string() },
+	(ctx, { id, summary }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("summary", summary);
+		ctx.db.appointment.id.update({
+			...found,
+			summary,
+			summaryReviewedBy: ctx.sender,
+			summaryReviewedAt: ctx.timestamp,
+		});
+	},
+);
+
+const frequencies: Record<string, string[]> = {
+	explicit: ["once"],
+	standing: ["weekly", "monthly"],
+};
+// Keep in step with `shareIntervalDays` in apps/server/src/routes/appointments.ts.
+const intervalMicros: Record<string, bigint> = {
+	weekly: 7n * 86_400_000_000n,
+	monthly: 30n * 86_400_000_000n,
+};
+
+// Approving and sending a clinician update need the `clinician_delivery` care scope (#26) as well
+// as the per-update consent.
+export const approveClinicianShare = spacetimedb.reducer(
+	{
+		id: t.string(),
+		appointmentId: t.string(),
+		recipient: t.string(),
+		sections: t.string(),
+		consent: t.string(),
+		frequency: t.string(),
+	},
+	(ctx, share) => {
+		const found = requireAppointment(ctx, share.appointmentId);
+		requireCareScope(ctx, found.familyId, "clinician_delivery");
+		requireText("id", share.id);
+		requireText("recipient", share.recipient);
+		requireText("sections", share.sections);
+		if (found.summaryReviewedAt === undefined)
+			throw new SenderError("review the summary before sharing it");
+		if (!frequencies[share.consent]?.includes(share.frequency))
+			throw new SenderError("consent and frequency do not match");
+		if (ctx.db.clinicianShare.id.find(share.id) !== null)
+			throw new SenderError("share id already exists");
+		ctx.db.clinicianShare.insert({
+			...share,
+			familyId: found.familyId,
+			approvedBy: ctx.sender,
+			approvedAt: ctx.timestamp,
+			approvedSummaryAt:
+				share.consent === "explicit" ? found.summaryReviewedAt : undefined,
+			revokedBy: undefined,
+			revokedAt: undefined,
+			sends: 0,
+			lastSentAt: undefined,
+		});
+	},
+);
+
+const requireShare = (ctx: Ctx, id: string) => {
+	const found = ctx.db.clinicianShare.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.revokedAt !== undefined) throw new SenderError("share is revoked");
+	return found;
+};
+
+// Records one simulated send, only inside the consent: once for explicit consent, and no sooner
+// than the agreed interval for a standing arrangement.
+export const sendClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		requireCareScope(ctx, share.familyId, "clinician_delivery");
+		const found = requireAppointment(ctx, share.appointmentId);
+		if (share.consent === "explicit") {
+			if (share.sends > 0)
+				throw new SenderError("explicit consent covers one send");
+			if (
+				found.summaryReviewedAt?.microsSinceUnixEpoch !==
+				share.approvedSummaryAt?.microsSinceUnixEpoch
+			)
+				throw new SenderError("the summary changed after approval");
+		} else if (
+			share.lastSentAt !== undefined &&
+			ctx.timestamp.microsSinceUnixEpoch <
+				share.lastSentAt.microsSinceUnixEpoch +
+					(intervalMicros[share.frequency] ?? 0n)
+		)
+			throw new SenderError("not due yet at the agreed frequency");
+		ctx.db.clinicianShare.id.update({
+			...share,
+			sends: share.sends + 1,
+			lastSentAt: ctx.timestamp,
+		});
+	},
+);
+
+// Any member may withdraw consent; stopping a share never needs more access than starting one.
+export const revokeClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		ctx.db.clinicianShare.id.update({
+			...share,
+			revokedBy: ctx.sender,
+			revokedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const saveCookingProfile = spacetimedb.reducer(
+	{ familyId: t.u64(), profile: t.string() },
+	(ctx, { familyId, profile }) => {
+		requireCareScope(ctx, familyId, "care_plan_edit");
+		requireText("profile", profile);
+		const row = {
+			familyId,
+			profile,
+			editedBy: ctx.sender,
+			editedAt: ctx.timestamp,
+		};
+		if (ctx.db.cookingProfile.familyId.find(familyId) === null)
+			ctx.db.cookingProfile.insert(row);
+		else ctx.db.cookingProfile.familyId.update(row);
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -2146,6 +3208,45 @@ export const myFinchnodeLinks = spacetimedb.view(
 			),
 );
 
+export const myTripEvents = spacetimedb.view(
+	{ name: "my_trip_events", public: true },
+	t.array(tripEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.tripEvent, (m, e) => m.familyId.eq(e.familyId)),
+);
+
+// Only for families where the caller holds `health_records` now (#26).
+export const myMealFacts = spacetimedb.view(
+	{ name: "my_meal_facts", public: true },
+	t.array(mealFact.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => ctx.db.mealFact.familyId.filter(familyId)),
+);
+
+export const myMedicineMemory = spacetimedb.view(
+	{ name: "my_medicine_memory", public: true },
+	t.array(medicineMemory.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineMemory, (m, r) =>
+				m.familyId.eq(r.familyId),
+			),
+);
+
+export const myMedicineSightings = spacetimedb.view(
+	{ name: "my_medicine_sightings", public: true },
+	t.array(medicineSighting.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineSighting, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
 export const myContactLadders = spacetimedb.view(
 	{ name: "my_contact_ladders", public: true },
 	t.array(contactLadder.rowType),
@@ -2219,6 +3320,29 @@ export const myReminderEvents = spacetimedb.view(
 			),
 );
 
+// The caller's own locations, and those of people who share theirs with the caller. A revoked
+// share drops the row at once.
+export const myLocations = spacetimedb.view(
+	{ name: "my_locations", public: true },
+	t.array(location.rowType),
+	(ctx) => [
+		...ctx.db.location.sharer.filter(ctx.sender),
+		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
+	],
+);
+
+// Shares the caller gave or received.
+export const myLocationShares = spacetimedb.view(
+	{ name: "my_location_shares", public: true },
+	t.array(locationShare.rowType),
+	(ctx) => [
+		...ctx.db.locationShare.sharer.filter(ctx.sender),
+		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
+);
+
 // Care views (#26): the profile and instructions only for families where the caller holds
 // `health_records` now, so a revoke empties them at once. Grants are visible to every member.
 const careReader = <Row>(
@@ -2261,4 +3385,79 @@ export const myCareGrants = spacetimedb.view(
 			.rightSemijoin(ctx.from.careGrantEvent, (m, g) =>
 				m.familyId.eq(g.familyId),
 			),
+);
+
+export const myExercisePlans = spacetimedb.view(
+	{ name: "my_exercise_plans", public: true },
+	t.array(exercisePlan.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.exercisePlan, (m, p) =>
+				m.familyId.eq(p.familyId),
+			),
+);
+
+export const myExerciseEvents = spacetimedb.view(
+	{ name: "my_exercise_events", public: true },
+	t.array(exerciseEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.exerciseEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
+			),
+);
+
+export const mySpeakerSettings = spacetimedb.view(
+	{ name: "my_speaker_settings", public: true },
+	t.array(speakerSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.speakerSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myDeliveryEvents = spacetimedb.view(
+	{ name: "my_delivery_events", public: true },
+	t.array(deliveryEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.deliveryEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
+			),
+);
+
+export const myAppointments = spacetimedb.view(
+	{ name: "my_appointments", public: true },
+	t.array(appointment.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.appointment, (m, a) => m.familyId.eq(a.familyId)),
+);
+
+export const myClinicianShares = spacetimedb.view(
+	{ name: "my_clinician_shares", public: true },
+	t.array(clinicianShare.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.clinicianShare, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+// Like the care profile, only for families where the caller holds `health_records` now.
+export const myCookingProfiles = spacetimedb.view(
+	{ name: "my_cooking_profiles", public: true },
+	t.array(cookingProfile.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => {
+			const row = ctx.db.cookingProfile.familyId.find(familyId);
+			return row === null ? [] : [row];
+		}),
 );

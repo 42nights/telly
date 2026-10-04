@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { HealthSample } from "./index";
 
 // Lab reports (docs/board.html#wf-lab). A report holds generated markers, which are evidence and
@@ -14,6 +14,27 @@ export const ReportMarker = Schema.Struct({
 export type ReportMarker = typeof ReportMarker.Type;
 
 const FieldText = Schema.NullOr(Schema.String.check(Schema.isMaxLength(200)));
+const LongText = Schema.NullOr(Schema.String.check(Schema.isMaxLength(4000)));
+/** Keys added after the first reports were stored decode as not filled in. */
+const added = <S extends Schema.Top>(schema: S, empty: S["Encoded"]) =>
+	schema.pipe(Schema.withDecodingDefaultKey(Effect.succeed(empty)));
+
+/**
+ * A family member's correction of one marker's value, in the marker's own unit. The generated
+ * sample stays in the report unchanged beside it. Only a marker with a sample can be corrected:
+ * an unavailable marker never gets a value.
+ */
+export const ReportCorrection = Schema.Struct({
+	metric: Schema.NonEmptyString,
+	value: Schema.Finite,
+	/** Why the source value is wrong, such as a typing error. */
+	reason: Schema.String.check(
+		Schema.isTrimmed(),
+		Schema.isNonEmpty(),
+		Schema.isMaxLength(200),
+	),
+});
+export type ReportCorrection = typeof ReportCorrection.Type;
 
 /** `POST /api/families/:familyId/reports/:reportId/fields`. `null` means not filled in. */
 export const ReportFields = Schema.Struct({
@@ -22,7 +43,21 @@ export const ReportFields = Schema.Struct({
 	patientId: FieldText,
 	physician: FieldText,
 	hospital: FieldText,
-	notes: Schema.NullOr(Schema.String.check(Schema.isMaxLength(4000))),
+	notes: LongText,
+	/** What a caregiver saw. Separate from measured values. */
+	observations: added(LongText, null),
+	/** Questions the family wants a clinician to answer. */
+	questions: added(LongText, null),
+	/** At most one correction per marker. */
+	corrections: added(
+		Schema.Array(ReportCorrection).check(
+			Schema.makeFilter(
+				(list) => new Set(list.map((c) => c.metric)).size === list.length,
+				{ expected: "at most one correction per marker" },
+			),
+		),
+		[],
+	),
 });
 export type ReportFields = typeof ReportFields.Type;
 
@@ -49,6 +84,30 @@ export type Report = typeof Report.Type;
 /** `GET /api/families/:familyId/reports`, newest first. */
 export const Reports = Schema.Struct({ reports: Schema.Array(Report) });
 export type Reports = typeof Reports.Type;
+
+/**
+ * `POST /api/families/:familyId/reports/:reportId/pdfs`: a PDF the caller made of one report, kept
+ * in private storage. Only the person who made it can list or download it, and only while they
+ * are a member of the report's family.
+ */
+export const ReportPdf = Schema.Struct({
+	id: Schema.String,
+	reportId: Schema.String,
+	createdAt: Schema.String,
+	bytes: Schema.Number,
+});
+export type ReportPdf = typeof ReportPdf.Type;
+
+/** `GET /api/families/:familyId/report-pdfs`: the caller's PDFs in this family, newest first. */
+export const ReportPdfs = Schema.Struct({ pdfs: Schema.Array(ReportPdf) });
+export type ReportPdfs = typeof ReportPdfs.Type;
+
+/** `GET …/report-pdfs/:id`: a presigned download link for one of the caller's PDFs. */
+export const ReportPdfLink = Schema.Struct({
+	url: Schema.String,
+	expiresAt: Schema.String,
+});
+export type ReportPdfLink = typeof ReportPdfLink.Type;
 
 // FinchNode (https://finchnode.com/docs): read-only, patient-authorized health records. A patient
 // connects a health system and approves sharing in FinchNode Connect; FinchNode checks that consent

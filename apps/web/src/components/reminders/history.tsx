@@ -13,7 +13,7 @@ import { memberLabel } from "@/lib/members";
 const SHOWN = 10;
 
 // "Seen" never reads as "done": only the two completion states say the task happened, and they say whose word it is.
-const STATE_TEXT: Record<ReminderState, string> = {
+export const STATE_TEXT: Record<ReminderState, string> = {
 	scheduled: "Scheduled",
 	delivered: "Shown",
 	acknowledged: "Seen, not done",

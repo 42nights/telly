@@ -3,11 +3,14 @@ import type { HealthSample } from "@health/contracts";
 
 import {
 	currentHeartRate,
+	emergencyIntent,
 	evidenceLine,
 	HEART_RATE_FRESH_MS,
 	isMedicineRequest,
 	itemFromRequest,
 	marker,
+	SIGHTING_OLD_MS,
+	sightingState,
 } from "./logic";
 
 const now = Date.parse("2026-10-04T12:00:00Z");
@@ -83,6 +86,14 @@ test("evidence reads as a short line with source and age, and marks old samples"
 	).toBe("Heart rate 72 bpm · from phone · 3 min ago (demo, not real)");
 });
 
+test("an urgent request dispatches; an ouch alone gets a check-in", () => {
+	expect(emergencyIntent("Ouch, I fell and can't get up")).toBe("help");
+	expect(emergencyIntent("Help!")).toBe("help");
+	expect(emergencyIntent("ouch")).toBe("ouch");
+	expect(emergencyIntent("I need help finding my pills")).toBeNull();
+	expect(emergencyIntent("How is my heart rate?")).toBeNull();
+});
+
 describe("marker", () => {
 	const frame = { width: 1000, height: 500 };
 
@@ -98,4 +109,27 @@ describe("marker", () => {
 		const low = marker({ x: 400, y: 380, width: 200, height: 100 }, frame);
 		expect(low.arrow.startsWith("M500 0")).toBe(true);
 	});
+});
+
+test("a remembered sighting is marked old, outdated, or unsure, never current", () => {
+	const seen = {
+		seenAt: new Date(now - 60_000).toISOString(),
+		notFoundAt: null,
+		confidence: 0.9,
+		labelRead: true,
+	};
+	expect(sightingState(seen, now)).toEqual({
+		outdated: false,
+		old: false,
+		unsure: false,
+	});
+	const stale = {
+		...seen,
+		seenAt: new Date(now - SIGHTING_OLD_MS - 1).toISOString(),
+	};
+	expect(sightingState(stale, now).old).toBe(true);
+	const moved = { ...seen, notFoundAt: new Date(now).toISOString() };
+	expect(sightingState(moved, now).outdated).toBe(true);
+	expect(sightingState({ ...seen, confidence: 0.5 }, now).unsure).toBe(true);
+	expect(sightingState({ ...seen, labelRead: false }, now).unsure).toBe(true);
 });
