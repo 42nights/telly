@@ -10,7 +10,13 @@ import { cn } from "@health/ui/lib/utils";
 import { Loader2, Phone, Siren, Users } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
+import {
+	type ApiFailure,
+	type ApiState,
+	apiRequest,
+	familyPath,
+	useApi,
+} from "@/lib/api";
 import { dial, isFullPhoneNumber, telHref, useContacts } from "@/lib/contacts";
 
 import { xl } from "./answer";
@@ -254,6 +260,48 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 const spinner = <Loader2 aria-hidden className="animate-spin" />;
 
 /**
+ * Adds `phone` to the care profile contacts, so every device and the family's agent have it.
+ * Resolves to null when kept, else why it stays on this phone only.
+ */
+const shareFamilyPhone = async (
+	path: string | null,
+	profile: ApiState<CareProfileRecord>,
+	phone: string,
+): Promise<string | null> => {
+	if (path === null || profile.kind !== "ready")
+		return `Saved on this phone only. ${
+			"message" in profile
+				? profile.message
+				: "Sign in to share it with your family."
+		}`;
+	const current = profile.value.profile;
+	const result = await apiRequest(null, path, {
+		method: "PUT",
+		body: {
+			...current,
+			contacts: [
+				...(current.contacts ?? []),
+				{ name: "Family", relationship: "Family", phone },
+			],
+		},
+	});
+	if (result.kind === "ready") return null;
+	return `Saved on this phone only. ${
+		result.kind === "signed_out"
+			? "Sign in again to share it with your family."
+			: result.message
+	}`;
+};
+
+/** The first care-profile contact with a dialable number, in contact order (#26). */
+const profileFamilyPhone = (profile: ApiState<CareProfileRecord>) =>
+	profile.kind === "ready"
+		? (profile.value.profile.contacts?.find(
+				(contact) => contact.phone !== null && isFullPhoneNumber(contact.phone),
+			)?.phone ?? null)
+		: null;
+
+/**
  * Call my family: dials the first care-profile contact with a number (#26), else the number saved
  * on this phone. With neither, one field saves a number to the care profile and dials it at once.
  */
@@ -272,13 +320,7 @@ function CallFamily({
 	const [draft, setDraft] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [note, setNote] = useState<string | null>(null);
-	const number =
-		(profile.kind === "ready"
-			? profile.value.profile.contacts?.find(
-					(contact) =>
-						contact.phone !== null && isFullPhoneNumber(contact.phone),
-				)?.phone
-			: null) ?? contacts.familyPhone;
+	const number = profileFamilyPhone(profile) ?? contacts.familyPhone;
 	const icon = busy ? spinner : <Users aria-hidden />;
 
 	if (number === null && profile.kind === "loading" && path !== null)
@@ -303,34 +345,6 @@ function CallFamily({
 			</div>
 		);
 
-	// The number goes to the care profile, so every device and the family's agent have it. A
-	// member who cannot edit the profile keeps it on this phone, and the screen says so.
-	const share = async (phone: string): Promise<string | null> => {
-		if (path === null || profile.kind !== "ready")
-			return `Saved on this phone only. ${
-				"message" in profile
-					? profile.message
-					: "Sign in to share it with your family."
-			}`;
-		const current = profile.value.profile;
-		const result = await apiRequest(null, path, {
-			method: "PUT",
-			body: {
-				...current,
-				contacts: [
-					...(current.contacts ?? []),
-					{ name: "Family", relationship: "Family", phone },
-				],
-			},
-		});
-		if (result.kind === "ready") return null;
-		return `Saved on this phone only. ${
-			result.kind === "signed_out"
-				? "Sign in again to share it with your family."
-				: result.message
-		}`;
-	};
-
 	const submit = (event: FormEvent) => {
 		event.preventDefault();
 		const phone = draft.trim();
@@ -338,7 +352,7 @@ function CallFamily({
 			return setError("Enter the full phone number, with the area code.");
 		setError(null);
 		saveContacts({ ...contacts, familyPhone: phone });
-		void share(phone).then(setNote);
+		void shareFamilyPhone(path, profile, phone).then(setNote);
 		onCall();
 		dial(phone);
 	};
