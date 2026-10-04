@@ -157,8 +157,9 @@ describe("ObjectAnswer", () => {
 			check: check({ kind: "done", detections: [] }),
 		});
 		expect(
-			view.getByText("I can't see your pills in this picture."),
+			view.getByText("I could not see anything to save. Try again."),
 		).toBeDefined();
+		expect(view.queryByText(/camera moved/)).toBeNull();
 		fireEvent.click(view.getByRole("button", { name: "Look again" }));
 		expect(look).toHaveBeenCalledTimes(1);
 	});
