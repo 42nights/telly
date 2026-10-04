@@ -1,6 +1,6 @@
 #!/bin/sh
 # Host-side auto-deploy (docs/deploy.md). The systemd user timer telly-autodeploy runs this every
-# 60 s: when origin/main moved, it releases the new commit with deploy/cloudflare/release.sh from its
+# 2 minutes: when origin/main moved, it releases the new commit with deploy/cloudflare/release.sh from its
 # own clone. One run at a time (flock). A failed commit is not retried; the next commit on main is.
 # CI (health-deploy) owns the Worker deploy of a commit when its `deploy` job ran: this waits while
 # that commit's run is unfinished, and after a successful CI deploy it publishes only the module.
