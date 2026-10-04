@@ -12,7 +12,7 @@ import {
 	fixReport,
 	helpMessage,
 	mapUrl,
-	tripReminder,
+	tripStatus,
 } from "./logic";
 
 const now = Date.parse("2026-01-01T08:00:00Z");
@@ -76,37 +76,30 @@ describe("describeLocation", () => {
 	});
 });
 
-describe("trip wording", () => {
-	const trip = {
-		destination: "the pharmacy",
-		purpose: "pick up my pills",
-		setAt: now,
-	};
+describe("trip status", () => {
+	const out = (minutesAgo: number, distanceMeters: number | null) =>
+		tripStatus(
+			{
+				home: { latitude: 1, longitude: 2 },
+				radiusMeters: 200,
+				autoTrip: true,
+				awaySince: at(minutesAgo),
+				distanceMeters,
+				sharing: true,
+			},
+			now,
+		);
 
-	test("the reminder repeats the chosen place and purpose and points to the traffic", () => {
-		expect(tripReminder(trip)).toBe(
-			"You are going to the pharmacy, to pick up my pills. Telly does not see the traffic. Stop, look, and listen before you cross.",
-		);
-		expect(tripReminder({ ...trip, purpose: "" })).toStartWith(
-			"You are going to the pharmacy. ",
-		);
+	test("rounds the distance to 10 m under a kilometer, and leaves it out when unknown", () => {
+		expect(out(10, 1234)).toBe("1.2 km from home · left 10 min ago");
+		expect(out(0, 347)).toBe("350 m from home · left just now");
+		expect(out(5, null)).toBe("left 5 min ago");
 	});
 
-	test("the help message carries no coordinates", () => {
-		const text = helpMessage(trip, true);
-		expect(text).toStartWith(
-			"I need help getting home. I was going to the pharmacy",
-		);
-		expect(text).not.toMatch(/\d+\.\d+/);
+	test("the help message carries no coordinates and fits a care need summary", () => {
+		const summary = helpMessage(at(30), true);
+		expect(summary).not.toMatch(/\d+\.\d+/);
 		expect(helpMessage(null, false)).toContain("I have not shared my location");
-	});
-
-	test("the help message fits a care need summary at the longest trip fields", () => {
-		const long = "x".repeat(150);
-		const summary = helpMessage(
-			{ ...trip, destination: long, purpose: long },
-			true,
-		);
 		const need = {
 			clientId: "a",
 			kind: "help",
@@ -119,11 +112,16 @@ describe("trip wording", () => {
 });
 
 describe("maps links", () => {
-	test("directions ask the maps app for a walking route to the typed place", () => {
+	test("directions ask the maps app for a walking route to a typed place or a saved position", () => {
 		const url = new URL(directionsUrl("Café & Co, 5th Ave"));
 		expect(url.origin).toBe("https://www.google.com");
 		expect(url.searchParams.get("travelmode")).toBe("walking");
 		expect(url.searchParams.get("destination")).toBe("Café & Co, 5th Ave");
+		expect(
+			new URL(
+				directionsUrl({ latitude: 40.5, longitude: -73.25 }),
+			).searchParams.get("destination"),
+		).toBe("40.5,-73.25");
 	});
 
 	test("a shared fix opens a marker at its coordinates", () => {

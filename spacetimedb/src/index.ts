@@ -329,6 +329,81 @@ const locationShare = table(
 	},
 );
 
+const HomePoint = t.object("HomePoint", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+});
+
+// One person's home for automatic trips (#302), in one family. Only that person reads it. Their
+// location reports start a trip after `AWAY_DWELL_MICROS` clearly outside `radiusMeters`, and end
+// it at the first report inside.
+const homeWatch = table(
+	{
+		name: "home_watch",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+		// The first report clearly outside the radius since the last one inside.
+		outsideSince: t.option(t.timestamp()),
+		// When the current trip started; unset at home.
+		awaySince: t.option(t.timestamp()),
+		// How far the latest reported fix was from home, for the person's own status.
+		distanceMeters: t.option(t.f64()),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const AwayKind = t.enum("AwayKind", { Left: t.unit(), Back: t.unit() });
+
+// A trip start or end. The people the sharer shares location with see it (`my_away_events`).
+// Rows are never changed; the last revoked share deletes them with the location.
+// ponytail: two rows per trip are kept until then; prune by age if the list grows large.
+const awayEvent = table(
+	{
+		name: "away_event",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		kind: AwayKind,
+		// The person pressed "I'm going out" or "I'm home"; otherwise the location decided.
+		manual: t.bool(),
+		fix: t.option(LocationFix),
+		at: t.timestamp(),
+	},
+);
+
+// A person's display name, from their own sign-in (the ID token's name), so family screens show a
+// name instead of an identity. Members of a family the person is in read it (`my_member_names`).
+const memberName = table(
+	{ name: "member_name" },
+	{
+		member: t.identity().primaryKey(),
+		name: t.string(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -920,6 +995,9 @@ const spacetimedb = schema({
 	finchnodeLink,
 	location,
 	locationShare,
+	homeWatch,
+	awayEvent,
+	memberName,
 	medicineMemory,
 	medicineSighting,
 	contactLadder,
@@ -1923,6 +2001,11 @@ export const revokeLocationShare = spacetimedb.reducer(
 			ctx.sender,
 		]))
 			ctx.db.location.id.delete(row.id);
+		for (const row of ctx.db.awayEvent.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.awayEvent.id.delete(row.id);
 	},
 );
 
@@ -1964,6 +2047,198 @@ export const reportLocation = spacetimedb.reducer(
 		};
 		if (existing === undefined) ctx.db.location.insert(row);
 		else ctx.db.location.id.update(row);
+		if (fix !== undefined) followHome(ctx, familyId, fix);
+	},
+);
+
+/** A trip starts after this long clearly outside the home radius, so a short walk past it is none. */
+const AWAY_DWELL_MICROS = 60_000_000n;
+// The `HOME_RADIUS` bounds of `@health/contracts/location`.
+const MIN_HOME_RADIUS = 100;
+const MAX_HOME_RADIUS = 5000;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+type Point = { latitude: number; longitude: number };
+
+/** Great-circle (haversine) distance in meters. */
+const distanceMeters = (a: Point, b: Point) => {
+	const rad = Math.PI / 180;
+	const h =
+		Math.sin(((b.latitude - a.latitude) * rad) / 2) ** 2 +
+		Math.cos(a.latitude * rad) *
+			Math.cos(b.latitude * rad) *
+			Math.sin(((b.longitude - a.longitude) * rad) / 2) ** 2;
+	return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h));
+};
+
+const homeWatchOf = (ctx: Ctx, familyId: bigint) =>
+	ctx.db.homeWatch.byFamilySharer.filter([familyId, ctx.sender]).next().value;
+
+const recordAway = (
+	ctx: Ctx,
+	familyId: bigint,
+	kind: "Left" | "Back",
+	manual: boolean,
+	fix: Infer<typeof LocationFix> | undefined,
+) =>
+	ctx.db.awayEvent.insert({
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		kind: { tag: kind },
+		manual,
+		fix,
+		at: ctx.timestamp,
+	});
+
+type HomeWatchRow = Infer<typeof homeWatch.rowType>;
+type HomeStep = {
+	readonly change: Partial<HomeWatchRow>;
+	readonly event?: "Left" | "Back";
+};
+
+/** A fix inside forgets a pending departure, and ends a trip that has been outside. */
+const insideStep = ({ outsideSince, awaySince }: HomeWatchRow): HomeStep =>
+	outsideSince === undefined
+		? { change: {} }
+		: {
+				change: { outsideSince: undefined, awaySince: undefined },
+				...(awaySince === undefined ? {} : { event: "Back" }),
+			};
+
+/** A fix clearly outside starts the dwell; one after the dwell starts the trip. */
+const outsideStep = (
+	{ outsideSince, awaySince }: HomeWatchRow,
+	now: Ctx["timestamp"],
+): HomeStep => {
+	if (outsideSince === undefined) return { change: { outsideSince: now } };
+	const dwelt =
+		now.microsSinceUnixEpoch - outsideSince.microsSinceUnixEpoch >=
+		AWAY_DWELL_MICROS;
+	return awaySince === undefined && dwelt
+		? { change: { awaySince: outsideSince }, event: "Left" }
+		: { change: {} };
+};
+
+/**
+ * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
+ * A fix is inside when its center is within the radius and its accuracy is no wider than the
+ * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
+ * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
+ * ends only after a fix clearly outside.
+ */
+const followHome = (
+	ctx: Ctx,
+	familyId: bigint,
+	fix: Infer<typeof LocationFix>,
+) => {
+	const watch = homeWatchOf(ctx, familyId);
+	if (watch?.home === undefined) return;
+	const distance = distanceMeters(watch.home, fix);
+	const { autoTrip, radiusMeters: radius } = watch;
+	const step: HomeStep = !autoTrip
+		? { change: {} }
+		: distance <= radius && fix.accuracyMeters <= radius
+			? insideStep(watch)
+			: distance - fix.accuracyMeters > radius
+				? outsideStep(watch, ctx.timestamp)
+				: { change: {} };
+	ctx.db.homeWatch.id.update({
+		...watch,
+		...step.change,
+		distanceMeters: distance,
+		updatedAt: ctx.timestamp,
+	});
+	if (step.event !== undefined)
+		recordAway(ctx, familyId, step.event, false, fix);
+};
+
+const upsertHomeWatch = (
+	ctx: Ctx,
+	familyId: bigint,
+	change: Partial<Infer<typeof homeWatch.rowType>>,
+) => {
+	const existing = homeWatchOf(ctx, familyId);
+	const row = {
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		home: undefined,
+		radiusMeters: 200,
+		autoTrip: false,
+		outsideSince: undefined,
+		awaySince: undefined,
+		distanceMeters: undefined,
+		...existing,
+		...change,
+		updatedAt: ctx.timestamp,
+	};
+	if (existing === undefined) ctx.db.homeWatch.insert(row);
+	else ctx.db.homeWatch.id.update(row);
+};
+
+/**
+ * Sets the sender's home, the radius that counts as home, and whether their location reports start
+ * and end trips. Moving home forgets a pending departure; an open trip stays open.
+ */
+export const setHome = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+	},
+	(ctx, { familyId, home, radiusMeters, autoTrip }) => {
+		requireMember(ctx, familyId);
+		if (radiusMeters < MIN_HOME_RADIUS || radiusMeters > MAX_HOME_RADIUS)
+			throw new SenderError(
+				`radiusMeters must be ${MIN_HOME_RADIUS} to ${MAX_HOME_RADIUS}`,
+			);
+		if (
+			home !== undefined &&
+			!(Math.abs(home.latitude) <= 90 && Math.abs(home.longitude) <= 180)
+		)
+			throw new SenderError("coordinates out of range");
+		// A pending departure and the last distance were measured from the old home; an open trip
+		// keeps its evidence.
+		const existing = homeWatchOf(ctx, familyId);
+		const moved =
+			existing?.home?.latitude !== home?.latitude ||
+			existing?.home?.longitude !== home?.longitude;
+		upsertHomeWatch(ctx, familyId, {
+			home,
+			radiusMeters,
+			autoTrip,
+			...(existing?.awaySince === undefined ? { outsideSince: undefined } : {}),
+			...(moved ? { distanceMeters: undefined } : {}),
+		});
+	},
+);
+
+/** "I'm going out" (`away`) or "I'm home". Pressing it again changes nothing. */
+export const setAway = spacetimedb.reducer(
+	{ familyId: t.u64(), away: t.bool() },
+	(ctx, { familyId, away }) => {
+		requireMember(ctx, familyId);
+		if ((homeWatchOf(ctx, familyId)?.awaySince !== undefined) === away) return;
+		upsertHomeWatch(ctx, familyId, {
+			outsideSince: undefined,
+			awaySince: away ? ctx.timestamp : undefined,
+		});
+		recordAway(ctx, familyId, away ? "Left" : "Back", true, undefined);
+	},
+);
+
+/** Stores the sender's display name. The server sends it from the sender's verified sign-in. */
+export const setMemberName = spacetimedb.reducer(
+	{ name: t.string() },
+	(ctx, { name }) => {
+		requireText("name", name);
+		if (name.length > 100) throw new SenderError("name is too long");
+		const row = { member: ctx.sender, name, updatedAt: ctx.timestamp };
+		if (ctx.db.memberName.member.find(ctx.sender) === null)
+			ctx.db.memberName.insert(row);
+		else ctx.db.memberName.member.update(row);
 	},
 );
 
@@ -3240,6 +3515,37 @@ export const saveCookingProfile = spacetimedb.reducer(
 	},
 );
 
+// The members of every family the caller belongs to.
+export const myFamilyMembers = spacetimedb.view(
+	{ name: "my_family_members", public: true },
+	t.array(familyMember.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.familyMember, (m, o) =>
+				m.familyId.eq(o.familyId),
+			),
+);
+
+// The names of the caller and of everyone who shares a family with the caller.
+export const myMemberNames = spacetimedb.view(
+	{ name: "my_member_names", public: true },
+	t.array(memberName.rowType),
+	(ctx) => {
+		const seen = new Set<string>();
+		const names = [];
+		for (const mine of ctx.db.familyMember.member.filter(ctx.sender))
+			for (const other of ctx.db.familyMember.familyId.filter(mine.familyId)) {
+				const key = other.member.toHexString();
+				if (seen.has(key)) continue;
+				seen.add(key);
+				const row = ctx.db.memberName.member.find(other.member);
+				if (row !== null) names.push(row);
+			}
+		return names;
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -3477,30 +3783,25 @@ export const myReminderEvents = spacetimedb.view(
 			),
 );
 
-// The caller's own locations, and those of people who share theirs with the caller. Another
-// person's location also needs the caller's `location` care scope (#26) in that family. A revoked
-// share or scope drops the row at once.
+// Shares to the caller that let the caller see the sharer's location now: the caller also holds
+// the `location` care scope (#26) in that family. A revoked share or scope drops out at once.
+const visibleShares = (ctx: ViewCtx<InferSchema<typeof spacetimedb>>) =>
+	[...ctx.db.locationShare.viewer.filter(ctx.sender)].filter((share) =>
+		holdsCareScope(
+			ctx.db.careGrantEvent.byFamilyMember.filter([share.familyId, ctx.sender]),
+			"location",
+		),
+	);
+
+// The caller's own locations, and those of people who share theirs with the caller.
 export const myLocations = spacetimedb.view(
 	{ name: "my_locations", public: true },
 	t.array(location.rowType),
 	(ctx) => [
 		...ctx.db.location.sharer.filter(ctx.sender),
-		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) =>
-			holdsCareScope(
-				ctx.db.careGrantEvent.byFamilyMember.filter([
-					share.familyId,
-					ctx.sender,
-				]),
-				"location",
-			)
-				? [
-						...ctx.db.location.byFamilySharer.filter([
-							share.familyId,
-							share.sharer,
-						]),
-					]
-				: [],
-		),
+		...visibleShares(ctx).flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
 	],
 );
 
@@ -3511,6 +3812,34 @@ export const myLocationShares = spacetimedb.view(
 	(ctx) => [
 		...ctx.db.locationShare.sharer.filter(ctx.sender),
 		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
+);
+
+// The caller's own home settings. Nobody else reads a home position.
+export const myHomeWatch = spacetimedb.view(
+	{ name: "my_home_watch", public: true },
+	t.array(homeWatch.rowType),
+	(ctx) => [...ctx.db.homeWatch.sharer.filter(ctx.sender)],
+);
+
+// Trip starts and ends: the caller's own, and those of people who share their location with the
+// caller, under the rule of `my_locations`. A share shows no event from before it began.
+export const myAwayEvents = spacetimedb.view(
+	{ name: "my_away_events", public: true },
+	t.array(awayEvent.rowType),
+	(ctx) => [
+		...ctx.db.awayEvent.sharer.filter(ctx.sender),
+		...visibleShares(ctx).flatMap((share) =>
+			[
+				...ctx.db.awayEvent.byFamilySharer.filter([
+					share.familyId,
+					share.sharer,
+				]),
+			].filter(
+				(event) =>
+					event.at.microsSinceUnixEpoch >= share.sharedAt.microsSinceUnixEpoch,
+			),
+		),
 	],
 );
 
@@ -3904,6 +4233,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.tripEvent.familyId,
 			db.location.familyId,
 			db.locationShare.familyId,
+			db.homeWatch.familyId,
+			db.awayEvent.familyId,
 			db.mealFact.familyId,
 			db.medicineMemory.familyId,
 			db.medicineSighting.familyId,

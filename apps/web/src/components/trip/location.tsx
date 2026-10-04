@@ -1,24 +1,20 @@
-// Shared location display and per-person sharing (issue #40). A location always shows its label,
-// accuracy, fix time, and report time; nothing here says the person is safe.
-import type { FamilyRecords } from "@health/contracts";
-import { IdentityHex } from "@health/contracts/families";
+// Shared location display, trip notices (#302), and per-person sharing (issue #40). A location
+// always shows its label, accuracy, fix time, and report time; nothing here says the person is safe.
+// People show by name (`useMemberNames`), never by identity.
+import { CareAccess } from "@health/contracts/care-profile";
 import {
 	describeLocation,
 	FamilyLocations,
 	type SharedLocation,
 } from "@health/contracts/location";
-import { Button } from "@health/ui/components/button";
-import { Schema } from "effect";
 import { useState } from "react";
 
 import { clock } from "@/components/family/logic";
 import { ApiNotice } from "@/components/win95";
-import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
-import { memberLabel } from "@/lib/members";
+import { apiRequest, familyPath, useApi } from "@/lib/api";
+import { useMemberNames } from "@/lib/members";
 
-import { mapUrl } from "./logic";
-
-const isIdentity = Schema.is(IdentityHex);
+import { awayText, mapUrl } from "./logic";
 
 /** One person's latest location with its label, accuracy, and times. */
 export function LocationCard({
@@ -67,124 +63,93 @@ export function LocationCard({
 }
 
 /**
- * The caller's own shares: who sees their location, a Stop sharing button for each, and a way to
- * share with one more family member. Candidates are members seen in the family's records.
+ * "Who sees where I am": every other member of the family with an on/off box. On shares the
+ * caller's location with that person (#40); they see it only while they also hold Location access
+ * (#26), and the row says so when they do not.
  */
-export function SharingControls({
+export function WhoSeesMe({
 	familyId,
 	me,
 	locations,
-	records,
 	onChange,
 }: {
 	familyId: string;
 	me: string;
 	locations: FamilyLocations;
-	records: ApiState<FamilyRecords>;
 	onChange: () => void;
 }) {
-	const [typed, setTyped] = useState("");
-	const [error, setError] = useState<string | null>(null);
+	const { state, members, nameOf } = useMemberNames(familyId);
+	const access = useApi(CareAccess, familyPath(familyId, "/care-access"));
 	const [busy, setBusy] = useState(false);
-	const mine = locations.shares.filter((s) => s.sharer === me);
-	const shared = new Set(mine.map((s) => s.viewer));
-	const known =
-		records.kind === "ready"
-			? [
-					...new Set([
-						...records.value.messages.map((m) => m.sender),
-						...records.value.acknowledgements.map((a) => a.member),
-					]),
-				].filter((id) => id !== me && !shared.has(id))
-			: [];
+	const [error, setError] = useState<string | null>(null);
+	const shared = new Set(
+		locations.shares.filter((s) => s.sharer === me).map((s) => s.viewer),
+	);
+	const others = members.filter((m) => m.identity !== me);
 
-	const change = async (viewer: string, method: "PUT" | "DELETE") => {
+	const change = async (viewer: string, on: boolean) => {
 		setBusy(true);
 		setError(null);
 		const result = await apiRequest(
 			FamilyLocations,
 			familyPath(familyId, `/location/shares/${viewer}`),
-			{ method },
+			{ method: on ? "PUT" : "DELETE" },
 		);
 		setBusy(false);
-		if (result.kind === "ready") {
-			onChange();
-			setTyped("");
-		} else
+		if (result.kind === "ready") onChange();
+		else
 			setError(
 				result.kind === "signed_out"
-					? "Sign in again to change sharing."
-					: result.message,
+					? "Not changed: sign in again."
+					: `Not changed: ${result.message}`,
 			);
 	};
 
 	return (
-		<fieldset className="grid gap-2 border border-border p-2">
-			<legend className="px-1">Who can see my location</legend>
-			{mine.length === 0 ? (
-				<p>Nobody. Telly sends no location until you share it with someone.</p>
+		<fieldset
+			className="grid gap-1"
+			title="Only the people you tick see where you are."
+		>
+			<legend className="font-bold">Who sees where I am</legend>
+			{state.kind !== "ready" ? (
+				<ApiNotice state={state} what="your family" />
+			) : others.length === 0 ? (
+				<p className="text-[16px]">Nobody else is in this family yet.</p>
 			) : (
-				<ul className="grid gap-1">
-					{mine.map((share) => (
-						<li
-							key={share.viewer}
-							className="flex flex-wrap items-center gap-2"
-						>
-							<span className="min-w-0 flex-1">
-								{memberLabel(share.viewer, me)} · since {clock(share.sharedAt)}
-							</span>
-							<Button
-								className="h-11"
+				others.map(({ identity }) => {
+					const on = shared.has(identity);
+					const blocked =
+						on &&
+						access.kind === "ready" &&
+						!access.value.grants.some(
+							(g) => g.identity === identity && g.scope === "location",
+						);
+					return (
+						<label key={identity} className="flex min-h-11 items-center gap-3">
+							<input
+								checked={on}
+								className="size-6 shrink-0"
 								disabled={busy}
-								onClick={() => void change(share.viewer, "DELETE")}
-								variant="outline"
-							>
-								Stop sharing with {memberLabel(share.viewer, me)}
-							</Button>
-						</li>
-					))}
-				</ul>
+								onChange={(event) =>
+									void change(identity, event.target.checked)
+								}
+								type="checkbox"
+							/>
+							<span className="min-w-0">
+								{nameOf(identity)}
+								{blocked && (
+									<span className="block text-[14px]">
+										Cannot see it yet: turn on Location for them in Care ›
+										Sharing.
+									</span>
+								)}
+							</span>
+						</label>
+					);
+				})
 			)}
-			{known.map((id) => (
-				<Button
-					key={id}
-					className="h-11 justify-self-start"
-					disabled={busy}
-					onClick={() => void change(id, "PUT")}
-				>
-					Share with {memberLabel(id, me)}
-				</Button>
-			))}
-			<form
-				className="grid gap-1"
-				onSubmit={(event) => {
-					event.preventDefault();
-					if (isIdentity(typed.trim())) void change(typed.trim(), "PUT");
-				}}
-			>
-				<label htmlFor="share-identity">
-					Share with a family member by their sharing ID
-				</label>
-				<span className="flex gap-2">
-					<input
-						id="share-identity"
-						className="win95-inset win95-field h-11 min-w-0 flex-1 bg-card px-2 font-mono text-sm"
-						value={typed}
-						onChange={(event) => setTyped(event.target.value)}
-						aria-invalid={typed.trim() !== "" && !isIdentity(typed.trim())}
-						spellCheck={false}
-					/>
-					<Button
-						className="h-11"
-						disabled={busy || !isIdentity(typed.trim())}
-						type="submit"
-					>
-						Share
-					</Button>
-				</span>
-			</form>
 			{error !== null && (
-				<p className="font-bold text-destructive" role="alert">
+				<p className="font-bold text-[16px] text-destructive" role="alert">
 					{error}
 				</p>
 			)}
@@ -192,9 +157,55 @@ export function SharingControls({
 	);
 }
 
+/** The newest trip starts and ends of people who share with the caller (#302), with a map link. */
+function AwayNotices({
+	locations,
+	me,
+	nameOf,
+}: {
+	locations: FamilyLocations;
+	me: string | null;
+	nameOf: (identity: string) => string;
+}) {
+	const notices = locations.events.filter((e) => e.sharer !== me).slice(0, 5);
+	if (notices.length === 0) return null;
+	return (
+		<ul aria-label="Going out" className="grid gap-1">
+			{notices.map((event) => {
+				// A manual start has no fix of its own: link the person's latest position.
+				const fix =
+					event.fix ??
+					locations.locations.find((l) => l.sharer === event.sharer)?.fix ??
+					null;
+				return (
+					<li
+						key={event.id}
+						className="win95-inset flex flex-wrap items-center gap-x-2 bg-card p-2"
+					>
+						<span className="min-w-0 flex-1">
+							{awayText(nameOf(event.sharer), event)}
+						</span>
+						{fix !== null && (
+							<a
+								className="underline"
+								href={mapUrl(fix)}
+								rel="noreferrer"
+								target="_blank"
+							>
+								Open on a map
+							</a>
+						)}
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
 /**
- * The family view: the latest location of each person who shares it with the caller. A failed
- * read, such as a lost network, shows as a failure, never as an old location passed off as new.
+ * The family view: the latest location of each person who shares it with the caller, and their
+ * trip starts and ends. A failed read, such as a lost network, shows as a failure, never as an old
+ * location passed off as new.
  */
 export function FamilyLocationSection({
 	familyId,
@@ -208,7 +219,7 @@ export function FamilyLocationSection({
 	const state = useApi(FamilyLocations, familyPath(familyId, "/location"), {
 		pollMs: 30_000,
 	});
-	const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+	const { nameOf } = useMemberNames(familyId);
 	const shared =
 		state.kind === "ready"
 			? state.value.locations.filter((l) => l.sharer !== me)
@@ -232,33 +243,13 @@ export function FamilyLocationSection({
 					<LocationCard
 						key={location.sharer}
 						location={location}
-						name={memberLabel(location.sharer, me)}
+						name={nameOf(location.sharer)}
 						now={now}
 					/>
 				))
 			)}
-			{me !== null && (
-				<p className="flex flex-wrap items-center gap-2">
-					<Button
-						className="h-11"
-						onClick={() =>
-							navigator.clipboard.writeText(me).then(
-								() => setCopy("copied"),
-								() => setCopy("failed"),
-							)
-						}
-						variant="outline"
-					>
-						Copy my sharing ID
-					</Button>
-					<span aria-live="polite" className="min-w-0 flex-1 text-xs">
-						{copy === "copied"
-							? "Copied. Send it to the family member who will share their location with you."
-							: copy === "failed"
-								? "This browser did not allow copying. Try again."
-								: "A family member pastes it in Going out to share their location with you."}
-					</span>
-				</p>
+			{state.kind === "ready" && state.value.seesShared && (
+				<AwayNotices locations={state.value} me={me} nameOf={nameOf} />
 			)}
 		</section>
 	);

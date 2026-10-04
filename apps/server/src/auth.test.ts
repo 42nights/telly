@@ -11,6 +11,7 @@ import {
 } from "@health/contracts";
 import {
 	FamilyInvite,
+	FamilyMembers,
 	JoinedFamily,
 	Me,
 	WhoopPushToken,
@@ -448,6 +449,38 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 			email: null,
 			picture: null,
 		});
+	});
+
+	test("a member's sign-in name shows in the family's member list, never another identity's", async () => {
+		const alice = `alice-${crypto.randomUUID()}`;
+		const bob = `bob-${crypto.randomUUID()}`;
+		const created = await call(alice, "POST", "/api/families", {
+			name: "Names",
+		});
+		const family = Schema.decodeUnknownSync(Family)(await created.json());
+		const bobMe = Schema.decodeUnknownSync(Me)(
+			await (
+				await app?.request("/api/me", {
+					headers: {
+						Authorization: `Bearer ${await token(bob, { name: "Synthetic Bob" })}`,
+					},
+				})
+			)?.json(),
+		);
+		await call(alice, "POST", `/api/families/${family.id}/members`, {
+			identity: bobMe.identity,
+		});
+		const members = Schema.decodeUnknownSync(FamilyMembers)(
+			await (
+				await call(alice, "GET", `/api/families/${family.id}/members`)
+			).json(),
+		).members;
+		expect(members.map((m) => [m.identity === bobMe.identity, m.name])).toEqual(
+			[
+				[false, null],
+				[true, "Synthetic Bob"],
+			],
+		);
 	});
 
 	test("an invite admits one person once; members may reuse the link", async () => {

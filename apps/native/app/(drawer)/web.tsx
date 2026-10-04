@@ -1,6 +1,7 @@
 // The iOS shell (issue #94): the web app full screen in a WebView. Only the web app's origin loads
 // here. The issuer's sign-in page starts the native sign-in instead (Google refuses sign-in in a
 // WebView). Other sites open in Safari, and `tel:` and `mailto:` links open the phone and mail apps.
+import { DbId } from "@health/contracts/families";
 import { SESSION_KEYS, type SignInToken } from "@health/contracts/session";
 import { Schema } from "effect";
 import { useFocusEffect } from "expo-router";
@@ -8,6 +9,7 @@ import { useCallback, useState } from "react";
 import { Alert, Linking, StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 
+import { setLocationWatch } from "@/lib/location-watch";
 import { originOf } from "@/lib/origin";
 import { readSession, writeSession } from "@/lib/session";
 import { issuer, signIn } from "@/lib/sign-in";
@@ -18,7 +20,14 @@ const ISSUER_ORIGIN = issuer ? originOf(issuer) : null;
 
 // The JS bridge: the web app calls `window.ReactNativeWebView.postMessage(JSON.stringify(message))`
 // (a WKScriptMessageHandler on iOS). Add a member here for each native feature, such as glasses audio.
-const BridgeMessage = Schema.Struct({ type: Schema.Literals(["sign-out"]) });
+// `location-watch` starts (a family id) or stops (`null`) background location for automatic trips.
+const BridgeMessage = Schema.Union([
+	Schema.Struct({ type: Schema.Literal("sign-out") }),
+	Schema.Struct({
+		type: Schema.Literal("location-watch"),
+		familyId: Schema.NullOr(DbId),
+	}),
+]);
 
 const decodeBridgeMessage = (data: string) => {
 	try {
@@ -97,8 +106,14 @@ export default function WebApp() {
 			onMessage={({ nativeEvent }) => {
 				if (originOf(nativeEvent.url) !== WEB_ORIGIN) return;
 				const message = decodeBridgeMessage(nativeEvent.data);
+				if (message?.type === "location-watch")
+					void setLocationWatch(message.familyId).catch((error: unknown) =>
+						console.warn("Could not change background location", error),
+					);
 				if (message?.type === "sign-out")
-					void writeSession(null).then(() => setSession(null));
+					void Promise.all([setLocationWatch(null), writeSession(null)]).then(
+						() => setSession(null),
+					);
 			}}
 			mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
 			allowsInlineMediaPlayback

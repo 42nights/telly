@@ -32,6 +32,15 @@
 		"plugins": [
 			"expo-router",
 			[
+				"expo-location",
+				{
+					"locationWhenInUsePermission": "Telly uses your location to notice when you go out and to show the family members you chose where you are.",
+					"locationAlwaysAndWhenInUsePermission": "Telly uses your location in the background to notice when you go out and come back, and tells only the family members you chose.",
+					"locationAlwaysPermission": "Telly uses your location in the background to notice when you go out and come back, and tells only the family members you chose.",
+					"isIosBackgroundLocationEnabled": true
+				}
+			],
+			[
 				"expo-splash-screen",
 				{
 					"image": "./assets/images/splash-icon.png",

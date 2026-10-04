@@ -8,7 +8,7 @@ const { fireEvent, within } = await import("@testing-library/react");
 const { renderRoute, screen, serve, signIn } = await import("@/lib/test/app");
 
 // #254: each setting is its own tab of the Settings screen.
-test("shows the phone, speaker, medicine place, report email, device, and delete family settings as tabs in that order", async () => {
+test("shows the phone, speaker, going out, medicine place, report email, device, and delete family settings as tabs in that order", async () => {
 	signIn();
 	serve({});
 	renderRoute("/settings");
@@ -19,6 +19,7 @@ test("shows the phone, speaker, medicine place, report email, device, and delete
 	expect(tabs.map((t) => [t.textContent, t.getAttribute("href")])).toEqual([
 		["Phone numbers", "/settings"],
 		["Home speaker", "/settings/speaker"],
+		["Going out", "/settings/going-out"],
 		["Medicine places", "/settings/places"],
 		["Report email", "/settings/reports"],
 		["This device", "/settings/device"],
@@ -27,6 +28,7 @@ test("shows the phone, speaker, medicine place, report email, device, and delete
 
 	for (const [tab, heading] of [
 		["Home speaker", "Settings · Home speaker (simulated)"],
+		["Going out", "Settings · Going out"],
 		["Medicine places", "Settings · Medicine places"],
 		["Report email", "Settings · Report email"],
 		["This device", "Settings · This device"],

@@ -21,29 +21,56 @@ const ME_REPLY = {
 	picture: null,
 };
 const SHARE = { familyId: "1", sharer: ME, viewer: MOM, sharedAt: NOW };
+const HOME = { latitude: 40, longitude: -73 };
 const MY_LOCATION = {
 	familyId: "1",
 	sharer: ME,
 	status: "fix",
-	fix: { latitude: 1, longitude: 2, accuracyMeters: 5, fixTime: NOW },
+	// About 1.2 km north of HOME, as the server reports in `distanceMeters`.
+	fix: { latitude: 40.011, longitude: -73, accuracyMeters: 5, fixTime: NOW },
 	reportedAt: NOW,
 };
-const TRIP = {
-	destination: "the pharmacy",
-	purpose: "pick up pills",
-	setAt: 1,
+const LOCATIONS = { locations: [], shares: [], seesShared: true, events: [] };
+const WATCH = {
+	home: null,
+	radiusMeters: 200,
+	autoTrip: false,
+	awaySince: null,
+	distanceMeters: null,
+	sharing: false,
 };
 
 const base = (extra: Record<string, unknown> = {}) => ({
 	"GET /api/families": { families: [FAMILY] },
 	"GET /api/me": ME_REPLY,
-	"GET /api/families/fam-1/location": {
-		locations: [],
-		shares: [],
-		seesShared: true,
+	"GET /api/families/fam-1/location": LOCATIONS,
+	"GET /api/families/fam-1/location/home": WATCH,
+	"GET /api/families/fam-1/members": {
+		members: [
+			{ identity: ME, name: "Ana", addedAt: NOW },
+			{ identity: MOM, name: "Mom Rivera", addedAt: NOW },
+		],
+	},
+	"GET /api/families/fam-1/care-access": {
+		mine: [],
+		grants: [
+			{
+				identity: MOM,
+				scope: "location",
+				granted: true,
+				changedBy: ME,
+				changedAt: NOW,
+			},
+		],
+		history: [],
 	},
 	...extra,
 });
+const momBox = async () => {
+	const box = await screen.findByRole("checkbox", { name: "Mom Rivera" });
+	if (!(box instanceof HTMLInputElement)) throw new Error("not a checkbox");
+	return box;
+};
 
 const attempt = {
 	step: 1,
@@ -76,10 +103,10 @@ const need = (attempts: unknown[]) => ({
 	remaining: [],
 });
 
-// happy-dom has no geolocation; the reporter watches this fake instead.
+// happy-dom has no geolocation; the reporter and "This is home" use this fake instead.
 type Watcher = { ok: PositionCallback; fail: PositionErrorCallback | null };
 let watcher: Watcher | null = null;
-let cleared = 0;
+let here: Partial<GeolocationCoordinates> = { ...HOME, accuracy: 15 };
 const geolocation = {
 	watchPosition: (
 		ok: PositionCallback,
@@ -89,8 +116,10 @@ const geolocation = {
 		return 7;
 	},
 	clearWatch: () => {
-		cleared++;
+		watcher = null;
 	},
+	getCurrentPosition: (ok: PositionCallback) =>
+		ok({ coords: here, timestamp: Date.now() } as GeolocationPosition),
 };
 Object.defineProperty(navigator, "geolocation", {
 	value: geolocation,
@@ -98,95 +127,167 @@ Object.defineProperty(navigator, "geolocation", {
 });
 afterEach(() => {
 	watcher = null;
+	here = { ...HOME, accuracy: 15 };
 });
 
-test("plans a trip: blank destination stays disabled, the trimmed plan is saved", async () => {
+test("no form: one tap on This is home saves this position, turns on automatic trips, and shares with the family", async () => {
 	signIn();
-	serve(base());
-	renderRoute("/trip");
-	const start = await screen.findByRole("button", { name: "Start trip" });
-	expect(start.hasAttribute("disabled")).toBe(true);
-	const where = screen.getByLabelText("Where are you going?");
-	fireEvent.change(where, { target: { value: "   " } });
-	fireEvent.submit(screen.getByRole("form", { name: "Plan a trip" }));
-	expect(localStorage.getItem("telly.trip")).toBeNull();
-	expect(screen.queryByText("Keep the old plan")).toBeNull();
-
-	fireEvent.change(where, { target: { value: "  the park " } });
-	fireEvent.change(screen.getByLabelText(/What for\?/), {
-		target: { value: " " },
-	});
-	fireEvent.submit(screen.getByRole("form", { name: "Plan a trip" }));
-	expect(
-		await screen.findByRole("heading", { name: "You are going to the park" }),
-	).toBeTruthy();
-	expect(screen.queryByText(/^To /)).toBeNull();
-	const saved = JSON.parse(localStorage.getItem("telly.trip") ?? "null");
-	expect(saved).toMatchObject({ destination: "the park", purpose: "" });
-	expect(
-		screen.getByRole("link", { name: "Directions" }).getAttribute("href"),
-	).toContain("destination=the%20park");
-});
-
-test("changes plans, keeps the old plan, and cancels the trip", async () => {
-	signIn();
-	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
-	serve(base());
-	renderRoute("/trip");
-	expect(await screen.findByText("To pick up pills.")).toBeTruthy();
-
-	fireEvent.click(screen.getByRole("button", { name: "My plans changed" }));
-	expect(
-		(screen.getByLabelText("Where are you going?") as HTMLInputElement).value,
-	).toBe("the pharmacy");
-	fireEvent.click(screen.getByRole("button", { name: "Keep the old plan" }));
-	expect(
-		screen.getByRole("heading", { name: "You are going to the pharmacy" }),
-	).toBeTruthy();
-
-	fireEvent.click(screen.getByRole("button", { name: "My plans changed" }));
-	fireEvent.change(screen.getByLabelText("Where are you going?"), {
-		target: { value: "the bank" },
-	});
-	fireEvent.submit(screen.getByRole("form", { name: "Plan a trip" }));
-	expect(
-		await screen.findByRole("heading", { name: "You are going to the bank" }),
-	).toBeTruthy();
-
-	fireEvent.click(screen.getByRole("button", { name: "Cancel trip" }));
-	expect(
-		await screen.findByRole("button", { name: "Start trip" }),
-	).toBeTruthy();
-	expect(localStorage.getItem("telly.trip")).toBeNull();
-});
-
-test("Remind me asks the voice for the plan and shows a voice failure", async () => {
-	signIn();
-	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
+	let watch: Record<string, unknown> = WATCH;
+	let shared = false;
 	const calls = serve(
 		base({
-			"POST /api/families/fam-1/voice/speech": json(503, {
-				error: "unavailable",
-				message: "down",
+			"GET /api/families/fam-1/location/home": () => watch,
+			"PUT /api/families/fam-1/location/home": (call: { body: unknown }) => {
+				watch = { ...WATCH, ...(call.body as object) };
+				return watch;
+			},
+			"GET /api/families/fam-1/location": () => ({
+				...LOCATIONS,
+				shares: shared ? [SHARE] : [],
+			}),
+			[`PUT /api/families/fam-1/location/shares/${MOM}`]: () => {
+				shared = true;
+				watch = { ...watch, sharing: true };
+				return { ...LOCATIONS, shares: [SHARE] };
+			},
+		}),
+	);
+	renderRoute("/trip");
+	expect((await momBox()).checked).toBe(false);
+	fireEvent.click(await screen.findByRole("button", { name: "This is home" }));
+	expect(
+		await screen.findByText(
+			"You are at home. Telly tells the people you chose when you go out.",
+		),
+	).toBeTruthy();
+	expect(calls.find((c) => c.method === "PUT")?.body).toEqual({
+		home: HOME,
+		radiusMeters: 200,
+		autoTrip: true,
+	});
+	// The first home turns sharing on for every family member, never for the wearer.
+	expect(
+		calls
+			.filter((c) => c.path.includes("/location/shares/"))
+			.map((c) => c.path),
+	).toEqual([`/api/families/fam-1/location/shares/${MOM}`]);
+	await waitFor(async () => expect((await momBox()).checked).toBe(true));
+	// Sharing and automatic trips on: this device now sends its position.
+	await waitFor(() => expect(watcher).not.toBeNull());
+});
+
+test("a position known only roughly is not saved as home", async () => {
+	signIn();
+	here = { ...HOME, accuracy: 900 };
+	const calls = serve(base());
+	renderRoute("/trip");
+	fireEvent.click(await screen.findByRole("button", { name: "This is home" }));
+	expect((await screen.findByRole("alert")).textContent).toContain(
+		"only within 900 m",
+	);
+	expect(calls.some((c) => c.method === "PUT")).toBe(false);
+});
+
+test("out: shows the distance and time, sends the position, and I'm back home ends the trip", async () => {
+	signIn();
+	const awaySince = new Date(Date.now() - 10 * 60_000).toISOString();
+	const calls = serve(
+		base({
+			"GET /api/families/fam-1/location/home": {
+				...WATCH,
+				home: HOME,
+				autoTrip: true,
+				sharing: true,
+				awaySince,
+				distanceMeters: 1223,
+			},
+			"GET /api/families/fam-1/location": {
+				...LOCATIONS,
+				locations: [MY_LOCATION],
+				shares: [SHARE],
+			},
+			"POST /api/families/fam-1/location": MY_LOCATION,
+			"POST /api/families/fam-1/location/away": { ...WATCH, sharing: true },
+		}),
+	);
+	renderRoute("/trip");
+	expect(
+		await screen.findByRole("heading", { name: "You are out" }),
+	).toBeTruthy();
+	expect(screen.getByText("1.2 km from home · left 10 min ago")).toBeTruthy();
+	expect(
+		screen.getByRole("link", { name: "Directions home" }).getAttribute("href"),
+	).toContain("destination=40%2C-73");
+	await waitFor(() => expect(watcher).not.toBeNull());
+	watcher?.ok({
+		coords: { latitude: 40.011, longitude: -73, accuracy: 5 },
+		timestamp: Date.parse(NOW),
+	} as GeolocationPosition);
+	await waitFor(() =>
+		expect(
+			calls.find((c) => c.method === "POST" && c.path.endsWith("/location"))
+				?.body,
+		).toMatchObject({ status: "fix", fix: { latitude: 40.011 } }),
+	);
+	fireEvent.click(screen.getByRole("button", { name: "I'm back home" }));
+	await waitFor(() =>
+		expect(calls.find((c) => c.path.endsWith("/away"))?.body).toEqual({
+			away: false,
+		}),
+	);
+});
+
+test("without a share, nothing is sent even with automatic trips on", async () => {
+	signIn();
+	serve(
+		base({
+			"GET /api/families/fam-1/location/home": {
+				...WATCH,
+				home: HOME,
+				autoTrip: true,
+			},
+		}),
+	);
+	renderRoute("/trip");
+	expect(
+		await screen.findByText(/^Share your location with someone below/),
+	).toBeTruthy();
+	expect(watcher).toBeNull();
+	expect((await momBox()).checked).toBe(false);
+});
+
+test("a refused position report shows an alert", async () => {
+	signIn();
+	const calls = serve(
+		base({
+			"GET /api/families/fam-1/location/home": {
+				...WATCH,
+				home: HOME,
+				autoTrip: true,
+				sharing: true,
+			},
+			"POST /api/families/fam-1/location": json(403, {
+				error: "forbidden",
+				message: "Share first.",
 			}),
 		}),
 	);
 	renderRoute("/trip");
-	fireEvent.click(await screen.findByRole("button", { name: "Remind me" }));
-	expect(
-		await screen.findByText("The voice is not available right now."),
-	).toBeTruthy();
-	const sent = calls.find((c) => c.path.endsWith("/voice/speech"));
-	expect(sent?.body).toMatchObject({
-		text: expect.stringContaining(
-			"You are going to the pharmacy, to pick up pills.",
-		),
+	await waitFor(() => expect(watcher).not.toBeNull());
+	watcher?.fail?.({
+		code: 1,
+		PERMISSION_DENIED: 1,
+	} as GeolocationPositionError);
+	expect((await screen.findByRole("alert")).textContent).toBe(
+		"Not sent: Share first.",
+	);
+	expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+		status: "gps_denied",
 	});
 });
 
-test("help: sends one need, names the contact, and offers Mom and home links", async () => {
+test("help: sends one need, names the contact, and offers Mom and a typed home address", async () => {
 	signIn();
-	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
 	localStorage.setItem(
 		"telly.contacts",
 		JSON.stringify({ momPhone: "+15551234567" }),
@@ -223,20 +324,13 @@ test("help: sends one need, names the contact, and offers Mom and home links", a
 		kind: "help",
 		sampleIds: [],
 		dueAt: null,
-		summary: expect.stringContaining(
-			"I was going to the pharmacy to pick up pills.",
-		),
+		summary: expect.stringContaining("I need help getting home."),
 	});
 	// The spoken answer reuses the help key.
 	expect(
 		await screen.findByText("The voice is not available right now."),
 	).toBeTruthy();
-
-	fireEvent.change(screen.getByLabelText(/Home address/), {
-		target: { value: " " },
-	});
-	expect(localStorage.getItem("telly.home")).toBe(" ");
-	expect(screen.queryByRole("link", { name: "Directions home" })).toBeNull();
+	localStorage.removeItem("telly.home");
 });
 
 test("help with nobody to contact says to call instead", async () => {
@@ -325,7 +419,7 @@ test("help with no family loaded fails without a request", async () => {
 	expect(calls.some((c) => c.method === "POST")).toBe(false);
 });
 
-test("location forbidden, unavailable, and unreachable show notices", async () => {
+test("location forbidden, unavailable, and unreachable show notices, never a list", async () => {
 	for (const reply of [
 		json(403, { error: "forbidden", message: "Not yours." }),
 		json(503, { error: "unavailable", message: "Down." }),
@@ -336,16 +430,15 @@ test("location forbidden, unavailable, and unreachable show notices", async () =
 		signIn();
 		serve(base({ "GET /api/families/fam-1/location": reply }));
 		const { unmount } = renderRoute("/trip");
-		const section = (
-			await screen.findByRole("heading", { name: "My location" })
-		).parentElement;
-		await waitFor(() => expect(section?.textContent).not.toMatch(/Loading/i));
-		expect(section?.textContent).not.toContain("Who can see my location");
+		await waitFor(() =>
+			expect(document.body.textContent).toMatch(/who sees where you are/i),
+		);
+		expect(screen.queryAllByRole("checkbox")).toEqual([]);
 		unmount();
 	}
 });
 
-test("me failing shows the sharing-settings notice", async () => {
+test("me failing shows the notice instead of the list", async () => {
 	signIn();
 	serve(
 		base({
@@ -353,140 +446,33 @@ test("me failing shows the sharing-settings notice", async () => {
 		}),
 	);
 	renderRoute("/trip");
-	const section = (await screen.findByRole("heading", { name: "My location" }))
-		.parentElement;
-	await waitFor(() => expect(section?.textContent).toContain("Me down."));
+	await waitFor(() => expect(document.body.textContent).toContain("Me down."));
+	expect(screen.queryAllByRole("checkbox")).toEqual([]);
 });
 
-test("not sharing: explains that nothing is sent", async () => {
-	signIn();
-	serve(base());
-	renderRoute("/trip");
-	expect(
-		await screen.findByText(
-			"Not shared. Telly sends your location only to people you choose.",
-		),
-	).toBeTruthy();
-	expect(screen.getByText(/Nobody\. Telly sends no location/)).toBeTruthy();
-});
-
-test("sharing without a trip asks to start one and shows the last report", async () => {
-	signIn();
-	serve(
-		base({
-			"GET /api/families/fam-1/location": {
-				locations: [MY_LOCATION],
-				shares: [SHARE],
-				seesShared: true,
-			},
-		}),
-	);
-	renderRoute("/trip");
-	expect(
-		await screen.findByText(
-			"Shared during a trip. Start a trip to send your location.",
-		),
-	).toBeTruthy();
-	expect(
-		screen.getByRole("heading", { name: "What your family sees" }),
-	).toBeTruthy();
-});
-
-test("sharing during a trip sends the position and shows when it was sent", async () => {
-	signIn();
-	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
-	const calls = serve(
-		base({
-			"GET /api/families/fam-1/location": {
-				locations: [],
-				shares: [SHARE],
-				seesShared: true,
-			},
-			"POST /api/families/fam-1/location": MY_LOCATION,
-		}),
-	);
-	const { unmount } = renderRoute("/trip");
-	expect(await screen.findByText("Looking for your position…")).toBeTruthy();
-	expect(
-		screen.queryByRole("heading", { name: "What your family sees" }),
-	).toBeNull();
-	await waitFor(() => expect(watcher).not.toBeNull());
-	watcher?.ok({
-		coords: { latitude: 1, longitude: 2, accuracy: 5 },
-		timestamp: Date.parse(NOW),
-	} as GeolocationPosition);
-	expect(
-		await screen.findByText(/^Sent to the people you chose at /),
-	).toBeTruthy();
-	expect(
-		screen.getByRole("heading", { name: "What your family sees" }),
-	).toBeTruthy();
-	const post = calls.find((c) => c.method === "POST");
-	expect(post?.body).toMatchObject({
-		status: "fix",
-		fix: { latitude: 1, longitude: 2 },
-	});
-	unmount();
-	expect(cleared).toBeGreaterThan(0);
-});
-
-test("a refused position report shows an alert", async () => {
-	signIn();
-	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
-	const calls = serve(
-		base({
-			"GET /api/families/fam-1/location": {
-				locations: [],
-				shares: [SHARE],
-				seesShared: true,
-			},
-			"POST /api/families/fam-1/location": json(403, {
-				error: "forbidden",
-				message: "Share first.",
-			}),
-		}),
-	);
-	renderRoute("/trip");
-	await waitFor(() => expect(watcher).not.toBeNull());
-	watcher?.fail?.({
-		code: 1,
-		PERMISSION_DENIED: 1,
-	} as GeolocationPositionError);
-	expect((await screen.findByRole("alert")).textContent).toBe(
-		"Not sent: Share first.",
-	);
-	expect(calls.find((c) => c.method === "POST")?.body).toEqual({
-		status: "gps_denied",
-	});
-});
-
-test("stopping a share reloads the locations", async () => {
+test("unticking a person stops the share and reloads the locations and the trip settings", async () => {
 	signIn();
 	let stopped = false;
 	const calls = serve(
 		base({
-			"GET /api/families/fam-1/location": () =>
-				stopped
-					? { locations: [], shares: [], seesShared: true }
-					: { locations: [], shares: [SHARE], seesShared: true },
+			"GET /api/families/fam-1/location": () => ({
+				...LOCATIONS,
+				shares: stopped ? [] : [SHARE],
+			}),
 			[`DELETE /api/families/fam-1/location/shares/${MOM}`]: () => {
 				stopped = true;
-				return { locations: [], shares: [], seesShared: true };
+				return LOCATIONS;
 			},
 		}),
 	);
 	renderRoute("/trip");
-	await screen.findByText(
-		"Shared during a trip. Start a trip to send your location.",
-	);
-	const before = calls.filter((c) => c.path.endsWith("/location")).length;
-	fireEvent.click(screen.getByRole("button", { name: /^Stop sharing with/ }));
-	expect(
-		await screen.findByText(
-			"Not shared. Telly sends your location only to people you choose.",
-		),
-	).toBeTruthy();
-	expect(
-		calls.filter((c) => c.path.endsWith("/location")).length,
-	).toBeGreaterThan(before);
+	const box = await momBox();
+	await waitFor(() => expect(box.checked).toBe(true));
+	const before = (end: string) =>
+		calls.filter((c) => c.method === "GET" && c.path.endsWith(end)).length;
+	const [locations, home] = [before("/location"), before("/location/home")];
+	fireEvent.click(box);
+	await waitFor(async () => expect((await momBox()).checked).toBe(false));
+	expect(before("/location")).toBeGreaterThan(locations);
+	await waitFor(() => expect(before("/location/home")).toBeGreaterThan(home));
 });
