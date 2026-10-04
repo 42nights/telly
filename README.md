@@ -104,6 +104,8 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `POST …/reports/:reportId/submit` | `409` before review, then `503 unavailable`: Finchnode has no API that sends a report to a hospital ([#8](https://github.com/ayaangazali/telly/issues/8)) |
 | `POST …/finchnode/sessions`, `POST …/finchnode/sessions/:sessionId/link` | Start Finchnode Connect for labs; link the patient to the family after they approve sharing |
 | `GET …/finchnode/labs` | Laboratory results of the family's linked patients, with source, units, ranges, and consent state |
+| `GET /api/families/:familyId/messages?after=<id>` | Family messages after `after`, oldest first, at most 200 |
+| `POST /api/families/:familyId/messages` | Send `{ clientId, body }`; a resend with the same `clientId` returns the stored message ([docs/chat.md](docs/chat.md)) |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 

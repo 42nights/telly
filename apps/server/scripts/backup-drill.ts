@@ -131,7 +131,11 @@ const seed = (config: DbConfig) =>
 				}),
 			);
 			yield* callDb(family, (c) =>
-				c.reducers.sendMessage({ familyId, body: "Drill message" }),
+				c.reducers.sendMessage({
+					familyId,
+					clientId: "drill-message",
+					body: "Drill message",
+				}),
 			);
 			yield* callDb(family, (c) =>
 				c.reducers.setAlertThreshold({
