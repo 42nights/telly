@@ -31,7 +31,8 @@
 		"./whoop-catalog": "./src/whoop-catalog.ts",
 		"./location": "./src/location.ts",
 		"./cooking": "./src/cooking.ts",
-		"./medicine-ar-pin": "./src/medicine-ar-pin.ts"
+		"./medicine-ar-pin": "./src/medicine-ar-pin.ts",
+		"./finder-link": "./src/finder-link.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
