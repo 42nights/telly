@@ -19,6 +19,28 @@ export const currentHeartRate = (
 	samples: readonly HealthSample[],
 	familyId: string,
 	now: number,
+): HealthSample | null =>
+	newestFreshHeartRate(
+		samples,
+		familyId,
+		now,
+		(s) => s.quality === "validated",
+	);
+
+export const whoopHeartRate = (
+	samples: readonly HealthSample[],
+	familyId: string,
+	now: number,
+): HealthSample | null =>
+	newestFreshHeartRate(samples, familyId, now, (s) =>
+		s.source.startsWith("noop:"),
+	);
+
+const newestFreshHeartRate = (
+	samples: readonly HealthSample[],
+	familyId: string,
+	now: number,
+	accept: (sample: HealthSample) => boolean,
 ): HealthSample | null => {
 	let newest: HealthSample | null = null;
 	for (const s of samples)
@@ -26,7 +48,7 @@ export const currentHeartRate = (
 			s.familyId === familyId &&
 			s.metric === "heart_rate" &&
 			s.unit === "bpm" &&
-			s.quality === "validated" &&
+			accept(s) &&
 			!s.synthetic &&
 			(newest === null || s.sourceTime > newest.sourceTime)
 		)

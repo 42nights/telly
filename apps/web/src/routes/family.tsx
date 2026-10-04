@@ -67,7 +67,12 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				<h3 id="monitoring" className="font-bold">
 					Monitoring
 				</h3>
-				<MonitoringList state={data.monitoring} />
+				<MonitoringList
+					state={data.monitoring}
+					records={data.records}
+					familyId={family.id}
+					now={now}
+				/>
 			</section>
 
 			<section aria-labelledby="chat" className="grid gap-2">

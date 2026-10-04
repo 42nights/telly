@@ -163,7 +163,7 @@ function KeyNumbers({
 						<span>HRV</span>
 						<b className="text-muted-foreground text-xl">Unavailable</b>
 						<span className="text-muted-foreground text-xs">
-							WHOOP · NOOP not connected
+							No HRV reading yet
 						</span>
 					</div>
 				)}

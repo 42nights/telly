@@ -3,7 +3,13 @@ import { Heart } from "lucide-react";
 
 import type { ApiState } from "@/lib/api";
 
-import { ago, barPercent, currentHeartRate, USUAL_BPM } from "./logic";
+import {
+	ago,
+	barPercent,
+	currentHeartRate,
+	USUAL_BPM,
+	whoopHeartRate,
+} from "./logic";
 
 const failureLine = {
 	loading: "waiting for the server",
@@ -13,10 +19,6 @@ const failureLine = {
 	error: "can't read right now",
 } as const;
 
-/**
- * The newest fresh, validated heart-rate reading with its source and age, and a range bar that
- * marks the usual band only. Anything else shows "Unavailable", never an old number.
- */
 export function HeartReading({
 	records,
 	familyId,
@@ -29,7 +31,8 @@ export function HeartReading({
 }) {
 	const sample =
 		records?.kind === "ready" && familyId !== null
-			? currentHeartRate(records.value.samples, familyId, now)
+			? (currentHeartRate(records.value.samples, familyId, now) ??
+				whoopHeartRate(records.value.samples, familyId, now))
 			: null;
 	const usual = {
 		left: barPercent(USUAL_BPM.low),
@@ -84,6 +87,7 @@ export function HeartReading({
 					</div>
 					<span className="text-muted-foreground">
 						{ago(now - Date.parse(sample.sourceTime))} · {sample.source}
+						{sample.quality === "unvalidated" ? " · unvalidated" : ""}
 					</span>
 				</>
 			)}

@@ -78,6 +78,18 @@ export const deliveryText = (delivery: AlertDelivery | null): string => {
 export const newestUnseen = (alerts: readonly FamilyAlert[]) =>
 	alerts.find((a) => a.acknowledgements.length === 0) ?? null;
 
+export const newestNoopSample = (
+	samples: readonly HealthSample[],
+	familyId: string,
+): HealthSample | null =>
+	samples
+		.filter((s) => s.familyId === familyId && s.source.startsWith("noop:"))
+		.reduce<HealthSample | null>(
+			(newest, s) =>
+				newest === null || s.sourceTime > newest.sourceTime ? s : newest,
+			null,
+		);
+
 export const ago = (iso: string, now: number): string => {
 	const minutes = Math.round((now - Date.parse(iso)) / 60_000);
 	if (minutes < 1) return "just now";
