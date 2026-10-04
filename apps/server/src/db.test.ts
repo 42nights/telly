@@ -205,7 +205,15 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 						mine.backfillFounderCareGrants({}).then(String, String),
 					);
 					expect(refused).toBe("SenderError: not the delivery operator");
-					// A family that has grant events is left as it is.
+					// A scope the founder revoked stays revoked, and no scope is granted twice.
+					yield* Effect.promise(() =>
+						mine.setCareGrant({
+							familyId,
+							member: Identity.fromString(owner.identity),
+							scope: "media",
+							granted: false,
+						}),
+					);
 					yield* Effect.promise(() =>
 						operator.connection.reducers.backfillFounderCareGrants({}),
 					);
@@ -213,7 +221,9 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					yield* Effect.promise(() =>
 						mine.sendMessage({ familyId, clientId: "sync", body: "Synced" }),
 					);
-					expect(grants()).toEqual(founder);
+					expect(grants()).toEqual(
+						[...founder, [owner.identity, "media", false]].sort(),
+					);
 				}),
 			),
 		));

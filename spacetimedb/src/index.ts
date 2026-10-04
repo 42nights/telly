@@ -1216,18 +1216,26 @@ const founderOf = (ctx: Ctx, familyId: bigint) => {
 	return founder?.member;
 };
 
-// The founder holds every care scope, so a new family works without a sharing step (#188).
+// The founder holds every care scope, so a new family works without a sharing step (#188). A scope
+// the member already has an event for (granted or revoked) keeps its latest choice.
 const grantEveryCareScope = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	const decided = new Set<string>();
+	for (const event of ctx.db.careGrantEvent.byFamilyMember.filter([
+		familyId,
+		member,
+	]))
+		decided.add(event.scope);
 	for (const scope of Object.keys(careScopes))
-		ctx.db.careGrantEvent.insert({
-			id: 0n,
-			familyId,
-			member,
-			scope,
-			granted: true,
-			changedBy: ctx.sender,
-			changedAt: ctx.timestamp,
-		});
+		if (!decided.has(scope))
+			ctx.db.careGrantEvent.insert({
+				id: 0n,
+				familyId,
+				member,
+				scope,
+				granted: true,
+				changedBy: ctx.sender,
+				changedAt: ctx.timestamp,
+			});
 };
 
 export const createFamily = spacetimedb.reducer(
@@ -1249,14 +1257,14 @@ export const createFamily = spacetimedb.reducer(
 	},
 );
 
-// One-time repair for families created before #188: a family with no grant event at all gives its
-// founder every scope, as `createFamily` now does. The founder could already grant these through
-// `maySetUpSharing`. Only the operator calls it; a second call changes nothing. Deletes nothing.
+// One-time repair for families created before #188: each founder gets every scope they have no
+// event for, as `createFamily` now does. A scope the founder granted or revoked stays as it is. The
+// founder could already grant these through `maySetUpSharing`. Only the operator calls it; a second
+// call changes nothing. Deletes nothing.
 export const backfillFounderCareGrants = spacetimedb.reducer((ctx) => {
 	if (ctx.db.operator.identity.find(ctx.sender) === null)
 		throw new SenderError("not the delivery operator");
 	for (const family of ctx.db.family.iter()) {
-		if (!ctx.db.careGrantEvent.familyId.filter(family.id).next().done) continue;
 		const founder = founderOf(ctx, family.id);
 		if (founder !== undefined) grantEveryCareScope(ctx, family.id, founder);
 	}
