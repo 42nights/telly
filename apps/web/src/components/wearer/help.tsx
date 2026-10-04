@@ -2,47 +2,61 @@
 // through `tel:` links; the app never calls anyone by itself.
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
-import { Link } from "@tanstack/react-router";
 import { Phone, TriangleAlert } from "lucide-react";
+import { useState } from "react";
 
+import { SaveAndCall, useSaveAndCall } from "@/components/hud/save-and-call";
 import { telHref, useContacts } from "@/lib/contacts";
 
 import { Asked, xl } from "./answer";
 
 const big = "h-14 w-full text-[20px] [&_svg]:size-6";
 
-function CallFamily() {
-	const [{ familyPhone }] = useContacts();
-	if (familyPhone === null)
+/**
+ * Call family: the number saved on this phone. Without one, a tap asks for it in place: Save &
+ * Call keeps it here and in the care profile contacts (#360, #379). The profile is read only then.
+ */
+function CallFamily({ familyId }: { familyId: string | null }) {
+	const [asking, setAsking] = useState(false);
+	const { contacts, note, call } = useSaveAndCall(
+		asking ? familyId : null,
+		"familyPhone",
+		"Family",
+	);
+	const number = contacts.familyPhone;
+	if (number !== null)
 		return (
 			<div className="grid gap-1">
-				<Button className={big} disabled variant="outline">
+				<a
+					className={cn(buttonVariants({ variant: "outline" }), big)}
+					data-slot="button"
+					href={telHref(number)}
+				>
 					<Phone aria-hidden /> Call family
-				</Button>
-				<p className="text-[16px]">
-					No family number is saved.{" "}
-					<Link className="font-bold text-primary underline" to="/settings">
-						Add it in Settings
-					</Link>
-				</p>
+				</a>
+				{note !== null && <p className="text-[16px]">{note}</p>}
 			</div>
 		);
+	if (asking)
+		return <SaveAndCall big label="Family phone number" onCall={call} />;
 	return (
-		<a
-			className={cn(buttonVariants({ variant: "outline" }), big)}
-			data-slot="button"
-			href={telHref(familyPhone)}
-		>
+		<Button className={big} onClick={() => setAsking(true)} variant="outline">
 			<Phone aria-hidden /> Call family
-		</a>
+		</Button>
 	);
 }
 
 /** Under every answer: a person to talk to, and the help panel. Calm talk never hides them. */
-export function SupportActions({ onHelp }: { onHelp: () => void }) {
+export function SupportActions({
+	familyId,
+	onHelp,
+}: {
+	familyId: string | null;
+	onHelp: () => void;
+}) {
 	return (
 		<div className="grid gap-2 sm:grid-cols-2">
-			<CallFamily />
+			<CallFamily familyId={familyId} />
 			<Button
 				className={cn(big, "font-bold text-destructive!")}
 				onClick={onHelp}
@@ -59,9 +73,11 @@ export function SupportActions({ onHelp }: { onHelp: () => void }) {
  * any model answers, and it never says that anyone was called.
  */
 export function HelpPanel({
+	familyId,
 	asked,
 	onDone,
 }: {
+	familyId: string | null;
 	asked: string | null;
 	onDone: () => void;
 }) {
@@ -86,7 +102,7 @@ export function HelpPanel({
 			>
 				<Phone aria-hidden /> Call {emergency}
 			</a>
-			<CallFamily />
+			<CallFamily familyId={familyId} />
 			<p className="text-[16px]">
 				Calls open your phone's dialer. This app does not call anyone by itself.
 			</p>

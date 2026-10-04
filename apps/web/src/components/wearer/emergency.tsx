@@ -1,4 +1,3 @@
-import { CareProfileRecord } from "@health/contracts/care-profile";
 import {
 	type CheckInEvent,
 	EmergencyOutcome,
@@ -8,16 +7,15 @@ import {
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { Loader2, Phone, Siren, Users } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
-	type ApiFailure,
-	type ApiState,
-	apiRequest,
-	familyPath,
-	useApi,
-} from "@/lib/api";
-import { dial, isFullPhoneNumber, telHref, useContacts } from "@/lib/contacts";
+	profilePhone,
+	SaveAndCall,
+	useSaveAndCall,
+} from "@/components/hud/save-and-call";
+import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
+import { telHref, useContacts } from "@/lib/contacts";
 
 import { xl } from "./answer";
 import type { EmergencyIntent } from "./logic";
@@ -260,48 +258,6 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 const spinner = <Loader2 aria-hidden className="animate-spin" />;
 
 /**
- * Adds `phone` to the care profile contacts, so every device and the family's agent have it.
- * Resolves to null when kept, else why it stays on this phone only.
- */
-const shareFamilyPhone = async (
-	path: string | null,
-	profile: ApiState<CareProfileRecord>,
-	phone: string,
-): Promise<string | null> => {
-	if (path === null || profile.kind !== "ready")
-		return `Saved on this phone only. ${
-			"message" in profile
-				? profile.message
-				: "Sign in to share it with your family."
-		}`;
-	const current = profile.value.profile;
-	const result = await apiRequest(null, path, {
-		method: "PUT",
-		body: {
-			...current,
-			contacts: [
-				...(current.contacts ?? []),
-				{ name: "Family", relationship: "Family", phone },
-			],
-		},
-	});
-	if (result.kind === "ready") return null;
-	return `Saved on this phone only. ${
-		result.kind === "signed_out"
-			? "Sign in again to share it with your family."
-			: result.message
-	}`;
-};
-
-/** The first care-profile contact with a dialable number, in contact order (#26). */
-const profileFamilyPhone = (profile: ApiState<CareProfileRecord>) =>
-	profile.kind === "ready"
-		? (profile.value.profile.contacts?.find(
-				(contact) => contact.phone !== null && isFullPhoneNumber(contact.phone),
-			)?.phone ?? null)
-		: null;
-
-/**
  * Call my family: dials the first care-profile contact with a number (#26), else the number saved
  * on this phone. With neither, one field saves a number to the care profile and dials it at once.
  */
@@ -314,16 +270,15 @@ function CallFamily({
 	busy: boolean;
 	onCall: () => void;
 }) {
-	const [contacts, saveContacts] = useContacts();
-	const path = familyId === null ? null : familyPath(familyId, "/care-profile");
-	const profile = useApi(CareProfileRecord, path);
-	const [draft, setDraft] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const [note, setNote] = useState<string | null>(null);
-	const number = profileFamilyPhone(profile) ?? contacts.familyPhone;
+	const { contacts, profile, note, call } = useSaveAndCall(
+		familyId,
+		"familyPhone",
+		"Family",
+	);
+	const number = profilePhone(profile) ?? contacts.familyPhone;
 	const icon = busy ? spinner : <Users aria-hidden />;
 
-	if (number === null && profile.kind === "loading" && path !== null)
+	if (number === null && profile.kind === "loading" && familyId !== null)
 		return (
 			<Button className={xl} disabled>
 				{spinner} Call my family
@@ -345,45 +300,16 @@ function CallFamily({
 			</div>
 		);
 
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		const phone = draft.trim();
-		if (!isFullPhoneNumber(phone))
-			return setError("Enter the full phone number, with the area code.");
-		setError(null);
-		saveContacts({ ...contacts, familyPhone: phone });
-		void shareFamilyPhone(path, profile, phone).then(setNote);
-		onCall();
-		dial(phone);
-	};
-
 	return (
-		<form className="grid gap-2" noValidate onSubmit={submit}>
-			<label className="grid gap-1 font-bold text-[18px]">
-				Family phone number
-				<input
-					aria-describedby={error === null ? undefined : "family-phone-error"}
-					aria-invalid={error !== null}
-					autoComplete="tel"
-					className="win95-inset win95-field h-12 w-full bg-card px-2 font-normal text-[20px]"
-					inputMode="tel"
-					onChange={(event) => setDraft(event.target.value)}
-					type="tel"
-					value={draft}
-				/>
-			</label>
-			{error !== null && (
-				<p
-					className="font-bold text-[16px] text-destructive"
-					id="family-phone-error"
-				>
-					{error}
-				</p>
-			)}
-			<Button className={xl} type="submit">
-				{busy ? spinner : <Phone aria-hidden />} Save & Call
-			</Button>
-		</form>
+		<SaveAndCall
+			big
+			icon={busy ? spinner : undefined}
+			label="Family phone number"
+			onCall={(phone) => {
+				call(phone);
+				onCall();
+			}}
+		/>
 	);
 }
 

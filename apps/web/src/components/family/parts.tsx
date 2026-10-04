@@ -6,8 +6,9 @@ import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Check, Phone, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
+import { SaveAndCall, useSaveAndCall } from "@/components/hud/save-and-call";
 import { ApiNotice, Hint, Tip } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
 import { telHref, useContacts } from "@/lib/contacts";
@@ -123,6 +124,7 @@ function AlertCard({
 	onSeen: () => void;
 }) {
 	const seen = seenText(item.acknowledgements, me);
+	const [askMom, setAskMom] = useState(false);
 	const failed =
 		item.delivery?.status === "failed" ||
 		item.delivery?.status === "unavailable";
@@ -153,9 +155,20 @@ function AlertCard({
 						)}
 					</p>
 				</div>
-				<AlertActions seen={seen !== null} busy={busy} onSeen={onSeen} />
+				<AlertActions
+					seen={seen !== null}
+					busy={busy}
+					onSeen={onSeen}
+					askingMom={askMom}
+					onAskMom={() => setAskMom(!askMom)}
+				/>
 			</div>
-			<AlertNote error={error} />
+			{error !== null && (
+				<p className="text-sm" role="alert">
+					{error}
+				</p>
+			)}
+			{askMom && <MomNumber familyId={item.alert.familyId} />}
 			<details className="text-sm">
 				<summary className="cursor-pointer">Details</summary>
 				<dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 pt-1">
@@ -191,10 +204,15 @@ function AlertActions({
 	seen,
 	busy,
 	onSeen,
+	askingMom,
+	onAskMom,
 }: {
 	seen: boolean;
 	busy: boolean;
 	onSeen: () => void;
+	askingMom: boolean;
+	/** Mom with no number saved: opens or closes the number field. */
+	onAskMom: () => void;
 }) {
 	const [contacts] = useContacts();
 	const button = "h-11 shrink-0 px-2";
@@ -210,7 +228,12 @@ function AlertActions({
 				<Check aria-hidden className="size-5" />
 			</Button>
 			{contacts.momPhone === null ? (
-				<Button className={button} aria-label="Call Mom" disabled>
+				<Button
+					className={button}
+					aria-label="Call Mom"
+					aria-expanded={askingMom}
+					onClick={onAskMom}
+				>
 					<Phone aria-hidden /> Mom
 				</Button>
 			) : (
@@ -235,25 +258,16 @@ function AlertActions({
 	);
 }
 
-/** A failed "Mark as seen", or how to turn on Call Mom; nothing otherwise. */
-function AlertNote({ error }: { error: string | null }) {
-	const [contacts] = useContacts();
-	if (error !== null)
-		return (
-			<p className="text-sm" role="alert">
-				{error}
-			</p>
-		);
-	if (contacts.momPhone !== null) return null;
-	return (
-		<p className="text-sm">
-			Call Mom is off: no number saved.{" "}
-			<Link to="/settings" className="font-bold text-primary underline">
-				Add it in Settings
-			</Link>
-			.
-		</p>
-	);
+/**
+ * Call Mom with no number saved (the Call my family pattern, #360): one field saves the number on
+ * this device and in the care profile contacts, then opens the dialer.
+ */
+function MomNumber({ familyId }: { familyId: string }) {
+	const { contacts, note, call } = useSaveAndCall(familyId, "momPhone", "Mom");
+	// Saved: the Mom button calls now; only a "this phone only" note stays.
+	if (contacts.momPhone !== null)
+		return note === null ? null : <p className="text-sm">{note}</p>;
+	return <SaveAndCall label="Phone number" onCall={call} />;
 }
 
 /** Shown when there is no alert to act on. Never "all clear": it says what is being watched. */
