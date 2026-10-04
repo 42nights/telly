@@ -102,13 +102,14 @@ class RepositoryBaselineTests(unittest.TestCase):
         self.assertNotIn("exemptions", parity_ledger._load_json(TOOLS / "parity_twin_map.json", {}))
 
     def test_core_tools_filter_covers_every_governance_tool_path(self) -> None:
-        core = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
+        workflows = REPOSITORY.parent / ".github/workflows"
+        core = (workflows / "tools-python.yml").read_text(
             encoding="utf-8"
         )
-        windows = (REPOSITORY / ".github/workflows/tools-python-windows.yml").read_text(
+        windows = (workflows / "tools-python-windows.yml").read_text(
             encoding="utf-8"
         )
-        governance = (REPOSITORY / ".github/workflows/parity-governance.yml").read_text(
+        governance = (workflows / "parity-governance.yml").read_text(
             encoding="utf-8"
         )
         # The core leg carries NO path filter, and that is the contract.
@@ -128,7 +129,7 @@ class RepositoryBaselineTests(unittest.TestCase):
             if line.startswith("      - '")
         ]
         self.assertEqual([], core_paths)
-        self.assertIn("working-directory: Tools\n", core)
+        self.assertIn("working-directory: noop/Tools\n", core)
         self.assertNotIn("unittest discover -s tests", core)
         # The Windows leg keeps a filter, because it runs ONLY the Tools/linux-capture tests and those
         # read nothing outside their own package. That is the whole reason it could be split off: the
@@ -139,11 +140,11 @@ class RepositoryBaselineTests(unittest.TestCase):
             if line.startswith("      - '")
         ]
         self.assertEqual(
-            ["Tools/linux-capture/**", ".github/workflows/tools-python-windows.yml"] * 2,
+            ["noop/Tools/linux-capture/**", ".github/workflows/tools-python-windows.yml"] * 2,
             windows_paths,
         )
-        self.assertIn("working-directory: Tools/linux-capture", windows)
-        self.assertNotIn("working-directory: Tools\n", windows)
+        self.assertIn("working-directory: noop/Tools/linux-capture", windows)
+        self.assertNotIn("working-directory: noop/Tools\n", windows)
         self.assertIn("pull_request:\n    branches: [main]\n    paths:", governance)
         governance_paths = [
             line.strip()[3:-1]
@@ -152,41 +153,41 @@ class RepositoryBaselineTests(unittest.TestCase):
         ]
         self.assertEqual(
             [
-                "Tools/issue_ref.py",
-                "Tools/parity_*.py",
-                "Tools/parity_*.json",
-                "Tools/parity_case_specs/**",
-                "Tools/tests/test_parity_*.py",
-                "Tools/tests/test_rr_legacy_preservation_contract.py",
+                "noop/Tools/issue_ref.py",
+                "noop/Tools/parity_*.py",
+                "noop/Tools/parity_*.json",
+                "noop/Tools/parity_case_specs/**",
+                "noop/Tools/tests/test_parity_*.py",
+                "noop/Tools/tests/test_rr_legacy_preservation_contract.py",
                 ".github/workflows/parity-governance.yml",
             ] * 2,
             governance_paths,
         )
         self.assertTrue(
             all(
-                path.startswith("Tools/")
+                path.startswith("noop/Tools/")
                 for path in governance_paths
                 if not path.startswith(".github/")
             )
         )
-        self.assertNotIn("'Packages/**/*.swift'", governance)
-        self.assertNotIn("'android/**/*.kt'", governance)
-        self.assertNotIn("Tools/tests/**", governance)
+        self.assertNotIn("'noop/Packages/**/*.swift'", governance)
+        self.assertNotIn("'noop/android/**/*.kt'", governance)
+        self.assertNotIn("noop/Tools/tests/**", governance)
         self.assertNotIn("test_german_today_localization", governance)
         self.assertIn("tests.test_parity_ledger", governance)
         self.assertIn("tests.test_parity_governance_acceptance", governance)
         self.assertIn("tests.test_rr_legacy_preservation_contract", governance)
         pull_request_paths = governance_paths[:7]
         self.assertFalse(any(
-            fnmatchcase("Tools/tests/test_german_today_localization.py", pattern)
+            fnmatchcase("noop/Tools/tests/test_german_today_localization.py", pattern)
             for pattern in pull_request_paths
         ))
         self.assertTrue(any(
-            fnmatchcase("Tools/tests/test_parity_ledger.py", pattern)
+            fnmatchcase("noop/Tools/tests/test_parity_ledger.py", pattern)
             for pattern in pull_request_paths
         ))
         self.assertTrue(any(
-            fnmatchcase("Tools/tests/test_rr_legacy_preservation_contract.py", pattern)
+            fnmatchcase("noop/Tools/tests/test_rr_legacy_preservation_contract.py", pattern)
             for pattern in pull_request_paths
         ))
 

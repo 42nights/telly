@@ -746,34 +746,33 @@
 
 <!-- 07 FILE STRUCTURE -->
 <section id="files">
-  <div class="sh"><span class="no">07</span><h2>One repo. Clear boundaries.</h2><p>New app layout for private telly, under health/. Preserve its existing NOOP source.</p></div>
+  <div class="sh"><span class="no">07</span><h2>One repo. Clear boundaries.</h2><p>New app layout for private telly, at the repository root. NOOP stays a separate project in noop/.</p></div>
   <div class="panel" id="repo-tree">
-    <pre style="font-size:15px;line-height:1.7">telly/
-├── (existing NOOP source, unchanged)
-├── health/           New app · Bun workspace root
-│   ├── apps/
-│   │   ├── web/          HUD + dashboard
-│   │   ├── native/       Phone app
-│   │   └── server/       Hono HTTP + Effect services
-│   ├── packages/
-│   │   ├── contracts/    Public API schemas
-│   │   └── db/           Generated DB client
-│   ├── spacetimedb/      Tables + reducers + views
-│   ├── agents/fetch/     Python Agentverse worker
-│   ├── training/gemma/   Python River training
-│   └── scripts/          One end-to-end smoke
+    <pre style="font-size:15px;line-height:1.7">telly/            New app · Bun workspace root
+├── apps/
+│   ├── web/          HUD + dashboard
+│   ├── native/       Phone app
+│   └── server/       Hono HTTP + Effect services
+├── packages/
+│   ├── contracts/    Public API schemas
+│   └── db/           Generated DB client
+├── spacetimedb/      Tables + reducers + views
+├── agents/fetch/     Python Agentverse worker
+├── training/gemma/   Python River training
+├── scripts/          One end-to-end smoke
+├── noop/             Existing NOOP source · separate, not connected
 └── .github/          CI/CD + task templates</pre>
-    <p class="tag" style="font-size:13px">health/ avoids a case collision between packages/ and NOOP's Packages/ on macOS, and keeps Sentrux scoped to the new app.</p>
+    <p class="tag" style="font-size:13px">noop/ keeps NOOP's source and documentation apart from the new app. The app does not import or build it.</p>
   </div>
   <div class="integrations" id="repo-boundaries">
     <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
-    <div class="integration"><strong>One schema owner</strong><p>Database source lives in health/spacetimedb. Generate health/packages/db from it. Commit both together; never edit generated files.</p></div>
+    <div class="integration"><strong>One schema owner</strong><p>Database source lives in spacetimedb/. Generate packages/db from it. Commit both together; never edit generated files.</p></div>
     <div class="integration"><strong>No dependency cycles</strong><p>Contracts import no apps, database code, or secrets. Apps never import each other. Python workers use the API, not TypeScript internals.</p></div>
     <div class="integration"><strong>Parallel ownership</strong><p>M owns HUD and reports. A owns data and Fetch.ai. J owns native, dashboard, and Gemma. Claim shared-file edits in an issue.</p></div>
   </div>
   <details class="stack-notes" id="repo-app-files">
     <summary>App files · shallow until the code grows</summary>
-    <pre>health/apps/web/
+    <pre>apps/web/
   package.json · vite.config.ts · index.html
   src/
     main.tsx · router.tsx
@@ -782,7 +781,7 @@
     components/     Web-only controls and live feature views
     lib/            api.ts · session.ts
 
-health/apps/native/
+apps/native/
   package.json · app.json
   app/              _layout.tsx · index.tsx
   src/
@@ -791,7 +790,7 @@ health/apps/native/
     devices/        phone.ts · healthkit.ts · glasses.ts (optional)
   modules/meta-dat/  Optional native bridge; no core startup dependency
 
-health/apps/server/
+apps/server/
   package.json · Dockerfile
   src/
     main.ts         Node startup and managed Effect runtime
@@ -803,32 +802,32 @@ health/apps/server/
                     grokbot.ts · finchnode.ts
                     fetch.ts · gemma.ts</pre>
     <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
-    <p>Keep HUD and reports under web routes. Preserve the existing NOOP source and root files; add the new app without connecting it.</p>
+    <p>Keep HUD and reports under web routes. Keep the existing NOOP source in noop/; add the new app without connecting it.</p>
     <p>The NOOP connection stub returns { status: "not_connected", source: "noop" }. It performs no transport or ingestion and supplies no readings.</p>
     <p>Phone capture and wearable capture feed the same feature contracts. Keep optional DAT lifecycle outside core session and cloud state.</p>
   </details>
   <details class="stack-notes" id="repo-shared-files">
     <summary>Shared contracts · database · Python workers</summary>
-    <pre>health/packages/contracts/
+    <pre>packages/contracts/
   package.json      @telly/contracts
   src/
     schema.ts       Health, alert, message, report schemas
     api.ts          HTTP endpoint schemas and DTOs
     index.ts        Public package exports
 
-health/packages/db/
+packages/db/
   package.json      @telly/db
   src/              Generated SpacetimeDB bindings only
 
-health/spacetimedb/
+spacetimedb/
   package.json · tsconfig.json
   src/index.ts      Tables, reducers, and scoped views
 
-health/agents/fetch/
+agents/fetch/
   requirements.txt  Pinned Python dependencies
   main.py           Agentverse entry point
 
-health/training/gemma/
+training/gemma/
   requirements.txt  Pinned Python training dependencies
   train.py          River training entry point</pre>
     <p>The API validates external data with contracts. Database reducers enforce access and state rules again.</p>
@@ -838,7 +837,7 @@ health/training/gemma/
   </details>
   <details class="stack-notes" id="repo-delivery-files">
     <summary>Root files · CI/CD · issue-first coordination</summary>
-    <pre>health/
+    <pre>telly/ (repository root)
   package.json        Bun workspaces: apps/* · packages/* · spacetimedb; private: true
   bun.lock            One JavaScript lockfile
   biome.json          One formatter and lint configuration
@@ -852,13 +851,13 @@ health/training/gemma/
   CONTRIBUTING.md     Claim rules, imports, ownership, handoffs
   scripts/smoke.ts    Synthetic sample → persisted data → alert
 
-.github/              (repository root)
+.github/
   ISSUE_TEMPLATE/task.yml
   pull_request_template.md
   workflows/
     ci.yml          PR checks and the stable required gate
     deploy.yml      Merged artifact → target → smoke check</pre>
-    <p>Root commands: dev:web, dev:native, dev:server, db:generate, lint, typecheck, test, build, smoke, check:structure, and check:quality. Run them with <code>bun run</code> in health/.</p>
+    <p>Root commands: dev:web, dev:native, dev:server, db:generate, lint, typecheck, test, build, smoke, check:structure, and check:quality. Run them with <code>bun run</code> from the repository root.</p>
     <p>Python stays outside the Bun workspace. CI installs each worker's own pinned requirements.</p>
     <p>CI rejects stale generated bindings, then runs independent checks in parallel. Keep focused behavior tests beside their code.</p>
     <p>The task template records owner, paths, acceptance, and dependencies. Comments carry progress, blockers, verification, and handoffs.</p>
@@ -906,17 +905,17 @@ health/training/gemma/
     </div>
     <details class="stack-notes" id="quality-config">
       <summary>Gate commands, type rules, and exclusions</summary>
-      <pre>check:structure  sentrux check .   (run in health/)
+      <pre>check:structure  sentrux check .   (run from the repository root)
 check:quality    fallow --fail-on-issues --fail-on-parse-error
 typecheck        Each package's strict TypeScript check
 test             Focused behavior checks, once
 build            Production outputs, once
 smoke            Real local service + database, synthetic data</pre>
       <p><b>TypeScript:</b> use strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes, and noEmit for type-only checks. Extend the native framework configuration rather than replacing it.</p>
-      <p><b>Contracts:</b> infer request, response, and error types from health/packages/contracts. Decode unknown JSON and native events. Do not use any, assertions, or suppression comments to bypass checks.</p>
+      <p><b>Contracts:</b> infer request, response, and error types from packages/contracts. Decode unknown JSON and native events. Do not use any, assertions, or suppression comments to bypass checks.</p>
       <p><b>Sentrux:</b> pin the binary and parser plugins. Start with max_cycles = 0 and no_god_files = true in .sentrux/rules.toml. No moving score target or automatically renewed baseline.</p>
       <p><b>Fallow:</b> pin 3.31.0. Configure all real entry points and six zones: web, native, server, contracts, db, and database module. Clients may import contracts, not server or db code.</p>
-      <p><b>Accuracy:</b> keep generated bindings in the boundary graph, but exclude generated copies from duplicate and complexity checks. Review each narrow exception. Do not ignore all of health/packages/db.</p>
+      <p><b>Accuracy:</b> keep generated bindings in the boundary graph, but exclude generated copies from duplicate and complexity checks. Review each narrow exception. Do not ignore all of packages/db.</p>
       <p><b>No coverage quota:</b> disable the estimated CRAP gate with health.maxCrap = 0. Keep compiler checks, complexity checks, and tests for behavior risks.</p>
       <p><b>Startup:</b> use one full Fallow scan per change while this repository is small. It needs no comparison worktree or baseline. Measure real CI before adding incremental machinery.</p>
       <p><b>Proof:</b> isolated Sentrux 0.5.7 and Fallow 3.31.0 checks accepted a simple graph and rejected an injected cycle.</p>
@@ -990,13 +989,13 @@ smoke            Real local service + database, synthetic data</pre>
   <details class="stack-notes" id="key-examples">
     <summary>Existing Node / Python runtime · no Cloudflare binding</summary>
     <p>After building the planned server, run from the repository root:</p>
-    <pre>chmod 600 health/apps/server/.env.local
-node --env-file=health/apps/server/.env.local health/apps/server/dist/main.js</pre>
+    <pre>chmod 600 apps/server/.env.local
+node --env-file=apps/server/.env.local apps/server/dist/main.js</pre>
     <p>For a Linux deployment, provision the file privately under the service account first:</p>
-    <pre>node --env-file=/run/secrets/telly.env health/apps/server/dist/main.js</pre>
+    <pre>node --env-file=/run/secrets/telly.env apps/server/dist/main.js</pre>
     <p>The host or operator supplies the file; the command does not create secrets.</p>
     <p>Existing environment variables override Node's env-file values. Remove stale injected values when rotating a file-based key.</p>
-    <p>In the planned health/apps/server/src/config.ts, validate and redact each required key with Effect 4:</p>
+    <p>In the planned apps/server/src/config.ts, validate and redact each required key with Effect 4:</p>
     <pre>import { Config, Schema } from "effect"
 
 export const GeminiKey = Config.schema(

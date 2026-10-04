@@ -2,7 +2,7 @@
 # One-shot v7.0.0 release-artifact build: mac universal + iOS unsigned + Android full,
 # each anonymized + leak-checked. Writes dist/NOOP-v7.0.0-{macos.zip,.ipa,.apk}.
 set -uo pipefail
-cd ~/Documents/Strand
+cd "$(dirname "$0")/.."
 
 # ── Anonymity source guard ─────────────────────────────────────────────────────
 # A maintainer name or home path must never reach a release. This is a build-from-

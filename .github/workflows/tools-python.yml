@@ -79,7 +79,7 @@ jobs:
             echo "::error::expected at least 200 tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
-        working-directory: Tools/linux-capture
+        working-directory: noop/Tools/linux-capture
 
       # Parity governance has its own path-filtered workflow because that suite scans the repository and
       # is intentionally much slower. Keep this core floor independent so growth in parity cannot hide
@@ -96,4 +96,4 @@ jobs:
             echo "::error::expected at least 114 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
-        working-directory: Tools
+        working-directory: noop/Tools

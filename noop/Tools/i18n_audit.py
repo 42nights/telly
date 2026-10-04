@@ -32,6 +32,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Callable
 
+from git_base import base_location
+
 ROOT = Path(__file__).resolve().parent.parent
 LANGS = ["de", "es", "fr", "pt-PT"]
 ANDROID_LOCALE_DIRS = {
@@ -1461,9 +1463,10 @@ def _disk_read(path: Path) -> str | None:
 
 def git_show(ref: str, rel_path: str) -> str | None:
     """File content at `ref`, or None if the path didn't exist there."""
+    top, prefix = base_location(ROOT, ref)
     result = subprocess.run(
-        ["git", "show", f"{ref}:{rel_path}"],
-        cwd=ROOT, capture_output=True, text=True,
+        ["git", "show", f"{ref}:{prefix}{rel_path}"],
+        cwd=top, capture_output=True, text=True,
     )
     return result.stdout if result.returncode == 0 else None
 

@@ -8,7 +8,7 @@
 > replaceable ad-hoc capability template so the sideloader can provision HealthKit and the App Group
 > shared with the widget. The app target (`NOOPiOS` +
 > `NOOPiOSWidgets`) also still builds from source in Xcode if you'd rather (**[Build from source](#build-from-source)**).
-> A CI job ([`app-build.yml`](../.github/workflows/app-build.yml)) compiles both the macOS and iOS
+> A CI job ([`app-build.yml`](../../.github/workflows/app-build.yml)) compiles both the macOS and iOS
 > targets on every change so iOS can't silently break.
 
 ## Install (sideload)

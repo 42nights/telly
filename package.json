@@ -24,7 +24,7 @@
 		"test": "bun test",
 		"smoke": "bun run --filter server smoke",
 		"check:quality": "fallow --fail-on-issues --fail-on-parse-error",
-		"check:structure": "sentrux check . && sentrux gate ."
+		"check:structure": "sh scripts/check-structure.sh"
 	},
 	"type": "module",
 	"workspaces": {

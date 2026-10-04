@@ -10,6 +10,8 @@
 		"includes": [
 			"**",
 			"!.sentrux",
+			"!noop",
+			"!docs",
 			"!**/.next",
 			"!**/dist",
 			"!**/.turbo",

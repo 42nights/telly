@@ -7,10 +7,10 @@ import XCTest
 final class BugReportTemplateTests: XCTestCase {
 
     private func templateText() -> String {
-        // The repo root is two levels above StrandTests at build time; resolve from this file.
+        // The git root is three levels above StrandTests (noop/ sits below it); resolve from this file.
         let here = URL(fileURLWithPath: #filePath)
-        let repoRoot = here.deletingLastPathComponent().deletingLastPathComponent()
-        let yml = repoRoot.appendingPathComponent(".github/ISSUE_TEMPLATE/bug_report.yml")
+        let gitRoot = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let yml = gitRoot.appendingPathComponent(".github/ISSUE_TEMPLATE/bug_report.yml")
         return (try? String(contentsOf: yml, encoding: .utf8)) ?? ""
     }
 

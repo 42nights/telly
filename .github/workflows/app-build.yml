@@ -12,32 +12,32 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Strand/**'
+      - 'noop/Strand/**'
       # The app-target TESTS, not just the sources they cover. The `Test Strand` step below runs
       # StrandTests, but a PR touching only those tests matched nothing here, so it built and ran
       # nothing: one that failed to compile, or simply failed, merged unverified and went red on the
-      # next unrelated PR that happened to touch `Strand/**`, mis-attributing the breakage to whoever
+      # next unrelated PR that happened to touch `noop/Strand/**`, mis-attributing the breakage to whoever
       # that was.
       #
       # This is the only test directory that needs naming, and the reason is layout rather than
-      # oversight: Android's tests sit under `android/**` and the package suites under `Packages/**`,
-      # both already inside their subject's glob, while StrandTests is a SIBLING of `Strand/` instead
-      # of part of it. `project.yml` does not cover it either — the target takes
+      # oversight: Android's tests sit under `noop/android/**` and the package suites under
+      # `noop/Packages/**`, both already inside their subject's glob, while StrandTests is a SIBLING of
+      # `noop/Strand/` instead of part of it. `noop/project.yml` does not cover it either — the target takes
       # `sources: [StrandTests]`, a directory, so adding a test file changes no other tracked path.
-      - 'StrandTests/**'
-      - 'StrandiOS/**'
-      - 'StrandiOSShared/**'
-      - 'StrandiOSWidgets/**'
+      - 'noop/StrandTests/**'
+      - 'noop/StrandiOS/**'
+      - 'noop/StrandiOSShared/**'
+      - 'noop/StrandiOSWidgets/**'
       # The watch app and its complications, for the same reason StrandTests is named above: the
       # NOOPiOS scheme BUILDS them (NOOPiOS embeds NOOPWatch, which embeds NOOPWatchComplications),
       # but neither directory sits under any glob here, so a PR touching only them matched nothing
       # and compiled nothing. A broken watch target merged unverified and surfaced on the next PR
-      # that happened to touch Strand/**, pointing at the wrong change. #2227 translated 25
+      # that happened to touch noop/Strand/**, pointing at the wrong change. #2227 translated 25
       # complication strings and got no build at all, which is what surfaced this.
-      - 'NOOPWatch/**'
-      - 'NOOPWatchComplications/**'
-      - 'Packages/**'
-      - 'project.yml'
+      - 'noop/NOOPWatch/**'
+      - 'noop/NOOPWatchComplications/**'
+      - 'noop/Packages/**'
+      - 'noop/project.yml'
       - '.github/workflows/app-build.yml'
   # No `push: main` leg. Every change reaches main through a PR, which the trigger above already
   # gates, so a push run rebuilt content that had just been built - on macOS runners, which GitHub
@@ -68,6 +68,10 @@ concurrency:
 jobs:
   build:
     runs-on: ${{ matrix.runner }}
+    # XcodeGen and xcodebuild read noop/project.yml; git commands below work from any subdirectory.
+    defaults:
+      run:
+        working-directory: noop
     strategy:
       fail-fast: false
       matrix:

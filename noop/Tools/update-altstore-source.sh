@@ -18,8 +18,8 @@ VERSION="${1:?usage: $0 <version> <ipa> [desc]}"
 IPA="${2:?usage: $0 <version> <ipa> [desc]}"
 DESC="${3:-"NOOP $VERSION. See the release notes for what changed."}"
 
-# altstore-source.json lives at the repo root; default to the Strand checkout
-SRC="${ALTSTORE_SRC:-$HOME/Documents/Strand/altstore-source.json}"
+# altstore-source.json lives at the NOOP root (this script's parent directory)
+SRC="${ALTSTORE_SRC:-$HERE/../altstore-source.json}"
 MIN_OS="17.0"
 
 [ -f "$SRC" ] || { echo "✗ $SRC not found (set ALTSTORE_SRC)" >&2; exit 1; }

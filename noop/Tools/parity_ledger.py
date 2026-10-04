@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Iterable
 
 import issue_ref
+from git_base import archive_treeish, base_location
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -1639,9 +1640,10 @@ def _base_semantic_state(
             ).strip()
         except subprocess.CalledProcessError:
             base = "HEAD"
+        top, prefix = base_location(root, base)
         archive = subprocess.check_output(
-            ["git", "archive", "--format=tar", base],
-            cwd=root,
+            ["git", "archive", "--format=tar", archive_treeish(base, prefix)],
+            cwd=top,
             stderr=subprocess.DEVNULL,
         )
         with tempfile.TemporaryDirectory() as directory:
@@ -2654,8 +2656,9 @@ def finding_identities_at_git_ref(root: Path, ref: str) -> set[str]:
         ).strip()
         if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", resolved) is None:
             raise ValueError(f"git returned an invalid commit for base {ref!r}")
+        top, prefix = base_location(root, resolved)
         archive = subprocess.check_output(
-            ["git", "archive", "--format=tar", resolved], cwd=root
+            ["git", "archive", "--format=tar", archive_treeish(resolved, prefix)], cwd=top
         )
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         raise ValueError(f"cannot scan exact base {ref!r}") from exc

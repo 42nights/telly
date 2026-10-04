@@ -8,12 +8,12 @@
 > Blobs are hex strings. `whoop/data/export.sh [noop.sqlite] [from_ts] [to_ts]` regenerates them.
 >
 > When publishing or hosting anything from this repo, publish only `whoop/health-fields.html`, `whoop/data/`,
-> and the built `health/` application.
+> and the built health application.
 > Never publish the rest of the repo or anyone's live NOOP database.
 >
-> [`health/`](health) is a separate application (web, phone app, and server) and follows
-> [`health/CONTRIBUTING.md`](health/CONTRIBUTING.md); its plan is [`docs/plan.md`](docs/plan.md). The
-> scope limits below apply to NOOP's source, not to `health/`.
+> NOOP lives in `noop/`. The health application (web, phone app, and server) is the repository root
+> and follows [`../CONTRIBUTING.md`](../CONTRIBUTING.md); its plan is [`../docs/plan.md`](../docs/plan.md). The
+> scope limits below apply to NOOP's source, not to the health application.
 >
 > The rest of this file is NOOP's own contributor guide.
 

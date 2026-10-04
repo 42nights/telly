@@ -73,4 +73,4 @@ jobs:
           echo "diffing against $base"
 
       - name: i18n audit (regression gate)
-        run: python3 Tools/i18n_audit.py --ci "${{ steps.base.outputs.ref }}"
+        run: python3 noop/Tools/i18n_audit.py --ci "${{ steps.base.outputs.ref }}"
