@@ -12,6 +12,7 @@ import AddFamilyMemberReducer from "../add_family_member_reducer";
 import AnswerReminderReducer from "../answer_reminder_reducer";
 import ClaimAlertDeliveryReducer from "../claim_alert_delivery_reducer";
 import ConfirmReminderReducer from "../confirm_reminder_reducer";
+import CreateExercisePlanReducer from "../create_exercise_plan_reducer";
 import CreateFamilyReducer from "../create_family_reducer";
 import CreateReminderReducer from "../create_reminder_reducer";
 import CreateReportReducer from "../create_report_reducer";
@@ -23,6 +24,8 @@ import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavaila
 import OpenCareNeedReducer from "../open_care_need_reducer";
 import PostAlertMessageReducer from "../post_alert_message_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
+import RecordExerciseEventReducer from "../record_exercise_event_reducer";
+import RecordMealFactReducer from "../record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "../record_reminder_delivery_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
@@ -35,6 +38,7 @@ import SetContactLadderReducer from "../set_contact_ladder_reducer";
 import SetReminderSettingsReducer from "../set_reminder_settings_reducer";
 import UpdateReportReducer from "../update_report_reducer";
 import VerifyCareInstructionReducer from "../verify_care_instruction_reducer";
+import VerifyExercisePlanReducer from "../verify_exercise_plan_reducer";
 
 export type AcknowledgeAlertParams = __Infer<typeof AcknowledgeAlertReducer>;
 export type AddCareInstructionParams = __Infer<typeof AddCareInstructionReducer>;
@@ -42,6 +46,7 @@ export type AddFamilyMemberParams = __Infer<typeof AddFamilyMemberReducer>;
 export type AnswerReminderParams = __Infer<typeof AnswerReminderReducer>;
 export type ClaimAlertDeliveryParams = __Infer<typeof ClaimAlertDeliveryReducer>;
 export type ConfirmReminderParams = __Infer<typeof ConfirmReminderReducer>;
+export type CreateExercisePlanParams = __Infer<typeof CreateExercisePlanReducer>;
 export type CreateFamilyParams = __Infer<typeof CreateFamilyReducer>;
 export type CreateReminderParams = __Infer<typeof CreateReminderReducer>;
 export type CreateReportParams = __Infer<typeof CreateReportReducer>;
@@ -53,6 +58,8 @@ export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliver
 export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
 export type PostAlertMessageParams = __Infer<typeof PostAlertMessageReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
+export type RecordExerciseEventParams = __Infer<typeof RecordExerciseEventReducer>;
+export type RecordMealFactParams = __Infer<typeof RecordMealFactReducer>;
 export type RecordReminderDeliveryParams = __Infer<typeof RecordReminderDeliveryReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
@@ -65,4 +72,5 @@ export type SetContactLadderParams = __Infer<typeof SetContactLadderReducer>;
 export type SetReminderSettingsParams = __Infer<typeof SetReminderSettingsReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
 export type VerifyCareInstructionParams = __Infer<typeof VerifyCareInstructionReducer>;
+export type VerifyExercisePlanParams = __Infer<typeof VerifyExercisePlanReducer>;
 

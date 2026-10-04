@@ -1,10 +1,12 @@
 import type {
 	FinchnodeLab,
+	ReportCorrection,
 	ReportFields,
 	ReportMarker,
 } from "@health/contracts/reports";
 
-export type FieldName = keyof ReportFields;
+/** The text fields of `ReportFields`. */
+export type FieldName = Exclude<keyof ReportFields, "corrections">;
 
 /** Field limits from the `ReportFields` contract. */
 export const FIELD_LIMITS: Record<FieldName, number> = {
@@ -14,6 +16,8 @@ export const FIELD_LIMITS: Record<FieldName, number> = {
 	physician: 200,
 	hospital: 200,
 	notes: 4000,
+	observations: 4000,
+	questions: 4000,
 };
 
 export const FIELD_LABELS: Record<FieldName, string> = {
@@ -23,10 +27,16 @@ export const FIELD_LABELS: Record<FieldName, string> = {
 	physician: "Physician",
 	hospital: "Hospital",
 	notes: "Notes for the physician",
+	observations: "Caregiver observations",
+	questions: "Questions for a clinician",
 };
 
+const FIELD_NAMES = Object.keys(FIELD_LIMITS) as FieldName[];
+
 /** Form text for each field; a contract `null` (not filled in) is an empty box. */
-export type FieldDraft = Record<FieldName, string>;
+export type FieldDraft = Record<FieldName, string> & {
+	readonly corrections: readonly ReportCorrection[];
+};
 
 export const draftOf = (fields: ReportFields): FieldDraft => ({
 	patientName: fields.patientName ?? "",
@@ -35,6 +45,9 @@ export const draftOf = (fields: ReportFields): FieldDraft => ({
 	physician: fields.physician ?? "",
 	hospital: fields.hospital ?? "",
 	notes: fields.notes ?? "",
+	observations: fields.observations ?? "",
+	questions: fields.questions ?? "",
+	corrections: fields.corrections,
 });
 
 const orNull = (text: string) => (text.trim() === "" ? null : text.trim());
@@ -47,14 +60,22 @@ export const fieldsOf = (draft: FieldDraft): ReportFields => ({
 	physician: orNull(draft.physician),
 	hospital: orNull(draft.hospital),
 	notes: orNull(draft.notes),
+	observations: orNull(draft.observations),
+	questions: orNull(draft.questions),
+	corrections: draft.corrections,
 });
+
+/** The form would save something other than `saved`. */
+export const draftChanged = (draft: FieldDraft, saved: FieldDraft): boolean =>
+	FIELD_NAMES.some((name) => draft[name].trim() !== saved[name]) ||
+	JSON.stringify(draft.corrections) !== JSON.stringify(saved.corrections);
 
 /** One message per field that is longer than the contract allows. */
 export const fieldErrors = (
 	draft: FieldDraft,
 ): Partial<Record<FieldName, string>> => {
 	const errors: Partial<Record<FieldName, string>> = {};
-	for (const name of Object.keys(FIELD_LIMITS) as FieldName[]) {
+	for (const name of FIELD_NAMES) {
 		const length = draft[name].trim().length;
 		if (length > FIELD_LIMITS[name])
 			errors[name] =

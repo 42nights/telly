@@ -40,6 +40,7 @@ import AddFamilyMemberReducer from "./add_family_member_reducer";
 import AnswerReminderReducer from "./answer_reminder_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
 import ConfirmReminderReducer from "./confirm_reminder_reducer";
+import CreateExercisePlanReducer from "./create_exercise_plan_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
 import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
@@ -51,6 +52,8 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
+import RecordExerciseEventReducer from "./record_exercise_event_reducer";
+import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
@@ -63,6 +66,7 @@ import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
+import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
 
 // Import all procedure arg schemas
 
@@ -77,9 +81,12 @@ import MyCareNeedsRow from "./my_care_needs_table";
 import MyCareProfilesRow from "./my_care_profiles_table";
 import MyContactAttemptsRow from "./my_contact_attempts_table";
 import MyContactLaddersRow from "./my_contact_ladders_table";
+import MyExerciseEventsRow from "./my_exercise_events_table";
+import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyMealFactsRow from "./my_meal_facts_table";
 import MyMessagesRow from "./my_messages_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
 import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
@@ -162,6 +169,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyContactLaddersRow),
+  myExerciseEvents: __table({
+    name: 'my_exercise_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyExerciseEventsRow),
+  myExercisePlans: __table({
+    name: 'my_exercise_plans',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyExercisePlansRow),
   myFamilies: __table({
     name: 'my_families',
     indexes: [
@@ -183,6 +204,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myMealFacts: __table({
+    name: 'my_meal_facts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMealFactsRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -242,6 +270,7 @@ const reducersSchema = __reducers(
   __reducerSchema("answer_reminder", AnswerReminderReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
   __reducerSchema("confirm_reminder", ConfirmReminderReducer),
+  __reducerSchema("create_exercise_plan", CreateExercisePlanReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
   __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
@@ -253,6 +282,8 @@ const reducersSchema = __reducers(
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
+  __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
+  __reducerSchema("record_meal_fact", RecordMealFactReducer),
   __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
@@ -265,6 +296,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("update_report", UpdateReportReducer),
   __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
+  __reducerSchema("verify_exercise_plan", VerifyExercisePlanReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
