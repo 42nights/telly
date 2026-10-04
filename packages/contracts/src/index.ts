@@ -75,3 +75,75 @@ export const loadDecoded = <T>(
 	});
 	return () => controller.abort();
 };
+
+// Family records. Database ids (u64) travel as decimal strings and identities as hex strings, so
+// JSON keeps them exact. Times are ISO 8601 UTC strings with microsecond precision.
+
+export const Family = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	createdAt: Schema.String,
+});
+export type Family = typeof Family.Type;
+
+/** Only `validated` samples may drive monitoring; `unvalidated` ones stay visibly unvalidated. */
+export const SampleQuality = Schema.Literals(["validated", "unvalidated"]);
+export type SampleQuality = typeof SampleQuality.Type;
+
+/** One stored reading. It always carries its source time, receive time, unit, provenance, and quality. */
+export const HealthSample = Schema.Struct({
+	id: Schema.String,
+	familyId: Schema.String,
+	metric: Schema.NonEmptyString,
+	value: Schema.Finite,
+	unit: Schema.NonEmptyString,
+	/** When the source measured the value. */
+	sourceTime: Schema.String,
+	/** When the database accepted the value. */
+	receivedAt: Schema.String,
+	/** The device or provider that produced the value. */
+	source: Schema.NonEmptyString,
+	/** Synthetic demo data, never a real measurement. */
+	synthetic: Schema.Boolean,
+	quality: SampleQuality,
+});
+export type HealthSample = typeof HealthSample.Type;
+
+export const Alert = Schema.Struct({
+	id: Schema.String,
+	familyId: Schema.String,
+	sampleId: Schema.NullOr(Schema.String),
+	summary: Schema.String,
+	raisedBy: Schema.String,
+	createdAt: Schema.String,
+});
+export type Alert = typeof Alert.Type;
+
+export const FamilyMessage = Schema.Struct({
+	id: Schema.String,
+	familyId: Schema.String,
+	sender: Schema.String,
+	body: Schema.String,
+	sentAt: Schema.String,
+});
+export type FamilyMessage = typeof FamilyMessage.Type;
+
+/** A family member's acknowledgement of an alert. Separate from provider delivery. */
+export const AlertAcknowledgement = Schema.Struct({
+	id: Schema.String,
+	alertId: Schema.String,
+	familyId: Schema.String,
+	member: Schema.String,
+	acknowledgedAt: Schema.String,
+});
+export type AlertAcknowledgement = typeof AlertAcknowledgement.Type;
+
+/** Everything the caller's families hold, and nothing from any other family. */
+export const FamilyRecords = Schema.Struct({
+	families: Schema.Array(Family),
+	samples: Schema.Array(HealthSample),
+	alerts: Schema.Array(Alert),
+	messages: Schema.Array(FamilyMessage),
+	acknowledgements: Schema.Array(AlertAcknowledgement),
+});
+export type FamilyRecords = typeof FamilyRecords.Type;

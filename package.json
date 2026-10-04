@@ -24,23 +24,30 @@
 		"test": "bun test",
 		"smoke": "bun run --filter server smoke",
 		"check:quality": "fallow --fail-on-issues --fail-on-parse-error",
-		"check:structure": "sh scripts/check-structure.sh"
+		"check:structure": "sh scripts/check-structure.sh",
+		"db:generate": "rm -rf packages/db/src && spacetime generate --lang typescript --module-path spacetimedb --out-dir packages/db/src --yes",
+		"db:test": "sh scripts/db-test.sh"
 	},
 	"type": "module",
 	"workspaces": {
 		"packages": [
 			"apps/*",
-			"packages/*"
+			"packages/*",
+			"spacetimedb"
 		],
 		"catalog": {
 			"effect": "4.0.0",
 			"@types/node": "^26.4.1",
 			"varlock": "1.18.0",
+			"spacetimedb": "2.10.2",
 			"lucide-react": "^1.41.0",
 			"next-themes": "^0.4.6",
 			"sonner": "^2.0.8",
 			"@types/react-dom": "^19.2.7",
 			"tailwindcss": "^4.3.3"
 		}
+	},
+	"patchedDependencies": {
+		"spacetimedb@2.10.2": "patches/spacetimedb@2.10.2.patch"
 	}
 }
