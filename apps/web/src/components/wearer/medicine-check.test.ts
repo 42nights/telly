@@ -56,16 +56,6 @@ beforeEach(() => {
 					const s = shade.get(source);
 					if (s !== undefined) shade.set(this, s);
 				},
-				getImageData: (_x: number, _y: number, w: number, h: number) => {
-					const s = shade.get(this);
-					const data = new Uint8ClampedArray(w * h * 4);
-					// Every other pixel lit, so the brightness survives mean removal.
-					for (let i = 0; i < w * h; i++) {
-						data.fill(i % 2 === 0 ? (s ?? 0) : 0, i * 4, i * 4 + 3);
-						data[i * 4 + 3] = s === undefined ? 0 : 255;
-					}
-					return { data };
-				},
 			};
 		},
 		// One base64 character per pixel, so a big frame must be scaled down to fit.
@@ -137,13 +127,12 @@ describe("capture", () => {
 		expect(frame?.picture).toBe(`data:image/jpeg;base64,${"A".repeat(3072)}`);
 		expect(frame?.data).toBe("A".repeat(3072));
 		expect([frame?.width, frame?.height]).toEqual([64, 48]);
-		expect([frame?.canvas.width, frame?.canvas.height]).toEqual([64, 48]);
 	});
 
 	test("scales a big frame down until it fits the vision limit, and keeps the frame size", () => {
 		const frame = capture(video(3000, 2000, 10));
 		expect([frame?.width, frame?.height]).toEqual([3000, 2000]);
-		expect([frame?.canvas.width, frame?.canvas.height]).toEqual([2100, 1400]);
+		expect(frame?.data.length).toBe(2100 * 1400);
 		expect(((frame?.data.length ?? 0) * 3) / 4).toBeLessThanOrEqual(
 			MAX_VISION_IMAGE_BYTES,
 		);
@@ -292,37 +281,5 @@ describe("usePictureCheck", () => {
 		expect(calls.length).toBe(2);
 		expect(result.current.check?.frame).toEqual({ width: 32, height: 24 });
 		expect(result.current.check?.result.kind).toBe("done");
-	});
-
-	test("takes the markers away once the camera moves", async () => {
-		serve({ [detectionsPath]: detected([detection(0.9)]) });
-		const camera = video(64, 48, 10);
-		document.body.append(camera);
-		const { result } = renderHook(() => usePictureCheck("f1", ready));
-		await act(() => result.current.look(camera));
-		// The live video still shows the checked frame: the markers stay.
-		expect(result.current.check?.result.kind).toBe("done");
-		shade.set(camera, 200);
-		await waitFor(() =>
-			expect(result.current.check?.result).toEqual({
-				kind: "cleared",
-				reason: "moved",
-			}),
-		);
-		camera.remove();
-	});
-
-	test("takes the markers away once the picture is over a minute old", async () => {
-		serve({ [detectionsPath]: detected([detection(0.9)]) });
-		const { result } = renderHook(() => usePictureCheck("f1", ready));
-		await act(() => result.current.look(video(64, 48, 10)));
-		expect(result.current.check?.result.kind).toBe("done");
-		setSystemTime(NOW + 61_000);
-		await waitFor(() =>
-			expect(result.current.check?.result).toEqual({
-				kind: "cleared",
-				reason: "old",
-			}),
-		);
 	});
 });

@@ -14,14 +14,7 @@ import {
 	familyPath,
 } from "@/lib/api";
 
-import {
-	type ClearedReason,
-	clearedReason,
-	difference,
-	MARKER_MIN_CONFIDENCE,
-	MOTION_EVERY_MS,
-	sample,
-} from "./stale-marker";
+const MARKER_MIN_CONFIDENCE = 0.4;
 
 export type CheckResult =
 	| { readonly kind: "looking" }
@@ -29,8 +22,6 @@ export type CheckResult =
 			readonly kind: "done";
 			readonly detections: readonly MedicineDetection[];
 	  }
-	/** The markers were taken away because the camera moved or the picture got old. */
-	| { readonly kind: "cleared"; readonly reason: ClearedReason }
 	| ApiFailure;
 
 export type PictureCheck = {
@@ -47,8 +38,6 @@ type Frame = {
 	readonly data: string;
 	readonly width: number;
 	readonly height: number;
-	/** The encoded pixels, so motion is measured against exactly what was sent. */
-	readonly canvas: HTMLCanvasElement;
 };
 
 /** Encodes the video's current frame as JPEG, scaled down until it fits the vision limit. */
@@ -66,7 +55,7 @@ export const capture = (video: HTMLVideoElement): Frame | null => {
 		const picture = canvas.toDataURL("image/jpeg", 0.85);
 		const data = picture.slice(picture.indexOf(",") + 1);
 		if ((data.length * 3) / 4 <= MAX_VISION_IMAGE_BYTES)
-			return { picture, data, width, height, canvas };
+			return { picture, data, width, height };
 		scale *= 0.7;
 	}
 };
@@ -116,11 +105,6 @@ export const bestDetection = (detections: readonly MedicineDetection[]) =>
 		null,
 	);
 
-/**
- * Captures the video frame and asks `POST /vision/medicine-detections` about it. A new look or
- * `stop` aborts the pending one, and a reply for another frame is never shown. Shown markers are
- * cleared once the live video moves away from the checked frame or the frame gets old.
- */
 export function usePictureCheck(
 	familyId: string | null,
 	families: ApiState<FamilyList>,
@@ -128,34 +112,6 @@ export function usePictureCheck(
 	const [check, setCheck] = useState<PictureCheck | null>(null);
 	const pending = useRef<AbortController | null>(null);
 	useEffect(() => () => pending.current?.abort(), []);
-	const sent = useRef<{
-		readonly id: string;
-		readonly capturedAt: number;
-		readonly video: HTMLVideoElement | null;
-		readonly signature: Float32Array | null;
-	} | null>(null);
-
-	const doneId = check?.result.kind === "done" ? check.id : null;
-	useEffect(() => {
-		const shown = sent.current;
-		if (doneId === null || shown?.id !== doneId) return;
-		const tick = () => {
-			const live = sample(shown.video);
-			const change =
-				live === null || shown.signature === null
-					? null
-					: difference(shown.signature, live);
-			const reason = clearedReason(shown.capturedAt, Date.now(), change);
-			if (reason !== null)
-				setCheck((c) =>
-					c?.id === doneId ? { ...c, result: { kind: "cleared", reason } } : c,
-				);
-		};
-		tick();
-		const timer = setInterval(tick, MOTION_EVERY_MS);
-		return () => clearInterval(timer);
-	}, [doneId]);
-
 	const stop = () => {
 		pending.current?.abort();
 		pending.current = null;
@@ -168,7 +124,6 @@ export function usePictureCheck(
 		if (frame === null) return setCheck(null);
 		const id = crypto.randomUUID();
 		const capturedAt = Date.now();
-		sent.current = { id, capturedAt, video, signature: sample(frame.canvas) };
 		const base = {
 			id,
 			picture: frame.picture,

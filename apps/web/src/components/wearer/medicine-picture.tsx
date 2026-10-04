@@ -131,11 +131,6 @@ function PictureTag({
 	);
 }
 
-/**
- * The checked picture in place of the live video, with marker boxes drawn in frame pixels: the
- * SVG viewBox is the frame, so the boxes scale with the picture exactly. A cleared check shows
- * nothing, so the live video comes back without markers.
- */
 export function CheckedPicture({
 	check,
 	best,
@@ -143,7 +138,6 @@ export function CheckedPicture({
 	check: PictureCheck;
 	best: MedicineDetection | null;
 }) {
-	if (check.result.kind === "cleared") return null;
 	const detections =
 		check.result.kind === "done" ? check.result.detections : [];
 	return (

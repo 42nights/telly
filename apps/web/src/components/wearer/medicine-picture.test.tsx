@@ -64,16 +64,6 @@ describe("CheckedPicture", () => {
 		expect(view.getByText("Picture not checked")).toBeDefined();
 	});
 
-	test("shows nothing once the markers were cleared", () => {
-		const view = render(
-			<CheckedPicture
-				best={null}
-				check={check({ kind: "cleared", reason: "moved" })}
-			/>,
-		);
-		expect(view.container.innerHTML).toBe("");
-	});
-
 	test("tells the picture's age", () => {
 		const done: CheckResult = { kind: "done", detections: [] };
 		const fresh = render(<CheckedPicture best={null} check={check(done)} />);
