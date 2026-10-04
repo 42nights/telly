@@ -65,7 +65,7 @@ The IDs below are from the recorded run (database IDs begin at 1 in each new run
 | | Rosa `POST /messages` in Spanish; Priya replies in English | Messages 1 and 2, stored verbatim. Telly does not translate them. |
 | 2. Medication | `PUT /reminder-settings`, `POST /reminders` for the next minute | The database timer makes occurrence 1 due |
 | | Delivery from the phone, then the answer "okay" ("Vale") | State `acknowledged` ("Seen, not done"), not taken |
-| | `POST /vision/medicine-detections` | 503: "Medicine detection is not configured" |
+| | `POST /vision/object-detections` | 503: "Object detection is not configured" |
 | | A sighting at "kitchen counter", then `not-found` | The old place is marked outdated (stale location) |
 | | A new sighting at "bedside table" | Recovery: the last-seen place is current again |
 | | The answer "unsure" ("No me acuerdo si la tomé") | State `unresolved`. No `self_reported_complete` or `caregiver_confirmed` event exists. |

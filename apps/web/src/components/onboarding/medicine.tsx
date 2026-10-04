@@ -17,7 +17,7 @@ import {
 	useCamera,
 } from "@/components/hud/camera-preview";
 import {
-	bestDetection,
+	bestMedicine,
 	type PictureCheck,
 	usePictureCheck,
 } from "@/components/wearer/medicine-check";
@@ -140,7 +140,7 @@ function useLabelRead(
 	const [seededFor, setSeededFor] = useState<string | null>(null);
 	if (check?.result.kind === "done" && check.id !== seededFor) {
 		setSeededFor(check.id);
-		const best = bestDetection(check.result.detections);
+		const best = bestMedicine(check.result.detections);
 		const label = best?.label?.trim() || null;
 		setRead({ label, needsVerification: best?.needsVerification ?? true });
 		setName(label ?? "");
@@ -217,7 +217,7 @@ function PhotoPanel({
 					<CheckedPicture
 						best={
 							check.result.kind === "done"
-								? bestDetection(check.result.detections)
+								? bestMedicine(check.result.detections)
 								: null
 						}
 						check={check}

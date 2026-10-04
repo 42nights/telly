@@ -22,7 +22,7 @@ const save = {
 	type: "ar.savePin",
 	requestId: "r1",
 	familyId: "f1",
-	containerId: "c1",
+	objectId: "c1",
 	label: "Aspirin",
 } as const;
 
@@ -45,11 +45,11 @@ test("capabilities says why AR is missing without the native module", async () =
 	});
 });
 
-test("save and find answers carry the requestId and containerId", async () => {
+test("save and find answers carry the requestId and objectId", async () => {
 	expect(await answerArRequest(save, fake({}), "ios")).toEqual({
 		type: "ar.pinSaved",
 		requestId: "r1",
-		containerId: "c1",
+		objectId: "c1",
 		anchorId: "A",
 		worldMap: "bWFw",
 		mapBytes: 3,
@@ -57,7 +57,7 @@ test("save and find answers carry the requestId and containerId", async () => {
 	const find = {
 		type: "ar.findPin",
 		requestId: "r2",
-		containerId: "c1",
+		objectId: "c1",
 		label: "Aspirin",
 		anchorId: "A",
 		worldMap: "bWFw",
@@ -65,7 +65,7 @@ test("save and find answers carry the requestId and containerId", async () => {
 	expect(await answerArRequest(find, fake({}), "ios")).toEqual({
 		type: "ar.pinFound",
 		requestId: "r2",
-		containerId: "c1",
+		objectId: "c1",
 	});
 });
 

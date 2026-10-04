@@ -52,6 +52,7 @@ import CreateReportReducer from "./create_report_reducer";
 import DeleteFamilyReducer from "./delete_family_reducer";
 import DeleteMedicineArPinReducer from "./delete_medicine_ar_pin_reducer";
 import DeleteReminderReducer from "./delete_reminder_reducer";
+import ForgetMedicineSightingReducer from "./forget_medicine_sighting_reducer";
 import JoinFamilyByInviteReducer from "./join_family_by_invite_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
@@ -84,9 +85,11 @@ import SaveMedicineArPinReducer from "./save_medicine_ar_pin_reducer";
 import SendClinicianShareReducer from "./send_clinician_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
+import SetAwayReducer from "./set_away_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
+import SetHomeReducer from "./set_home_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetMyNameReducer from "./set_my_name_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
@@ -108,6 +111,7 @@ import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
 import MyAppointmentsRow from "./my_appointments_table";
+import MyAwayEventsRow from "./my_away_events_table";
 import MyCareGrantsRow from "./my_care_grants_table";
 import MyCareInstructionsRow from "./my_care_instructions_table";
 import MyCareNeedsRow from "./my_care_needs_table";
@@ -125,6 +129,7 @@ import MyFamilyMembersRow from "./my_family_members_table";
 import MyFamilyPeopleRow from "./my_family_people_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyHomeWatchRow from "./my_home_watch_table";
 import MyLocationSharesRow from "./my_location_shares_table";
 import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
@@ -183,6 +188,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAppointmentsRow),
+  myAwayEvents: __table({
+    name: 'my_away_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAwayEventsRow),
   myCareGrants: __table({
     name: 'my_care_grants',
     indexes: [
@@ -302,6 +314,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myHomeWatch: __table({
+    name: 'my_home_watch',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyHomeWatchRow),
   myLocationShares: __table({
     name: 'my_location_shares',
     indexes: [
@@ -450,6 +469,7 @@ const reducersSchema = __reducers(
   __reducerSchema("delete_family", DeleteFamilyReducer),
   __reducerSchema("delete_medicine_ar_pin", DeleteMedicineArPinReducer),
   __reducerSchema("delete_reminder", DeleteReminderReducer),
+  __reducerSchema("forget_medicine_sighting", ForgetMedicineSightingReducer),
   __reducerSchema("join_family_by_invite", JoinFamilyByInviteReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
@@ -482,9 +502,11 @@ const reducersSchema = __reducers(
   __reducerSchema("send_clinician_share", SendClinicianShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
+  __reducerSchema("set_away", SetAwayReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_family_push_token", SetFamilyPushTokenReducer),
+  __reducerSchema("set_home", SetHomeReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_my_name", SetMyNameReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),

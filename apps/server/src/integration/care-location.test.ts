@@ -205,9 +205,9 @@ describe.skipIf(!integration)("location sharing", () => {
 					`${path}/location/shares/${owner.identity}`,
 				),
 			),
-		).toEqual({ locations: [], shares: [], seesShared: false });
+		).toEqual({ locations: [], shares: [], seesShared: false, events: [] });
 		expect(
 			await json(FamilyLocations, await owner.call("GET", `${path}/location`)),
-		).toEqual({ locations: [], shares: [], seesShared: true });
+		).toEqual({ locations: [], shares: [], seesShared: true, events: [] });
 	});
 });

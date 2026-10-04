@@ -43,7 +43,20 @@ export const replies: Record<string, unknown> = {
 		thresholds: [],
 	},
 	"/api/families/1/messages": { messages: [] },
-	"/api/families/1/location": { locations: [], shares: [], seesShared: false },
+	"/api/families/1/location": {
+		locations: [],
+		shares: [],
+		seesShared: false,
+		events: [],
+	},
+	"/api/families/1/location/home": {
+		home: null,
+		radiusMeters: 200,
+		autoTrip: false,
+		awaySince: null,
+		distanceMeters: null,
+		sharing: false,
+	},
 	"/api/families/1/trips/current": { trip: null },
 	"/api/families/1/exercise": { plans: [], sessions: [] },
 	"/api/families/1/cooking/profile": {
@@ -67,7 +80,7 @@ export const replies: Record<string, unknown> = {
 	"/api/families/1/medicine-memory": {
 		personId: "a".repeat(64),
 		people: ["a".repeat(64)],
-		permission: null,
+		places: [],
 		sightings: [],
 	},
 	"/api/families/1/care/needs": { needs: [] },

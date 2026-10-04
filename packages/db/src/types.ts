@@ -99,6 +99,28 @@ export const AttemptStatus = __t.enum("AttemptStatus", {
 });
 export type AttemptStatus = __Infer<typeof AttemptStatus>;
 
+export const AwayEvent = __t.object("AwayEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get kind() {
+    return AwayKind;
+  },
+  manual: __t.bool(),
+  get fix() {
+    return __t.option(LocationFix);
+  },
+  at: __t.timestamp(),
+});
+export type AwayEvent = __Infer<typeof AwayEvent>;
+
+// The tagged union or sum type for the algebraic type `AwayKind`.
+export const AwayKind = __t.enum("AwayKind", {
+  Left: __t.unit(),
+  Back: __t.unit(),
+});
+export type AwayKind = __Infer<typeof AwayKind>;
+
 export const CareGrantEvent = __t.object("CareGrantEvent", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -370,6 +392,28 @@ export const HealthSample = __t.object("HealthSample", {
 });
 export type HealthSample = __Infer<typeof HealthSample>;
 
+export const HomePoint = __t.object("HomePoint", {
+  latitude: __t.f64(),
+  longitude: __t.f64(),
+});
+export type HomePoint = __Infer<typeof HomePoint>;
+
+export const HomeWatch = __t.object("HomeWatch", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get home() {
+    return __t.option(HomePoint);
+  },
+  radiusMeters: __t.u32(),
+  autoTrip: __t.bool(),
+  outsideSince: __t.option(__t.timestamp()),
+  awaySince: __t.option(__t.timestamp()),
+  distanceMeters: __t.option(__t.f64()),
+  updatedAt: __t.timestamp(),
+});
+export type HomeWatch = __Infer<typeof HomeWatch>;
+
 export const LadderTimer = __t.object("LadderTimer", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
@@ -446,6 +490,7 @@ export const MedicineArPin = __t.object("MedicineArPin", {
   savedBy: __t.identity(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  personId: __t.identity(),
 });
 export type MedicineArPin = __Infer<typeof MedicineArPin>;
 
@@ -479,6 +524,9 @@ export const MedicineSighting = __t.object("MedicineSighting", {
   savedBy: __t.identity(),
   notFoundAt: __t.option(__t.timestamp()),
   personId: __t.identity(),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()),
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
 
@@ -513,6 +561,9 @@ export type MyAlerts = __Infer<typeof MyAlerts>;
 
 export const MyAppointments = __t.object("MyAppointments", {});
 export type MyAppointments = __Infer<typeof MyAppointments>;
+
+export const MyAwayEvents = __t.object("MyAwayEvents", {});
+export type MyAwayEvents = __Infer<typeof MyAwayEvents>;
 
 export const MyCareGrants = __t.object("MyCareGrants", {});
 export type MyCareGrants = __Infer<typeof MyCareGrants>;
@@ -564,6 +615,9 @@ export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
+
+export const MyHomeWatch = __t.object("MyHomeWatch", {});
+export type MyHomeWatch = __Infer<typeof MyHomeWatch>;
 
 export const MyLocationShares = __t.object("MyLocationShares", {});
 export type MyLocationShares = __Infer<typeof MyLocationShares>;

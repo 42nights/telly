@@ -1,8 +1,9 @@
 import type { FamilyList } from "@health/contracts/families";
 import {
 	MAX_VISION_IMAGE_BYTES,
-	type MedicineDetection,
-	MedicineDetections,
+	type ObjectCategory,
+	type ObjectDetection,
+	ObjectDetections,
 } from "@health/contracts/vision";
 import { useEffect, useRef, useState } from "react";
 
@@ -28,7 +29,7 @@ export type CheckResult =
 	| { readonly kind: "looking" }
 	| {
 			readonly kind: "done";
-			readonly detections: readonly MedicineDetection[];
+			readonly detections: readonly ObjectDetection[];
 	  }
 	/** The markers were taken away because the camera moved or the picture got old. */
 	| { readonly kind: "cleared"; readonly reason: ClearedReason }
@@ -93,7 +94,7 @@ const detectionRequest = (id: string, capturedAt: number, frame: Frame) => ({
 });
 
 const resultFor = (
-	result: ApiResult<MedicineDetections>,
+	result: ApiResult<ObjectDetections>,
 	id: string,
 ): CheckResult => {
 	if (result.kind !== "ready") return result;
@@ -108,15 +109,100 @@ const resultFor = (
 	};
 };
 
-/** The most confident detection, which the arrow points to. */
-export const bestDetection = (detections: readonly MedicineDetection[]) =>
-	detections.reduce<MedicineDetection | null>(
-		(top, d) => (top === null || d.confidence > top.confidence ? d : top),
+/**
+ * The detections in the order the arrow offers them: those of the asked category first, then the
+ * rest, each in the model's order, which puts the main object in view first.
+ */
+export const candidates = (
+	detections: readonly ObjectDetection[],
+	asked: ObjectCategory | null,
+) => [
+	...detections.filter((d) => d.category === asked),
+	...detections.filter((d) => d.category !== asked),
+];
+
+/** What the person can do with the object the arrow points to. */
+export type Choice = {
+	/** Opens the form that saves where it is. */
+	readonly save: () => void;
+	/** Moves the arrow to the next object in the picture. */
+	readonly notThis: () => void;
+	/** How many objects the person turned down in this picture. */
+	readonly skipped: number;
+};
+
+/**
+ * The object the arrow points to in `check`, and the person's choice about it: "Not this" moves the
+ * arrow on within one picture, and Save opens the form for it. A new picture starts over. With
+ * `adding` (Add a thing), the form is open from the start.
+ */
+export function useArrow(
+	check: PictureCheck | null,
+	asked: ObjectCategory | null,
+	adding = false,
+) {
+	const [step, setStep] = useState({ id: "", skipped: 0, saving: false });
+	const id = check?.id ?? "";
+	const mine = step.id === id;
+	const skipped = mine ? step.skipped : 0;
+	const best =
+		check?.result.kind === "done"
+			? (candidates(check.result.detections, asked)[skipped] ?? null)
+			: null;
+	const choice: Choice = {
+		skipped,
+		save: () => setStep({ id, skipped, saving: true }),
+		notThis: () => setStep({ id, skipped: skipped + 1, saving: adding }),
+	};
+	return { best, choice, saving: mine ? step.saving : adding };
+}
+
+/** The most confident medicine container: onboarding reads the label of the real box. */
+export const bestMedicine = (detections: readonly ObjectDetection[]) =>
+	detections.reduce<ObjectDetection | null>(
+		(top, d) =>
+			d.category === "medicine" &&
+			(top === null || d.confidence > top.confidence)
+				? d
+				: top,
 		null,
 	);
 
 /**
- * Captures the video frame and asks `POST /vision/medicine-detections` about it. A new look or
+ * Base64 JPEG of the detection's box cut from the checked picture, at most 160 px on its longer
+ * side. The box is in camera-frame pixels; the sent picture may be scaled down from the frame.
+ */
+export const thumbnail = async (
+	{ picture, frame }: Pick<PictureCheck, "picture" | "frame">,
+	box: ObjectDetection["box"],
+): Promise<string> => {
+	const image = new Image();
+	image.src = picture;
+	await image.decode();
+	const toPicture = image.naturalWidth / frame.width;
+	const scale = Math.min(1, 160 / Math.max(box.width, box.height));
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.max(1, Math.round(box.width * scale));
+	canvas.height = Math.max(1, Math.round(box.height * scale));
+	canvas
+		.getContext("2d")
+		?.drawImage(
+			image,
+			box.x * toPicture,
+			box.y * toPicture,
+			box.width * toPicture,
+			box.height * toPicture,
+			0,
+			0,
+			canvas.width,
+			canvas.height,
+		);
+	const url = canvas.toDataURL("image/jpeg", 0.8);
+	return url.slice(url.indexOf(",") + 1);
+};
+
+/**
+ * Captures the video frame and asks `POST /vision/object-detections` about it. A new look or
  * `stop` aborts the pending one, and a reply for another frame is never shown. Shown markers are
  * cleared once the live video keeps moving away from how it looked when the answer arrived, or the
  * frame gets old. Motion while the answer is pending does not count.
@@ -185,8 +271,8 @@ export function usePictureCheck(
 		const controller = new AbortController();
 		pending.current = controller;
 		const result = await apiRequest(
-			MedicineDetections,
-			familyPath(familyId, "/vision/medicine-detections"),
+			ObjectDetections,
+			familyPath(familyId, "/vision/object-detections"),
 			{
 				method: "POST",
 				signal: controller.signal,

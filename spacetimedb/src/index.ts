@@ -329,6 +329,70 @@ const locationShare = table(
 	},
 );
 
+const HomePoint = t.object("HomePoint", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+});
+
+// One person's home for automatic trips (#302), in one family. Only that person reads it. Their
+// location reports start a trip after `AWAY_DWELL_MICROS` clearly outside `radiusMeters`, and end
+// it at the first report inside.
+const homeWatch = table(
+	{
+		name: "home_watch",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+		// The first report clearly outside the radius since the last one inside.
+		outsideSince: t.option(t.timestamp()),
+		// When the current trip started; unset at home.
+		awaySince: t.option(t.timestamp()),
+		// How far the latest reported fix was from home, for the person's own status.
+		distanceMeters: t.option(t.f64()),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const AwayKind = t.enum("AwayKind", { Left: t.unit(), Back: t.unit() });
+
+// A trip start or end. The people the sharer shares location with see it (`my_away_events`).
+// Rows are never changed; the last revoked share deletes them with the location.
+// ponytail: two rows per trip are kept until then; prune by age if the list grows large.
+const awayEvent = table(
+	{
+		name: "away_event",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		kind: AwayKind,
+		// The person pressed "I'm going out" or "I'm home"; otherwise the location decided.
+		manual: t.bool(),
+		fix: t.option(LocationFix),
+		at: t.timestamp(),
+	},
+);
+
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -359,8 +423,8 @@ const medicineMemory = table(
 	},
 );
 
-// One member's permission to remember where their medicine containers were last seen (#29, #291).
-// Without this row no sighting of that member is stored, and removing it deletes their sightings.
+// One member's agreed familiar places to search when a thing moved (#29, #291). Remembering is on
+// for every member without it (#301); `setMedicineMemory` off deletes it with every sighting.
 const medicinePlaces = table(
 	{
 		name: "medicine_places",
@@ -384,14 +448,15 @@ const medicinePlaces = table(
 	},
 );
 
-// Where one member's medicine container was last seen: one row per member and container
-// description. Only a newer camera observation that the person confirmed changes it; `notFoundAt`
-// marks it outdated.
+// Where one member's object was last seen: one row per member and object label (#29, #301). An
+// object is medicine or any personal thing: keys, glasses, a wallet. Only a newer camera
+// observation that the person confirmed changes it; `notFoundAt` marks it outdated.
 const medicineSighting = table(
 	{ name: "medicine_sighting" },
 	{
 		id: t.u64().primaryKey().autoInc(),
 		familyId: t.u64().index("btree"),
+		// The object's label, such as "Lisinopril bottle" or "keys".
 		container: t.string(),
 		place: t.string(),
 		// When the camera captured the frame the container was found in.
@@ -404,16 +469,25 @@ const medicineSighting = table(
 		// The member whose medicine this is (#291). Rows from before #291 hold the zero identity until
 		// `migrateMedicineMembers` gives them to the family's wearer.
 		personId: t.identity().default(Identity.zero()),
+		// What kind of object it is (#301): "keys", "glasses", "medicine", ... Older rows are medicine.
+		category: t.string().default("medicine"),
+		// Base64 JPEG of the object from the confirming picture; empty for rows from before #301.
+		thumbnail: t.string().default(""),
+		// The places it was seen before `place`, oldest first, at most `MAX_PAST_PLACES` (#301).
+		pastPlaces: t.array(t.string()).default([]),
 	},
 );
 
-// Where a remembered container sits in the room, pinned with ARKit on the person's iPhone (contract
-// telly-ar-pin). The world map itself is in R2 at `ar-pins/<familyId>/<containerId>.worldmap`; this
-// row only says that it exists. One pin per sighting; turning medicine memory off deletes them.
+// Where a remembered object sits in the room, pinned with ARKit on the person's iPhone (contract
+// telly-ar-pin, generalized in #301). The world map itself is in R2 at
+// `ar-pins/<familyId>/<personId>/<objectId>.worldmap`, or `ar-pins/<familyId>/<objectId>.worldmap`
+// for a pin saved before #301; this row only says that it exists. One pin per object; forgetting
+// the object or the member's memory deletes it.
 const medicineArPin = table(
 	{ name: "medicine_ar_pin" },
 	{
-		// The `medicine_sighting` id of the pinned container.
+		// The `medicine_sighting` id of the pinned object. The column keeps its first name, so the
+		// pins saved before #301 stay valid.
 		containerId: t.u64().primaryKey(),
 		familyId: t.u64().index("btree"),
 		anchorId: t.string(),
@@ -421,6 +495,9 @@ const medicineArPin = table(
 		savedBy: t.identity(),
 		createdAt: t.timestamp(),
 		updatedAt: t.timestamp(),
+		// The member whose object this is (#301). Pins from before #301 hold the zero identity, and
+		// their map is at the first key.
+		personId: t.identity().default(Identity.zero()),
 	},
 );
 
@@ -977,6 +1054,8 @@ const spacetimedb = schema({
 	finchnodeLink,
 	location,
 	locationShare,
+	homeWatch,
+	awayEvent,
 	medicineMemory,
 	medicinePlaces,
 	medicineSighting,
@@ -1983,6 +2062,11 @@ export const revokeLocationShare = spacetimedb.reducer(
 			ctx.sender,
 		]))
 			ctx.db.location.id.delete(row.id);
+		for (const row of ctx.db.awayEvent.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.awayEvent.id.delete(row.id);
 	},
 );
 
@@ -2024,6 +2108,185 @@ export const reportLocation = spacetimedb.reducer(
 		};
 		if (existing === undefined) ctx.db.location.insert(row);
 		else ctx.db.location.id.update(row);
+		if (fix !== undefined) followHome(ctx, familyId, fix);
+	},
+);
+
+/** A trip starts after this long clearly outside the home radius, so a short walk past it is none. */
+const AWAY_DWELL_MICROS = 60_000_000n;
+// The `HOME_RADIUS` bounds of `@health/contracts/location`.
+const MIN_HOME_RADIUS = 100;
+const MAX_HOME_RADIUS = 5000;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+type Point = { latitude: number; longitude: number };
+
+/** Great-circle (haversine) distance in meters. */
+const distanceMeters = (a: Point, b: Point) => {
+	const rad = Math.PI / 180;
+	const h =
+		Math.sin(((b.latitude - a.latitude) * rad) / 2) ** 2 +
+		Math.cos(a.latitude * rad) *
+			Math.cos(b.latitude * rad) *
+			Math.sin(((b.longitude - a.longitude) * rad) / 2) ** 2;
+	return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h));
+};
+
+const homeWatchOf = (ctx: Ctx, familyId: bigint) =>
+	ctx.db.homeWatch.byFamilySharer.filter([familyId, ctx.sender]).next().value;
+
+const recordAway = (
+	ctx: Ctx,
+	familyId: bigint,
+	kind: "Left" | "Back",
+	manual: boolean,
+	fix: Infer<typeof LocationFix> | undefined,
+) =>
+	ctx.db.awayEvent.insert({
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		kind: { tag: kind },
+		manual,
+		fix,
+		at: ctx.timestamp,
+	});
+
+type HomeWatchRow = Infer<typeof homeWatch.rowType>;
+type HomeStep = {
+	readonly change: Partial<HomeWatchRow>;
+	readonly event?: "Left" | "Back";
+};
+
+/** A fix inside forgets a pending departure, and ends a trip that has been outside. */
+const insideStep = ({ outsideSince, awaySince }: HomeWatchRow): HomeStep =>
+	outsideSince === undefined
+		? { change: {} }
+		: {
+				change: { outsideSince: undefined, awaySince: undefined },
+				...(awaySince === undefined ? {} : { event: "Back" }),
+			};
+
+/** A fix clearly outside starts the dwell; one after the dwell starts the trip. */
+const outsideStep = (
+	{ outsideSince, awaySince }: HomeWatchRow,
+	now: Ctx["timestamp"],
+): HomeStep => {
+	if (outsideSince === undefined) return { change: { outsideSince: now } };
+	const dwelt =
+		now.microsSinceUnixEpoch - outsideSince.microsSinceUnixEpoch >=
+		AWAY_DWELL_MICROS;
+	return awaySince === undefined && dwelt
+		? { change: { awaySince: outsideSince }, event: "Left" }
+		: { change: {} };
+};
+
+/**
+ * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
+ * A fix is inside when its center is within the radius and its accuracy is no wider than the
+ * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
+ * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
+ * ends only after a fix clearly outside.
+ */
+const followHome = (
+	ctx: Ctx,
+	familyId: bigint,
+	fix: Infer<typeof LocationFix>,
+) => {
+	const watch = homeWatchOf(ctx, familyId);
+	if (watch?.home === undefined) return;
+	const distance = distanceMeters(watch.home, fix);
+	const { autoTrip, radiusMeters: radius } = watch;
+	const step: HomeStep = !autoTrip
+		? { change: {} }
+		: distance <= radius && fix.accuracyMeters <= radius
+			? insideStep(watch)
+			: distance - fix.accuracyMeters > radius
+				? outsideStep(watch, ctx.timestamp)
+				: { change: {} };
+	ctx.db.homeWatch.id.update({
+		...watch,
+		...step.change,
+		distanceMeters: distance,
+		updatedAt: ctx.timestamp,
+	});
+	if (step.event !== undefined)
+		recordAway(ctx, familyId, step.event, false, fix);
+};
+
+const upsertHomeWatch = (
+	ctx: Ctx,
+	familyId: bigint,
+	change: Partial<Infer<typeof homeWatch.rowType>>,
+) => {
+	const existing = homeWatchOf(ctx, familyId);
+	const row = {
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		home: undefined,
+		radiusMeters: 200,
+		autoTrip: false,
+		outsideSince: undefined,
+		awaySince: undefined,
+		distanceMeters: undefined,
+		...existing,
+		...change,
+		updatedAt: ctx.timestamp,
+	};
+	if (existing === undefined) ctx.db.homeWatch.insert(row);
+	else ctx.db.homeWatch.id.update(row);
+};
+
+/**
+ * Sets the sender's home, the radius that counts as home, and whether their location reports start
+ * and end trips. Moving home forgets a pending departure; an open trip stays open.
+ */
+export const setHome = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+	},
+	(ctx, { familyId, home, radiusMeters, autoTrip }) => {
+		requireMember(ctx, familyId);
+		if (radiusMeters < MIN_HOME_RADIUS || radiusMeters > MAX_HOME_RADIUS)
+			throw new SenderError(
+				`radiusMeters must be ${MIN_HOME_RADIUS} to ${MAX_HOME_RADIUS}`,
+			);
+		if (
+			home !== undefined &&
+			!(Math.abs(home.latitude) <= 90 && Math.abs(home.longitude) <= 180)
+		)
+			throw new SenderError("coordinates out of range");
+		// A pending departure and the last distance were measured from the old home; an open trip
+		// keeps its evidence.
+		const existing = homeWatchOf(ctx, familyId);
+		const moved =
+			existing?.home?.latitude !== home?.latitude ||
+			existing?.home?.longitude !== home?.longitude;
+		upsertHomeWatch(ctx, familyId, {
+			home,
+			radiusMeters,
+			autoTrip,
+			...(existing?.awaySince === undefined ? { outsideSince: undefined } : {}),
+			...(moved ? { distanceMeters: undefined } : {}),
+		});
+	},
+);
+
+/** "I'm going out" (`away`) or "I'm home". Pressing it again changes nothing. */
+export const setAway = spacetimedb.reducer(
+	{ familyId: t.u64(), away: t.bool() },
+	(ctx, { familyId, away }) => {
+		requireMember(ctx, familyId);
+		if ((homeWatchOf(ctx, familyId)?.awaySince !== undefined) === away) return;
+		upsertHomeWatch(ctx, familyId, {
+			outsideSince: undefined,
+			awaySince: away ? ctx.timestamp : undefined,
+		});
+		recordAway(ctx, familyId, away ? "Left" : "Back", true, undefined);
 	},
 );
 
@@ -2119,6 +2382,9 @@ export const migrateMedicineMembers = spacetimedb.reducer((ctx) => {
 
 // A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
 const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+const MAX_PAST_PLACES = 19;
+// A 160 px JPEG is about 10 KB of base64; this leaves room and still keeps the rows small.
+const MAX_THUMBNAIL_CHARS = 64 * 1024;
 
 export const rememberMedicine = spacetimedb.reducer(
 	{
@@ -2130,12 +2396,15 @@ export const rememberMedicine = spacetimedb.reducer(
 		source: t.string(),
 		confidence: t.f64(),
 		labelRead: t.bool(),
+		category: t.string(),
+		thumbnail: t.string(),
 	},
 	(ctx, seen) => {
 		requireMedicineOf(ctx, seen.familyId, seen.personId);
-		if (placesOf(ctx, seen.familyId, seen.personId) === undefined)
-			throw new SenderError("medicine memory is off for this member");
 		requireText("container", seen.container);
+		requireText("category", seen.category);
+		if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
+			throw new SenderError("the thumbnail is too large");
 		requireText("place", seen.place);
 		requireText("source", seen.source);
 		if (!(seen.confidence >= 0 && seen.confidence <= 1))
@@ -2145,60 +2414,82 @@ export const rememberMedicine = spacetimedb.reducer(
 		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
 			throw new SenderError("seenAt must be a current observation");
 		const key = seen.container.trim().toLowerCase();
-		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+		const row = {
+			...seen,
+			savedBy: ctx.sender,
+			notFoundAt: undefined,
+			pastPlaces: [] as string[],
+		};
 		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
 			if (!old.personId.isEqual(seen.personId)) continue;
 			if (old.container.trim().toLowerCase() !== key) continue;
 			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
 				throw new SenderError("a newer sighting is already stored");
-			ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+			const pastPlaces = [...old.pastPlaces, old.place].slice(-MAX_PAST_PLACES);
+			ctx.db.medicineSighting.id.update({ ...row, id: old.id, pastPlaces });
 			return;
 		}
 		ctx.db.medicineSighting.insert({ ...row, id: 0n });
 	},
 );
 
+// One sighting the caller may change: a missing one fails like another family's, so ids leak nothing.
+const ownSighting = (ctx: Ctx, id: bigint) => {
+	const found = ctx.db.medicineSighting.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMedicineOf(ctx, found.familyId, found.personId);
+	return found;
+};
+
 // The person looked at the remembered place and the container was not there. The place stays as
 // the last sighting, marked outdated, until a new sighting replaces it.
 export const markMedicineNotFound = spacetimedb.reducer(
 	{ id: t.u64() },
 	(ctx, { id }) => {
-		const found = ctx.db.medicineSighting.id.find(id);
-		if (found === null) throw new SenderError("not a member of this family");
-		requireMedicineOf(ctx, found.familyId, found.personId);
+		const found = ownSighting(ctx, id);
 		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
+// Forgets one remembered object (#301): its sighting and its AR pin. The server deletes the map.
+export const forgetMedicineSighting = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		ownSighting(ctx, id);
+		ctx.db.medicineSighting.id.delete(id);
+		ctx.db.medicineArPin.containerId.delete(id);
 	},
 );
 
 // The largest world map a pin keeps; the server refuses a larger one before it stores anything.
 const MAX_WORLD_MAP_BYTES = 16 * 1024 * 1024;
 
-// Stores or replaces the AR pin of a remembered container. The server has already stored the world
-// map in R2; the row records its anchor and size.
+// Stores or replaces the AR pin of a remembered object. The server has already stored the world map
+// in R2; the row records its anchor and size. The same member rule as the object's sighting.
 export const saveMedicineArPin = spacetimedb.reducer(
 	{
 		familyId: t.u64(),
-		containerId: t.u64(),
+		objectId: t.u64(),
 		anchorId: t.string(),
 		mapBytes: t.u32(),
 	},
-	(ctx, pin) => {
-		const sighting = ctx.db.medicineSighting.id.find(pin.containerId);
+	(ctx, { objectId, ...pin }) => {
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
 		if (sighting?.familyId !== pin.familyId) {
 			requireMember(ctx, pin.familyId);
 			throw new SenderError("no such sighting in this family");
 		}
-		// The member rule of #291: the sighting's member, or a manager of everyone's medicine.
+		// The member rule of #291: the sighting's member, or a manager of everyone's things.
 		requireMedicineOf(ctx, pin.familyId, sighting.personId);
-		if (placesOf(ctx, pin.familyId, sighting.personId) === undefined)
-			throw new SenderError("medicine memory is off for this member");
 		requireText("anchorId", pin.anchorId);
 		if (pin.mapBytes === 0 || pin.mapBytes > MAX_WORLD_MAP_BYTES)
 			throw new SenderError("the world map must be 1 byte to 16 MB");
-		const old = ctx.db.medicineArPin.containerId.find(pin.containerId);
+		const old = ctx.db.medicineArPin.containerId.find(objectId);
 		const row = {
 			...pin,
+			containerId: objectId,
 			savedBy: ctx.sender,
+			personId: sighting.personId,
 			createdAt: old?.createdAt ?? ctx.timestamp,
 			updatedAt: ctx.timestamp,
 		};
@@ -2207,18 +2498,16 @@ export const saveMedicineArPin = spacetimedb.reducer(
 	},
 );
 
-// Deletes one container's AR pin; a missing pin is already deleted. The server deletes the map.
+// Deletes one object's AR pin; a missing pin is already deleted. The server deletes the map.
 export const deleteMedicineArPin = spacetimedb.reducer(
-	{ familyId: t.u64(), containerId: t.u64() },
-	(ctx, { familyId, containerId }) => {
+	{ familyId: t.u64(), objectId: t.u64() },
+	(ctx, { familyId, objectId }) => {
 		requireMember(ctx, familyId);
-		const sighting = ctx.db.medicineSighting.id.find(containerId);
-		if (sighting !== null && sighting.familyId === familyId)
-			requireMedicineOf(ctx, familyId, sighting.personId);
-		if (
-			ctx.db.medicineArPin.containerId.find(containerId)?.familyId === familyId
-		)
-			ctx.db.medicineArPin.containerId.delete(containerId);
+		const pin = ctx.db.medicineArPin.containerId.find(objectId);
+		if (pin?.familyId !== familyId) return;
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
+		if (sighting !== null) requireMedicineOf(ctx, familyId, sighting.personId);
+		ctx.db.medicineArPin.containerId.delete(objectId);
 	},
 );
 
@@ -3610,22 +3899,17 @@ export const myFamilyMembers = spacetimedb.view(
 		]),
 );
 
+// The pins of the objects the caller may read (`medicineReader`): a pin follows its sighting.
 export const myMedicineArPins = spacetimedb.view(
 	{ name: "my_medicine_ar_pins", public: true },
 	t.array(medicineArPin.rowType),
-	// A pin is a scan of one member's home: it is visible exactly when its sighting is (#291).
-	(ctx) => {
-		const visible = new Set(
-			medicineReader(ctx, (familyId) =>
-				ctx.db.medicineSighting.familyId.filter(familyId),
-			).map((sighting) => sighting.id),
-		);
-		return [...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) =>
-			[...ctx.db.medicineArPin.familyId.filter(m.familyId)].filter((pin) =>
-				visible.has(pin.containerId),
-			),
-		);
-	},
+	(ctx) =>
+		medicineReader(ctx, (familyId) =>
+			ctx.db.medicineSighting.familyId.filter(familyId),
+		).flatMap((sighting) => {
+			const pin = ctx.db.medicineArPin.containerId.find(sighting.id);
+			return pin === null ? [] : [pin];
+		}),
 );
 
 export const myContactLadders = spacetimedb.view(
@@ -3697,30 +3981,25 @@ export const myReminderEvents = spacetimedb.view(
 		),
 );
 
-// The caller's own locations, and those of people who share theirs with the caller. Another
-// person's location also needs the caller's `location` care scope (#26) in that family. A revoked
-// share or scope drops the row at once.
+// Shares to the caller that let the caller see the sharer's location now: the caller also holds
+// the `location` care scope (#26) in that family. A revoked share or scope drops out at once.
+const visibleShares = (ctx: ViewCtx<InferSchema<typeof spacetimedb>>) =>
+	[...ctx.db.locationShare.viewer.filter(ctx.sender)].filter((share) =>
+		holdsCareScope(
+			ctx.db.careGrantEvent.byFamilyMember.filter([share.familyId, ctx.sender]),
+			"location",
+		),
+	);
+
+// The caller's own locations, and those of people who share theirs with the caller.
 export const myLocations = spacetimedb.view(
 	{ name: "my_locations", public: true },
 	t.array(location.rowType),
 	(ctx) => [
 		...ctx.db.location.sharer.filter(ctx.sender),
-		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) =>
-			holdsCareScope(
-				ctx.db.careGrantEvent.byFamilyMember.filter([
-					share.familyId,
-					ctx.sender,
-				]),
-				"location",
-			)
-				? [
-						...ctx.db.location.byFamilySharer.filter([
-							share.familyId,
-							share.sharer,
-						]),
-					]
-				: [],
-		),
+		...visibleShares(ctx).flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
 	],
 );
 
@@ -3731,6 +4010,34 @@ export const myLocationShares = spacetimedb.view(
 	(ctx) => [
 		...ctx.db.locationShare.sharer.filter(ctx.sender),
 		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
+);
+
+// The caller's own home settings. Nobody else reads a home position.
+export const myHomeWatch = spacetimedb.view(
+	{ name: "my_home_watch", public: true },
+	t.array(homeWatch.rowType),
+	(ctx) => [...ctx.db.homeWatch.sharer.filter(ctx.sender)],
+);
+
+// Trip starts and ends: the caller's own, and those of people who share their location with the
+// caller, under the rule of `my_locations`. A share shows no event from before it began.
+export const myAwayEvents = spacetimedb.view(
+	{ name: "my_away_events", public: true },
+	t.array(awayEvent.rowType),
+	(ctx) => [
+		...ctx.db.awayEvent.sharer.filter(ctx.sender),
+		...visibleShares(ctx).flatMap((share) =>
+			[
+				...ctx.db.awayEvent.byFamilySharer.filter([
+					share.familyId,
+					share.sharer,
+				]),
+			].filter(
+				(event) =>
+					event.at.microsSinceUnixEpoch >= share.sharedAt.microsSinceUnixEpoch,
+			),
+		),
 	],
 );
 
@@ -4148,6 +4455,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.tripEvent.familyId,
 			db.location.familyId,
 			db.locationShare.familyId,
+			db.homeWatch.familyId,
+			db.awayEvent.familyId,
 			db.mealFact.familyId,
 			db.medicineMemory.familyId,
 			db.medicinePlaces.familyId,

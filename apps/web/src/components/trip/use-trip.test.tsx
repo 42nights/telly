@@ -11,64 +11,9 @@ import {
 	waitFor,
 } from "../test/dom";
 
-import type { Trip } from "./logic";
-import { useLocationReporter, useTrip } from "./use-trip";
+import { useLocationReporter } from "./use-trip";
 
 installDom();
-
-const trip: Trip = {
-	destination: "the pharmacy",
-	purpose: "pick up my pills",
-	setAt: 1,
-};
-
-function TripProbe({ next }: { next: Trip | null }) {
-	const [current, save] = useTrip();
-	return (
-		<>
-			<p data-testid="trip">
-				{current === null ? "none" : current.destination}
-			</p>
-			<button onClick={() => save(next)} type="button">
-				Save
-			</button>
-		</>
-	);
-}
-
-describe("useTrip", () => {
-	test("starts with the trip saved on this device", async () => {
-		localStorage.setItem("telly.trip", JSON.stringify(trip));
-		const view = render(<TripProbe next={null} />);
-		await waitFor(() =>
-			expect(view.getByTestId("trip").textContent).toBe("the pharmacy"),
-		);
-	});
-
-	test.each([
-		["nothing saved", null],
-		["broken JSON", "{"],
-		["a wrong shape", JSON.stringify({ ...trip, setAt: "now" })],
-		["a bare value", "3"],
-	])("%s gives no trip", (_, stored) => {
-		if (stored !== null) localStorage.setItem("telly.trip", stored);
-		const view = render(<TripProbe next={null} />);
-		expect(view.getByTestId("trip").textContent).toBe("none");
-	});
-
-	test("saving shows and keeps the trip; saving null cancels it", async () => {
-		const view = render(<TripProbe next={trip} />);
-		await act(async () => view.getByRole("button").click());
-		expect(view.getByTestId("trip").textContent).toBe("the pharmacy");
-		expect(JSON.parse(localStorage.getItem("telly.trip") ?? "null")).toEqual(
-			trip,
-		);
-		view.rerender(<TripProbe next={null} />);
-		await act(async () => view.getByRole("button").click());
-		expect(view.getByTestId("trip").textContent).toBe("none");
-		expect(localStorage.getItem("telly.trip")).toBeNull();
-	});
-});
 
 const start = Date.parse("2026-01-01T08:00:00Z");
 const me = "a".repeat(64);

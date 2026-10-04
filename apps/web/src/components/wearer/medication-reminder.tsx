@@ -265,7 +265,7 @@ function Occurrence({
 					className={buttonVariants({ variant: "outline", className: big })}
 					data-slot="button"
 					search={{ q: `find my ${instruction?.name ?? occurrence.title}` }}
-					to="/medicine"
+					to="/find"
 				>
 					<Pill aria-hidden />
 					Find it

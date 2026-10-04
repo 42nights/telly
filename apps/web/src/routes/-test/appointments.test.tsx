@@ -19,10 +19,15 @@ test("with no visits, says none are upcoming and offers a new one", async () => 
 
 	expect(await screen.findByText("No upcoming visits recorded.")).toBeTruthy();
 	expect(screen.queryByText("Past and cancelled")).toBeNull();
-	// The frame's status bar reads /health, /api/sources, and monitoring on every page.
+	// The frame's status bar reads /health, /api/sources, and monitoring on every page, and every
+	// screen also reads the person's own going-out settings (#302).
 	const status = ["/health", "/api/sources", "/api/families/fam-1/monitoring"];
 	expect(
-		calls.map((call) => call.path).filter((path) => !status.includes(path)),
+		calls
+			.map((call) => call.path)
+			.filter(
+				(path) => !status.includes(path) && !path.endsWith("/location/home"),
+			),
 	).toEqual(["/api/families", "/api/families/fam-1/appointments"]);
 });
 
