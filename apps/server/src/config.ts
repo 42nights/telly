@@ -45,7 +45,23 @@ type Env = {
 	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
 	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
 	readonly TELLY_R2_ENDPOINT?: string | undefined;
+	readonly TELLY_REQUIRED_KEYS?: string | undefined;
 } & Parameters<typeof gemmaConfigFrom>[0];
+
+/** `bun run secrets:pull` lists every key it wrote in TELLY_REQUIRED_KEYS. A listed key that is
+ * missing or empty, such as one blanked by a stale host variable, fails startup by name only. */
+const requireKeys = (env: Env) => {
+	const missing = (env.TELLY_REQUIRED_KEYS ?? "")
+		.split(",")
+		.map((name) => name.trim())
+		.filter(
+			(name) => name && !(env as Readonly<Record<string, unknown>>)[name],
+		);
+	if (missing.length > 0)
+		throw new Error(
+			`Required keys are missing or empty: ${missing.join(", ")} (see TELLY_REQUIRED_KEYS)`,
+		);
+};
 
 /** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
 const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
@@ -80,6 +96,7 @@ const r2Config = (env: Env): R2Config | undefined => {
  * secret is optional (Google web clients need it) but means nothing without the four.
  */
 export const serverConfig = (env: Env): ServerConfig => {
+	requireKeys(env);
 	const {
 		OIDC_ISSUER: issuer,
 		OIDC_AUDIENCE: audience,
