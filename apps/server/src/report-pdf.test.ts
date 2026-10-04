@@ -44,6 +44,7 @@ const report = (extra: Partial<Report> = {}): Report => ({
 		corrections: [],
 	},
 	review: null,
+	email: null,
 	...extra,
 });
 

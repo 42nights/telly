@@ -188,6 +188,7 @@ describe("server boundaries", () => {
 			ELEVENLABS_VOICE_ID: "voice",
 			ELEVENLABS_API_URL: "http://127.0.0.1:1",
 			GEMINI_BASE_URL: "http://127.0.0.1:1",
+			REPORT_EMAIL_FROM: "Telly <reports@example.com>",
 			SPACETIMEDB_URI: db.uri,
 			SPACETIMEDB_DATABASE: db.database,
 			NOOP_SPACETIMEDB_TOKEN: "ingest-token",
@@ -234,7 +235,9 @@ describe("server boundaries", () => {
 
 	test("an unexpected failure answers a generic 500 and logs it, unless the client left", async () => {
 		const failing = createApp(config, {
-			key: "relay-key",
+			identity: "0".repeat(64),
+			legacy: { key: "relay-key", familyId: 7n },
+			tokenFamily: () => undefined,
 			record: async () => {
 				throw new Error("row 7 of family 42 is corrupt");
 			},
@@ -272,7 +275,9 @@ describe("server boundaries", () => {
 
 	test("a closed database connection reads as an outage, not a server bug", async () => {
 		const outage = createApp(config, {
-			key: "relay-key",
+			identity: "0".repeat(64),
+			legacy: { key: "relay-key", familyId: 7n },
+			tokenFamily: () => undefined,
 			record: async () => {
 				throw new DbUnavailable({ reason: "connection closed" });
 			},

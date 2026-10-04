@@ -171,6 +171,7 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 				expect(Schema.decodeUnknownSync(FamilyLocations)(after.json)).toEqual({
 					locations: [],
 					shares: [],
+					seesShared: false,
 				});
 			}),
 		));

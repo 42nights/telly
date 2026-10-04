@@ -11,7 +11,6 @@ import { Schema } from "effect";
 import {
 	addMember,
 	createFamily,
-	errorOf,
 	integration,
 	json,
 	type ProviderCall,
@@ -54,16 +53,39 @@ describe.skipIf(!it)("family chat flow", () => {
 		expect(await thread(member, path)).toEqual([]);
 	});
 
-	test("without a Fetch.ai bridge, AI on answers 503 and never calls Gemini", async () => {
+	// #256: without the bridge, the tools read the asker's own database and Gemini still answers.
+	test("without a Fetch.ai bridge, Gemini answers from the asker's database", async () => {
 		if (!bare) return;
+		bare.providers.gemini = () =>
+			Response.json({
+				status: "completed",
+				model: "gemini-3.8-flash",
+				steps: [
+					{
+						type: "model_output",
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify({
+									answer: "No sleep is recorded yet.",
+									follow_ups: [],
+								}),
+							},
+						],
+					},
+				],
+			});
 		const asker = await bare.signIn(`chat-bare-${run}`);
 		const { path: barePath } = await createFamily(asker, "Bare");
-		const reply = await asker.call("POST", `${barePath}/ask`, {
-			question: "How did Mom sleep?",
-			timeZone: "Europe/Berlin",
-		});
-		expect(await errorOf(reply)).toEqual([503, "unavailable"]);
-		expect(geminiCalls(bare.calls)).toEqual([]);
+		const answer = await json(
+			FamilyAnswer,
+			await asker.call("POST", `${barePath}/ask`, {
+				question: "How did Mom sleep?",
+				timeZone: "Europe/Berlin",
+			}),
+		);
+		expect(answer.answer).toBe("No sleep is recorded yet.");
+		expect(geminiCalls(bare.calls)).toHaveLength(1);
 	});
 
 	test("AI on: Gemini answers the asker, and the family thread keeps no copy", async () => {

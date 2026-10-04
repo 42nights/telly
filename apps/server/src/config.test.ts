@@ -6,6 +6,7 @@ const base = {
 	ELEVENLABS_VOICE_ID: "voice",
 	ELEVENLABS_API_URL: "http://127.0.0.1:1",
 	GEMINI_BASE_URL: "http://127.0.0.1:1",
+	REPORT_EMAIL_FROM: "Telly <reports@example.com>",
 };
 
 describe("startup configuration", () => {
@@ -34,11 +35,13 @@ describe("startup configuration", () => {
 				...base,
 				SPECTRUM_PROJECT_ID: "project",
 				SPECTRUM_PROJECT_SECRET: "secret",
+				SPECTRUM_WEBHOOK_SECRET: "hook",
 				TELLY_IMESSAGE_SENDERS: " +15550001111 = 7 ,ana@example.com=12",
 			}).imessage,
 		).toEqual({
 			projectId: "project",
 			projectSecret: "secret",
+			webhookSecret: "hook",
 			senders: new Map([
 				["+15550001111", 7n],
 				["ana@example.com", 12n],
@@ -50,7 +53,7 @@ describe("startup configuration", () => {
 		expect(() =>
 			serverConfig({ ...base, SPECTRUM_PROJECT_ID: "project" }),
 		).toThrow(
-			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
+			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, SPECTRUM_WEBHOOK_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
 		);
 		for (const senders of ["+15550001111", "+1555=seven", "a=1,,b=2"])
 			expect(() =>
@@ -58,6 +61,7 @@ describe("startup configuration", () => {
 					...base,
 					SPECTRUM_PROJECT_ID: "project",
 					SPECTRUM_PROJECT_SECRET: "secret",
+					SPECTRUM_WEBHOOK_SECRET: "hook",
 					TELLY_IMESSAGE_SENDERS: senders,
 				}),
 			).toThrow("TELLY_IMESSAGE_SENDERS must be address=familyId pairs");
@@ -122,12 +126,11 @@ describe("startup configuration", () => {
 			SPACETIMEDB_DATABASE: "health",
 		};
 		expect(serverConfig({ ...base, ...noop, ...db }).noop).toEqual({
-			key: "relay-key",
-			familyId: 9n,
+			legacy: { key: "relay-key", familyId: 9n },
 			db: { uri: "ws://127.0.0.1:1", database: "health", token: "noop-token" },
 		});
 		expect(() => serverConfig({ ...base, ...noop })).toThrow(
-			"Set all of NOOP_INGEST_KEY",
+			"NOOP ingest needs NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
 		);
 	});
 });

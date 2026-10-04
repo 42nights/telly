@@ -1,5 +1,5 @@
 // Runs the server's layer in-process: the HTTP listener, the alert outbox (unconfigured here), and
-// the iMessage agent with the Spectrum Cloud client replaced by an in-memory message stream.
+// the iMessage agent with the Spectrum Cloud client replaced by an in-memory webhook stand-in.
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { once } from "node:events";
 import { type AddressInfo, createServer } from "node:net";
@@ -13,6 +13,7 @@ const base = {
 	ELEVENLABS_VOICE_ID: "voice",
 	ELEVENLABS_API_URL: "http://127.0.0.1:1",
 	GEMINI_BASE_URL: "http://127.0.0.1:1",
+	REPORT_EMAIL_FROM: "Telly <reports@example.com>",
 };
 
 // @hono/node-server swaps in its own global Request and Response when it serves; Bun runs every
@@ -32,13 +33,10 @@ const freePort = async () => {
 	return port;
 };
 
-// Spectrum Cloud stand-in: tests push inbound messages and read the replies the agent sends.
+// Spectrum Cloud stand-in: the webhook body is `{ text, sender }`; tests read the replies the agent sends.
 const cloud = {
-	inbox: [] as [Space, Message][],
 	replies: [] as string[],
 	stopped: 0,
-	wake: () => {},
-	fail: false,
 	replied: Promise.withResolvers<void>(),
 };
 const space = {
@@ -47,41 +45,31 @@ const space = {
 		cloud.replied.resolve();
 	},
 } as unknown as Space;
-const inbound = (text: string, sender = "+15550001111") =>
-	cloud.inbox.push([
-		space,
-		{
-			direction: "inbound",
-			sender: { id: sender },
-			content: { type: "text", text },
-		} as unknown as Message,
-	]);
 mock.module("@spectrum-ts/imessage", () => ({
 	imessage: { config: () => ({ name: "imessage" }) },
 }));
 mock.module("@spectrum-ts/core", () => ({
-	Spectrum: async () => {
-		let running = true;
-		return {
-			messages: (async function* () {
-				while (running) {
-					if (cloud.fail) throw new Error("stream lost");
-					const next = cloud.inbox.shift();
-					if (next) yield next;
-					else {
-						const { promise, resolve } = Promise.withResolvers<void>();
-						cloud.wake = resolve;
-						await promise;
-					}
-				}
-			})(),
-			stop: async () => {
-				running = false;
-				cloud.stopped += 1;
-				cloud.wake();
-			},
-		};
-	},
+	Spectrum: async () => ({
+		webhook: async (
+			request: Request,
+			handle: (space: Space, message: Message) => Promise<void>,
+		) => {
+			const { text, sender } = (await request.json()) as {
+				text: string;
+				sender: string;
+			};
+			void handle(space, {
+				id: crypto.randomUUID(),
+				direction: "inbound",
+				sender: { id: sender },
+				content: { type: "text", text },
+			} as unknown as Message);
+			return new Response(null, { status: 202 });
+		},
+		stop: async () => {
+			cloud.stopped += 1;
+		},
+	}),
 }));
 // Imported after the mocks so the iMessage client never loads the real Spectrum Cloud provider.
 const { serverLayer } = await import("./server");
@@ -161,8 +149,14 @@ describe("the server process", () => {
 			...base,
 			SPECTRUM_PROJECT_ID: "project",
 			SPECTRUM_PROJECT_SECRET: "secret",
+			SPECTRUM_WEBHOOK_SECRET: "hook",
 			TELLY_IMESSAGE_SENDERS: "+15550001111=7",
 		});
+		const inbound = (text: string, sender = "+15550001111") =>
+			fetch(`http://127.0.0.1:${port}/api/imessage/webhook`, {
+				method: "POST",
+				body: JSON.stringify({ text, sender }),
+			});
 		const errors = spyOn(console, "error").mockImplementation(() => {});
 		const nextReply = async () => {
 			await cloud.replied.promise;
@@ -177,14 +171,15 @@ describe("the server process", () => {
 							serverLayer(config, { HOST: "127.0.0.1", PORT: port }),
 						);
 						// Urgent help never waits on a model or a missing configuration.
-						inbound("I've fallen");
-						cloud.wake();
+						const accepted = yield* Effect.promise(() =>
+							inbound("I've fallen"),
+						);
+						expect(accepted.status).toBe(202);
 						expect(yield* Effect.promise(nextReply)).toBe(
 							"This sounds urgent. Call your emergency number or a family member now.",
 						);
 						// Without the fetch bridge, a normal question gets the fallback reply, not silence.
-						inbound("How did Mom sleep?");
-						cloud.wake();
+						yield* Effect.promise(() => inbound("How did Mom sleep?"));
 						expect(yield* Effect.promise(nextReply)).toBe(unavailableReply);
 						expect(cloud.stopped).toBe(0);
 					}),
@@ -192,42 +187,6 @@ describe("the server process", () => {
 			);
 			expect(cloud.stopped).toBe(1);
 		} finally {
-			errors.mockRestore();
-		}
-	});
-
-	test("a lost iMessage stream is logged and the HTTP server keeps serving", async () => {
-		const port = await freePort();
-		const config = serverConfig({
-			...base,
-			SPECTRUM_PROJECT_ID: "project",
-			SPECTRUM_PROJECT_SECRET: "secret",
-			TELLY_IMESSAGE_SENDERS: "+15550001111=7",
-		});
-		const logged = Promise.withResolvers<unknown>();
-		const errors = spyOn(console, "error").mockImplementation((line) =>
-			logged.resolve(line),
-		);
-		cloud.fail = true;
-		try {
-			await Effect.runPromise(
-				Effect.scoped(
-					Effect.gen(function* () {
-						yield* Layer.build(
-							serverLayer(config, { HOST: "127.0.0.1", PORT: port }),
-						);
-						expect(yield* Effect.promise(() => logged.promise)).toBe(
-							"imessage: agent stopped",
-						);
-						expect(yield* Effect.promise(() => health(port))).toEqual({
-							status: "ok",
-							service: "server",
-						});
-					}),
-				),
-			);
-		} finally {
-			cloud.fail = false;
 			errors.mockRestore();
 		}
 	});

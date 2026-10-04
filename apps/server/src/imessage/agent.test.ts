@@ -65,17 +65,13 @@ test("a failed reply does not stop later answers", async () => {
 		},
 	} as unknown as Space;
 	try {
-		await runIMessageAgent(
-			(async function* () {
-				yield [flaky, message("first?")] as [Space, Message];
-				yield [flaky, message("second?")] as [Space, Message];
-			})(),
-			{
-				senders: new Map([["+15550001111", 7n]]),
-				answer: async (_, { question }) =>
-					({ answer: `re: ${question}` }) as FamilyAnswer,
-			},
-		);
+		const handle = iMessageHandler({
+			senders: new Map([["+15550001111", 7n]]),
+			answer: async (_, { question }) =>
+				({ answer: `re: ${question}` }) as FamilyAnswer,
+		});
+		await handle(flaky, message("first?"));
+		await handle(flaky, message("second?"));
 		expect(delivered).toEqual(["re: second?"]);
 		expect(errors).toHaveBeenCalledTimes(1);
 	} finally {

@@ -129,8 +129,10 @@ const deflated = (value: unknown) =>
 const app = (key = "secret") => {
 	const batches: NoopSample[][] = [];
 	const routes = noopRoutes({
-		key,
-		record: async (samples) => {
+		identity: "0".repeat(64),
+		legacy: { key, familyId: 7n },
+		tokenFamily: () => undefined,
+		record: async (_familyId, samples) => {
 			batches.push([...samples]);
 		},
 	});
@@ -221,7 +223,7 @@ describe("noopRoutes ingest", () => {
 			}),
 			{ query: "secret" },
 		);
-		expect(response.status).toBe(204);
+		expect(response.status).toBe(200);
 		const day = Date.parse("2026-09-01T00:00:00Z");
 		expect(batches).toEqual([
 			[
