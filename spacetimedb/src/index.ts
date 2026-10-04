@@ -3387,16 +3387,30 @@ export const myReminderEvents = spacetimedb.view(
 			),
 );
 
-// The caller's own locations, and those of people who share theirs with the caller. A revoked
-// share drops the row at once.
+// The caller's own locations, and those of people who share theirs with the caller. Another
+// person's location also needs the caller's `location` care scope (#26) in that family. A revoked
+// share or scope drops the row at once.
 export const myLocations = spacetimedb.view(
 	{ name: "my_locations", public: true },
 	t.array(location.rowType),
 	(ctx) => [
 		...ctx.db.location.sharer.filter(ctx.sender),
-		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) => [
-			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
-		]),
+		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) =>
+			holdsCareScope(
+				ctx.db.careGrantEvent.byFamilyMember.filter([
+					share.familyId,
+					ctx.sender,
+				]),
+				"location",
+			)
+				? [
+						...ctx.db.location.byFamilySharer.filter([
+							share.familyId,
+							share.sharer,
+						]),
+					]
+				: [],
+		),
 	],
 );
 
