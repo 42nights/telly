@@ -16,8 +16,12 @@ export type ApiFailure =
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
-	/** The server could not be reached, or it replied with something else. */
-	| { readonly kind: "error"; readonly message: string };
+	/** The server could not be reached (`unreachable`), or it replied with something else. */
+	| {
+			readonly kind: "error";
+			readonly message: string;
+			readonly unreachable?: true;
+	  };
 
 export type ApiResult<T> =
 	| { readonly kind: "ready"; readonly value: T }
@@ -82,7 +86,11 @@ export const apiRequest = async <T>(
 		});
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 	if (!response.ok)
 		return failureFor(
@@ -128,7 +136,11 @@ export const apiBlob = async (
 		return { kind: "ready", value: await response.blob() };
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 };
 
