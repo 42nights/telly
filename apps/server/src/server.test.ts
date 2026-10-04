@@ -40,6 +40,9 @@ const cloud = {
 	replied: Promise.withResolvers<void>(),
 };
 const space = {
+	read: async () => {},
+	startTyping: async () => {},
+	stopTyping: async () => {},
 	send: async (text: string) => {
 		cloud.replies.push(text);
 		cloud.replied.resolve();
@@ -62,6 +65,7 @@ mock.module("@spectrum-ts/core", () => ({
 				};
 				void handle(space, {
 					id: crypto.randomUUID(),
+					timestamp: new Date(),
 					direction: "inbound",
 					sender: { id: sender },
 					content: { type: "text", text },
