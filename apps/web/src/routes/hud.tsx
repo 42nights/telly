@@ -89,19 +89,23 @@ function serverStatus(health: Polled<Health>, now: number) {
 	};
 }
 
-/** The health source line. Only NOOP can supply heart rate, and it stays `not_connected`. */
-function sourceStatus(sources: Polled<Sources>) {
-	if (sources.latest === undefined) return "Checking health sources…";
+/**
+ * The monitoring line, from health sources only, never from server liveness. The `Sources`
+ * contract allows only `not_connected`, so monitoring is stopped whenever the list is known;
+ * "partial" and "on" need a connected source in the contract first.
+ */
+function monitoringStatus(sources: Polled<Sources>) {
+	if (sources.latest === undefined) return "Monitoring: checking…";
 	if (sources.latest.kind === "error")
-		return "Health sources unknown: the server did not answer";
+		return "Monitoring: unknown · the server did not answer";
 	if (sources.latest.value.sources.length === 0)
-		return "No health source configured";
-	return sources.latest.value.sources
+		return "Monitoring: stopped · no health source configured";
+	return `Monitoring: stopped · ${sources.latest.value.sources
 		.map(
 			({ source, status }) =>
 				`${source.toUpperCase()} ${status.replace("_", " ")}`,
 		)
-		.join(" · ");
+		.join(" · ")}`;
 }
 
 function HudComponent() {
@@ -143,7 +147,7 @@ function HudComponent() {
 								{server.text}
 							</span>
 						</p>
-						<p className="text-muted-foreground">{sourceStatus(sources)}</p>
+						<p>{monitoringStatus(sources)}</p>
 					</div>
 				</Window>
 				<Window className="flex-[2_1_16rem]" icon={MicOff} title="Request">
