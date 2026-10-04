@@ -84,10 +84,9 @@ test("with nothing recorded, it says so and does not count silence as exercise",
 	serve({ [RECORDS]: EMPTY });
 	const view = render(<ExerciseSection familyId="f1" />);
 	expect(await view.findByText("No agreed activity yet.")).toBeDefined();
+	expect(view.getByText("No sessions recorded yet.")).toBeDefined();
 	expect(
-		view.getByText(
-			"No sessions recorded yet. No answer is not counted as exercise.",
-		),
+		view.getByRole("button", { name: "No answer is not counted as exercise." }),
 	).toBeDefined();
 });
 

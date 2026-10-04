@@ -1,4 +1,4 @@
-import type { HealthSample } from "@health/contracts";
+import { drivesMonitoring, type HealthSample } from "@health/contracts";
 import { CueRequest, type HealthCue } from "@health/contracts/cues";
 import { Cause, Effect, Exit } from "effect";
 import { Hono } from "hono";
@@ -7,8 +7,8 @@ import { ApiFailure, decodeBody, type FamilyEnv, typedFailure } from "../http";
 import { type QwenConfig, requestCue } from "../integrations/qwen";
 
 /**
- * The family's samples for the requested ids, in request order. Unvalidated samples may drive a
- * cue: a cue is advice only, and the reply says so in `notice` (see `cueInput`).
+ * The family's samples for the requested ids, in request order. Unchecked samples may drive a cue:
+ * a cue is advice only, and the reply says so in `notice` (see `cueInput`).
  */
 export const pickSamples = (
 	samples: ReadonlyArray<HealthSample>,
@@ -29,14 +29,17 @@ export const pickSamples = (
 	});
 };
 
-/** The provenance of a cue, with a notice that names any unvalidated sources. */
+/**
+ * The provenance of a cue, with a notice that names any unchecked sources. A real WHOOP reading
+ * through NOOP counts as accurate, as it does for monitoring (`drivesMonitoring`).
+ */
 const cueInput = (
 	samples: ReadonlyArray<HealthSample>,
 	sampleIds: HealthCue["input"]["sampleIds"],
 ): Pick<HealthCue, "input" | "notice"> => {
-	const unvalidated = [
+	const unchecked = [
 		...new Set(
-			samples.filter((s) => s.quality !== "validated").map((s) => s.source),
+			samples.filter((s) => !drivesMonitoring(s)).map((s) => s.source),
 		),
 	];
 	return {
@@ -47,12 +50,12 @@ const cueInput = (
 				...string[],
 			],
 			synthetic: samples.some((s) => s.synthetic),
-			validated: unvalidated.length === 0,
+			validated: unchecked.length === 0,
 		},
 		notice:
-			unvalidated.length === 0
+			unchecked.length === 0
 				? null
-				: `Based on unvalidated readings from ${unvalidated.join(", ")}. Advice only; it never raises an alert.`,
+				: `Based on unchecked readings from ${unchecked.join(", ")}. Advice only; it never raises an alert.`,
 	};
 };
 

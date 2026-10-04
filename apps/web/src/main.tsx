@@ -5,8 +5,14 @@ import ReactDOM from "react-dom/client";
 import Loader from "./components/loader";
 import { startPendingSync } from "./lib/pending";
 import { queryClient } from "./lib/query";
+import { reloadOnce } from "./lib/reload";
 import { followSession } from "./lib/session";
 import { routeTree } from "./routeTree.gen";
+
+// The router shows no error for a chunk of an older build while the reload loads the new one.
+window.addEventListener("vite:preloadError", (event) => {
+	if (reloadOnce()) event.preventDefault();
+});
 
 const router = createRouter({
 	routeTree,

@@ -4,19 +4,26 @@ import {
 	ReportPdfLink,
 	ReportPdfs,
 } from "@health/contracts/reports";
-import { Button } from "@health/ui/components/button";
-import { useState } from "react";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { useEffect, useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
-import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
+import { ApiNotice, Tip } from "@/components/win95";
+import {
+	type ApiFailure,
+	type ApiResult,
+	apiBlob,
+	apiRequest,
+	familyPath,
+	useApi,
+} from "@/lib/api";
 
 import { DataTable } from "./data-table";
 import { formatTime } from "./logic";
 import { failureText } from "./use-report-sheet";
 
 /**
- * The Save as PDF and Past PDFs buttons, for a row beside Send. A PDF is kept in the caller's
- * private storage; saving one sends nothing.
+ * The Preview PDF, Save as PDF, and Past PDFs buttons, for a row beside Send. A PDF is kept in the
+ * caller's private storage; saving or previewing one sends nothing.
  */
 export function PdfActions({
 	familyId,
@@ -30,6 +37,7 @@ export function PdfActions({
 	const [busy, setBusy] = useState(false);
 	const [result, setResult] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
+	const [previewing, setPreviewing] = useState(false);
 
 	const save = async () => {
 		setBusy(true);
@@ -51,6 +59,13 @@ export function PdfActions({
 			<Button
 				type="button"
 				className="h-11 px-4 text-sm"
+				onClick={() => setPreviewing(true)}
+			>
+				Preview PDF
+			</Button>
+			<Button
+				type="button"
+				className="h-11 px-4 text-sm"
 				disabled={busy}
 				onClick={() => void save()}
 			>
@@ -63,8 +78,9 @@ export function PdfActions({
 			>
 				Past PDFs…
 			</Button>
+			<Tip text="Saving a PDF does not send it to anyone." />
 			<p role="status" className="basis-full">
-				{result ?? "Saving a PDF does not send it to anyone."}
+				{result}
 			</p>
 			{open && (
 				<PastPdfsDialog
@@ -73,7 +89,109 @@ export function PdfActions({
 					onClose={() => setOpen(false)}
 				/>
 			)}
+			{previewing && (
+				<PreviewDialog
+					familyId={familyId}
+					reportId={reportId}
+					onClose={() => setPreviewing(false)}
+				/>
+			)}
 		</>
+	);
+}
+
+/**
+ * The PDF that an email of the report attaches, fetched with the caller's sign-in and shown from
+ * memory. Phones have no inline PDF viewer that shows every page, so they get only the buttons.
+ */
+function PreviewDialog({
+	familyId,
+	reportId,
+	onClose,
+}: {
+	familyId: string;
+	reportId: string;
+	onClose: () => void;
+}) {
+	const [pdf, setPdf] = useState<ApiResult<string> | null>(null);
+	useEffect(() => {
+		let url: string | undefined;
+		let live = true;
+		void apiBlob(
+			familyPath(familyId, `/reports/${encodeURIComponent(reportId)}/pdf`),
+			{ method: "GET" },
+		).then((result) => {
+			if (!live) return;
+			if (result.kind !== "ready") return setPdf(result);
+			url = URL.createObjectURL(result.value);
+			setPdf({ kind: "ready", value: url });
+		});
+		return () => {
+			live = false;
+			if (url !== undefined) URL.revokeObjectURL(url);
+		};
+	}, [familyId, reportId]);
+	const link = `${buttonVariants()} h-11 px-4 text-sm`;
+
+	return (
+		<div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-3">
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="report-preview-title"
+				onKeyDown={(event) => event.key === "Escape" && onClose()}
+				className="win95-raised flex max-h-full w-full max-w-4xl flex-col"
+			>
+				<h3
+					id="report-preview-title"
+					className="win95-titlebar px-2 py-1 text-sm"
+				>
+					Preview PDF
+				</h3>
+				<div className="grid min-h-0 gap-3 p-3 text-sm">
+					{pdf === null ? (
+						<p role="status">Making the PDF…</p>
+					) : pdf.kind !== "ready" ? (
+						<p role="alert">Not previewed: {failureText(pdf)}</p>
+					) : (
+						<iframe
+							title="Lab report PDF"
+							src={pdf.value}
+							className="hidden h-[70dvh] w-full border border-border bg-white md:block"
+						/>
+					)}
+					<div className="flex flex-wrap justify-end gap-2">
+						{pdf?.kind === "ready" && (
+							<>
+								<a
+									href={pdf.value}
+									target="_blank"
+									rel="noopener"
+									className={link}
+								>
+									Open in new tab
+								</a>
+								<a
+									href={pdf.value}
+									download={`lab-report-${reportId.slice(0, 8)}.pdf`}
+									className={link}
+								>
+									Download
+								</a>
+							</>
+						)}
+						<Button
+							type="button"
+							className="h-11 px-4 text-sm"
+							autoFocus
+							onClick={onClose}
+						>
+							Close
+						</Button>
+					</div>
+				</div>
+			</div>
+		</div>
 	);
 }
 

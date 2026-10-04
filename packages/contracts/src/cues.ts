@@ -32,7 +32,8 @@ export type CueRequest = typeof CueRequest.Type;
 /**
  * One model cue with its provenance. A cue is advice only: it never feeds threshold evaluation or
  * alert delivery. `input.synthetic` is true when any input sample is synthetic demo data, and
- * `input.validated` is false when any is unvalidated; `notice` then names the unvalidated sources.
+ * `input.validated` is false when any input fails `drivesMonitoring`; `notice` then names those
+ * unchecked sources.
  */
 export const HealthCue = Schema.Struct({
 	...CueOutput.fields,
@@ -50,7 +51,7 @@ export const HealthCue = Schema.Struct({
 		synthetic: Schema.Boolean,
 		validated: Schema.Boolean,
 	}),
-	/** Shown with the cue when any input is unvalidated; null when every input is validated. */
+	/** Shown with the cue when any input is unchecked; null when every input drives monitoring. */
 	notice: Schema.NullOr(Schema.NonEmptyString),
 	generatedAt: Schema.String,
 });

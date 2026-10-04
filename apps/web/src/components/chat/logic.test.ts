@@ -118,13 +118,25 @@ test("evidenceLine", () => {
 		stale: false,
 	};
 	const at = (iso: string) => `at ${iso}`;
-	expect(evidenceLine(evidence, at)).toBe("heart_rate 72 bpm · Watch · at T");
+	expect(evidenceLine(evidence, at)).toBe("Heart rate 72 bpm · Watch · at T");
 	expect(evidenceLine({ ...evidence, stale: true }, at)).toBe(
-		"heart_rate 72 bpm · Watch · at T · stale",
+		"Heart rate 72 bpm · Watch · at T · stale",
 	);
 	expect(evidenceLine({ ...evidence, synthetic: true }, at)).toBe(
-		"heart_rate 72 bpm · Watch · at T · demo, not real",
+		"Heart rate 72 bpm · Watch · at T · demo, not real",
 	);
+	expect(
+		evidenceLine(
+			{
+				...evidence,
+				metric: "sleep_duration",
+				value: 536.6,
+				unit: "min",
+				source: "noop:my-whoop-noop",
+			},
+			at,
+		),
+	).toBe("Sleep 8 h 57 m · WHOOP · at T");
 });
 
 test("timeline interleaves messages and asks by time", () => {
