@@ -50,6 +50,7 @@ jobs:
               - 'bts.jsonc'
               - '.fallowrc.json'
               - '.sentrux/**'
+              - 'scripts/**'
               - '.gitignore'
               - '.github/workflows/health.yml'
 
@@ -110,11 +111,10 @@ jobs:
           fi
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - run: sentrux analytics off
-      # Rules: no cycles, no god files, client and contract boundaries (.sentrux/rules.toml).
-      - run: sentrux check .
-      # Regression gate against the committed .sentrux/baseline.json. Move the baseline only in a
-      # reviewed commit; see CONTRIBUTING.md.
-      - run: sentrux gate .
+      # Rules (no cycles, no god files, client and contract boundaries in .sentrux/rules.toml) and
+      # the regression gate against .sentrux/baseline.json, on the app only: the script leaves out
+      # noop/. Move the baseline only in a reviewed commit; see CONTRIBUTING.md.
+      - run: sh scripts/check-structure.sh
 
   required:
     name: required

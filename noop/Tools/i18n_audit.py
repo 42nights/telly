@@ -1462,7 +1462,7 @@ def _disk_read(path: Path) -> str | None:
 def git_show(ref: str, rel_path: str) -> str | None:
     """File content at `ref`, or None if the path didn't exist there."""
     result = subprocess.run(
-        ["git", "show", f"{ref}:{rel_path}"],
+        ["git", "show", f"{ref}:./{rel_path}"],
         cwd=ROOT, capture_output=True, text=True,
     )
     return result.stdout if result.returncode == 0 else None

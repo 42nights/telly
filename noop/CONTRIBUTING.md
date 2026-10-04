@@ -111,7 +111,7 @@ generated output (`Strand.xcodeproj/`) or any secrets, keystores, or `local.prop
 
 1. One concern per PR where practical (keep protocol, schema, UI, and Android
    changes separate).
-2. Fill in the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
+2. Fill in the [PR template](../.github/PULL_REQUEST_TEMPLATE.md).
 3. For anything on the BLE path, state what you tested **on real hardware** and on
    which strap. A green build is not proof a command behaves correctly.
 4. For analytics changes, add a test and cite the method. If the change alters a
@@ -129,7 +129,7 @@ terms as the project — see [`LICENSE`](LICENSE).
 ## Reporting issues
 
 - **Bugs and feature requests:** open an issue using the templates in
-  [`.github/ISSUE_TEMPLATE`](.github/ISSUE_TEMPLATE). NOOP is on-device, so please
+  [`.github/ISSUE_TEMPLATE`](../.github/ISSUE_TEMPLATE). NOOP is on-device, so please
   leave out anything that identifies you.
 - **Security issues:** see [`SECURITY.md`](SECURITY.md).
 

@@ -1,6 +1,7 @@
-# Structural rules for the health app. `sentrux check .` enforces them; `sentrux gate .`
-# compares against the committed baseline (.sentrux/baseline.json) and fails on regression.
-# Move the baseline only in a reviewed commit (`sentrux gate --save .`), never to make a red check pass.
+# Structural rules for the health app. `bun run check:structure` (scripts/check-structure.sh) runs
+# `sentrux check` and `sentrux gate` against the committed baseline (.sentrux/baseline.json) on the
+# app only, without noop/. Move the baseline only in a reviewed commit (`--save`), never to make a
+# red check pass.
 [constraints]
 max_cycles = 0
 no_god_files = true

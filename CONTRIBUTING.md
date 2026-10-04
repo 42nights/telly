@@ -1,7 +1,8 @@
 # Contributing to the health app
 
-These rules apply to `health/` and to the health issues. NOOP's own rules are in the repository root
-`AGENTS.md` and `docs/CONTRIBUTING.md`. The plan is [`docs/plan.md`](../docs/plan.md).
+These rules apply to the health app at the repository root and to the health issues. NOOP is a
+separate project in `noop/`; its own rules are in `noop/AGENTS.md` and `noop/docs/CONTRIBUTING.md`.
+The plan is [`docs/plan.md`](docs/plan.md).
 
 ## Issue-first coordination
 
@@ -24,7 +25,7 @@ secrets"), never its value.
 
 ## Before you push
 
-Run from `health/`:
+Run from the repository root:
 
 ```bash
 bun install
@@ -32,11 +33,11 @@ bun run check          # Biome format + lint, writes fixes
 bun run check-types    # strict TypeScript across every workspace
 bun run test           # behavior tests
 bun run check:quality  # Fallow
-sentrux check . && sentrux gate .   # if sentrux is installed; CI runs it anyway
+bun run check:structure  # Sentrux, on the app only (needs the sentrux binary; CI runs it anyway)
 ```
 
 CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single required status is
-`health / required`. It fails if any check fails, is cancelled, or is skipped while `health/` changed.
+`health / required`. It fails if any check fails, is cancelled, or is skipped while the app changed.
 
 ## Rules the gates enforce
 
@@ -50,11 +51,12 @@ CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single requ
   (`.sentrux/rules.toml`) checks relative imports, cycles, and god files.
 - **No dead code:** Fallow fails on unused files, exports, and dependencies, and on duplicated blocks.
   Delete what you do not use; do not add suppressions to make the check pass.
-- **Sentrux baseline:** `sentrux gate .` fails when the structure gets worse than
-  `.sentrux/baseline.json`. If a change makes the structure legitimately different, run
-  `sentrux gate --save .` and commit the new baseline in the same pull request, with the reason in the
-  description. Never move the baseline only to turn a red check green. Sentrux reads only files that
-  git tracks: `git add` new files before you run it locally.
+- **Sentrux baseline:** `bun run check:structure` fails when the structure gets worse than
+  `.sentrux/baseline.json`. Sentrux cannot exclude paths, so `scripts/check-structure.sh` copies the
+  files outside `noop/` to a temporary directory and runs there. If a change makes the structure
+  legitimately different, run `sh scripts/check-structure.sh --save` and commit the new baseline in
+  the same pull request, with the reason in the description. Never move the baseline only to turn a
+  red check green. The script reads tracked and untracked, not ignored, files.
 - **Tests:** keep the suite small. Add a test only for a real boundary: family access, data quality,
   durable delivery, or a contract that must reject bad input. Do not test wording, wiring, or
   configuration.

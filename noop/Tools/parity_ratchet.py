@@ -72,7 +72,7 @@ def _read_current_dispositions(root: Path) -> dict:
 def _read_base(root: Path, base: str, relative: str) -> dict | None:
     try:
         raw = subprocess.check_output(
-            ["git", "show", f"{base}:{relative}"],
+            ["git", "show", f"{base}:./{relative}"],
             cwd=root,
             text=True,
             stderr=subprocess.DEVNULL,
