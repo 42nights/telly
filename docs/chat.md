@@ -19,6 +19,8 @@ Errors use `ApiError`:
 
 The client makes a `clientId` (letters, digits, `_`, `-`, at most 128) one time for each message. After a lost reply, it sends the same `clientId` again. The database module (`sendMessage` in `spacetimedb/src/index.ts`) keeps the first stored copy, so the message is stored one time. To catch up after a disconnect, the client reads `GET /messages?after=<last id>`.
 
+The web client keeps each message in a saved queue on the device (`apps/web/src/lib/pending.ts`) until the server stores it. The queue keeps the first `clientId`. It sends again on start, when the browser goes online, after sign-in, and every 15 s. A reload, a restart, or a lost connection therefore stores the message one time (issue #45). Only the signed-in identity that saved an action sends it. A network failure, `401`, or `503` keeps the action. Any other error reply, such as `400` or `403`, removes it.
+
 ## Family questions
 
 By captain decision, Gemini is the only chat model for family questions, and ElevenLabs stays for speech. Grok is not used. The Gemini adapter and the question routes (`POST /ask`, `POST /ask/voice`) are described in [`ask.md`](ask.md). The provider-independent family tools belong to this area.
