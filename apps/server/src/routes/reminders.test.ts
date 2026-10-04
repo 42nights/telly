@@ -292,8 +292,8 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 							);
 							const app = familyApp(db, familyId, reminderRoutes());
 							yield* send(app, "PUT", "/reminder-settings", settings("UTC"));
-							// At least 30 s ahead, so the database never sees this minute as past.
-							const time = wallClock(Date.now() + 90_000, "UTC");
+							// At least 10 s ahead, so the database never sees this minute as past.
+							const time = wallClock(Date.now() + 70_000, "UTC");
 							const reminder = Schema.decodeUnknownSync(Reminder)(
 								(yield* send(app, "POST", "/reminders", {
 									kind: "medication",
