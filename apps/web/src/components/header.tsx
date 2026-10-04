@@ -10,6 +10,7 @@ import {
 const links = [
 	{ to: "/hud", label: "Home" },
 	{ to: "/medicine", label: "Medicine" },
+	{ to: "/bedtime", label: "Bedtime" },
 	{ to: "/trip", label: "Going out" },
 	{ to: "/family", label: "Family" },
 	{ to: "/care-profile", label: "Care plan" },
