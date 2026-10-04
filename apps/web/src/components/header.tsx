@@ -1,11 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 
-import {
-	getSessionToken,
-	onSessionChange,
-	setSessionToken,
-} from "@/lib/session";
+import { setSessionToken } from "@/lib/session";
 
 const links = [
 	{ to: "/hud", label: "Home" },
@@ -22,13 +17,8 @@ const links = [
 	{ to: "/settings", label: "Settings" },
 ] as const;
 
-/** The app's taskbar: one raised button per screen; the current screen shows pressed. */
+/** The signed-in app's taskbar: one raised button per screen; the current screen shows pressed. */
 export default function Header() {
-	const [signedIn, setSignedIn] = useState(() => getSessionToken() !== null);
-	useEffect(
-		() => onSessionChange(() => setSignedIn(getSessionToken() !== null)),
-		[],
-	);
 	return (
 		<nav
 			aria-label="Screens"
@@ -44,23 +34,13 @@ export default function Header() {
 					{label}
 				</Link>
 			))}
-			{signedIn ? (
-				<button
-					type="button"
-					className="win95-tab ml-auto"
-					onClick={() => setSessionToken(null)}
-				>
-					Sign out
-				</button>
-			) : (
-				<Link
-					to="/sign-in"
-					className="win95-tab ml-auto"
-					activeProps={{ "aria-current": "page" }}
-				>
-					Sign in
-				</Link>
-			)}
+			<button
+				type="button"
+				className="win95-tab ml-auto"
+				onClick={() => setSessionToken(null)}
+			>
+				Sign out
+			</button>
 		</nav>
 	);
 }

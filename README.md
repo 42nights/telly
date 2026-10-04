@@ -256,7 +256,7 @@ flowchart LR
     routes -->|"verify issuer keys"| db[("SpacetimeDB<br/>family membership")]
 ```
 
-- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership.
+- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership. Without a valid session, every web page shows only the sign-in screen, which returns to the requested page after sign-in.
 - **Code:** `apps/server/src/auth.ts`, `routes/sign-in.ts`. **Keys:** `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_SECRET`.
 - **Proof:** real Google discovery and keys loaded, and a forged token got 401 ([#162](https://github.com/ayaangazali/telly/pull/162)). Web and phone flows: [#130](https://github.com/ayaangazali/telly/pull/130).
 - **Limits:** the consent screen is in Testing mode, so only listed test users can sign in. No phone sign-in has run on a device.
