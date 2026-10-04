@@ -2,10 +2,11 @@
 # NOOP's own workflows are separate and cover noop/.
 #
 # `changes` picks the checks whose files changed (one paths filter per check; the shared root files
-# in `&all` run every check) and the rest are skipped, so docs- or data-only PRs run nothing heavy.
-# Every PR still gets `health / required`: it passes only when each picked check succeeded and each
-# other check was skipped. Make `health / required` the one required status check; never require
-# the individual jobs.
+# in `&all` run every check). When it picks none, the `check` matrix gets the one entry
+# `no app code changed`, which lists the changed files and succeeds, so no job is ever skipped (an
+# empty matrix shows as a grey `matrix.name skipped`). `structure` takes seconds and runs every time.
+# `health / required` passes only when `changes`, `check` and `structure` all succeeded. Make
+# `health / required` the one required status check; never require the individual jobs.
 #
 # `check` and `structure` run on the runner named by the repository variable HEALTH_RUNNER (a
 # Namespace label, see README.md) and on ubuntu-latest when it is unset. `changes` and
@@ -30,6 +31,7 @@ permissions:
   contents: read
 
 env:
+  NO_CODE: no app code changed
   SENTRUX_VERSION: v0.5.7
   SENTRUX_SHA256: 3237f80fe20d54aad4deefa8a143f0d60543bb5d2d6ad891eb42432f155725a6
   SPACETIME_VERSION: v2.10.2
@@ -45,20 +47,23 @@ jobs:
       # JSON lists, for example ["lint","db"] and ["apps/web"]; everything on a manual run.
       checks: ${{ steps.pick.outputs.checks }}
       workspaces: ${{ steps.pick.outputs.workspaces }}
+      files: ${{ steps.filter.outputs.any_files }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request'
       # A pull request is compared with its base. A push is compared with the commit before the push
       # (github.event.before..github.sha), because base is the pushed branch itself, so a UI-only
       # merge runs only the UI checks on main.
-      # A filter name without `./` is a check. `lint` and `structure` have the same files, so the
-      # `check` matrix is never empty when `structure` runs. A filter name with `./` is a workspace:
-      # its `check-types` and `bun test` run when it or a workspace it imports changed.
+      # A filter name without `./` is a check. A filter name with `./` is a workspace: its
+      # `check-types` and `bun test` run when it or a workspace it imports changed. `any` only lists
+      # the changed files for the `no app code changed` entry.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           base: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          list-files: json
           filters: |
+            any: '**'
             lint: &source
               - &all
                 - '.github/workflows/health.yml'
@@ -79,7 +84,6 @@ jobs:
               - '.sentrux/**'
               - '.gitignore'
             quality: *source
-            structure: *source
             ./apps/web:
               - *all
               - 'apps/web/**'
@@ -132,33 +136,37 @@ jobs:
               - *all
               - 'agents/fetch/**'
               - 'packages/contracts/**'
-      # `types` and `test` run when a workspace changed.
+      # `types` and `test` run when a workspace changed; NO_CODE when nothing was picked.
       - id: pick
         env:
-          CHANGED: ${{ github.event_name == 'workflow_dispatch' && '["lint","quality","structure","build-smoke","web-smoke","db","fetch-agent","./apps/web","./apps/server","./apps/native","./packages/ui","./packages/contracts","./packages/db","./spacetimedb"]' || steps.filter.outputs.changes }}
+          CHANGED: ${{ github.event_name == 'workflow_dispatch' && '["lint","quality","build-smoke","web-smoke","db","fetch-agent","./apps/web","./apps/server","./apps/native","./packages/ui","./packages/contracts","./packages/db","./spacetimedb"]' || steps.filter.outputs.changes }}
         run: |
           echo "$CHANGED" | jq -c 'map(select(startswith("./")))' | sed 's/^/workspaces=/' >> "$GITHUB_OUTPUT"
-          echo "$CHANGED" | jq -c 'map(select(startswith("./") | not)) + (if any(startswith("./")) then ["types","test"] else [] end)' |
-            sed 's/^/checks=/' >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" | jq -c --arg none "$NO_CODE" 'map(select(. != "any")) |
+            map(select(startswith("./") | not)) + (if any(startswith("./")) then ["types","test"] else [] end) |
+            if . == [] then [$none] else . end' | sed 's/^/checks=/' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   check:
     needs: changes
-    if: needs.changes.outputs.checks != '[]'
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         name: ${{ fromJSON(needs.changes.outputs.checks) }}
-        exclude:
-          - name: structure
     name: ${{ matrix.name }}
     steps:
+      - if: matrix.name == env.NO_CODE
+        env:
+          FILES: ${{ needs.changes.outputs.files }}
+        run: echo "No check covers these files:" && echo "$FILES" | jq -r '.[]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: matrix.name != env.NO_CODE
       # A persistent self-hosted runner (telly-local) already has the pinned Bun on PATH and keeps
       # ~/.bun/install/cache and its tool cache between jobs, so the Bun download and the cache
       # restore run only when the runner lacks them (GitHub-hosted and Namespace runners).
       - name: Find tools already on the runner
+        if: matrix.name != env.NO_CODE
         id: host
         run: |
           bun=$(sed -n 's/.*"packageManager": "bun@\([^"]*\)".*/\1/p' package.json)
@@ -166,7 +174,7 @@ jobs:
           [ -d ~/.bun/install/cache ] && echo bun-cache=true >> "$GITHUB_OUTPUT"
           true
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        if: steps.host.outputs.bun != 'true'
+        if: matrix.name != env.NO_CODE && steps.host.outputs.bun != 'true'
         with:
           bun-version-file: package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -192,12 +200,13 @@ jobs:
           fi
           echo "$dir" >> "$GITHUB_PATH"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: steps.host.outputs.bun-cache != 'true'
+        if: matrix.name != env.NO_CODE && steps.host.outputs.bun-cache != 'true'
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
+      - if: matrix.name != env.NO_CODE
+        run: bun install --frozen-lockfile
       - if: matrix.name == 'lint'
         run: bun run lint
       # Only the workspaces that `changes` picked.
@@ -254,8 +263,6 @@ jobs:
         run: bun scripts/coverage-summary.ts --min 95 coverage/unit/lcov.info coverage/db/lcov.info
 
   structure:
-    needs: changes
-    if: contains(fromJSON(needs.changes.outputs.checks), 'structure')
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -286,15 +293,10 @@ jobs:
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - env:
-          CHECKS: ${{ needs.changes.outputs.checks }}
           CHANGES: ${{ needs.changes.result }}
           CHECK: ${{ needs.check.result }}
           STRUCTURE: ${{ needs.structure.result }}
         run: |
-          echo "checks=$CHECKS changes=$CHANGES check=$CHECK structure=$STRUCTURE"
-          [ "$CHANGES" = success ] || { echo "::error::change detection did not succeed"; exit 1; }
-          # A picked check must succeed; a check that was not picked must be skipped.
-          want_check=skipped; [ "$CHECKS" = '[]' ] || want_check=success
-          want_structure=skipped; case "$CHECKS" in *'"structure"'*) want_structure=success ;; esac
-          [ "$CHECK" = "$want_check" ] && [ "$STRUCTURE" = "$want_structure" ] && exit 0
-          echo "::error::check is $CHECK (want $want_check), structure is $STRUCTURE (want $want_structure)"; exit 1
+          echo "changes=$CHANGES check=$CHECK structure=$STRUCTURE"
+          [ "$CHANGES" = success ] && [ "$CHECK" = success ] && [ "$STRUCTURE" = success ] && exit 0
+          echo "::error::changes, check and structure must all succeed"; exit 1

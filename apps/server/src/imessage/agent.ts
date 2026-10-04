@@ -35,6 +35,20 @@ export const iMessageHandler = (deps: {
 			);
 			return;
 		}
+		// Read receipt and typing go out with the answer, not before it: they never delay the reply.
+		// Both are best-effort; a failure only costs the indicator.
+		const arrived = Date.now();
+		const shown = Promise.allSettled([
+			space.read(message),
+			space.startTyping(),
+		]).then((results) => {
+			for (const result of results)
+				if (result.status === "rejected")
+					console.warn(
+						"imessage: read receipt or typing failed",
+						result.reason,
+					);
+		});
 		const question = Schema.decodeUnknownOption(FamilyQuestion)({
 			question: message.content.text,
 		});
@@ -47,10 +61,20 @@ export const iMessageHandler = (deps: {
 				reply = unavailableReply;
 			}
 		}
+		const answered = Date.now();
+		// Typing must start before the reply, or the indicator would stay after it.
+		await shown;
 		try {
 			await space.send(reply);
 		} catch (error) {
 			console.error("imessage: send failed", error);
 		}
+		const sent = Date.now();
+		const written = message.timestamp.getTime();
+		console.log(
+			`imessage: replied ${sent - written} ms after the message was written (delivery ${arrived - written} ms, answer ${answered - arrived} ms, send ${sent - answered} ms)`,
+		);
+		// Also clears the indicator after a failed send.
+		await space.stopTyping().catch(() => {});
 	};
 };

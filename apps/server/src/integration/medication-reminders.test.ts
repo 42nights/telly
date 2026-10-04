@@ -31,6 +31,7 @@ import {
 	errorOf,
 	integration,
 	json,
+	shareHealthRecords,
 	startIntegration,
 	type User,
 } from "./harness";
@@ -422,8 +423,9 @@ describe.skipIf(!integration)("medication reminders", () => {
 			).toEqual(detail);
 	});
 
-	test("a second family member sees the acknowledged and snoozed states, not the owner's medicine", async () => {
+	test("a second family member with health records sees the acknowledged and snoozed states, not the owner's medicine", async () => {
 		await addMember(owner, family.path, member);
+		await shareHealthRecords(owner, family.path, member);
 		const seen = await ownOccurrences(member);
 		expect(seen).toEqual(
 			expect.arrayContaining(

@@ -71,8 +71,7 @@ test("a person who is not a member sees the refusal instead of the composer", as
 	});
 	renderRoute("/chat");
 
-	expect(await screen.findByText("Not a member of this family")).toBeTruthy();
-	expect(screen.getByText("Not a member of fam-1.")).toBeTruthy();
+	expect(await screen.findByText("Not shared with you")).toBeTruthy();
 	expect(
 		screen.getByRole("region", { name: "Family chat · Grandma Rose" }),
 	).toBeTruthy();

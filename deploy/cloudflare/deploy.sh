@@ -54,6 +54,8 @@ jq -n '{TELLY_SECRETS_PULL_TOKEN: env.TELLY_SECRETS_PULL_TOKEN}' >"$tmp/secrets.
 # run_worker_first: every request runs the Worker first, so it can serve the landing page on
 # LANDING_HOST. ponytail: each asset request then counts against the Workers request quota; move the
 # landing to an assets-only Worker if traffic nears it.
+# triggers: only `telly` pings its API every 5 minutes (worker.js `scheduled`), so its one basic
+# container never sleeps; that costs about $8 a month (docs/deploy.md). The candidate gets no cron.
 ship() {
 	jq -n --arg name "$1" --arg image "$image" --arg web "$tmp/web" --arg id "$(date -u +%Y%m%dT%H%M%SZ)" '{
 		name: $name,
@@ -67,6 +69,7 @@ ship() {
 		containers: [{ class_name: "Api", image: $image, max_instances: 2, instance_type: "basic" }],
 		durable_objects: { bindings: [{ name: "API", class_name: "Api" }] },
 		migrations: [{ tag: "v1", new_sqlite_classes: ["Api"] }],
+		triggers: { crons: (if $name == "telly" then ["*/5 * * * *"] else [] end) },
 		vars: (env | {TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
 			"CORS_ORIGIN", "LANDING_HOST", "TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
 			"SPACETIMEDB_DATABASE", "FINCHNODE_MODE", "TELLY_R2_ACCOUNT_ID", "TELLY_R2_BUCKET",

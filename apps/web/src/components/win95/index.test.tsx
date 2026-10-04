@@ -63,11 +63,20 @@ describe("ApiNotice", () => {
 		expect(status.textContent).toContain("Sign in to see alerts.");
 	});
 
+	test("forbidden is a calm notice without the server's message", () => {
+		const view = render(
+			<ApiNotice
+				state={{ kind: "forbidden", message: "Ask a member to add you." }}
+				what="alerts"
+			/>,
+		);
+		expect(view.queryByRole("alert")).toBeNull();
+		const status = view.getByRole("status");
+		expect(status.textContent).toContain("Not shared with you");
+		expect(status.textContent).not.toContain("Ask a member to add you.");
+	});
+
 	test.each([
-		[
-			{ kind: "forbidden", message: "Ask a member to add you." } as const,
-			"Not a member of this family",
-		],
 		[
 			{ kind: "unavailable", message: "The database is down." } as const,
 			"Alerts unavailable",
