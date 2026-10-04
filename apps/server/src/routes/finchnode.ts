@@ -72,22 +72,33 @@ const connectedRoutes = (finchnode: Finchnode) =>
 				synthetic: finchnode.synthetic,
 			} satisfies FinchnodeSession);
 		})
-		.get("/finchnode/labs", async (c) => {
-			const { db, familyId } = c.var;
-			// A subject linked under another configuration (demo, sandbox, live) never reaches this one.
-			const subjects = [...db.connection.db.myFinchnodeLinks.iter()]
-				.filter(
-					(row) =>
-						row.familyId === familyId && row.synthetic === finchnode.synthetic,
-				)
-				.map((row) => row.subject);
-			const results = await Promise.all(
-				subjects.map((subject) =>
-					subjectLabs(finchnode, subject, c.req.raw.signal),
+		.get("/finchnode/labs", async (c) =>
+			c.json({
+				subjects: await familyLabs(
+					finchnode,
+					c.var.db,
+					c.var.familyId,
+					c.req.raw.signal,
 				),
-			);
-			return c.json({ subjects: results } satisfies FinchnodeLabs);
-		});
+			} satisfies FinchnodeLabs),
+		);
+
+/** The labs of every subject the family linked under this configuration. */
+export const familyLabs = (
+	finchnode: Finchnode,
+	db: FamilyDb,
+	familyId: bigint,
+	signal: AbortSignal,
+) =>
+	Promise.all(
+		// A subject linked under another configuration (demo, sandbox, live) never reaches this one.
+		[...db.connection.db.myFinchnodeLinks.iter()]
+			.filter(
+				(row) =>
+					row.familyId === familyId && row.synthetic === finchnode.synthetic,
+			)
+			.map((row) => subjectLabs(finchnode, row.subject, signal)),
+	);
 
 /** Family routes for FinchNode records. Without a configuration every route is `unavailable`. */
 export const finchnodeRoutes = (finchnode: Finchnode | undefined) =>

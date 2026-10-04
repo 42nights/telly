@@ -4,8 +4,9 @@ import { VoiceTranscript } from "@health/contracts/voice";
 import { useEffect, useRef, useState } from "react";
 
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
+import { type Outcome, submitAction } from "@/lib/pending";
 
-import { failureText, mergeMessages, type Outbox, outboxFor } from "./logic";
+import { mergeMessages } from "./logic";
 
 const POLL_MS = 5_000;
 /** The server returns at most this many messages after a cursor. */
@@ -23,7 +24,6 @@ export function useChat(familyId: string) {
 	const [read, setRead] = useState<ReadState>({ kind: "loading" });
 	const [refreshKey, setRefreshKey] = useState(0);
 	const last = useRef<string | null>(null);
-	const outbox = useRef<Outbox | null>(null);
 
 	useEffect(() => {
 		void refreshKey;
@@ -67,21 +67,19 @@ export function useChat(familyId: string) {
 
 	const refresh = () => setRefreshKey((key) => key + 1);
 
-	/** Sends `body` to the family. Resolves null once stored, otherwise why it was not sent. */
-	const send = async (body: string): Promise<string | null> => {
-		const message: SendFamilyMessage = outboxFor(outbox.current, body);
-		outbox.current = message;
-		const result = await apiRequest(null, familyPath(familyId, "/messages"), {
-			method: "POST",
-			body: message,
-		});
-		if (result.kind !== "ready") {
-			console.error("Family message not sent:", result);
-			return failureText(result);
-		}
-		outbox.current = null;
-		refresh();
-		return null;
+	/**
+	 * Sends `body` to the family through the device's pending queue, so a lost reply, a reload, or a
+	 * restart stores it once.
+	 */
+	const send = async (body: string): Promise<Outcome> => {
+		const payload: Omit<SendFamilyMessage, "clientId"> = { body };
+		const outcome = await submitAction(
+			familyPath(familyId, "/messages"),
+			payload,
+		);
+		if (outcome.kind === "sent") refresh();
+		else console.error("Family message not stored yet:", outcome);
+		return outcome;
 	};
 
 	/** Turns a recording into text with `POST /voice/transcriptions`. */

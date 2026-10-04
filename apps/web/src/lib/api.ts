@@ -16,8 +16,12 @@ export type ApiFailure =
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
-	/** The server could not be reached, or it replied with something else. */
-	| { readonly kind: "error"; readonly message: string };
+	/** The server could not be reached (`unreachable`), or it replied with something else. */
+	| {
+			readonly kind: "error";
+			readonly message: string;
+			readonly unreachable?: true;
+	  };
 
 export type ApiResult<T> =
 	| { readonly kind: "ready"; readonly value: T }
@@ -82,7 +86,11 @@ export const apiRequest = async <T>(
 		});
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 	if (!response.ok)
 		return failureFor(
@@ -128,52 +136,59 @@ export const apiBlob = async (
 		return { kind: "ready", value: await response.blob() };
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 };
 
 /**
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
- * its failure visible: the last good value is not shown as current.
+ * its failure visible: the last good value is not shown as current. A new `path` (such as another
+ * selected person) shows loading until its own reply: one person's data never shows as another's.
  */
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
 	path: string | null,
 	options: { readonly pollMs?: number; readonly refreshKey?: unknown } = {},
 ): ApiState<T> {
-	const [state, setState] = useState<ApiState<T>>({ kind: "loading" });
+	const [read, setRead] = useState<{
+		readonly path: string;
+		readonly state: ApiState<T>;
+	} | null>(null);
 	const { pollMs, refreshKey } = options;
 	useEffect(() => {
 		void refreshKey;
-		if (path === null) {
-			setState({ kind: "loading" });
-			return;
-		}
+		if (path === null) return;
 		let controller = new AbortController();
-		const read = () => {
+		const load = () => {
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
 			apiRequest(schema, path, { signal })
 				.then((result) => {
 					if (signal.aborted) return;
-					setState(
-						result.kind === "ready" ? { ...result, at: Date.now() } : result,
-					);
+					setRead({
+						path,
+						state:
+							result.kind === "ready" ? { ...result, at: Date.now() } : result,
+					});
 				})
 				.catch(() => {});
 		};
-		read();
-		const stop = onSessionChange(read);
-		const timer = pollMs === undefined ? undefined : setInterval(read, pollMs);
+		load();
+		const stop = onSessionChange(load);
+		const timer = pollMs === undefined ? undefined : setInterval(load, pollMs);
 		return () => {
 			stop();
 			clearInterval(timer);
 			controller.abort();
 		};
 	}, [schema, path, pollMs, refreshKey]);
-	return state;
+	return read !== null && read.path === path ? read.state : { kind: "loading" };
 }
 
 /** A path inside one family: `familyPath("123", "/alerts")` is `/api/families/123/alerts`. */

@@ -10,7 +10,7 @@ Alzheimer's care first. Phone and web first. Glasses optional.
 </div>
 
 > [!IMPORTANT]
-> Telly is in early development. The workspace and the typed API contracts exist. The product features do not exist yet.
+> Telly is in early development. The server API and the web screens exist, and they are tested only with local stand-ins and synthetic data. No live provider call is verified, the phone app is still a scaffold, and no hosted instance exists.
 > Telly is not a medical device and makes no medical safety claims.
 
 ## Overview
@@ -39,16 +39,18 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | CI: lint, types, tests, Fallow, Sentrux, server build and runtime smoke | Runs on Namespace runners ([runs](https://github.com/ayaangazali/telly/actions/workflows/health.yml)) |
 | NOOP-to-server connection | Stub only. Reports `not_connected`, with no transport, readings, or nudges |
 | Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database |
-| Sign-in check and family data API (server only) | OIDC token check and family access on every `/api` route except `/api/sources`. Tested with a local test issuer only. The production issuer is not chosen, and no sign-in screen exists ([#4](https://github.com/ayaangazali/telly/issues/4)) |
-| Threshold alerts and durable delivery (server only) | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
-| Lab report API (server only) | Generate, fill, and review. Hospital submission is unavailable: Finchnode only reads records ([#17](https://github.com/ayaangazali/telly/issues/17), [#8](https://github.com/ayaangazali/telly/issues/8)) |
-| Finchnode laboratory results (server only) | Tested against the keyless public demo with fictional patients. No sandbox or live key is configured |
-| Product features from the overview | Planned |
-| Gemini medicine detection (server only) | Route, frame mapping, and errors are tested against a local protocol server. No live Gemini call is verified yet, and no client draws the markers ([#15](https://github.com/ayaangazali/telly/issues/15)) |
+| Web app: HUD, medicine finder, family phone, family dashboard, family chat, care contacts, lab reports, and settings | The screens call the real server routes. Tested in a browser against a local server, a local database, a local test sign-in issuer, and a local stand-in for Gemini ([#11](https://github.com/ayaangazali/telly/issues/11), [#14](https://github.com/ayaangazali/telly/issues/14)) |
+| Sign-in and family data API | OIDC token check and family access on every `/api` route except `/api/sources`. The web app has a sign-in screen (authorization code with PKCE). Tested with a local test issuer only. The production issuer is not chosen, and the phone app has no sign-in screen ([#4](https://github.com/ayaangazali/telly/issues/4)) |
+| Phone app | Scaffold only: one screen shows `GET /api/sources`. No product feature exists on the phone yet |
+| Threshold alerts and durable delivery | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. The web HUD shows the family's alerts. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
+| Family contact ladder: care needs, contact order, and accepted responsibility | The database runs each step on its own timer and records each attempt once. Calls are simulated, and messages stay in the app: no phone or SMS provider exists. Tested on a local database ([#30](https://github.com/ayaangazali/telly/issues/30)) |
+| Lab reports | Generate, fill, and review, on the server and on the web reports screen. Hospital submission is unavailable: Finchnode only reads records ([#17](https://github.com/ayaangazali/telly/issues/17), [#8](https://github.com/ayaangazali/telly/issues/8)) |
+| Finchnode laboratory results | Tested against the keyless public demo with fictional patients. The web app labels these results as demo data. No sandbox or live key is configured |
+| Gemini medicine detection | The route, frame mapping, and errors are tested against a local protocol server. The web medicine screen draws the box and the arrow on the camera frame. No live Gemini call is verified yet ([#15](https://github.com/ayaangazali/telly/issues/15)) |
 | Fetch.ai agent tools: server caller, bridge and worker uAgents (`agents/fetch/`), the signed-in route `POST /api/families/:familyId/tools`, and Agent Chat Protocol chat on the worker (synthetic records only) | Tested end to end on a local database with local agents and a local test sign-in issuer. No live Agentverse or ASI:One round trip is verified yet, and no agent is published |
 | Gemma health cues (server only): `POST /api/families/:familyId/cues` and the River training entry point (`training/`) | The route is tested on a local database against a local protocol server. River access, Gemma on River, a trained model, and a deployment are not confirmed ([#10](https://github.com/ayaangazali/telly/issues/10), [#9](https://github.com/ayaangazali/telly/issues/9)) |
-| Family questions (server only): Gemini chat with Fetch.ai tools, `POST /api/families/:familyId/ask` and `/ask/voice` with ElevenLabs | Tested on the real server with a local database and local Gemini, ElevenLabs, and bridge servers. No live Gemini or ElevenLabs call is verified yet ([#86](https://github.com/ayaangazali/telly/issues/86)) |
-| Providers: ElevenLabs | Planned. No provider is connected |
+| Family questions: Gemini chat with Fetch.ai tools, `POST /api/families/:familyId/ask` and `/ask/voice`, with follow-ups and attached files | Tested on the real server with a local database and local Gemini, ElevenLabs, and bridge servers. No live Gemini or ElevenLabs call is verified yet ([#86](https://github.com/ayaangazali/telly/issues/86), [docs/ask.md](docs/ask.md)) |
+| Voice: ElevenLabs transcription and speech (`/voice/transcriptions`, `/voice/speech`) | Routes and errors are tested against a local protocol server. No live ElevenLabs call is verified yet, and the web HUD shows voice as unavailable without a key ([#16](https://github.com/ayaangazali/telly/issues/16), [docs/voice.md](docs/voice.md)) |
 | Deployment | Planned. No hosted instance exists |
 | Optional glasses adapter | Planned |
 
@@ -73,13 +75,15 @@ bun run dev
 
 | App | Address |
 | --- | --- |
-| Web HUD and family dashboard | <http://localhost:3001> |
+| Web app (opens the HUD; the other screens are in the taskbar) | <http://localhost:3001> |
 | Server | <http://localhost:3000> (`GET /health`, `GET /api/sources`, and the signed-in `/api` routes below) |
 | Phone app | Open it in Expo Go |
 
 To start one app only, use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native`.
 
 On a physical phone, set `EXPO_PUBLIC_SERVER_URL` in `apps/native/.env` to the LAN address of your computer, for example `http://192.168.1.20:3000`. Then start the server with `HOST=0.0.0.0`.
+
+The web sign-in screen needs `VITE_OIDC_ISSUER` and `VITE_OIDC_CLIENT_ID` in `apps/web/.env`. Without them, the screen says that sign-in is not set up, and the signed-in screens cannot load family data.
 
 Each app keeps its environment schema in `.env.schema`. Varlock generates `src/env.ts` during `bun install`. After you change a schema, run `bun run env:generate`. Keep secrets in ignored env files, never in Git.
 
@@ -108,6 +112,13 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `GET …/finchnode/labs` | Laboratory results of the family's linked patients, with source, units, ranges, and consent state |
 | `GET /api/families/:familyId/messages?after=<id>` | Family messages after `after`, oldest first, at most 200 |
 | `POST /api/families/:familyId/messages` | Send `{ clientId, body }`; a resend with the same `clientId` returns the stored message ([docs/chat.md](docs/chat.md)) |
+| `POST /api/families/:familyId/ask`, `POST …/ask/voice` | Ask a question about the family's records, as text with optional attached files or as a recording. Gemini answers with Fetch.ai data tools ([docs/ask.md](docs/ask.md)) |
+| `POST /api/families/:familyId/voice/transcriptions`, `POST …/voice/speech` | Turn a recording into text, or text into speech, with ElevenLabs ([docs/voice.md](docs/voice.md)) |
+| `POST /api/families/:familyId/tools` | Run one family data tool. The Fetch.ai worker is the caller |
+| `POST /api/families/:familyId/cues` | A Gemma health cue from validated samples. Advice only: it never changes thresholds or alerts |
+| `GET`, `PUT /api/families/:familyId/care/ladder` | Read or set the family's contact order |
+| `GET`, `POST …/care/needs`, `GET …/care/needs/:needId` | List care needs, raise one, or read one with its contact attempts |
+| `POST …/care/needs/:needId/responses` | The current contact sends `seen`, `answer`, `accept`, or `decline`; the member who accepted sends `help_confirmed` |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 
@@ -198,7 +209,7 @@ Queues and retention: each alert has one delivery row in the database, so the ou
 
 ## Architecture
 
-This diagram follows the system diagram in the [approved plan](docs/board.html). Solid boxes exist today. Dashed boxes are planned.
+This diagram follows the system diagram in the [approved plan](docs/board.html). Solid boxes exist in code and are tested locally. Dashed boxes are planned, or have no verified live connection yet.
 
 ```mermaid
 flowchart TB
@@ -221,7 +232,7 @@ flowchart TB
         ai["Cloud inference<br/>Gemini vision · Gemma cues · ElevenLabs voice"]
         agents["Gemini family agents<br/>tools via Fetch.ai Agentverse"]
         db[("SpacetimeDB<br/>health data · alerts · messages")]
-        rules["Threshold rules<br/>fall · breathing · heart"]
+        rules["Threshold rules<br/>per metric and direction"]
         reports["Lab report generator"]
         river["Gemma training<br/>River AI"]
     end
@@ -241,7 +252,7 @@ flowchart TB
     reports --> finch --> hospital
 
     classDef planned stroke-dasharray: 5 5
-    class glasses,ai,agents,db,rules,reports,river,finch planned
+    class glasses,phone,ai,agents,river,finch planned
 ```
 
 | Part | Technology |
@@ -251,7 +262,7 @@ flowchart TB
 | Server | Node, Hono for HTTP, Effect 4 for service logic |
 | Contracts | Effect Schema in `@health/contracts` |
 | Data | SpacetimeDB (TypeScript module in `spacetimedb/`, generated bindings in `@health/db`) |
-| Providers (planned) | Gemini vision and family chat, ElevenLabs voice, Fetch.ai Agentverse tool routing, Finchnode report handoff, Gemma on River AI |
+| Providers (see [Status](#status) for what is verified) | Gemini vision and family chat, ElevenLabs voice, Fetch.ai Agentverse tool routing, Finchnode lab results, Gemma on River AI |
 
 ```text
 apps/
@@ -266,7 +277,7 @@ packages/
 spacetimedb/    SpacetimeDB module: family-scoped tables, reducers, and views
 agents/fetch/   Python uAgents bridge and worker for Fetch.ai Agentverse (outside the Bun workspace)
 training/       Gemma training on River AI (training/README.md)
-docs/           Approved planning board and plan summary
+docs/           Approved planning board, plan summary, and API notes (chat, ask, voice)
 noop/           NOOP, a separate project
 ```
 
