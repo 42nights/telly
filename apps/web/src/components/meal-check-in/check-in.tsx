@@ -182,7 +182,7 @@ function Prompt({
 	return (
 		<section
 			aria-labelledby="meal-check-in"
-			className="win95-raised mt-4 grid gap-3 p-4 text-[20px]"
+			className="win95-raised grid gap-3 p-4 text-[20px]"
 		>
 			<h2
 				className="flex items-center gap-2 font-semibold text-[22px]"
