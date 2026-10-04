@@ -5,7 +5,11 @@ import { MedicineDetections, type VisionFrame } from "@health/contracts/vision";
 import { Schema } from "effect";
 import { Hono } from "hono";
 import { ApiFailure, errorStatus } from "../http";
-import { GEMINI_VISION_MODEL, type GeminiConfig } from "../integrations/gemini";
+import {
+	GEMINI_FALLBACK_MODEL,
+	GEMINI_VISION_MODEL,
+	type GeminiConfig,
+} from "../integrations/gemini";
 import { imageSize, toFramePixels, visionRoutes } from "./vision";
 
 // Synthetic test frames only: a flat gray PNG and a header-only JPEG. No real camera image.
@@ -194,6 +198,22 @@ describe("medicine detection route", () => {
 			store: false,
 			input: [{ type: "text" }, { type: "image", mime_type: "image/png" }],
 		});
+	});
+
+	test("falls back to the steadier model when the primary one is overloaded", async () => {
+		reply = async (request) =>
+			((await request.json()) as { model: string }).model ===
+			GEMINI_VISION_MODEL
+				? new Response(null, { status: 503 })
+				: interaction(JSON.stringify({ detections: [] }));
+		const response = await post(body());
+		expect(response.status).toBe(200);
+		const result = Schema.decodeUnknownSync(MedicineDetections)(
+			await response.json(),
+			{ onExcessProperty: "error" },
+		);
+		expect(result.model).toBe(GEMINI_FALLBACK_MODEL);
+		expect(lastRequest?.json).toMatchObject({ model: GEMINI_FALLBACK_MODEL });
 	});
 
 	const failed = "Medicine detection failed";
