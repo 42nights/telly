@@ -36,13 +36,14 @@ PASS = {"reloc_rate": 0.90, "err_cm": 5.0, "err_px": 20.0}
 BASE = {
     "span": 120, "scan_frames": 24, "plain": False,  # session 1: arc in degrees around the box
     "light": (0.6, 1.4), "gradient": 0.4, "tint": 0.1,  # session 2 lighting relative to session 1
-    "find_frames": 12,
+    "find_frames": 12, "find_r": (1.0, 2.6),  # session 2 start distance from the box, metres
 }
 CASES = {
     "baseline": {},
     "short-scan": {"span": 8, "scan_frames": 4},
     "featureless-walls": {"plain": True},
     "big-lighting-change": {"light": (0.05, 0.1), "gradient": 0.8, "tint": 0.4},
+    "far-start": {"find_r": (3.0, 4.0)},  # start across the room (the far wall is about 3.9 m away)
 }
 
 
@@ -87,9 +88,9 @@ def scan_path(rng, pin, span, n):
     return poses
 
 
-def find_path(rng, pin, n):
+def find_path(rng, pin, n, r_range):
     """Session 2: start elsewhere, looking elsewhere, and turn toward the box while walking a little."""
-    phi, r, h = np.pi + rng.uniform(-1.0, 1.0), rng.uniform(1.0, 2.6), rng.uniform(1.0, 1.7)
+    phi, r, h = np.pi + rng.uniform(-1.0, 1.0), rng.uniform(*r_range), rng.uniform(1.0, 1.7)
     start = in_room(pin + (r * np.cos(phi), r * np.sin(phi), h - pin[2]))
     walk, look0 = rng.normal(0, (0.3, 0.3, 0.05)), pin + rng.normal(0, (0.3, 0.9, 0.4))
     look1 = pin + rng.normal(0, 0.05, 3)
@@ -221,7 +222,7 @@ def trial(job):
     request = {"type": "ar.findPin", "requestId": "sim", "containerId": CONTAINER_ID, "label": "Pills",
                "anchorId": saved["anchorId"], "worldMap": saved["worldMap"]}
     mpts, mdes, manchor = load_pin(request)
-    true2 = find_path(rng, pin, cfg["find_frames"])
+    true2 = find_path(rng, pin, cfg["find_frames"], cfg["find_r"])
     est2 = vio(rng, true2)
     light, tint = rng.uniform(*cfg["light"]), 1 + rng.uniform(-cfg["tint"], cfg["tint"], 3)
     # ARKit keeps matching the map while it tracks. A single PnP fix on distant, near-planar points can

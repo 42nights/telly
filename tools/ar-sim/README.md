@@ -36,9 +36,11 @@ Full run, 50 baseline trials and 20 trials per failure case:
 | short-scan | 20 | 85% | 35% | 1.63 / 3.42 / 3.75 | 1.7 / 5.1 / 6.1 | 35% |
 | featureless-walls | 20 | 100% | 70% | 1.17 / 3.90 / 4.32 | 2.5 / 5.6 / 7.1 | 70% |
 | big-lighting-change | 20 | 100% | 85% | 1.10 / 2.62 / 2.64 | 2.2 / 5.1 / 7.4 | 85% |
+| far-start | 20 | 100% | 95% | 1.47 / 3.25 / 3.70 | 1.8 / 3.9 / 5.1 | 95% |
 
 The bar applies to the baseline: relocalization in at least 90 percent of trials, and the p95 error at most 5 cm and at most 20 px. The baseline passes.
 A trial that does not relocalize shows no marker. No trial put a wrong marker on the screen: every relocalized trial, failure cases included, is within 5 cm and 20 px.
+The 5 cm bar is the marker error, not a room size: the box is 8 x 12 cm, so the marker must land on it. The `far-start` case starts session 2 3 to 4 m from the box, across the room from it.
 
 ![baseline](evidence/baseline-1.jpg)
 ![big lighting change](evidence/big-lighting-change-1.jpg)
