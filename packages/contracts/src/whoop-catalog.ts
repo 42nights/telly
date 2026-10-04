@@ -98,6 +98,7 @@ const SYNC =
 	"next history sync: ~15 min, 90 s after an event, 45–60 min on low refresh";
 const AFTER_SYNC = "recomputed on the phone after a history sync";
 const NOT_ROWS = "table exists, no rows from the WHOOP 5.0 / MG";
+const NO_SPO2 = "no SpO₂ samples from the WHOOP 5.0 / MG";
 
 const deviceId: Row = ["deviceId", "text", null, "metadata", "confirmed"];
 const ts: Row = ["ts", "int", "unix s", "metadata", "confirmed"];
@@ -201,8 +202,8 @@ const exported = [
 		],
 		["steps", "int", "steps", "computed", "unvalidated", null, "daily_steps"],
 		["activeKcalEst", "float", "kcal", "estimated", "unvalidated"],
-		["spo2Red", "float", null, "raw", "unvalidated", NOT_ROWS],
-		["spo2Ir", "float", null, "raw", "unvalidated", NOT_ROWS],
+		["spo2Red", "int", "ADC", "raw", "unvalidated", NO_SPO2],
+		["spo2Ir", "int", "ADC", "raw", "unvalidated", NO_SPO2],
 		["avgSdnn", "float", "ms SDNN", "computed", "unvalidated"],
 		[
 			"skinTempC",
@@ -341,8 +342,6 @@ const exported = [
 	]),
 ];
 
-const eventKind = (table: string) => strap(table, "on event", EVENT);
-
 const catalogOnly = [
 	...fields(strap("live.heartRate", "~1 Hz", LIVE), [
 		["bpm", "int", "bpm", "measured", "confirmed"],
@@ -461,7 +460,7 @@ const catalogOnly = [
 		["body_age", "float", "years", "computed", "unvalidated"],
 		["*", "float", null, "computed", "unvalidated"],
 	]),
-	...fields(eventKind("event.kind"), [
+	...fields(strap("event.kind", "on event", EVENT), [
 		["DOUBLE_TAP", "int", "unix s", "measured", "confirmed"],
 		["WRIST_ON", "int", "unix s", "measured", "confirmed", null, "on_wrist"],
 		["WRIST_OFF", "int", "unix s", "measured", "confirmed", null, "on_wrist"],

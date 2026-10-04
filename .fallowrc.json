@@ -3,6 +3,7 @@
 	"entry": [
 		"packages/db/src/**/*.ts",
 		"spacetimedb/src/**/*.test.ts",
+		"packages/contracts/src/**/*.test.ts",
 		"deploy/cloudflare/worker.js"
 	],
 	"duplicates": { "ignore": ["packages/db/src/**"] },
