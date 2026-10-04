@@ -71,7 +71,8 @@ bun run db:drill       # crash-restart and backup/restore drill on isolated loca
 ```
 
 CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single required status is
-`health / required`. It fails if any check fails, is cancelled, or is skipped while the app changed.
+`health / required`. It fails unless change detection, every picked check, and `structure` succeed.
+When no check covers the changed files, the one check `no app code changed` lists them and passes.
 
 For work that depends on an open pull request, use a stack (`gh stack`). Run `gh stack init`, then
 `gh stack add <branch>` for each next branch, and `gh stack submit` to open the pull requests. Health
