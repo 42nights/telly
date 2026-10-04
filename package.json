@@ -26,7 +26,8 @@
 		"check:quality": "fallow --fail-on-issues --fail-on-parse-error",
 		"check:structure": "sh scripts/check-structure.sh",
 		"db:generate": "rm -rf packages/db/src && spacetime generate --lang typescript --module-path spacetimedb --out-dir packages/db/src --yes",
-		"db:test": "sh scripts/db-test.sh"
+		"db:test": "sh scripts/db-test.sh",
+		"db:drill": "bun apps/server/scripts/backup-drill.ts"
 	},
 	"type": "module",
 	"workspaces": {

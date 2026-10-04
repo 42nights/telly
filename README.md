@@ -56,7 +56,7 @@ You need:
 - Node.js 24, for the server build and the smoke test
 - Expo Go on a phone, or an iOS or Android simulator, for the phone app
 - [Sentrux](https://github.com/sentrux/sentrux), only for `bun run check:structure`
-- The [SpacetimeDB CLI](https://spacetimedb.com/install) 2.10.2, only for `bun run db:generate` and `bun run db:test`
+- The [SpacetimeDB CLI](https://spacetimedb.com/install) 2.10.2, only for `bun run db:generate`, `bun run db:test`, and `bun run db:drill`
 
 Run from the repository root:
 
@@ -110,6 +110,7 @@ bun run check:quality     # Fallow: unused code, duplication, complexity, import
 bun run check:structure   # Sentrux rules and regression gate
 bun run --filter server build && bun run smoke   # Real server responses under Node
 bun run db:test           # Family-access, alert, and outbox tests on an isolated in-memory local SpacetimeDB
+bun run db:drill          # Crash-restart and backup/restore drill on isolated local data
 bun run build             # Production build of every app
 ```
 
@@ -131,6 +132,38 @@ The `check` and `structure` jobs run on the runner that the repository variable 
 - To return to GitHub-hosted runners, delete the variable: `gh variable delete HEALTH_RUNNER -R ayaangazali/telly`.
 
 The setup record is in [#21](https://github.com/ayaangazali/telly/issues/21).
+
+</details>
+
+<details>
+<summary><strong>Database limits, backup, and restore</strong></summary>
+
+<br>
+
+`apps/server/src/db.ts` bounds every database call:
+
+| Operation | Timeout | Retries | On failure |
+| --- | --- | --- | --- |
+| Open a connection (`openFamilyDb`) | 5 s per attempt | 2, after 250 ms and 500 ms | `DbUnavailable` |
+| Reducer or procedure call (`callDb`) | 5 s | none: a reducer call is not idempotent | `DbUnavailable`, or `DbRejected` when the database refuses it |
+| Read cached rows (`readFamilyRecords`) | none (local) | none | throws `DbUnavailable` when the connection has closed |
+
+A cancelled request or shutdown interrupts an open and closes its socket. A dropped connection is not reopened in place: the call in flight fails at once, the cached rows count as stale, and the next request opens a new connection. Routes map `DbUnavailable` to the `unavailable` API error, never to an empty result. With a token, the SDK first fetches a short-lived token over HTTP without a timeout; an interrupted open returns at once, but that fetch can stay open until the runtime closes it.
+
+**Back up.** SpacetimeDB 2.10.2 has no online backup command, so take a cold backup:
+
+1. Stop the database process (`SIGTERM`).
+2. Archive the whole data directory (`--data-dir`, by default `~/.local/share/spacetime/data`): `tar -czf backup.tar.gz -C <data-dir> .`
+3. Archive the identity-signing key pair with it: the files that `--jwt-priv-key-path` and `--jwt-pub-key-path` name, by default `~/.config/spacetime/id_ecdsa` and `id_ecdsa.pub`. Without them, the restored rows are intact, but no existing identity token is accepted. Keep this archive as secret as the keys.
+4. Start the database again.
+
+**Restore.** Restore into a new, empty directory, never over the live one:
+
+1. `mkdir <new-dir> && tar -xzf backup.tar.gz -C <new-dir>`
+2. `spacetime start --data-dir <new-dir> --jwt-priv-key-path <key> --jwt-pub-key-path <key>.pub --listen-addr 127.0.0.1:<port>`
+3. Open a connection with a known token and compare its rows with the expected values before you send traffic to it.
+
+`bun run db:drill` runs these steps with synthetic records in temporary directories and its own key pair. It also kills the database with `SIGKILL`, restarts it, and checks that every committed row is present. `DRILL_PORT` picks its ports (default 3600 and 3601). It fails unless the restored rows equal the written rows.
 
 </details>
 

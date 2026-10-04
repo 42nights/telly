@@ -80,14 +80,16 @@ jobs:
             run: bun run check:quality
           - name: build-smoke
             run: bun run --filter server build && bun run smoke && bun run --filter web build
-          # Fails when packages/db is stale against spacetimedb/, then runs the family-access
-          # tests against an isolated in-memory local database.
+          # Fails when packages/db is stale against spacetimedb/, then runs the family-access and
+          # connection-recovery tests against an isolated in-memory local database, then the
+          # crash-restart and backup/restore drill on temporary local data.
           - name: db
             run: >-
               bun run db:generate &&
               git diff --exit-code -- packages/db &&
               test -z "$(git status --porcelain -- packages/db)" &&
-              bun run db:test
+              bun run db:test &&
+              bun run db:drill
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -36,6 +36,7 @@ bun run check:quality  # Fallow
 bun run check:structure  # Sentrux, on the app only (needs the sentrux binary; CI runs it anyway)
 bun run db:generate    # after a spacetimedb/ change; commit packages/db with it (needs the spacetime CLI)
 bun run db:test        # family-access tests on an isolated local SpacetimeDB (needs the spacetime CLI)
+bun run db:drill       # crash-restart and backup/restore drill on isolated local data (needs the spacetime CLI)
 ```
 
 CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single required status is
