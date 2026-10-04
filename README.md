@@ -45,7 +45,8 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Finchnode laboratory results (server only) | Tested against the keyless public demo with fictional patients. No sandbox or live key is configured |
 | Product features from the overview | Planned |
 | Gemini medicine detection (server only) | Route, frame mapping, and errors are tested against a local protocol server. No live Gemini call is verified yet, and no client draws the markers ([#15](https://github.com/ayaangazali/telly/issues/15)) |
-| Providers: ElevenLabs, Grokbot, Fetch.ai Agentverse, Gemma on River AI | Planned. No provider is connected |
+| Fetch.ai worker (`agents/fetch/`) and family-scoped agent tools (`POST /api/families/:familyId/tools`) | Worker and tool route are tested against a local database and a local agent. No live Agentverse round trip is verified yet |
+| Providers: ElevenLabs, Grokbot, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
 | Optional glasses adapter | Planned |
 
@@ -259,13 +260,14 @@ packages/
   ui/           shadcn/ui components for the web app
   db/           Generated SpacetimeDB bindings, server-only (bun run db:generate)
 spacetimedb/    SpacetimeDB module: family-scoped tables, reducers, and views
+agents/fetch/   Python uAgents worker for Fetch.ai Agentverse (outside the Bun workspace)
 docs/           Approved planning board and plan summary
 noop/           NOOP, a separate project
 ```
 
 Clients import only `@health/contracts`, and the web app also imports `@health/ui`. Only the server can import database code. Fallow and Sentrux enforce these rules in CI.
 
-Later issues add `agents/fetch/` and `training/gemma/`.
+A later issue adds `training/gemma/`.
 
 ## Contributing
 
