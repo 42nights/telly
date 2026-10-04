@@ -73,10 +73,10 @@ Each section says how Telly uses the provider, where the code and keys are, and 
 <details>
 <summary><strong>Gemini</strong> · medicine detection, family questions, meal photos</summary>
 
-- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision retries once on `gemini-3.5-flash`. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
+- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. Vision has 30 s: `gemini-3.8-flash` gets the first 12 s, and when it answers 429 or 503 or is slower, `gemini-3.5-flash` gets the rest. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
 - **Code:** `apps/server/src/integrations/gemini.ts`, `gemini-chat.ts`, `gemini-meal.ts`. **Key:** `GEMINI_API_KEY`.
 - **Proof:** live medicine detection answered 200 ([#174](https://github.com/ayaangazali/telly/pull/174)). Live Gemini checks for calm support, meal photos, and medicine memory are in [#180](https://github.com/ayaangazali/telly/pull/180). A request with the stored key returned 200 ([#126](https://github.com/ayaangazali/telly/pull/126)).
-- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota or overloaded, a question says "The assistant is busy right now". A found box does not confirm that a dose was taken.
+- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota or overloaded, a question says "The assistant is busy right now", and a picture check says "The picture checker is busy right now". A found box does not confirm that a dose was taken.
 
 </details>
 
