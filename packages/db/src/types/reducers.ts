@@ -9,6 +9,7 @@ import { type Infer as __Infer } from "spacetimedb";
 import AcknowledgeAlertReducer from "../acknowledge_alert_reducer";
 import AddFamilyMemberReducer from "../add_family_member_reducer";
 import ClaimAlertDeliveryReducer from "../claim_alert_delivery_reducer";
+import CreateExercisePlanReducer from "../create_exercise_plan_reducer";
 import CreateFamilyReducer from "../create_family_reducer";
 import CreateReportReducer from "../create_report_reducer";
 import LinkFinchnodeSubjectReducer from "../link_finchnode_subject_reducer";
@@ -16,15 +17,18 @@ import MarkAlertDeliveryFailedReducer from "../mark_alert_delivery_failed_reduce
 import MarkAlertDeliverySentReducer from "../mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavailable_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
+import RecordExerciseEventReducer from "../record_exercise_event_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
 import UpdateReportReducer from "../update_report_reducer";
+import VerifyExercisePlanReducer from "../verify_exercise_plan_reducer";
 
 export type AcknowledgeAlertParams = __Infer<typeof AcknowledgeAlertReducer>;
 export type AddFamilyMemberParams = __Infer<typeof AddFamilyMemberReducer>;
 export type ClaimAlertDeliveryParams = __Infer<typeof ClaimAlertDeliveryReducer>;
+export type CreateExercisePlanParams = __Infer<typeof CreateExercisePlanReducer>;
 export type CreateFamilyParams = __Infer<typeof CreateFamilyReducer>;
 export type CreateReportParams = __Infer<typeof CreateReportReducer>;
 export type LinkFinchnodeSubjectParams = __Infer<typeof LinkFinchnodeSubjectReducer>;
@@ -32,9 +36,11 @@ export type MarkAlertDeliveryFailedParams = __Infer<typeof MarkAlertDeliveryFail
 export type MarkAlertDeliverySentParams = __Infer<typeof MarkAlertDeliverySentReducer>;
 export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliveryUnavailableReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
+export type RecordExerciseEventParams = __Infer<typeof RecordExerciseEventReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
+export type VerifyExercisePlanParams = __Infer<typeof VerifyExercisePlanReducer>;
 

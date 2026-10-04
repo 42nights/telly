@@ -11,6 +11,7 @@ import type { Schema } from "effect";
 import { CloudOff, Glasses, Home, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ExerciseInvite } from "@/components/exercise/session";
 import { Window } from "@/components/hud/window";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
@@ -243,11 +244,14 @@ function HudComponent() {
 						<HeartReading familyId={familyId} now={now} records={records} />
 					</div>
 
-					<div className="min-w-0">
+					<div className="grid min-w-0 content-start gap-4">
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
 							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
+						)}
+						{familyId !== null && (
+							<ExerciseInvite familyId={familyId} now={now} />
 						)}
 					</div>
 

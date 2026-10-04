@@ -6,6 +6,7 @@ import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
+import { exerciseRoutes } from "./exercise";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
 import { reportRoutes } from "./reports";
@@ -36,5 +37,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", exerciseRoutes());
 };

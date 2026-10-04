@@ -38,14 +38,19 @@ const audioUrl = async (
 /**
  * Reads real text aloud, one text at a time: the MP3 that came with it when given, otherwise
  * ElevenLabs speech from `POST /voice/speech`. `key` names what is spoken, so each button can show
- * its own state.
+ * its own state. `rate` below 1 plays it slower; `stop` silences it.
  */
 export function useSpeech(familyId: string | null) {
 	const [speech, setSpeech] = useState<Speech>({ kind: "idle", key: null });
 	const current = useRef<{ stop: () => void } | null>(null);
 	useEffect(() => () => current.current?.stop(), []);
 
-	const say = async (key: string, text: string, mp3Base64?: string) => {
+	const say = async (
+		key: string,
+		text: string,
+		mp3Base64?: string,
+		rate = 1,
+	) => {
 		current.current?.stop();
 		const controller = new AbortController();
 		let audio: HTMLAudioElement | null = null;
@@ -70,6 +75,7 @@ export function useSpeech(familyId: string | null) {
 		}
 		url = result.value;
 		audio = new Audio(url);
+		audio.playbackRate = rate;
 		audio.onended = () => {
 			stop();
 			setSpeech({ kind: "idle", key });
@@ -86,7 +92,12 @@ export function useSpeech(familyId: string | null) {
 		});
 	};
 
-	return { speech, say };
+	const stop = () => {
+		current.current?.stop();
+		setSpeech((last) => ({ kind: "idle", key: last.key }));
+	};
+
+	return { speech, say, stop };
 }
 
 const speechText = {

@@ -37,6 +37,7 @@ import {
 import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
+import CreateExercisePlanReducer from "./create_exercise_plan_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
 import CreateReportReducer from "./create_report_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
@@ -44,11 +45,13 @@ import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
+import RecordExerciseEventReducer from "./record_exercise_event_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import UpdateReportReducer from "./update_report_reducer";
+import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
 
 // Import all procedure arg schemas
 
@@ -57,6 +60,8 @@ import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
+import MyExerciseEventsRow from "./my_exercise_events_table";
+import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
@@ -96,6 +101,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAlertsRow),
+  myExerciseEvents: __table({
+    name: 'my_exercise_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyExerciseEventsRow),
+  myExercisePlans: __table({
+    name: 'my_exercise_plans',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyExercisePlansRow),
   myFamilies: __table({
     name: 'my_families',
     indexes: [
@@ -145,6 +164,7 @@ const reducersSchema = __reducers(
   __reducerSchema("acknowledge_alert", AcknowledgeAlertReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
+  __reducerSchema("create_exercise_plan", CreateExercisePlanReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
   __reducerSchema("create_report", CreateReportReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
@@ -152,11 +172,13 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
+  __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("update_report", UpdateReportReducer),
+  __reducerSchema("verify_exercise_plan", VerifyExercisePlanReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
