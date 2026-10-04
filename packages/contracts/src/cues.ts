@@ -20,7 +20,7 @@ export const CueOutput = Schema.Struct({
 });
 export type CueOutput = typeof CueOutput.Type;
 
-/** `POST /api/families/:familyId/cues`: validated samples of that family to turn into one cue. */
+/** `POST /api/families/:familyId/cues`: samples of that family to turn into one cue. */
 export const CueRequest = Schema.Struct({
 	sampleIds: Schema.NonEmptyArray(DbId).check(
 		Schema.isMaxLength(cueFormat.maxReadings),
@@ -31,7 +31,8 @@ export type CueRequest = typeof CueRequest.Type;
 
 /**
  * One model cue with its provenance. A cue is advice only: it never feeds threshold evaluation or
- * alert delivery, and `input.synthetic` is true when any input sample is synthetic demo data.
+ * alert delivery. `input.synthetic` is true when any input sample is synthetic demo data, and
+ * `input.validated` is false when any is unvalidated; `notice` then names the unvalidated sources.
  */
 export const HealthCue = Schema.Struct({
 	...CueOutput.fields,
@@ -47,7 +48,10 @@ export const HealthCue = Schema.Struct({
 		sampleIds: Schema.NonEmptyArray(Schema.String),
 		sources: Schema.NonEmptyArray(Schema.NonEmptyString),
 		synthetic: Schema.Boolean,
+		validated: Schema.Boolean,
 	}),
+	/** Shown with the cue when any input is unvalidated; null when every input is validated. */
+	notice: Schema.NullOr(Schema.NonEmptyString),
 	generatedAt: Schema.String,
 });
 export type HealthCue = typeof HealthCue.Type;
