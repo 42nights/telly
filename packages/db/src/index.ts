@@ -69,6 +69,7 @@ import ReviewAppointmentSummaryReducer from "./review_appointment_summary_reduce
 import RevokeClinicianShareReducer from "./revoke_clinician_share_reducer";
 import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
+import SaveCookingProfileReducer from "./save_cooking_profile_reducer";
 import SendClinicianShareReducer from "./send_clinician_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
@@ -98,6 +99,7 @@ import MyCareProfilesRow from "./my_care_profiles_table";
 import MyClinicianSharesRow from "./my_clinician_shares_table";
 import MyContactAttemptsRow from "./my_contact_attempts_table";
 import MyContactLaddersRow from "./my_contact_ladders_table";
+import MyCookingProfilesRow from "./my_cooking_profiles_table";
 import MyDeliveryEventsRow from "./my_delivery_events_table";
 import MyExerciseEventsRow from "./my_exercise_events_table";
 import MyExercisePlansRow from "./my_exercise_plans_table";
@@ -205,6 +207,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyContactLaddersRow),
+  myCookingProfiles: __table({
+    name: 'my_cooking_profiles',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCookingProfilesRow),
   myDeliveryEvents: __table({
     name: 'my_delivery_events',
     indexes: [
@@ -370,6 +379,7 @@ const reducersSchema = __reducers(
   __reducerSchema("revoke_clinician_share", RevokeClinicianShareReducer),
   __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
+  __reducerSchema("save_cooking_profile", SaveCookingProfileReducer),
   __reducerSchema("send_clinician_share", SendClinicianShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),

@@ -790,6 +790,19 @@ const clinicianShare = table(
 	},
 );
 
+// The wearer's agreed kitchen abilities and food dislikes (#42): one current row per family, with
+// who saved it last. JSON that the server validates against `CookingProfile` in
+// `@health/contracts/cooking`.
+const cookingProfile = table(
+	{ name: "cooking_profile" },
+	{
+		familyId: t.u64().primaryKey(),
+		profile: t.string(),
+		editedBy: t.identity(),
+		editedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -826,6 +839,7 @@ const spacetimedb = schema({
 	deliveryEvent,
 	appointment,
 	clinicianShare,
+	cookingProfile,
 });
 export default spacetimedb;
 
@@ -2950,6 +2964,23 @@ export const revokeClinicianShare = spacetimedb.reducer(
 	},
 );
 
+export const saveCookingProfile = spacetimedb.reducer(
+	{ familyId: t.u64(), profile: t.string() },
+	(ctx, { familyId, profile }) => {
+		requireCareScope(ctx, familyId, "care_plan_edit");
+		requireText("profile", profile);
+		const row = {
+			familyId,
+			profile,
+			editedBy: ctx.sender,
+			editedAt: ctx.timestamp,
+		};
+		if (ctx.db.cookingProfile.familyId.find(familyId) === null)
+			ctx.db.cookingProfile.insert(row);
+		else ctx.db.cookingProfile.familyId.update(row);
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -3294,4 +3325,15 @@ export const myClinicianShares = spacetimedb.view(
 			.rightSemijoin(ctx.from.clinicianShare, (m, s) =>
 				m.familyId.eq(s.familyId),
 			),
+);
+
+// Like the care profile, only for families where the caller holds `health_records` now.
+export const myCookingProfiles = spacetimedb.view(
+	{ name: "my_cooking_profiles", public: true },
+	t.array(cookingProfile.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => {
+			const row = ctx.db.cookingProfile.familyId.find(familyId);
+			return row === null ? [] : [row];
+		}),
 );

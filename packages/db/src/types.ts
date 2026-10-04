@@ -239,6 +239,14 @@ export const ContactStep = __t.object("ContactStep", {
 });
 export type ContactStep = __Infer<typeof ContactStep>;
 
+export const CookingProfile = __t.object("CookingProfile", {
+  familyId: __t.u64(),
+  profile: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+});
+export type CookingProfile = __Infer<typeof CookingProfile>;
+
 export const DeliveryEvent = __t.object("DeliveryEvent", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -440,6 +448,9 @@ export type MyContactAttempts = __Infer<typeof MyContactAttempts>;
 
 export const MyContactLadders = __t.object("MyContactLadders", {});
 export type MyContactLadders = __Infer<typeof MyContactLadders>;
+
+export const MyCookingProfiles = __t.object("MyCookingProfiles", {});
+export type MyCookingProfiles = __Infer<typeof MyCookingProfiles>;
 
 export const MyDeliveryEvents = __t.object("MyDeliveryEvents", {});
 export type MyDeliveryEvents = __Infer<typeof MyDeliveryEvents>;

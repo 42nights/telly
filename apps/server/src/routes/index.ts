@@ -10,6 +10,7 @@ import { askRoutes } from "./ask";
 import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
+import { cookingRoutes } from "./cooking";
 import { cueRoutes } from "./cues";
 import { deliveryRoutes } from "./delivery";
 import { emergencyRoutes } from "./emergency";
@@ -67,5 +68,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", exerciseRoutes())
 		.route("/", deliveryRoutes(simulatedDelivery()))
 		.route("/", healthKitRoutes())
-		.route("/", locationRoutes());
+		.route("/", locationRoutes())
+		.route("/", cookingRoutes());
 };

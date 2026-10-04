@@ -8,7 +8,7 @@ import {
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import { CloudOff, Home, RotateCw, Utensils } from "lucide-react";
+import { ChefHat, CloudOff, Home, RotateCw, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ExerciseInvite } from "@/components/exercise/session";
@@ -265,6 +265,17 @@ function HudComponent() {
 						>
 							<Utensils aria-hidden />
 							Meal
+						</Link>
+						<Link
+							className={buttonVariants({
+								variant: "outline",
+								className: "h-14 w-full text-[20px] [&_svg]:size-6",
+							})}
+							data-slot="button"
+							to="/cooking"
+						>
+							<ChefHat aria-hidden />
+							Cook
 						</Link>
 						{familyId !== null && (
 							<ExerciseInvite familyId={familyId} now={now} />

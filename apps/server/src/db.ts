@@ -48,6 +48,7 @@ const views = [
 	"SELECT * FROM my_delivery_events",
 	"SELECT * FROM my_appointments",
 	"SELECT * FROM my_clinician_shares",
+	"SELECT * FROM my_cooking_profiles",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
 ];

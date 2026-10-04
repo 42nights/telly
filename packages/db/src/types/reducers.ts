@@ -41,6 +41,7 @@ import ReviewAppointmentSummaryReducer from "../review_appointment_summary_reduc
 import RevokeClinicianShareReducer from "../revoke_clinician_share_reducer";
 import RevokeLocationShareReducer from "../revoke_location_share_reducer";
 import SaveCareProfileReducer from "../save_care_profile_reducer";
+import SaveCookingProfileReducer from "../save_cooking_profile_reducer";
 import SendClinicianShareReducer from "../send_clinician_share_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
@@ -90,6 +91,7 @@ export type ReviewAppointmentSummaryParams = __Infer<typeof ReviewAppointmentSum
 export type RevokeClinicianShareParams = __Infer<typeof RevokeClinicianShareReducer>;
 export type RevokeLocationShareParams = __Infer<typeof RevokeLocationShareReducer>;
 export type SaveCareProfileParams = __Infer<typeof SaveCareProfileReducer>;
+export type SaveCookingProfileParams = __Infer<typeof SaveCookingProfileReducer>;
 export type SendClinicianShareParams = __Infer<typeof SendClinicianShareReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
