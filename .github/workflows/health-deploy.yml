@@ -1,0 +1,100 @@
+# Continuous deployment for the health app (issue #2): build the server and web artifacts once from
+# main, deploy those exact artifacts, then smoke-check the deployed URLs.
+#
+# Not complete yet: the deployment target is not chosen (issue #2, decision `telly-cd-target`), so
+# this workflow has no deploy job. When the target is approved, add a `deploy` job between `build`
+# and `smoke`: download the `health-<sha>` artifact, unpack it, and publish `server/` and `web/` to
+# the target with repository secrets. Until then, `build` and `smoke` run only when the repository
+# variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set; otherwise every job is skipped.
+#
+# Secrets: only push and workflow_dispatch start this workflow, never pull_request, so pull-request
+# jobs never get deployment secrets. `build` gets no secrets, so nothing secret can enter the
+# artifacts. Provider keys come from the host's secret store at server start (apps/server/.env.schema).
+#
+# Artifact `health-<sha>` (health.tar.gz), kept 30 days:
+#   server/  index.mjs (all dependencies bundled), .env.schema, and node_modules/varlock, which
+#            `varlock/auto-load` runs at startup. Run: cd server && NODE_ENV=production node index.mjs
+#            with HOST, PORT, CORS_ORIGIN (= HEALTH_WEB_URL), and the provider keys from the host.
+#   web/     static files built with VITE_SERVER_URL = HEALTH_SERVER_URL. `/` opens the HUD.
+#
+# Rollback: open the last good run of this workflow and re-run its deploy and smoke jobs. They use
+# that run's own artifact and workflow file, and the concurrency group queues them after any
+# running deploy. GitHub re-runs jobs for 30 days, which matches the artifact retention.
+name: health-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'patches/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'tsconfig.json'
+      - '.github/workflows/health-deploy.yml'
+  workflow_dispatch:
+
+# One deploy at a time, in order. Never cancel a running deploy halfway.
+concurrency:
+  group: health-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: vars.HEALTH_SERVER_URL != '' && vars.HEALTH_WEB_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter server build
+      - run: bun run --filter web build
+        env:
+          NODE_ENV: production
+          VITE_SERVER_URL: ${{ vars.HEALTH_SERVER_URL }}
+      - name: Pack the artifact
+        run: |
+          mkdir -p artifact/server/node_modules/.bin
+          cp apps/server/dist/index.mjs apps/server/.env.schema artifact/server/
+          cp -RL apps/server/node_modules/varlock artifact/server/node_modules/varlock
+          ln -s ../varlock/bin/cli.js artifact/server/node_modules/.bin/varlock
+          cp -R apps/web/dist artifact/web
+          tar -czf health.tar.gz -C artifact .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: health-${{ github.sha }}
+          path: health.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      # /health and /api/sources answer and decode with @health/contracts.
+      - run: node scripts/smoke.ts "$HEALTH_SERVER_URL"
+        working-directory: apps/server
+        env:
+          HEALTH_SERVER_URL: ${{ vars.HEALTH_SERVER_URL }}
+      # The deployed web app renders the sources chip from the deployed server's /api/sources.
+      - name: Web app shows the sources panel
+        env:
+          HEALTH_WEB_URL: ${{ vars.HEALTH_WEB_URL }}
+        run: |
+          google-chrome --headless=new --disable-gpu --virtual-time-budget=15000 --dump-dom "$HEALTH_WEB_URL" > dom.html
+          grep -q 'WHOOP · NOOP not connected' dom.html || { echo "::error::the web app did not show the sources panel"; exit 1; }

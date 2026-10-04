@@ -71,12 +71,6 @@ export async function toAttachment(file: File): Promise<QuestionAttachment> {
 	return { name: file.name.slice(0, 200), mimeType: type, data: btoa(binary) };
 }
 
-/** The family message being sent. A resend of the same text keeps its clientId, so it is stored once. */
-export type Outbox = { readonly body: string; readonly clientId: string };
-
-export const outboxFor = (previous: Outbox | null, body: string): Outbox =>
-	previous?.body === body ? previous : { body, clientId: crypto.randomUUID() };
-
 /** The text to show for a failed request. */
 export const failureText = (failure: ApiFailure): string =>
 	failure.kind === "signed_out" ? "Sign in first." : failure.message;

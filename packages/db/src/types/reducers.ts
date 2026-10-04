@@ -7,6 +7,7 @@ import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
 import AcknowledgeAlertReducer from "../acknowledge_alert_reducer";
+import AddCareInstructionReducer from "../add_care_instruction_reducer";
 import AddFamilyMemberReducer from "../add_family_member_reducer";
 import ClaimAlertDeliveryReducer from "../claim_alert_delivery_reducer";
 import CreateFamilyReducer from "../create_family_reducer";
@@ -17,18 +18,23 @@ import MarkAlertDeliverySentReducer from "../mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavailable_reducer";
 import MarkMedicineNotFoundReducer from "../mark_medicine_not_found_reducer";
 import OpenCareNeedReducer from "../open_care_need_reducer";
+import PostAlertMessageReducer from "../post_alert_message_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RememberMedicineReducer from "../remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
 import RespondToCareNeedReducer from "../respond_to_care_need_reducer";
+import SaveCareProfileReducer from "../save_care_profile_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
+import SetCareGrantReducer from "../set_care_grant_reducer";
 import SetContactLadderReducer from "../set_contact_ladder_reducer";
 import SetMedicineMemoryReducer from "../set_medicine_memory_reducer";
 import UpdateReportReducer from "../update_report_reducer";
+import VerifyCareInstructionReducer from "../verify_care_instruction_reducer";
 
 export type AcknowledgeAlertParams = __Infer<typeof AcknowledgeAlertReducer>;
+export type AddCareInstructionParams = __Infer<typeof AddCareInstructionReducer>;
 export type AddFamilyMemberParams = __Infer<typeof AddFamilyMemberReducer>;
 export type ClaimAlertDeliveryParams = __Infer<typeof ClaimAlertDeliveryReducer>;
 export type CreateFamilyParams = __Infer<typeof CreateFamilyReducer>;
@@ -39,14 +45,18 @@ export type MarkAlertDeliverySentParams = __Infer<typeof MarkAlertDeliverySentRe
 export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliveryUnavailableReducer>;
 export type MarkMedicineNotFoundParams = __Infer<typeof MarkMedicineNotFoundReducer>;
 export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
+export type PostAlertMessageParams = __Infer<typeof PostAlertMessageReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RememberMedicineParams = __Infer<typeof RememberMedicineReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
 export type RespondToCareNeedParams = __Infer<typeof RespondToCareNeedReducer>;
+export type SaveCareProfileParams = __Infer<typeof SaveCareProfileReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
+export type SetCareGrantParams = __Infer<typeof SetCareGrantReducer>;
 export type SetContactLadderParams = __Infer<typeof SetContactLadderReducer>;
 export type SetMedicineMemoryParams = __Infer<typeof SetMedicineMemoryReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
+export type VerifyCareInstructionParams = __Infer<typeof VerifyCareInstructionReducer>;
 
