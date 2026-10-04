@@ -8,7 +8,6 @@ import { FamilyPeople } from "@/components/family/invite";
 import {
 	AlertSection,
 	FamilyGate,
-	MonitoringBadge,
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
@@ -26,10 +25,7 @@ function FamilyOverview() {
 			icon={Users}
 			className="max-w-4xl"
 		>
-			<div className="flex flex-wrap items-center gap-2 p-2">
-				<PersonPicker className="min-w-0 flex-1 [&_select]:min-w-0 [&_select]:flex-1" />
-				<MonitoringBadge state={data.monitoring} />
-			</div>
+			<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
 			<FamilyGate data={data} emptyClassName="p-3 text-sm">
 				{(family) => (
 					<div className="flex min-h-0 flex-1 flex-col gap-2 p-2 text-sm">

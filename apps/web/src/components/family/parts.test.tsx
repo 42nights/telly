@@ -21,12 +21,7 @@ import {
 } from "../test/dom-routed";
 import type { FamilyData } from "./data";
 import { clock } from "./logic";
-import {
-	AlertSection,
-	FamilyGate,
-	MonitoringBadge,
-	ReadingsGlance,
-} from "./parts";
+import { AlertSection, FamilyGate, ReadingsGlance } from "./parts";
 
 setupDom();
 
@@ -423,20 +418,5 @@ describe("ReadingsGlance", () => {
 			document.getElementById(card?.getAttribute("aria-describedby") ?? "")
 				?.textContent,
 		).toBe(`watch · ${clock(minutesAgo(3))}`);
-	});
-});
-
-describe("MonitoringBadge", () => {
-	test.each([
-		[{ kind: "loading" } as const, "Monitoring: unknown"],
-		[monitoring(row("in_range")), "Monitoring: on"],
-		[
-			monitoring(row("out_of_range"), row("unavailable")),
-			"Monitoring: partial",
-		],
-		[monitoring(row("unavailable")), "Monitoring: stopped"],
-	])("shows the level", (state, text) => {
-		const view = render(<MonitoringBadge state={state} />);
-		expect(view.getByText(text)).toBeDefined();
 	});
 });

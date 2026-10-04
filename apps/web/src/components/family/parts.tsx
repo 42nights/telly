@@ -19,7 +19,6 @@ import {
 	clock,
 	deliveryText,
 	type Glance,
-	type MonitoringLevel,
 	monitoringLevel,
 	newestPerMetric,
 	oldAge,
@@ -95,21 +94,6 @@ export function ReadingsGlance({
 				readings.value.samples.filter((s) => s.familyId === familyId),
 			)}
 		/>
-	);
-}
-
-export function MonitoringBadge({ state }: { state: ApiState<Monitoring> }) {
-	const level: MonitoringLevel | "unknown" =
-		state.kind === "ready" ? monitoringLevel(state.value) : "unknown";
-	return (
-		<span
-			className={cn(
-				"win95-inset whitespace-nowrap px-2 py-1 text-sm",
-				level === "on" ? "bg-card" : "bg-[#ffffe1]",
-			)}
-		>
-			Monitoring: {level}
-		</span>
 	);
 }
 
@@ -287,7 +271,7 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 		);
 	return (
 		// ponytail: an inner scroll only when the cards outgrow the window (a long list of metrics).
-		<ul className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] content-start gap-1.5 overflow-y-auto">
+		<ul className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] content-start gap-1.5 overflow-y-auto">
 			{glance.map(({ metric, sample }) => {
 				if (sample === null)
 					return (
