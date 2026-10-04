@@ -146,6 +146,9 @@ export type MyMessages = __Infer<typeof MyMessages>;
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
 
+export const MyTripEvents = __t.object("MyTripEvents", {});
+export type MyTripEvents = __Infer<typeof MyTripEvents>;
+
 export const Operator = __t.object("Operator", {
   identity: __t.identity(),
 });
@@ -198,4 +201,38 @@ export const ThresholdTrigger = __t.object("ThresholdTrigger", {
   alertId: __t.u64(),
 });
 export type ThresholdTrigger = __Infer<typeof ThresholdTrigger>;
+
+export const TripEvent = __t.object("TripEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  tripId: __t.string(),
+  get step() {
+    return TripStep;
+  },
+  source: __t.string(),
+  purpose: __t.option(__t.string()),
+  destination: __t.option(__t.string()),
+  notifyDeparture: __t.bool(),
+  notifyArrival: __t.bool(),
+  by: __t.identity(),
+  at: __t.timestamp(),
+});
+export type TripEvent = __Infer<typeof TripEvent>;
+
+export const TripPlan = __t.object("TripPlan", {
+  purpose: __t.string(),
+  destination: __t.option(__t.string()),
+  notifyDeparture: __t.bool(),
+  notifyArrival: __t.bool(),
+});
+export type TripPlan = __Infer<typeof TripPlan>;
+
+// The tagged union or sum type for the algebraic type `TripStep`.
+export const TripStep = __t.enum("TripStep", {
+  Asked: __t.unit(),
+  Leaving: __t.unit(),
+  Cancelled: __t.unit(),
+  Arrived: __t.unit(),
+});
+export type TripStep = __Infer<typeof TripStep>;
 

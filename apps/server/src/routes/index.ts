@@ -10,6 +10,7 @@ import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
 import { reportRoutes } from "./reports";
 import { toolRoutes } from "./tools";
+import { tripRoutes } from "./trips";
 import { visionRoutes } from "./vision";
 import { voiceRoutes } from "./voice";
 
@@ -36,5 +37,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", tripRoutes());
 };
