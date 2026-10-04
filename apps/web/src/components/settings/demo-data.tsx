@@ -10,7 +10,7 @@ import { apiRequest, familyPath, useApi } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
 /** The selected family and whether it replays demo data, or null while either is unknown. */
-export function useDemoData() {
+function useDemoData() {
 	const { family } = useFamily();
 	const records = useApi(
 		FamilyRecords,
@@ -115,4 +115,16 @@ export function UseDemoData({ familyId }: { familyId: string }) {
 			<WriteError error={error} />
 		</div>
 	);
+}
+
+/** The status bar's "Demo" pane, shown only while the selected family replays demo data. */
+export function DemoPane() {
+	return useDemoData()?.on === true ? (
+		<p
+			className="win95-status px-2 py-0.5"
+			title="Replaying a real WHOOP recording"
+		>
+			Demo
+		</p>
+	) : null;
 }
