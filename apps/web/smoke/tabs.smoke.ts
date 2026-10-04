@@ -34,7 +34,6 @@ const tabs = [
 	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
 	{ name: "Home", path: "/hud", heading: /^Home · / },
 	{ name: "Find things", path: "/find", heading: "Find things" },
-	{ name: "Bedtime", path: "/bedtime", heading: "Bedtime" },
 	{ name: "Going out", path: "/trip", heading: "Going out" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },
 ] as const;
@@ -69,3 +68,60 @@ test("a signed-in user opens every tab without a page error", async ({
 		});
 	}
 });
+
+// #308: the wearer reads Home and the finder link without scrolling the page, on a desktop and a phone.
+const viewports = [
+	{ width: 1280, height: 800 },
+	{ width: 1440, height: 900 },
+	{ width: 390, height: 844 },
+] as const;
+const wearerPages = [
+	{ name: "home", path: "/hud", heading: /^Home · /, signedIn: true },
+	{
+		name: "finder",
+		path: `/find?person=1&object=2&token=${"t".repeat(43)}`,
+		heading: "Find your things",
+		signedIn: false,
+	},
+] as const;
+
+for (const viewport of viewports)
+	for (const wearerPage of wearerPages)
+		test(`the wearer ${wearerPage.name} page fits ${viewport.width}x${viewport.height} without scrolling`, async ({
+			page,
+			baseURL,
+		}) => {
+			await page.setViewportSize(viewport);
+			await page.addInitScript(() =>
+				localStorage.setItem("telly.view", "wearer"),
+			);
+			if (wearerPage.signedIn) await signIn(page);
+			const problems = await watch(page, baseURL);
+			await page.goto(wearerPage.path);
+			await expect(
+				page.getByRole("heading", {
+					level: 2,
+					name: wearerPage.heading,
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(page.getByText(/^(Next:|Seen )/).first()).toBeVisible();
+			const overflow = await page.evaluate(() => ({
+				page: document.documentElement.scrollHeight - window.innerHeight,
+				desktop: [...document.querySelectorAll(".win95-desktop")].map(
+					(e) => e.scrollHeight - e.clientHeight,
+				),
+			}));
+			expect(overflow.page).toBeLessThanOrEqual(0);
+			for (const extra of overflow.desktop)
+				expect(extra).toBeLessThanOrEqual(0);
+			await page.screenshot({
+				path: test
+					.info()
+					.outputPath(
+						`${wearerPage.name}-${viewport.width}x${viewport.height}.png`,
+					),
+				fullPage: true,
+			});
+			expect(problems).toEqual([]);
+		});

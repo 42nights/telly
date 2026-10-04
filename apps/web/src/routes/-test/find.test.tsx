@@ -210,7 +210,7 @@ test("Add a thing opens the save form for the main object at once", async () => 
 		[`GET ${MEMORY}`]: memory([]),
 		[DETECT]: detections([KEYS, PILLS]),
 	});
-	renderRoute(`/find?mode=add&member=${"a".repeat(64)}&token=signed-link`);
+	renderRoute(`/find?mode=add&member=${"a".repeat(64)}`);
 	expect(
 		await screen.findByRole("heading", { name: "Add a thing" }),
 	).toBeTruthy();

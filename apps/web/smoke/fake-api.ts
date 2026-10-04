@@ -1,7 +1,10 @@
 // The fake server for the browser smoke tests: the session (an unsigned JWT-shaped ID token with a
 // future `exp`, stored where the sign-in screen stores it) and the whole server API (`page.route` on
 // VITE_SERVER_URL). Every other non-app request is blocked and reported as a problem.
+import type { FamilyRecords } from "@health/contracts";
 import type { FamilyList, FamilyMembers, Me } from "@health/contracts/families";
+import type { LinkedFinder } from "@health/contracts/finder-link";
+import type { ReminderHistory } from "@health/contracts/reminders";
 import type { Page } from "@playwright/test";
 
 import { SERVER_URL } from "../playwright.config";
@@ -29,10 +32,19 @@ export const replies: Record<string, unknown> = {
 	"/api/families/1": {
 		families: [family],
 		samples: [],
-		alerts: [],
+		alerts: [
+			{
+				id: "1",
+				familyId: "1",
+				sampleId: null,
+				summary: "Heart rate above 120 bpm",
+				raisedBy: "monitor",
+				createdAt: "2026-01-01T08:00:00.000Z",
+			},
+		],
 		messages: [],
 		acknowledgements: [],
-	},
+	} satisfies FamilyRecords,
 	"/api/families/1/members": {
 		members: [{ identity: "a".repeat(64), name: null }],
 	} satisfies FamilyMembers,
@@ -65,7 +77,28 @@ export const replies: Record<string, unknown> = {
 		editedAt: null,
 	},
 	"/api/families/1/reminders": { reminders: [] },
-	"/api/families/1/reminder-occurrences": { occurrences: [] },
+	"/api/families/1/reminder-occurrences": {
+		occurrences: [
+			{
+				occurrence: {
+					id: "1",
+					reminderId: "1",
+					familyId: "1",
+					kind: "meal",
+					subjectId: null,
+					title: "Lunch",
+					scheduledFor: new Date(Date.now() + 3600_000)
+						.toISOString()
+						.replace(/\.\d+Z$/, "Z"),
+					state: "scheduled",
+					promptDue: false,
+					prompts: 0,
+					nextPromptAt: null,
+				},
+				events: [],
+			},
+		],
+	} satisfies ReminderHistory,
 	"/api/families/1/reminder-settings": { settings: null },
 	"/api/families/1/speaker-settings": {
 		settings: { enabled: false, room: "shared", sharedRoomKinds: [] },
@@ -115,6 +148,34 @@ export const replies: Record<string, unknown> = {
 	"/api/families/1/appointments": { appointments: [] },
 };
 
+// The POST replies the faked pages send: a finder link (#308) opens without sign-in.
+const posts: Record<string, unknown> = {
+	"/api/finder-link/open": {
+		session: "s".repeat(43),
+		expiresAt: new Date(Date.now() + 15 * 60_000)
+			.toISOString()
+			.replace(/\.\d+Z$/, "Z"),
+		sightings: [
+			{
+				id: "1",
+				container: "Lisinopril bottle",
+				category: "medicine",
+				place: "Kitchen counter, next to the kettle",
+				seenAt: "2026-01-01T08:00:00Z",
+				notFoundAt: null,
+			},
+			{
+				id: "2",
+				container: "House keys",
+				category: "keys",
+				place: "Hall table",
+				seenAt: "2026-01-01T07:00:00Z",
+				notFoundAt: "2026-01-01T09:00:00Z",
+			},
+		],
+	} satisfies LinkedFinder,
+};
+
 /** Serves the app, fakes the API from `routes`, and collects page errors and blocked requests. */
 export const watch = async (
 	page: Page,
@@ -126,8 +187,9 @@ export const watch = async (
 	await page.route("**/*", (route) => {
 		const url = new URL(route.request().url());
 		if (url.origin === SERVER_URL) {
-			const body = routes[url.pathname];
-			if (route.request().method() === "GET" && body !== undefined)
+			const method = route.request().method();
+			const body = (method === "POST" ? posts : routes)[url.pathname];
+			if ((method === "GET" || method === "POST") && body !== undefined)
 				return route.fulfill({ json: body });
 			problems.push(`unfaked API call: ${route.request().method()} ${url}`);
 			return route.fulfill({

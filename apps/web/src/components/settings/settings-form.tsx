@@ -136,6 +136,10 @@ function NumbersForm({
 						tip="911 is the US number. Outside the US, enter your local emergency number, for example 112 or 999."
 						{...emergency.field}
 					/>
+					<p className="flex items-center gap-1">
+						Calls start from your phone's dialer.
+						<Tip text="The call buttons never call by themselves." />
+					</p>
 				</fieldset>
 
 				<div className="flex flex-wrap items-center justify-between gap-2">

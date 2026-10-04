@@ -9,7 +9,6 @@ import {
 	House,
 	type LucideIcon,
 	MessageCircle,
-	Moon,
 	ScanSearch,
 	Settings,
 	Users,
@@ -62,7 +61,6 @@ export const familyScreens = [
 export const wearerScreens = [
 	{ to: "/hud", label: "Home", icon: House },
 	{ to: "/find", label: "Find things", icon: ScanSearch },
-	{ to: "/bedtime", label: "Bedtime", icon: Moon },
 	{ to: "/trip", label: "Going out", icon: DoorOpen },
 ] as const satisfies readonly Screen[];
 

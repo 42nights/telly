@@ -26,8 +26,7 @@ export type Glance = {
 };
 
 /**
- * The newest real sample of each metric (by source time). Synthetic samples never count, as in
- * `currentHeartRate`.
+ * The newest real sample of each metric (by source time). Synthetic samples never count.
  */
 export const newestPerMetric = (samples: readonly HealthSample[]): Glance[] => {
 	const newest = new Map<string, HealthSample | null>();

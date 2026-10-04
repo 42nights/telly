@@ -71,7 +71,6 @@ const paths = [
 	"/appointments",
 	"/reports",
 	"/find",
-	"/bedtime",
 	"/trip",
 	"/meal",
 	"/cooking",
@@ -86,11 +85,11 @@ const paths = [
 ];
 
 // The wearer view has its own menu and Settings rows, so its screens are checked in that view too.
-const wearerPaths = ["/find", "/bedtime", "/trip", "/settings"];
+const wearerPaths = ["/find", "/trip", "/settings"];
 
-// Open product decision (PR #314): the wearer's big-button Bedtime and Meal screens do not fit a
-// 390 px phone without a redesign into steps. Desktop sizes are checked; the phone is not yet.
-const phonePending = ["/bedtime", "/meal"];
+// Open product decision (PR #314): the big-button Meal screen does not fit a 390 px phone without
+// a redesign into steps. Desktop sizes are checked; the phone is not yet.
+const phonePending = ["/meal"];
 
 for (const [width, height] of [
 	[1440, 900],
