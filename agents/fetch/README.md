@@ -16,16 +16,17 @@ Neither agent is an open relay:
 - uAgents accepts only signed messages. The worker checks the sender's grant for the family.
 - Both agents check each request against `contract.json`. The worker also checks each server response against `contract.json`.
 - Messages do not carry credentials. The worker uses its own server token. The bridge accepts only calls that carry `TELLY_FETCH_BRIDGE_TOKEN`.
-- The server checks sign-in and family membership again for the worker's identity.
+- A member's question carries a delegation: an unguessable value that lets the worker read that one family through the asking member's connection while the question runs (`apps/server/src/delegation.ts`). It grants nothing alone: the `/tools` call must also sign in, and the delegation ends with the answer.
+- The server checks sign-in again for the worker's identity, then the delegation, or family membership when there is none.
 
 ## Caller API (server)
 
-`callAgentTool(config.fetchAgent, familyId, request, signal)` in `apps/server/src/integrations/fetch.ts`:
+`callAgentTool(config.fetchAgent, familyId, request, signal, delegation)` in `apps/server/src/integrations/fetch.ts`:
 
 - `request` is a `ToolRequest` from `@health/contracts/tools`. The result is a `ToolResponse` with only that family's records.
 - A tool error becomes `ApiFailure` with the worker's or server's `ApiError` code.
 - No configuration, no reply, or a timeout (40 s) gives `unavailable`. An invalid answer gives `upstream_error`. There are no retries.
-- Check that the signed-in person is a member of the family before the call. The worker grant and the server check limit the call to the families of the worker's identity.
+- Check that the signed-in person is a member of the family before the call. `familyAnswer` (`routes/ask.ts`) does, and lends the member's connection with `delegate(db, familyId)` for the question. The worker sends it as `X-Telly-Delegation`; the `/tools` route is mounted before the membership check and reads through the lent connection. Without a delegation, the worker's own membership decides.
 
 Do not call the tool route or `runTool` directly for agent tool calls. That skips Agentverse.
 
@@ -63,8 +64,9 @@ Worker (`main.py`):
 | --- | --- | --- |
 | `TELLY_FETCH_AGENT_SEED` | yes, secret | The seed for the worker identity. The same seed gives the same agent address. |
 | `TELLY_SERVER_URL` | yes | The http(s) base URL of the telly server. |
-| `TELLY_FETCH_SERVER_TOKEN` | yes, secret | The worker's OIDC token for the server. Its identity must be a member of each granted family. |
-| `TELLY_FETCH_GRANTS` | yes | A JSON object. Each key is a sender agent address (the bridge, or a chat sender). Each value is a list of family ids, for example `{"agent1q...": ["12"]}`. Give a chat sender only a synthetic demo family. |
+| `TELLY_FETCH_SERVER_TOKEN` | one of these two, secret | The worker's OIDC token for the server. Without delegations, its identity must be a member of each granted family. |
+| `TELLY_FETCH_SERVER_TOKEN_FILE` | one of these two | A file that holds that token. The worker reads it on each call, so a refreshed token needs no restart. |
+| `TELLY_FETCH_GRANTS` | yes | A JSON object. Each key is a sender agent address (the bridge, or a chat sender). Each value is a list of family ids, for example `{"agent1q...": ["12"]}`. `"*"` covers every family, but only for calls that carry the server's delegation; give it only to the bridge. Give a chat sender only a synthetic demo family. |
 | `TELLY_FETCH_PORT` | no, default `8001` | The local HTTP port of the worker. |
 | `TELLY_FETCH_MAILBOX` | no, default `true` | `true` uses an Agentverse mailbox. `false` turns off the mailbox and registration, for local tests only. |
 
@@ -136,7 +138,23 @@ systemctl --user list-units 'telly-fetch*'     # status
 journalctl --user -u telly-fetch-worker -f     # chat sender, family, tool, and status
 ```
 
-To update the worker code, copy `agents/fetch/` to `~/.local/share/telly-fetch/agent/` (keep `.venv/`), then restart the worker. To use the live API instead, the worker needs a sign-in token for the live issuer (a Google ID token for the `telly-fetch-worker` service account, which expires after one hour) and a synthetic family on the live database; change only `worker.env` and `worker.sh`.
+To update the worker code, copy `agents/fetch/` to `~/.local/share/telly-fetch/agent/` (keep `.venv/`), then restart the worker. This published agent serves only the synthetic demo backend; the live API has its own pair (below).
+
+### Live API
+
+The live API (`https://api.saintess.tech`) has its own worker and bridge on the team host, with their own seeds and Agentverse mailboxes. They are not granted to any chat sender.
+
+| Part | Value |
+| --- | --- |
+| Worker | `agent1qwsv95h9qfcxpsvt4qf8zxwtsgyulzgnvdx5y5ax39as3qq0clxv6wry99v`, port 8011, `TELLY_SERVER_URL=https://api.saintess.tech` |
+| Bridge | `agent1qwgryychlnac5v0vjyzlm48zflu2593tq2wzu7jpvzt9dg3d8dhy5xlf0m9`, port 8012, the shared store's `TELLY_FETCH_BRIDGE_TOKEN` |
+| Public bridge URL | `https://agents.tailc4c9b.ts.net:10000` (`TELLY_FETCH_BRIDGE_URL` in `deploy/cloudflare/settings.env`): a Tailscale Funnel that exposes only `/tool-call` (`sudo tailscale funnel --bg --https=10000 --set-path=/tool-call http://127.0.0.1:8012/tool-call`) |
+| Worker identity | The Google service account `telly-fetch-worker` in the Google Cloud project `Telly`. Its key pair was made on the host; only the public certificate is uploaded. `mint.ts` signs a JWT with it and gets a one-hour Google ID token for the web client audience. |
+| Grants | `TELLY_FETCH_GRANTS` gives the bridge `"*"`: every family, each call with the asking member's delegation. The worker identity needs no family membership. |
+
+Files are in `~/.local/share/telly-fetch-live/` (mode 700): `worker.env`, `bridge.env`, `sa-key.pem`, `mint.ts`, `refresh-token.sh`, `server-token`, `worker.sh`, and `agent/`. The units are `telly-fetch-live-worker` and `telly-fetch-live-bridge` under `telly-fetch-live.target`. The timer `telly-fetch-live-token` writes a fresh one-hour ID token to `server-token` every 30 minutes; the worker reads it on each call (`TELLY_FETCH_SERVER_TOKEN_FILE`), so it keeps running and its mailbox stays connected.
+
+To update the live pair, copy `agents/fetch/` to `~/.local/share/telly-fetch-live/agent/` (keep `.venv/`), then restart both units.
 
 ## Run locally without Agentverse
 

@@ -6,7 +6,14 @@ import {
 } from "@health/contracts/location";
 import { Schema } from "effect";
 
-import { helpMessage, tripReminder } from "./logic";
+import {
+	directionsUrl,
+	errorReport,
+	fixReport,
+	helpMessage,
+	mapUrl,
+	tripStatus,
+} from "./logic";
 
 const now = Date.parse("2026-01-01T08:00:00Z");
 const at = (minutesAgo: number) =>
@@ -69,37 +76,30 @@ describe("describeLocation", () => {
 	});
 });
 
-describe("trip wording", () => {
-	const trip = {
-		destination: "the pharmacy",
-		purpose: "pick up my pills",
-		setAt: now,
-	};
+describe("trip status", () => {
+	const out = (minutesAgo: number, distanceMeters: number | null) =>
+		tripStatus(
+			{
+				home: { latitude: 1, longitude: 2 },
+				radiusMeters: 200,
+				autoTrip: true,
+				awaySince: at(minutesAgo),
+				distanceMeters,
+				sharing: true,
+			},
+			now,
+		);
 
-	test("the reminder repeats the chosen place and purpose and points to the traffic", () => {
-		expect(tripReminder(trip)).toBe(
-			"You are going to the pharmacy, to pick up my pills. Telly does not see the traffic. Stop, look, and listen before you cross.",
-		);
-		expect(tripReminder({ ...trip, purpose: "" })).toStartWith(
-			"You are going to the pharmacy. ",
-		);
+	test("rounds the distance to 10 m under a kilometer, and leaves it out when unknown", () => {
+		expect(out(10, 1234)).toBe("1.2 km from home · left 10 min ago");
+		expect(out(0, 347)).toBe("350 m from home · left just now");
+		expect(out(5, null)).toBe("left 5 min ago");
 	});
 
-	test("the help message carries no coordinates", () => {
-		const text = helpMessage(trip, true);
-		expect(text).toStartWith(
-			"I need help getting home. I was going to the pharmacy",
-		);
-		expect(text).not.toMatch(/\d+\.\d+/);
+	test("the help message carries no coordinates and fits a care need summary", () => {
+		const summary = helpMessage(at(30), true);
+		expect(summary).not.toMatch(/\d+\.\d+/);
 		expect(helpMessage(null, false)).toContain("I have not shared my location");
-	});
-
-	test("the help message fits a care need summary at the longest trip fields", () => {
-		const long = "x".repeat(150);
-		const summary = helpMessage(
-			{ ...trip, destination: long, purpose: long },
-			true,
-		);
 		const need = {
 			clientId: "a",
 			kind: "help",
@@ -108,5 +108,62 @@ describe("trip wording", () => {
 			dueAt: null,
 		};
 		expect(Schema.decodeUnknownSync(NewCareNeed)(need).summary).toBe(summary);
+	});
+});
+
+describe("maps links", () => {
+	test("directions ask the maps app for a walking route to a typed place or a saved position", () => {
+		const url = new URL(directionsUrl("Café & Co, 5th Ave"));
+		expect(url.origin).toBe("https://www.google.com");
+		expect(url.searchParams.get("travelmode")).toBe("walking");
+		expect(url.searchParams.get("destination")).toBe("Café & Co, 5th Ave");
+		expect(
+			new URL(
+				directionsUrl({ latitude: 40.5, longitude: -73.25 }),
+			).searchParams.get("destination"),
+		).toBe("40.5,-73.25");
+	});
+
+	test("a shared fix opens a marker at its coordinates", () => {
+		expect(mapUrl(fix(0))).toBe(
+			"https://www.openstreetmap.org/?mlat=1&mlon=2#map=17/1/2",
+		);
+	});
+});
+
+describe("device reports", () => {
+	const position = (accuracy: number) => ({
+		coords: { latitude: 51.5, longitude: -0.12, accuracy },
+		timestamp: now,
+	});
+
+	test("a position becomes a fix with whole meters and the device time", () => {
+		expect(fixReport(position(12.6) as GeolocationPosition)).toEqual({
+			status: "fix",
+			fix: {
+				latitude: 51.5,
+				longitude: -0.12,
+				accuracyMeters: 13,
+				fixTime: "2026-01-01T08:00:00.000Z",
+			},
+		});
+	});
+
+	test("an accuracy under one meter still reports one meter, which the contract accepts", () => {
+		const report = fixReport(position(0.2) as GeolocationPosition);
+		expect(report.status === "fix" && report.fix.accuracyMeters).toBe(1);
+	});
+
+	test("a denied permission is its own state; a timeout or no signal is no fix", () => {
+		const error = (code: number) =>
+			({
+				code,
+				PERMISSION_DENIED: 1,
+				POSITION_UNAVAILABLE: 2,
+				TIMEOUT: 3,
+			}) as GeolocationPositionError;
+		expect(errorReport(error(1))).toEqual({ status: "gps_denied" });
+		expect(errorReport(error(2))).toEqual({ status: "no_fix" });
+		expect(errorReport(error(3))).toEqual({ status: "no_fix" });
 	});
 });

@@ -8,11 +8,15 @@ import {
 	CarePrompt,
 } from "@health/contracts/care-profile";
 import { Effect, Schema } from "effect";
-import type { Hono } from "hono";
-import { Identity } from "spacetimedb";
+import { Hono } from "hono";
+import { Identity, Timestamp } from "spacetimedb";
 import { openFamilyDb } from "../db";
 import type { FamilyEnv } from "../http";
+import { alertRoutes } from "./alerts";
 import { careProfileRoutes } from "./care-profile";
+import { familyRoutes } from "./families";
+import { reminderRoutes } from "./reminders";
+import { reportRoutes } from "./reports";
 import {
 	dbConfig,
 	failure,
@@ -124,6 +128,13 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 				expect(first?.verification).toBe("unverified");
 				expect(first?.timeZone).toBe("Europe/London");
 				expect(first?.editedBy).toBe(owner.identity);
+				const unverified = Schema.decodeUnknownSync(CarePrompt)(
+					(yield* send(app, "GET", "/care-profile/prompt")).json,
+				).lines;
+				expect(unverified).toContain(
+					"Synthetic A is in your plan, but nobody has verified its instruction. Please ask your caregiver.",
+				);
+				expect(unverified.join("\n")).not.toContain("1 tablet");
 				const verify = (id = "") =>
 					send(app, "POST", `/care-instructions/${id}/verify`);
 				expect((yield* verify(first?.id)).status).toBe(204);
@@ -249,6 +260,131 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 						i.verification,
 					]),
 				).toEqual([["1 tablet", "unverified"]]);
+			}),
+		));
+
+	test("health records need health_records: an invited relative, a revoke, another family", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Health");
+				const routes = () =>
+					new Hono<FamilyEnv>()
+						.route("/", careProfileRoutes())
+						.route("/", alertRoutes())
+						.route("/", reportRoutes())
+						.route("/", reminderRoutes())
+						.route("/", familyRoutes());
+				const app = familyApp(owner, familyId, routes());
+				const id = BigInt(familyId);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.recordSample({
+						familyId: id,
+						metric: "heart_rate",
+						value: 70,
+						unit: "bpm",
+						sourceTime: Timestamp.now(),
+						source: "synthetic-watch",
+						synthetic: true,
+						quality: { tag: "Validated" },
+					}),
+				);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.raiseAlert({
+						familyId: id,
+						sampleId: undefined,
+						summary: "Synthetic dizzy spell",
+					}),
+				);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.sendMessage({
+						familyId: id,
+						clientId: "hello",
+						body: "Synthetic hello",
+					}),
+				);
+				expect((yield* send(app, "POST", "/reports")).status).toBe(201);
+				yield* send(app, "PUT", "/reminder-settings", {
+					timeZone: "UTC",
+					quietHours: null,
+					repeatEveryMinutes: 10,
+					maxPrompts: 1,
+					snoozeMinutes: 10,
+				});
+				const reminder = {
+					kind: "medication",
+					subjectId: null,
+					title: "Synthetic pills",
+					times: ["08:00"],
+				};
+				expect((yield* send(app, "POST", "/reminders", reminder)).status).toBe(
+					201,
+				);
+
+				// The relative joins by invite, as the app does, and holds no care scope.
+				const relative = yield* openFamilyDb(config);
+				const codeHash = "b".repeat(64);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.createFamilyInvite({
+						familyId: id,
+						codeHash,
+						expiresAt: Timestamp.fromDate(new Date(Date.now() + 3_600_000)),
+					}),
+				);
+				yield* Effect.promise(() =>
+					relative.connection.reducers.joinFamilyByInvite({ codeHash }),
+				);
+				const theirs = familyApp(relative, familyId, routes());
+				const paths = [
+					"/alerts",
+					"/monitoring",
+					"/reports",
+					"/reminder-occurrences",
+				];
+				const reads = (who: Hono<FamilyEnv>) =>
+					Effect.forEach(paths, (path) => send(who, "GET", path));
+				const rows = (db: typeof relative) => [
+					[...db.connection.db.myHealthSamples.iter()].length,
+					[...db.connection.db.myAlerts.iter()].length,
+					[...db.connection.db.myReports.iter()].length,
+					[...db.connection.db.myReminderOccurrences.iter()].length,
+				];
+				const forbidden = paths.map(() => [403, "forbidden" as const]);
+				expect((yield* reads(theirs)).map(failure)).toEqual(forbidden);
+				expect(rows(relative)).toEqual([0, 0, 0, 0]);
+				// Family chat needs no grant.
+				const records = (yield* send(theirs, "GET", "/")).json;
+				expect(records).toMatchObject({
+					samples: [],
+					alerts: [],
+					messages: [{ body: "Synthetic hello" }],
+				});
+
+				// The founder grants health_records in the care-access screen's route.
+				const setGrant = (granted: boolean) =>
+					send(app, "POST", "/care-access", {
+						identity: relative.identity,
+						scope: "health_records",
+						granted,
+					});
+				yield* setGrant(true);
+				yield* until(theirs, "/alerts", 200);
+				expect((yield* reads(theirs)).map((r) => r.status)).toEqual(
+					paths.map(() => 200),
+				);
+				expect(rows(relative)).toEqual(rows(owner));
+				expect(rows(owner).every((n) => n > 0)).toBe(true);
+
+				// A revoke stops the next read, in the views as well as the routes.
+				yield* setGrant(false);
+				yield* until(theirs, "/alerts", 403);
+				expect((yield* reads(theirs)).map(failure)).toEqual(forbidden);
+				expect(rows(relative)).toEqual([0, 0, 0, 0]);
+
+				// Another family's founder holds every scope in its own family only.
+				const { db: other } = yield* openFamily(config, "Other health");
+				const outsider = familyApp(other, familyId, routes());
+				expect((yield* reads(outsider)).map(failure)).toEqual(forbidden);
+				expect(rows(other)).toEqual([0, 0, 0, 0]);
 			}),
 		));
 });

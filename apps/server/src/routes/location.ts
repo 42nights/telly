@@ -1,8 +1,13 @@
-// Family location routes (issue #40), mounted at `/api/families/:familyId`. The module's reducers
-// and views enforce membership, per-person shares, and revocation, so these handlers add no rule.
+// Family location routes (issues #40 and #302), mounted at `/api/families/:familyId`. The module's
+// reducers and views enforce membership, per-person shares, revocation, the `location` care scope
+// (#26), and when a trip starts or ends, so these handlers add no rule.
 import { IdentityHex } from "@health/contracts/families";
 import {
+	AwayInput,
 	type FamilyLocations,
+	HOME_RADIUS,
+	HomeInput,
+	type HomeWatch,
 	LocationReport,
 	type LocationStatus,
 	type SharedLocation,
@@ -12,12 +17,23 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
+import { readAccess } from "./care-profile";
 
 const status = {
 	Fix: "fix",
 	GpsDenied: "gps_denied",
 	NoFix: "no_fix",
 } as const satisfies Record<string, LocationStatus>;
+
+type FixRow = {
+	readonly latitude: number;
+	readonly longitude: number;
+	readonly accuracyMeters: number;
+	readonly fixTime: Timestamp;
+};
+
+const fixOf = (fix: FixRow | undefined) =>
+	fix === undefined ? null : { ...fix, fixTime: fix.fixTime.toISOString() };
 
 const readLocations = (c: Context<FamilyEnv>): FamilyLocations => {
 	const { db } = c.var.db.connection;
@@ -29,10 +45,7 @@ const readLocations = (c: Context<FamilyEnv>): FamilyLocations => {
 				familyId: row.familyId.toString(),
 				sharer: row.sharer.toHexString(),
 				status: status[row.status.tag],
-				fix:
-					row.fix === undefined
-						? null
-						: { ...row.fix, fixTime: row.fix.fixTime.toISOString() },
+				fix: fixOf(row.fix),
 				reportedAt: row.reportedAt.toISOString(),
 			})),
 		shares: [...db.myLocationShares.iter()]
@@ -43,6 +56,40 @@ const readLocations = (c: Context<FamilyEnv>): FamilyLocations => {
 				viewer: row.viewer.toHexString(),
 				sharedAt: row.sharedAt.toISOString(),
 			})),
+		seesShared: readAccess(c).mine.includes("location"),
+		events: [...db.myAwayEvents.iter()]
+			.filter((row) => row.familyId === familyId)
+			.sort((a, b) => (a.id < b.id ? 1 : -1))
+			.map((row) => ({
+				id: row.id.toString(),
+				familyId: row.familyId.toString(),
+				sharer: row.sharer.toHexString(),
+				kind: row.kind.tag === "Left" ? "left" : "back",
+				manual: row.manual,
+				fix: fixOf(row.fix),
+				at: row.at.toISOString(),
+			})),
+	};
+};
+
+/** The caller's home settings; the defaults before the first save. */
+const readHome = (c: Context<FamilyEnv>): HomeWatch => {
+	const { db, familyId } = c.var;
+	const row = [...db.connection.db.myHomeWatch.iter()].find(
+		(r) => r.familyId === familyId,
+	);
+	return {
+		home:
+			row?.home === undefined
+				? null
+				: { latitude: row.home.latitude, longitude: row.home.longitude },
+		radiusMeters: row?.radiusMeters ?? HOME_RADIUS.default,
+		autoTrip: row?.autoTrip ?? false,
+		awaySince: row?.awaySince?.toISOString() ?? null,
+		distanceMeters: row?.distanceMeters ?? null,
+		sharing: [...db.connection.db.myLocationShares.iter()].some(
+			(s) => s.familyId === familyId && s.sharer.toHexString() === db.identity,
+		),
 	};
 };
 
@@ -88,6 +135,26 @@ export const locationRoutes = () =>
 			if (own === undefined)
 				throw new Error("the reported location is not visible to its sharer");
 			return c.json(own satisfies SharedLocation);
+		})
+		.get("/location/home", (c) => c.json(readHome(c) satisfies HomeWatch))
+		.put("/location/home", async (c) => {
+			const input = await decodeBody(c, HomeInput);
+			await callReducer(c.var.db, (connection) =>
+				connection.reducers.setHome({
+					familyId: c.var.familyId,
+					home: input.home ?? undefined,
+					radiusMeters: input.radiusMeters,
+					autoTrip: input.autoTrip,
+				}),
+			);
+			return c.json(readHome(c) satisfies HomeWatch);
+		})
+		.post("/location/away", async (c) => {
+			const { away } = await decodeBody(c, AwayInput);
+			await callReducer(c.var.db, (connection) =>
+				connection.reducers.setAway({ familyId: c.var.familyId, away }),
+			);
+			return c.json(readHome(c) satisfies HomeWatch);
 		})
 		.put("/location/shares/:identity", async (c) => {
 			const viewer = viewerParam(c);

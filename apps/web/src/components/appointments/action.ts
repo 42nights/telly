@@ -11,8 +11,8 @@ export type RunAction = (
 	body?: unknown,
 ) => Promise<boolean>;
 
-/** Runs one write and keeps its failure visible; `onDone` refreshes the screen after a success. */
-export function useAction(onDone: () => void) {
+/** Runs one write and keeps its failure visible; a success marks the visit reads stale. */
+export function useAction() {
 	const [busy, setBusy] = useState<string | null>(null);
 	const [failure, setFailure] = useState<ApiFailure | null>(null);
 	const run: RunAction = async (label, path, method, body) => {
@@ -27,7 +27,6 @@ export function useAction(onDone: () => void) {
 			return false;
 		}
 		setFailure(null);
-		onDone();
 		return true;
 	};
 	return { busy, failure, run };

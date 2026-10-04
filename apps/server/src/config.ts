@@ -6,11 +6,12 @@ import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 import { type QwenConfig, qwenConfigFrom } from "./integrations/qwen";
 import type { R2Config } from "./integrations/r2";
+import type { ResendConfig } from "./integrations/resend";
 
+/** The NOOP ingest connection; `legacy` is the single family of `NOOP_INGEST_KEY`, when set. */
 export type NoopConfig = {
-	readonly key: string;
-	readonly familyId: bigint;
 	readonly db: DbConfig;
+	readonly legacy?: { readonly key: string; readonly familyId: bigint };
 };
 
 export type ServerConfig = {
@@ -25,23 +26,27 @@ export type ServerConfig = {
 	readonly finchnode?: Finchnode;
 	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
 	readonly fetchAgent?: FetchAgentConfig | undefined;
-	/** Undefined when no Qwen deployment is configured: the cue route then answers `unavailable`. */
+	/** Undefined when no River checkpoint is configured: the cue route then answers `unavailable`. */
 	readonly qwen?: QwenConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
+	/** Undefined without `RESEND_API_KEY`: report email routes then answer `unavailable`. */
+	readonly reportEmail?: ResendConfig | undefined;
 	readonly noop?: NoopConfig | undefined;
 	/** Undefined when Photon Spectrum is not configured: no iMessage agent runs. */
 	readonly imessage?: IMessageConfig | undefined;
 };
 
-/** Photon Spectrum Cloud project and the iMessage addresses allowed to ask, each mapped to its family. */
+/** Photon Spectrum Cloud project, its webhook signing secret, and the iMessage addresses allowed to
+ * ask, each mapped to its family. */
 export type IMessageConfig = {
 	readonly projectId: string;
 	readonly projectSecret: string;
+	readonly webhookSecret: string;
 	readonly senders: ReadonlyMap<string, bigint>;
 };
 
-type Env = {
+export type Env = {
 	readonly CORS_ORIGIN: string;
 	readonly OIDC_ISSUER?: string | undefined;
 	readonly OIDC_AUDIENCE?: string | undefined;
@@ -62,12 +67,15 @@ type Env = {
 	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
 	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
 	readonly TELLY_R2_ENDPOINT?: string | undefined;
+	readonly RESEND_API_KEY?: string | undefined;
+	readonly REPORT_EMAIL_FROM: string;
 	readonly NOOP_INGEST_KEY?: string | undefined;
 	readonly NOOP_FAMILY_ID?: string | undefined;
 	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
 	readonly TELLY_REQUIRED_KEYS?: string | undefined;
 	readonly SPECTRUM_PROJECT_ID?: string | undefined;
 	readonly SPECTRUM_PROJECT_SECRET?: string | undefined;
+	readonly SPECTRUM_WEBHOOK_SECRET?: string | undefined;
 	readonly TELLY_IMESSAGE_SENDERS?: string | undefined;
 } & Parameters<typeof qwenConfigFrom>[0];
 
@@ -100,17 +108,18 @@ const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
 	return undefined;
 };
 
-/** iMessage needs all three values; a partial set or a malformed sender list fails startup. */
+/** iMessage needs all four values; a partial set or a malformed sender list fails startup. */
 const imessageConfig = (env: Env): IMessageConfig | undefined => {
 	const {
 		SPECTRUM_PROJECT_ID: projectId,
 		SPECTRUM_PROJECT_SECRET: projectSecret,
+		SPECTRUM_WEBHOOK_SECRET: webhookSecret,
 		TELLY_IMESSAGE_SENDERS: list,
 	} = env;
-	if (!(projectId || projectSecret || list)) return undefined;
-	if (!(projectId && projectSecret && list))
+	if (!(projectId || projectSecret || webhookSecret || list)) return undefined;
+	if (!(projectId && projectSecret && webhookSecret && list))
 		throw new Error(
-			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
+			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, SPECTRUM_WEBHOOK_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
 		);
 	const senders = new Map<string, bigint>();
 	for (const entry of list.split(",")) {
@@ -121,7 +130,7 @@ const imessageConfig = (env: Env): IMessageConfig | undefined => {
 			);
 		senders.set(match[1] as string, BigInt(match[2] as string));
 	}
-	return { projectId, projectSecret, senders };
+	return { projectId, projectSecret, webhookSecret, senders };
 };
 
 /** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */
@@ -158,6 +167,10 @@ const signIn = (
 ) =>
 	issuer && audience && db ? { issuer, audience, clientSecret, db } : undefined;
 
+/**
+ * `NOOP_SPACETIMEDB_TOKEN` and the database enable per-family WHOOP push tokens. `NOOP_INGEST_KEY`
+ * and `NOOP_FAMILY_ID` are a pair for the single legacy family and need the token too.
+ */
 const noopIngest = (
 	{
 		NOOP_INGEST_KEY: key,
@@ -165,10 +178,19 @@ const noopIngest = (
 		NOOP_SPACETIMEDB_TOKEN: token,
 	}: Env,
 	db: DbConfig | undefined,
-) =>
-	key && familyId && token && db
-		? { key, familyId: BigInt(familyId), db: { ...db, token } }
-		: undefined;
+): NoopConfig | undefined => {
+	if (!key !== !familyId)
+		throw new Error("Set both NOOP_INGEST_KEY and NOOP_FAMILY_ID, or neither");
+	if (!(key || token)) return undefined;
+	if (!(token && db))
+		throw new Error(
+			"NOOP ingest needs NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
+		);
+	return {
+		db: { ...db, token },
+		...(key && familyId ? { legacy: { key, familyId: BigInt(familyId) } } : {}),
+	};
+};
 
 const SIGN_IN =
 	"OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE";
@@ -186,11 +208,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		[env.OIDC_ISSUER, env.OIDC_AUDIENCE, env.OIDC_CLIENT_SECRET],
 		SIGN_IN,
 	);
-	const noop = allOrNone(
-		noopIngest(env, db),
-		[env.NOOP_INGEST_KEY, env.NOOP_FAMILY_ID, env.NOOP_SPACETIMEDB_TOKEN],
-		"NOOP_INGEST_KEY, NOOP_FAMILY_ID, NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
-	);
+	const noop = noopIngest(env, db);
 	if ((uri || database) && !auth && !noop)
 		throw new Error(`Set all of ${SIGN_IN}, or none`);
 	const finchnode = finchnodeFromEnv(
@@ -207,6 +225,9 @@ export const serverConfig = (env: Env): ServerConfig => {
 		...(finchnode === undefined ? {} : { finchnode }),
 		fetchAgent: fetchAgentConfig(env),
 		r2: r2Config(env),
+		reportEmail: env.RESEND_API_KEY
+			? { apiKey: env.RESEND_API_KEY, from: env.REPORT_EMAIL_FROM }
+			: undefined,
 		gemini: env.GEMINI_API_KEY
 			? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 			: undefined,

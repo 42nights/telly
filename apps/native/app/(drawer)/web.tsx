@@ -1,15 +1,20 @@
 // The iOS shell (issue #94): the web app full screen in a WebView. Only the web app's origin loads
 // here. The issuer's sign-in page starts the native sign-in instead (Google refuses sign-in in a
 // WebView). Other sites open in Safari, and `tel:` and `mailto:` links open the phone and mail apps.
+import { DbId } from "@health/contracts/families";
+import { SESSION_KEYS, type SignInToken } from "@health/contracts/session";
 import { Schema } from "effect";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { Alert, Linking, StyleSheet } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Alert, Linking, Platform, StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 
+import { ArRequest, answerArRequest } from "@/lib/ar-bridge";
+import { setLocationWatch } from "@/lib/location-watch";
 import { originOf } from "@/lib/origin";
-import { readSessionToken, writeSessionToken } from "@/lib/session";
+import { readSession, writeSession } from "@/lib/session";
 import { issuer, signIn } from "@/lib/sign-in";
+import TellyAr from "@/modules/telly-ar";
 import { ENV } from "@/src/env";
 
 const WEB_ORIGIN = originOf(ENV.EXPO_PUBLIC_WEB_URL);
@@ -17,7 +22,16 @@ const ISSUER_ORIGIN = issuer ? originOf(issuer) : null;
 
 // The JS bridge: the web app calls `window.ReactNativeWebView.postMessage(JSON.stringify(message))`
 // (a WKScriptMessageHandler on iOS). Add a member here for each native feature, such as glasses audio.
-const BridgeMessage = Schema.Struct({ type: Schema.Literals(["sign-out"]) });
+// `location-watch` starts (a family id) or stops (`null`) background location for automatic trips.
+// AR pin answers go back as `window.dispatchEvent(new CustomEvent("telly-ar", { detail }))`.
+const BridgeMessage = Schema.Union([
+	Schema.Struct({ type: Schema.Literals(["sign-out"]) }),
+	Schema.Struct({
+		type: Schema.Literal("location-watch"),
+		familyId: Schema.NullOr(DbId),
+	}),
+	ArRequest,
+]);
 
 const decodeBridgeMessage = (data: string) => {
 	try {
@@ -30,13 +44,14 @@ const decodeBridgeMessage = (data: string) => {
 const styles = StyleSheet.create({ fill: { flex: 1 } });
 
 export default function WebApp() {
-	// `undefined` until SecureStore answers. `readSessionToken` drops an expired token.
-	const [token, setToken] = useState<string | null>();
+	// `undefined` until SecureStore answers. `readSession` renews or drops an expired ID token.
+	const [session, setSession] = useState<SignInToken | null>();
 	const [signingIn, setSigningIn] = useState(false);
+	const webView = useRef<WebView>(null);
 
 	useFocusEffect(
 		useCallback(() => {
-			void readSessionToken().then(setToken);
+			void readSession().then(setSession);
 		}, []),
 	);
 
@@ -44,10 +59,10 @@ export default function WebApp() {
 		if (signingIn) return;
 		setSigningIn(true);
 		signIn()
-			.then(async (idToken) => {
-				if (idToken === null) return;
-				await writeSessionToken(idToken);
-				setToken(idToken);
+			.then(async (signedIn) => {
+				if (signedIn === null) return;
+				await writeSession(signedIn);
+				setSession(signedIn);
 			})
 			.catch((error: unknown) =>
 				Alert.alert(
@@ -58,18 +73,27 @@ export default function WebApp() {
 			.finally(() => setSigningIn(false));
 	};
 
-	if (token === undefined || WEB_ORIGIN === null) return null;
+	if (session === undefined || WEB_ORIGIN === null) return null;
+	// The web app's session keys, written before the page loads. The web app renews the ID token
+	// itself with the refresh token (`apps/web/src/lib/session.ts`).
+	const storage = Object.entries({
+		[SESSION_KEYS.idToken]: session?.idToken,
+		[SESSION_KEYS.refreshToken]: session?.refreshToken,
+	})
+		.map(([key, value]) =>
+			value === undefined
+				? `sessionStorage.removeItem(${JSON.stringify(key)});`
+				: `sessionStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)});`,
+		)
+		.join(" ");
 	return (
 		<WebView
-			// A new token reloads the page, so the web app always starts with the stored session.
-			key={token ?? "signed-out"}
+			ref={webView}
+			// A new session reloads the page, so the web app always starts with the stored session.
+			key={session?.idToken ?? "signed-out"}
 			source={{ uri: ENV.EXPO_PUBLIC_WEB_URL }}
-			// The token goes only into the web app's own origin, in the main frame.
-			injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${
-				token === null
-					? `sessionStorage.removeItem("telly.session.token");`
-					: `sessionStorage.setItem("telly.session.token", ${JSON.stringify(token)});`
-			} } true;`}
+			// The session goes only into the web app's own origin, in the main frame.
+			injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${storage} } true;`}
 			// Every URL reaches the check below; the library default opens other schemes itself.
 			originWhitelist={["*"]}
 			onShouldStartLoadWithRequest={({ url, isTopFrame }) => {
@@ -88,8 +112,25 @@ export default function WebApp() {
 			onMessage={({ nativeEvent }) => {
 				if (originOf(nativeEvent.url) !== WEB_ORIGIN) return;
 				const message = decodeBridgeMessage(nativeEvent.data);
-				if (message?.type === "sign-out")
-					void writeSessionToken(null).then(() => setToken(null));
+				if (message === null) return;
+				if (message.type === "location-watch") {
+					void setLocationWatch(message.familyId).catch((error: unknown) =>
+						console.warn("Could not change background location", error),
+					);
+					return;
+				}
+				if (message.type === "sign-out") {
+					void Promise.all([setLocationWatch(null), writeSession(null)]).then(
+						() => setSession(null),
+					);
+					return;
+				}
+				// The answer (a room scan for a saved pin) goes only to the web app's origin.
+				void answerArRequest(message, TellyAr, Platform.OS).then((reply) =>
+					webView.current?.injectJavaScript(
+						`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) window.dispatchEvent(new CustomEvent("telly-ar", { detail: ${JSON.stringify(reply)} })); true;`,
+					),
+				);
 			}}
 			mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
 			allowsInlineMediaPlayback

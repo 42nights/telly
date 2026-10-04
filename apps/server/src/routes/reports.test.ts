@@ -1,6 +1,7 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`). All records
 // are synthetic. Each connection is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
+import { ReminderHistory } from "@health/contracts/reminders";
 import {
 	Report,
 	ReportPdf,
@@ -9,15 +10,21 @@ import {
 	Reports,
 } from "@health/contracts/reports";
 import { Effect, Schema } from "effect";
+import type { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
-import { openFamilyDb } from "../db";
+import { openFamilyDb, readFamilyRecords } from "../db";
+import type { FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
+import type { Mail, Mailer } from "../integrations/resend";
+import { familyRoutes } from "./families";
+import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import {
 	dbConfig,
 	failure,
 	familyApp,
+	joinFamily,
 	openFamily,
 	send,
 	setOwnScopes,
@@ -57,6 +64,28 @@ const recordSamples = (db: FamilyDb, familyId: string) =>
 				}),
 			),
 	);
+
+// The storage stand-in keeps objects by key; the routes alone decide the keys.
+const memoryBucket = () => {
+	const objects = new Map<string, { body: Uint8Array; at: string }>();
+	const bucket: R2Bucket = {
+		put: async (key, body) =>
+			void objects.set(key, { body, at: new Date().toISOString() }),
+		exists: async (key) => objects.has(key),
+		get: async (key) => objects.get(key)?.body,
+		presign: async (key) => `https://storage.test/${key}?signed`,
+		list: async (prefix) =>
+			[...objects]
+				.filter(([key]) => key.startsWith(prefix))
+				.map(([key, { body, at }]) => ({
+					key,
+					size: body.length,
+					lastModified: at,
+				})),
+		remove: async (key) => void objects.delete(key),
+	};
+	return { objects, bucket };
+};
 
 describe.skipIf(dbConfig === undefined)("lab reports", () => {
 	test("a report is generated from family samples, filled, reviewed, then frozen", () =>
@@ -168,6 +197,54 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 			}),
 		));
 
+	test("a report lists only the reminders that ended unresolved", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Unresolved");
+				const reminders = familyApp(db, familyId, reminderRoutes());
+				yield* send(reminders, "PUT", "/reminder-settings", {
+					timeZone: "UTC",
+					quietHours: null,
+					repeatEveryMinutes: 1,
+					maxPrompts: 1,
+					snoozeMinutes: 1,
+				});
+				// Hours away, so no database timer settles either occurrence during the test.
+				const hoursAhead = (hours: number) =>
+					new Date(Date.now() + hours * 3_600_000).toISOString().slice(11, 16);
+				yield* send(reminders, "POST", "/reminders", {
+					kind: "meal",
+					subjectId: null,
+					title: "Synthetic lunch",
+					times: [hoursAhead(3), hoursAhead(4)],
+				});
+				const [unsure, open] = Schema.decodeUnknownSync(ReminderHistory)(
+					(yield* send(reminders, "GET", "/reminder-occurrences")).json,
+				).occurrences.map((d) => d.occurrence.id);
+				if (unsure === undefined || open === undefined)
+					throw new Error("expected one occurrence per reminder time");
+				yield* send(
+					reminders,
+					"POST",
+					`/reminder-occurrences/${unsure}/answers`,
+					{
+						clientId: "unsure-1",
+						source: "phone",
+						response: "unsure",
+						wording: "I don't remember if I ate",
+					},
+				);
+
+				const app = familyApp(db, familyId, reportRoutes());
+				const report = Schema.decodeUnknownSync(Report)(
+					(yield* send(app, "POST", "/reports")).json,
+				);
+				expect(report.unresolved?.map((d) => d.occurrence.id)).toEqual([
+					unsure,
+				]);
+			}),
+		));
+
 	test("another family's identity cannot read or change a report", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
@@ -179,7 +256,7 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 
 				const outsiderApp = familyApp(outsider, familyId, reportRoutes());
 				const read = yield* send(outsiderApp, "GET", `/reports/${id}`);
-				expect(failure(read)).toEqual([404, "not_found"]);
+				expect(failure(read)).toEqual([403, "forbidden"]);
 
 				const theirs = outsider.connection.reducers;
 				const writes = [
@@ -207,29 +284,11 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 	test("a saved PDF belongs to the member who made it", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
-				// The storage stand-in keeps objects by key; the routes alone decide the keys.
-				const objects = new Map<string, Uint8Array>();
-				const bucket: R2Bucket = {
-					put: async (key, body) => void objects.set(key, body),
-					exists: async (key) => objects.has(key),
-					presign: async (key) => `https://storage.test/${key}?signed`,
-					list: async (prefix) =>
-						[...objects]
-							.filter(([key]) => key.startsWith(prefix))
-							.map(([key, body]) => ({
-								key,
-								size: body.length,
-								lastModified: new Date().toISOString(),
-							})),
-				};
+				const { objects, bucket } = memoryBucket();
 				const { db: owner, familyId } = yield* openFamily(config, "Pdf");
-				const relative = yield* openFamilyDb(config);
-				yield* Effect.promise(() =>
-					owner.connection.reducers.addFamilyMember({
-						familyId: BigInt(familyId),
-						member: Identity.fromString(relative.identity),
-					}),
-				);
+				const relative = yield* joinFamily(config, owner, familyId, [
+					"health_records",
+				]);
 				const ownerApp = familyApp(owner, familyId, reportRoutes(bucket));
 				const created = yield* send(ownerApp, "POST", "/reports");
 				const report = Schema.decodeUnknownSync(Report)(created.json);
@@ -251,9 +310,19 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				expect(key).toBe(
 					`report-pdfs/${familyId}/${owner.identity}/${pdf.id}.pdf`,
 				);
-				const text = new TextDecoder("latin1").decode(objects.get(key));
+				const text = new TextDecoder("latin1").decode(objects.get(key)?.body);
 				expect(text.startsWith("%PDF-1.4")).toBe(true);
 				expect(text).toContain(`(Layout version 2 - report ${report.id})`);
+
+				// A later PDF of the same report lists first.
+				yield* Effect.sleep("5 millis");
+				const later = Schema.decodeUnknownSync(ReportPdf)(
+					(yield* send(ownerApp, "POST", `/reports/${report.id}/pdfs`)).json,
+				);
+				const both = yield* send(ownerApp, "GET", "/report-pdfs");
+				expect(
+					Schema.decodeUnknownSync(ReportPdfs)(both.json).pdfs.map((p) => p.id),
+				).toEqual([later.id, pdf.id]);
 
 				// Another member of the same family sees none of it, even with the exact id.
 				const relativeApp = familyApp(relative, familyId, reportRoutes(bucket));
@@ -266,6 +335,204 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 
 				const unset = familyApp(owner, familyId, reportRoutes());
 				const none = yield* send(unset, "GET", "/report-pdfs");
+				expect(failure(none)).toEqual([503, "unavailable"]);
+			}),
+		));
+
+	test("deleting a family deletes its records and every member's PDFs, and nothing else", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { objects, bucket } = memoryBucket();
+				const { db: owner, familyId } = yield* openFamily(config, "Doomed");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				yield* recordSamples(owner, familyId);
+				const kept = yield* openFamily(config, "Kept");
+				for (const [db, id] of [
+					[owner, familyId],
+					[kept.db, kept.familyId],
+				] as const) {
+					const app = familyApp(db, id, reportRoutes(bucket));
+					const created = yield* send(app, "POST", "/reports");
+					const report = Schema.decodeUnknownSync(Report)(created.json);
+					yield* send(app, "POST", `/reports/${report.id}/pdfs`);
+				}
+				const keys = () => [...objects.keys()].map((key) => key.split("/")[1]);
+				expect(keys().sort()).toEqual([familyId, kept.familyId].sort());
+
+				// A member without family_access, or the wrong name, deletes nothing.
+				const relativeApp = familyApp(relative, familyId, familyRoutes(bucket));
+				const refused = yield* send(relativeApp, "DELETE", "/", {
+					name: "Doomed",
+				});
+				expect(failure(refused)).toEqual([403, "forbidden"]);
+				const ownerApp = familyApp(owner, familyId, familyRoutes(bucket));
+				const wrong = yield* send(ownerApp, "DELETE", "/", { name: "doomed" });
+				expect(failure(wrong)).toEqual([400, "invalid_request"]);
+				expect(keys()).toHaveLength(2);
+
+				const deleted = yield* send(ownerApp, "DELETE", "/", {
+					name: "Doomed",
+				});
+				expect(deleted.status).toBe(204);
+				expect(keys()).toEqual([kept.familyId]);
+				// The caller's own view is current when the reducer returns; another member's view
+				// follows over its own connection.
+				const left = readFamilyRecords(owner);
+				expect(left.families.map((f) => f.id)).not.toContain(familyId);
+				expect(left.samples).toEqual([]);
+				const other = familyApp(kept.db, kept.familyId, reportRoutes(bucket));
+				const reports = yield* send(other, "GET", "/reports");
+				expect(
+					Schema.decodeUnknownSync(Reports)(reports.json).reports,
+				).toHaveLength(1);
+			}),
+		));
+});
+
+describe.skipIf(dbConfig === undefined)("report email", () => {
+	const recipient = "family@example.com";
+	/** A mailer that records each email; it fails while `failWith` is set. */
+	const spyMailer = () => {
+		const sent: Mail[] = [];
+		const state = { failWith: null as string | null };
+		const mailer: Mailer = async (mail) => {
+			if (state.failWith !== null) throw new Error(state.failWith);
+			sent.push(mail);
+		};
+		return { sent, state, mailer };
+	};
+	const reviewedReport = (app: Hono<FamilyEnv>) =>
+		Effect.gen(function* () {
+			const created = yield* send(app, "POST", "/reports");
+			const { id } = Schema.decodeUnknownSync(Report)(created.json);
+			const reviewed = yield* send(app, "POST", `/reports/${id}/review`);
+			expect(reviewed.status).toBe(200);
+			return Schema.decodeUnknownSync(Report)(reviewed.json);
+		});
+
+	test("with automatic email off, a review sends nothing", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Email off");
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(db, familyId, reportRoutes(undefined, mailer));
+				expect((yield* send(app, "GET", "/report-email")).json).toEqual({
+					enabled: false,
+					recipient: null,
+				});
+				// An address alone does not turn automatic email on.
+				const saved = yield* send(app, "PUT", "/report-email", {
+					enabled: false,
+					recipient,
+				});
+				expect(saved.json).toEqual({ enabled: false, recipient });
+
+				const report = yield* reviewedReport(app);
+				expect(report.email).toBeNull();
+				expect(sent).toEqual([]);
+			}),
+		));
+
+	test("a review sends the PDF once, and only a family admin changes the setting", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Email on");
+				const relative = yield* joinFamily(config, owner, familyId, [
+					"health_records",
+				]);
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(owner, familyId, reportRoutes(undefined, mailer));
+				const relativeApp = familyApp(
+					relative,
+					familyId,
+					reportRoutes(undefined, mailer),
+				);
+
+				const settings = { enabled: true, recipient };
+				const notAdmin = yield* send(
+					relativeApp,
+					"PUT",
+					"/report-email",
+					settings,
+				);
+				expect(failure(notAdmin)).toEqual([403, "forbidden"]);
+				const noAddress = { enabled: true, recipient: null };
+				const missing = yield* send(app, "PUT", "/report-email", noAddress);
+				expect(failure(missing)).toEqual([400, "invalid_request"]);
+				const bad = { enabled: true, recipient: "not an address" };
+				const invalid = yield* send(app, "PUT", "/report-email", bad);
+				expect(failure(invalid)).toEqual([400, "invalid_request"]);
+				const saved = yield* send(app, "PUT", "/report-email", settings);
+				expect(saved.json).toEqual(settings);
+				// Every member sees the setting, once their view catches up.
+				let seen = yield* send(relativeApp, "GET", "/report-email");
+				for (
+					let tries = 0;
+					tries < 50 && !Bun.deepEquals(seen.json, settings);
+					tries++
+				) {
+					yield* Effect.sleep("100 millis");
+					seen = yield* send(relativeApp, "GET", "/report-email");
+				}
+				expect(seen.json).toEqual(settings);
+
+				// The relative reviews; the email goes to the family address once.
+				const report = yield* reviewedReport(relativeApp);
+				expect(report.email).toMatchObject({
+					status: "sent",
+					recipient,
+					reason: null,
+					automatic: true,
+				});
+				const again = yield* send(app, "POST", `/reports/${report.id}/review`);
+				expect(again.status).toBe(200);
+				expect(sent.map((mail) => mail.to)).toEqual([recipient]);
+				const pdf = new TextDecoder("latin1").decode(
+					sent[0]?.attachment.content,
+				);
+				expect(pdf).toContain(`report ${report.id}`);
+
+				// A draft cannot be emailed by hand.
+				const created = yield* send(app, "POST", "/reports");
+				const draft = Schema.decodeUnknownSync(Report)(created.json);
+				const early = yield* send(app, "POST", `/reports/${draft.id}/email`);
+				expect(failure(early)).toEqual([400, "invalid_request"]);
+				expect(sent).toHaveLength(1);
+			}),
+		));
+
+	test("a failed send shows its reason, and a manual send retries it", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Email fails");
+				const { sent, state, mailer } = spyMailer();
+				const app = familyApp(db, familyId, reportRoutes(undefined, mailer));
+				yield* send(app, "PUT", "/report-email", { enabled: true, recipient });
+
+				state.failWith = "The email service refused the email (HTTP 422)";
+				const report = yield* reviewedReport(app);
+				expect(report.email).toMatchObject({
+					status: "failed",
+					reason: "The email service refused the email (HTTP 422)",
+					automatic: true,
+				});
+
+				state.failWith = null;
+				const retried = yield* send(app, "POST", `/reports/${report.id}/email`);
+				expect(
+					Schema.decodeUnknownSync(Report)(retried.json).email,
+				).toMatchObject({ status: "sent", reason: null, automatic: false });
+				expect(sent).toHaveLength(1);
+
+				// Without email on the server, a manual send is unavailable, not a false receipt.
+				const unset = familyApp(db, familyId, reportRoutes());
+				const none = yield* send(unset, "POST", `/reports/${report.id}/email`);
 				expect(failure(none)).toEqual([503, "unavailable"]);
 			}),
 		));

@@ -1,11 +1,18 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import { NoopBatch, type NoopConnection } from "@health/contracts";
+import type { WhoopPushToken } from "@health/contracts/families";
 import { Schema } from "effect";
 import type { Context } from "hono";
-import { Timestamp } from "spacetimedb";
-import type { FamilyDb } from "../db";
-import { ApiFailure, callReducer } from "../http";
+import { Identity, Timestamp } from "spacetimedb";
+import { type FamilyDb, pushTokenFamily, readFamilyRecords } from "../db";
+import {
+	ApiFailure,
+	callReducer,
+	type FamilyEnv,
+	newSecret,
+	sha256Hex,
+} from "../http";
 
 export type NoopSample = {
 	readonly metric: string;
@@ -16,8 +23,18 @@ export type NoopSample = {
 };
 
 export type NoopIngest = {
-	readonly key: string;
-	readonly record: (samples: readonly NoopSample[]) => Promise<void>;
+	/** Hex identity of the ingest connection. A family's push token adds it as a member. */
+	readonly identity: string;
+	/** The single-family `NOOP_INGEST_KEY` and its `NOOP_FAMILY_ID`, when set. */
+	readonly legacy?: { readonly key: string; readonly familyId: bigint };
+	/** The family that holds this push token hash, or undefined. */
+	readonly tokenFamily: (tokenHash: string) => bigint | undefined;
+	readonly record: (
+		familyId: bigint,
+		samples: readonly NoopSample[],
+	) => Promise<void>;
+	/** When the newest stored NOOP sample arrived (ms), so a restarted server still knows. */
+	readonly lastReceivedAt?: () => number | undefined;
 };
 
 const daily = [
@@ -90,16 +107,20 @@ const dailyValues = (rows: NonNullable<Tables["dailyMetric"]>): NoopSample[] =>
 			});
 		});
 
+/** The samples the NOOP contract keeps from a batch's tables; the relay push and the WHOOP seed share it. */
+export const noopTableSamples = (tables: Tables): NoopSample[] => [
+	...heartRate(tables.hrSample ?? []),
+	...onWrist(tables.event ?? []),
+	...dailyValues(tables.dailyMetric ?? []),
+];
+
 const noopSamples = (body: ArrayBuffer): NoopSample[] => {
 	const json = inflateRawSync(Buffer.from(body), {
 		maxOutputLength: 64 << 20,
 	}).toString("utf8");
-	const { tables } = Schema.decodeUnknownSync(NoopBatch)(JSON.parse(json));
-	return [
-		...heartRate(tables.hrSample ?? []),
-		...onWrist(tables.event ?? []),
-		...dailyValues(tables.dailyMetric ?? []),
-	];
+	return noopTableSamples(
+		Schema.decodeUnknownSync(NoopBatch)(JSON.parse(json)).tables,
+	);
 };
 
 const slot = ({ source, metric, time }: NoopSample) =>
@@ -163,25 +184,62 @@ export const recordNoopSamples =
 			);
 	};
 
+/** NOOP ingest through one database connection that acts as the ingest identity. */
+export const noopIngest = (
+	db: FamilyDb,
+	legacy?: NoopIngest["legacy"],
+): NoopIngest => ({
+	identity: db.identity,
+	...(legacy === undefined ? {} : { legacy }),
+	tokenFamily: (tokenHash) => pushTokenFamily(db, tokenHash),
+	record: (familyId, samples) => recordNoopSamples(db, familyId)(samples),
+	lastReceivedAt: () => {
+		try {
+			const times = readFamilyRecords(db)
+				.samples.filter((s) => s.source.startsWith("noop:"))
+				.map((s) => Date.parse(s.receivedAt));
+			return times.length === 0 ? undefined : Math.max(...times);
+		} catch {
+			// The ingest connection dropped: its cached rows are stale, so they say nothing.
+			return undefined;
+		}
+	},
+});
+
 const NOOP_FRESH_MS = 10 * 60_000;
 
 export const noopRoutes = (noop: NoopIngest | undefined) => {
 	let lastSeenAt: number | undefined;
-	const status = (now: number): NoopConnection => ({
-		source: "noop",
-		status:
-			lastSeenAt !== undefined && now - lastSeenAt < NOOP_FRESH_MS
-				? "connected"
-				: "not_connected",
-		lastSeenAt:
-			lastSeenAt === undefined ? null : new Date(lastSeenAt).toISOString(),
-	});
+	const status = (now: number): NoopConnection => {
+		// The process forgets its last push on every restart; the database does not.
+		const stored = noop?.lastReceivedAt?.();
+		const seen =
+			stored === undefined || (lastSeenAt !== undefined && lastSeenAt > stored)
+				? lastSeenAt
+				: stored;
+		return {
+			source: "noop",
+			status:
+				seen !== undefined && now - seen < NOOP_FRESH_MS
+					? "connected"
+					: "not_connected",
+			lastSeenAt: seen === undefined ? null : new Date(seen).toISOString(),
+		};
+	};
 	const ingest = async (c: Context) => {
 		if (noop === undefined)
 			throw new ApiFailure("unavailable", "NOOP ingest is not configured");
-		// The relay should send `Authorization: Bearer <key>`; `?k=` stays accepted until the Mac relay switches.
+		// The relay should send `Authorization: Bearer <key>`; `?k=` stays accepted until the Mac relay
+		// switches. NOOP's family push sends only the URL, so its token always comes as `?k=`.
 		const bearer = c.req.header("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-		if (!noopKeyMatches(bearer ?? c.req.query("k"), noop.key))
+		const given = bearer ?? c.req.query("k");
+		const familyId =
+			given === undefined
+				? undefined
+				: noop.legacy !== undefined && noopKeyMatches(given, noop.legacy.key)
+					? noop.legacy.familyId
+					: noop.tokenFamily(sha256Hex(given));
+		if (familyId === undefined)
 			throw new ApiFailure("unauthorized", "Missing or wrong NOOP ingest key");
 		let samples: NoopSample[];
 		try {
@@ -192,9 +250,27 @@ export const noopRoutes = (noop: NoopIngest | undefined) => {
 				"The body is not a raw-deflate NOOP batch",
 			);
 		}
-		await noop.record(samples);
+		await noop.record(familyId, samples);
 		lastSeenAt = Date.now();
-		return c.body(null, 204);
+		// NOOP advances its cursor only on 200 (noop/Strand/Collect/TellyPush.swift).
+		return c.body(null, 200);
 	};
-	return { status, ingest };
+	// `POST /api/families/:familyId/whoop-token`: the module checks the caller may set up sharing.
+	const pushToken = async (c: Context<FamilyEnv>) => {
+		if (noop === undefined)
+			throw new ApiFailure(
+				"unavailable",
+				"WHOOP push is not set up on this server",
+			);
+		const { secret: token, hash: tokenHash } = newSecret();
+		await callReducer(c.var.db, (db) =>
+			db.reducers.setFamilyPushToken({
+				familyId: c.var.familyId,
+				tokenHash,
+				ingest: Identity.fromString(noop.identity),
+			}),
+		);
+		return c.json({ token } satisfies WhoopPushToken, 201);
+	};
+	return { status, ingest, pushToken };
 };

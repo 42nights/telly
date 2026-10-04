@@ -9,12 +9,14 @@
 		"serve": "vite preview",
 		"start": "vite",
 		"check-types": "vite build && tsc --noEmit",
-		"env:generate": "varlock codegen"
+		"env:generate": "varlock codegen",
+		"smoke": "playwright test"
 	},
 	"dependencies": {
 		"@health/contracts": "workspace:*",
 		"@health/ui": "workspace:*",
 		"@tailwindcss/vite": "^4.3.3",
+		"@tanstack/react-query": "^5.104.1",
 		"@tanstack/react-router": "^1.170.32",
 		"@varlock/vite-integration": "1.5.1",
 		"effect": "catalog:",
@@ -26,9 +28,13 @@
 		"varlock": "catalog:"
 	},
 	"devDependencies": {
+		"@happy-dom/global-registrator": "^20.14.5",
 		"@health/config": "workspace:*",
+		"@playwright/test": "1.63.0",
 		"@tanstack/react-router-devtools": "^1.167.1",
 		"@tanstack/router-plugin": "^1.168.35",
+		"@testing-library/dom": "^10.4.2",
+		"@testing-library/react": "^16.3.3",
 		"@types/bun": "1.4.2",
 		"@types/node": "catalog:",
 		"@types/react": "^19.2.18",

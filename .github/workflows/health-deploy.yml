@@ -1,7 +1,7 @@
 # Continuous deployment for the health app (issue #2): build the server and web artifacts once from
 # main, deploy those exact artifacts, then smoke-check the deployed URLs.
 #
-# Target (captain decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
+# Target (owner decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
 # deploy/cloudflare/deploy.sh: the Worker `telly` serves web/ as static assets and runs server/ in a
 # Cloudflare Container. Public settings are in deploy/cloudflare/settings.env. Every job runs only
 # when the repository variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set
@@ -47,6 +47,8 @@ concurrency:
 
 permissions:
   contents: read
+  # The deploy job reads the last good run's artifact for a rollback.
+  actions: read
 
 jobs:
   build:
@@ -111,7 +113,40 @@ jobs:
           spacetime login --token "$SPACETIMEDB_TOKEN"
           bun install --frozen-lockfile
           spacetime publish telly -s maincloud --module-path spacetimedb --yes=remote </dev/null
-      - run: sh deploy/cloudflare/deploy.sh health.tar.gz
+      - id: deploy
+        run: sh deploy/cloudflare/deploy.sh health.tar.gz
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TELLY_DEPLOY_CLOUDFLARE_API_TOKEN }}
+          TELLY_SECRETS_PULL_TOKEN: ${{ secrets.TELLY_SECRETS_PULL_TOKEN }}
+      # deploy.sh fails when /health is not 200 within 2 minutes of the container rollout. If the API
+      # is still down then, redeploy the artifact of the last fully successful run of this workflow.
+      # The job stays failed, so the bad commit is visible.
+      - name: Find the last good artifact
+        id: good
+        if: failure() && steps.deploy.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -a; . deploy/cloudflare/settings.env; set +a
+          if [ "$(curl -s -m 70 -o /dev/null -w '%{http_code}' "$HEALTH_SERVER_URL/health")" = 200 ]; then
+            echo "the API answers again; no rollback"
+            exit 0
+          fi
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/health-deploy.yml/runs?branch=main&status=success&per_page=1" |
+            jq -r '.workflow_runs[0] // empty | "run=\(.id)\nsha=\(.head_sha)"' >>"$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: failure() && steps.good.outputs.run != ''
+        with:
+          name: health-${{ steps.good.outputs.sha }}
+          run-id: ${{ steps.good.outputs.run }}
+          github-token: ${{ github.token }}
+          path: rollback
+      - name: Roll back to the last good artifact
+        if: failure() && steps.good.outputs.run != ''
+        run: |
+          echo "::error::the deploy is unhealthy; rolling back to ${{ steps.good.outputs.sha }}"
+          sh deploy/cloudflare/deploy.sh rollback/health.tar.gz
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TELLY_DEPLOY_CLOUDFLARE_API_TOKEN }}
           TELLY_SECRETS_PULL_TOKEN: ${{ secrets.TELLY_SECRETS_PULL_TOKEN }}
@@ -134,9 +169,13 @@ jobs:
         env:
           HEALTH_SERVER_URL: ${{ vars.HEALTH_SERVER_URL }}
       # The deployed web app loads and renders the HUD's wearable status line.
-      - name: Web app renders the HUD
+      # Signed out, the web app shows only its sign-in screen (#207). Self-hosted runners have no
+      # google-chrome; they use the Playwright Chromium in the runner user's cache.
+      - name: Web app renders the sign-in screen
         env:
           HEALTH_WEB_URL: ${{ vars.HEALTH_WEB_URL }}
         run: |
-          google-chrome --headless=new --disable-gpu --virtual-time-budget=15000 --dump-dom "$HEALTH_WEB_URL" > dom.html
-          grep -q 'WHOOP ·' dom.html || { echo "::error::the web app did not render the HUD"; exit 1; }
+          chrome=$(command -v google-chrome || ls "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | tail -1)
+          [ -n "$chrome" ] || { echo "::error::no Chrome or Chromium on this runner"; exit 1; }
+          "$chrome" --headless=new --disable-gpu --virtual-time-budget=15000 --dump-dom "$HEALTH_WEB_URL" > dom.html
+          grep -q 'Continue with Google' dom.html || { echo "::error::the web app did not render"; exit 1; }

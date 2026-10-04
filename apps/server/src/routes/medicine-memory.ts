@@ -1,14 +1,20 @@
-// Medicine last-seen memory (issue #29; docs/board.html#hud-marker), relative to
-// `/api/families/:familyId`. The module's reducers check membership, the permission, and sighting
-// freshness again, so these handlers add no access rule. Nothing here records or changes a dose.
+// Medicine and object last-seen memory (issues #29, #301; docs/board.html#hud-marker), relative to
+// `/api/families/:familyId`. Each member has their own (#291): `?person=<identity>` names the member,
+// and the caller is the default. The module's reducers check membership, the member rule, the
+// permission, and sighting freshness again; the member check here only turns an empty view into an
+// honest `403`. Nothing here records or changes a dose. Turning the memory off also deletes the
+// member's AR pins (`./medicine-ar-pin`) and their maps.
+import { IdentityHex } from "@health/contracts/families";
 import {
 	type MedicineMemory,
 	RememberMedicine,
 	SetMedicineMemory,
 } from "@health/contracts/medicine-memory";
+import { ObjectCategory } from "@health/contracts/vision";
+import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { Timestamp } from "spacetimedb";
+import { Identity, Timestamp } from "spacetimedb";
 import { DbUnavailable } from "../db";
 import {
 	ApiFailure,
@@ -17,74 +23,142 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
+import { readAccess } from "./care-profile";
+import { deleteArPins, medicineArPinRoutes } from "./medicine-ar-pin";
 
-const readMemory = (c: Context<FamilyEnv>): MedicineMemory => {
+type Ctx = Context<FamilyEnv>;
+
+/** The members whose medicine the caller may open: the caller, and every member for a manager. */
+const readPeople = (c: Ctx): string[] => {
+	const me = c.var.db.identity;
+	const { mine } = readAccess(c);
+	if (!mine.includes("family_access") && !mine.includes("care_plan_edit"))
+		return [me];
+	const others = [...c.var.db.connection.db.myFamilyMembers.iter()]
+		.filter((row) => row.familyId === c.var.familyId)
+		.map((row) => row.member.toHexString())
+		.filter((member) => member !== me);
+	return [me, ...others];
+};
+
+/** The member `?person=` names, or the caller; `403` for a member the caller may not open. */
+const readPerson = (c: Ctx) => {
+	const person = c.req.query("person") ?? c.var.db.identity;
+	if (!Schema.is(IdentityHex)(person))
+		throw new ApiFailure("invalid_request", "person must be 64 hex characters");
+	const people = readPeople(c);
+	if (!people.includes(person))
+		throw new ApiFailure(
+			"forbidden",
+			"You may open only your own medicines in this family",
+		);
+	return { person, people };
+};
+
+/**
+ * The place seen most often among `places` (oldest first), ignoring case, in its newest spelling;
+ * a tie goes to the newer place. `null` until one place was seen at least twice.
+ */
+const usualPlace = (places: readonly string[]): string | null => {
+	const seen = new Map<string, { count: number; name: string }>();
+	let best: { count: number; name: string } | null = null;
+	for (const name of places) {
+		const key = name.trim().toLowerCase();
+		const entry = { count: (seen.get(key)?.count ?? 0) + 1, name };
+		seen.set(key, entry);
+		if (best === null || entry.count >= best.count) best = entry;
+	}
+	return best !== null && best.count >= 2 ? best.name : null;
+};
+
+const readMemory = (c: Ctx): MedicineMemory => {
 	const { connection } = c.var.db;
 	if (!connection.isActive)
 		throw new DbUnavailable({
 			reason: "connection closed; cached rows are stale",
 		});
 	const { familyId } = c.var;
-	const permission = [...connection.db.myMedicineMemory.iter()].find(
-		(row) => row.familyId === familyId,
+	const { person, people } = readPerson(c);
+	const mine = (row: { familyId: bigint; personId: Identity }) =>
+		row.familyId === familyId && row.personId.toHexString() === person;
+	const places = [...connection.db.myMedicinePlaces.iter()].find(mine);
+	const pinned = new Set(
+		[...connection.db.myMedicineArPins.iter()].map((pin) => pin.containerId),
 	);
 	return {
-		permission:
-			permission === undefined
-				? null
-				: {
-						places: permission.places,
-						setBy: permission.setBy.toHexString(),
-						setAt: permission.setAt.toISOString(),
-					},
+		personId: person,
+		people,
+		places: places?.places ?? [],
 		sightings: [...connection.db.myMedicineSightings.iter()]
-			.filter((row) => row.familyId === familyId)
+			.filter(mine)
 			.map((row) => ({
 				id: row.id.toString(),
 				familyId: row.familyId.toString(),
+				personId: person,
 				container: row.container,
 				place: row.place,
 				seenAt: row.seenAt.toISOString(),
 				source: "camera_check" as const,
 				confidence: row.confidence,
 				labelRead: row.labelRead,
+				category: Schema.is(ObjectCategory)(row.category)
+					? row.category
+					: "other",
+				thumbnail: row.thumbnail,
 				savedBy: row.savedBy.toHexString(),
 				notFoundAt: row.notFoundAt?.toISOString() ?? null,
+				usualPlace: usualPlace([...row.pastPlaces, row.place]),
+				pinned: pinned.has(row.id),
 			}))
 			.sort((a, b) => b.seenAt.localeCompare(a.seenAt)),
 	};
 };
 
-export const medicineMemoryRoutes = (): FamilyRoutes =>
+export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 	new Hono<FamilyEnv>()
+		.route("/", medicineArPinRoutes(storage))
 		.get("/medicine-memory", (c) => c.json(readMemory(c)))
 		.put("/medicine-memory", async (c) => {
 			const { enabled, places } = await decodeBody(c, SetMedicineMemory);
+			// The member's objects, read before the module deletes them, name their world maps.
+			const { sightings } = readMemory(c);
+			const { person } = readPerson(c);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
 				connection.reducers.setMedicineMemory({
 					familyId,
+					personId: Identity.fromString(person),
 					enabled,
 					places: places.map((place) => place.trim()),
 				}),
 			);
+			// After the module's member check; the module has deleted the pin rows.
+			if (!enabled)
+				await deleteArPins(
+					storage,
+					familyId,
+					sightings.map((s) => ({
+						id: BigInt(s.id),
+						personId: Identity.fromString(person),
+					})),
+				);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {
 			const seen = await decodeBody(c, RememberMedicine);
-			if (readMemory(c).permission === null)
-				throw new ApiFailure(
-					"conflict",
-					"Remembering where medicine was seen is off for this person",
-				);
+			const memory = readMemory(c);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
 				connection.reducers.rememberMedicine({
 					...seen,
 					familyId,
+					personId: Identity.fromString(memory.personId),
 					container: seen.container.trim(),
 					place: seen.place.trim(),
 					seenAt: Timestamp.fromDate(new Date(seen.seenAt)),
+					category: seen.category ?? "medicine",
+					thumbnail: seen.thumbnail ?? "",
 				}),
 			);
 			return c.json(readMemory(c), 201);
@@ -96,5 +170,20 @@ export const medicineMemoryRoutes = (): FamilyRoutes =>
 			await callReducer(c.var.db, (connection) =>
 				connection.reducers.markMedicineNotFound({ id: BigInt(id) }),
 			);
+			return c.json(readMemory(c));
+		})
+		// Forgets one thing: the module deletes its sighting and pin, then the map goes.
+		.delete("/medicine-memory/sightings/:sightingId", async (c) => {
+			const id = c.req.param("sightingId");
+			const { personId, sightings } = readMemory(c);
+			if (!sightings.some((s) => s.id === id))
+				throw new ApiFailure("not_found", "No such sighting for this person");
+			const { db, familyId } = c.var;
+			await callReducer(db, (connection) =>
+				connection.reducers.forgetMedicineSighting({ id: BigInt(id) }),
+			);
+			await deleteArPins(storage, familyId, [
+				{ id: BigInt(id), personId: Identity.fromString(personId) },
+			]);
 			return c.json(readMemory(c));
 		});

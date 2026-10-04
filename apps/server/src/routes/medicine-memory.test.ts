@@ -3,8 +3,11 @@
 import { describe, expect, test } from "bun:test";
 import { MedicineMemory } from "@health/contracts/medicine-memory";
 import { Effect, Schema } from "effect";
-import { Timestamp } from "spacetimedb";
-import { openFamilyDb } from "../db";
+import type { Hono } from "hono";
+import { Identity, Timestamp } from "spacetimedb";
+import { DbUnavailable, openFamilyDb } from "../db";
+import { dbProxy } from "../db-proxy";
+import type { FamilyEnv } from "../http";
 import { medicineMemoryRoutes } from "./medicine-memory";
 import {
 	dbConfig,
@@ -16,6 +19,20 @@ import {
 } from "./test-family";
 
 const decode = Schema.decodeUnknownSync(MedicineMemory);
+
+/** Another identity's views update asynchronously; polls `path` until `done` holds. */
+const until = (
+	app: Hono<FamilyEnv>,
+	path: string,
+	done: (response: { status: number; json: unknown }) => boolean,
+) =>
+	Effect.gen(function* () {
+		for (let tries = 0; ; tries++) {
+			const response = yield* send(app, "GET", path);
+			if (done(response) || tries === 100) return response;
+			yield* Effect.sleep("20 millis");
+		}
+	});
 const minutesAgo = (minutes: number) =>
 	new Date(Date.now() - minutes * 60_000).toISOString();
 const sighting = (place: string, seenAt: string) => ({
@@ -28,32 +45,26 @@ const sighting = (place: string, seenAt: string) => ({
 });
 
 describe.skipIf(dbConfig === undefined)("medicine memory", () => {
-	test("a place is stored only with permission and replaced only by a newer current sighting", () =>
+	test("remembering is on by default, a place is replaced only by a newer current sighting, and forgetting deletes", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db, familyId } = yield* openFamily(config, "Memory family");
 				const app = familyApp(db, familyId, medicineMemoryRoutes());
 				const path = "/medicine-memory/sightings";
 
-				const off = yield* send(
-					app,
-					"POST",
-					path,
-					sighting("Kitchen", minutesAgo(1)),
-				);
-				expect(failure(off)).toEqual([409, "conflict"]);
-				const direct = yield* Effect.promise(() =>
-					db.connection.reducers
-						.rememberMedicine({
-							familyId: BigInt(familyId),
-							...sighting("Kitchen", ""),
-							seenAt: Timestamp.now(),
-						})
-						.then(String, String),
-				);
-				expect(direct).toBe(
-					"SenderError: medicine memory is off for this family",
-				);
+				// On without any setting (#301); one thing can be forgotten on its own.
+				const glasses = yield* send(app, "POST", path, {
+					...sighting("Desk", minutesAgo(1)),
+					container: "Synthetic glasses",
+					category: "glasses",
+				});
+				expect(glasses.status).toBe(201);
+				const [saved] = decode(glasses.json).sightings;
+				const forgot = yield* send(app, "DELETE", `${path}/${saved?.id}`);
+				expect(decode(forgot.json).sightings).toEqual([]);
+				expect(
+					failure(yield* send(app, "DELETE", `${path}/${saved?.id}`)),
+				).toEqual([404, "not_found"]);
 
 				const places = ["Kitchen counter", "Bedside table"];
 				yield* send(app, "PUT", "/medicine-memory", { enabled: true, places });
@@ -103,18 +114,72 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					container: " synthetic lisinopril BOTTLE ",
 				});
 				const memory = decode(moved.json);
-				expect(memory.permission?.places).toEqual(places);
+				expect(memory.places).toEqual(places);
 				expect(
-					memory.sightings.map((s) => [s.id, s.place, s.notFoundAt]),
-				).toEqual([[stored.id, "Bedside table", null]]);
+					memory.sightings.map((s) => [
+						s.id,
+						s.place,
+						s.notFoundAt,
+						s.category,
+						s.usualPlace,
+					]),
+				).toEqual([[stored.id, "Bedside table", null, "medicine", null]]);
 
-				// Turning the permission off deletes what was remembered.
+				// Any object, not only medicine: its category and picture are kept, and a place it was
+				// seen at twice becomes where it is usually kept.
+				const keys = {
+					...sighting("Hall table", minutesAgo(4)),
+					container: "Synthetic keys",
+					category: "keys",
+					thumbnail: "/9j/AAAA",
+				};
+				yield* send(app, "POST", path, keys);
+				yield* send(app, "POST", path, {
+					...keys,
+					place: "Sofa",
+					seenAt: minutesAgo(3),
+				});
+				const back = decode(
+					(yield* send(app, "POST", path, {
+						...keys,
+						place: "hall table",
+						seenAt: minutesAgo(2),
+					})).json,
+				).sightings.find((s) => s.container === "Synthetic keys");
+				expect(back).toMatchObject({
+					category: "keys",
+					thumbnail: "/9j/AAAA",
+					place: "hall table",
+					usualPlace: "hall table",
+				});
+				const unknown = yield* send(app, "POST", path, {
+					...keys,
+					category: "sofa",
+				});
+				expect(failure(unknown)).toEqual([400, "invalid_request"]);
+
+				// Another container is its own sighting; the most recently seen lists first.
+				const second = yield* send(app, "POST", path, {
+					...sighting("Kitchen counter", minutesAgo(2)),
+					container: "Synthetic Metformin box",
+				});
+				expect(
+					decode(second.json).sightings.map((s) => [s.container, s.place]),
+				).toEqual([
+					[expect.stringMatching(/lisinopril/i), "Bedside table"],
+					["Synthetic Metformin box", "Kitchen counter"],
+					["Synthetic keys", "hall table"],
+				]);
+
+				// Forget everything deletes what was remembered.
 				const cleared = yield* send(app, "PUT", "/medicine-memory", {
 					enabled: false,
 					places: [],
 				});
 				expect(decode(cleared.json)).toEqual({
-					permission: null,
+					personId: db.identity,
+					people: [db.identity],
+					places: [],
 					sightings: [],
 				});
 			}),
@@ -147,21 +212,47 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					medicineMemoryRoutes(),
 				);
 				const read = yield* send(outsiderApp, "GET", "/medicine-memory");
-				expect(decode(read.json)).toEqual({ permission: null, sightings: [] });
+				expect(decode(read.json)).toEqual({
+					personId: outsider.identity,
+					people: [outsider.identity],
+					places: [],
+					sightings: [],
+				});
+				const asked = yield* send(
+					outsiderApp,
+					"GET",
+					`/medicine-memory?person=${owner.identity}`,
+				);
+				expect(failure(asked)).toEqual([403, "forbidden"]);
 
 				const theirs = outsider.connection.reducers;
 				const writes = [
 					theirs.setMedicineMemory({
 						familyId: BigInt(familyId),
+						personId: Identity.fromString(owner.identity),
 						enabled: false,
 						places: [],
 					}),
 					theirs.rememberMedicine({
 						familyId: BigInt(familyId),
+						personId: Identity.fromString(owner.identity),
 						...sighting("Garage", ""),
+						category: "keys",
+						thumbnail: "",
 						seenAt: Timestamp.now(),
 					}),
 					theirs.markMedicineNotFound({ id: BigInt(stored?.id ?? "0") }),
+					theirs.forgetMedicineSighting({ id: BigInt(stored?.id ?? "0") }),
+					theirs.saveMedicineArPin({
+						familyId: BigInt(familyId),
+						objectId: BigInt(stored?.id ?? "0"),
+						anchorId: "outsider-anchor",
+						mapBytes: 1,
+					}),
+					theirs.deleteMedicineArPin({
+						familyId: BigInt(familyId),
+						objectId: BigInt(stored?.id ?? "0"),
+					}),
 				];
 				const results = yield* Effect.promise(() => Promise.allSettled(writes));
 				expect(
@@ -172,6 +263,146 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 
 				const after = yield* send(ownerApp, "GET", "/medicine-memory");
 				expect(after.json).toEqual(saved.json);
+			}),
+		));
+
+	test("each member has their own; a caregiver opens every member's; others get 403", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Members");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				const ownerApp = familyApp(owner, familyId, medicineMemoryRoutes());
+				const theirs = familyApp(relative, familyId, medicineMemoryRoutes());
+				const ofOwner = `/medicine-memory?person=${owner.identity}`;
+				const ofRelative = `/medicine-memory?person=${relative.identity}`;
+
+				// The relative keeps their own pills in their own places.
+				yield* send(theirs, "PUT", "/medicine-memory", {
+					enabled: true,
+					places: ["Bathroom shelf"],
+				});
+				const saved = yield* send(
+					theirs,
+					"POST",
+					"/medicine-memory/sightings",
+					sighting("Bathroom shelf", minutesAgo(1)),
+				);
+				expect(decode(saved.json)).toMatchObject({
+					personId: relative.identity,
+					people: [relative.identity],
+					sightings: [{ personId: relative.identity }],
+				});
+
+				// The founder (every scope, #188) sees only their own by default, and the relative's on
+				// request; the relative cannot open the founder's.
+				expect(
+					decode((yield* send(ownerApp, "GET", "/medicine-memory")).json),
+				).toMatchObject({
+					personId: owner.identity,
+					places: [],
+					sightings: [],
+				});
+				const opened = decode(
+					(yield* until(
+						ownerApp,
+						ofRelative,
+						(r) => r.status === 200 && decode(r.json).sightings.length === 1,
+					)).json,
+				);
+				expect(opened.people).toEqual([owner.identity, relative.identity]);
+				expect(opened.places).toEqual(["Bathroom shelf"]);
+				for (const [method, path, body] of [
+					["GET", ofOwner, undefined],
+					["PUT", ofOwner, { enabled: false, places: [] }],
+					[
+						"DELETE",
+						`/medicine-memory/sightings/1?person=${owner.identity}`,
+						undefined,
+					],
+				] as const)
+					expect(failure(yield* send(theirs, method, path, body))).toEqual([
+						403,
+						"forbidden",
+					]);
+				expect(
+					failure(yield* send(theirs, "GET", "/medicine-memory?person=me")),
+				).toEqual([400, "invalid_request"]);
+
+				// A caregiver scope opens the founder's too; the founder's own stays separate.
+				yield* Effect.promise(() =>
+					owner.connection.reducers.setCareGrant({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+						scope: "care_plan_edit",
+						granted: true,
+					}),
+				);
+				yield* until(theirs, ofOwner, (r) => r.status === 200);
+				yield* send(theirs, "PUT", ofOwner, {
+					enabled: true,
+					places: ["Desk"],
+				});
+				const own = decode(
+					(yield* until(
+						ownerApp,
+						"/medicine-memory",
+						(r) => decode(r.json).places.length > 0,
+					)).json,
+				);
+				expect(own.places).toEqual(["Desk"]);
+				expect(own.sightings).toEqual([]);
+			}),
+		));
+
+	test("a dropped connection serves no stale memory", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const link = yield* Effect.acquireRelease(
+					Effect.promise(() => dbProxy(config.uri)),
+					(proxy) => Effect.sync(() => proxy.close()),
+				);
+				const { db, familyId } = yield* openFamily(
+					{ ...config, uri: link.uri },
+					"Dropped memory",
+				);
+				const app = familyApp(db, familyId, medicineMemoryRoutes());
+				const permission = { enabled: true, places: ["Kitchen"] };
+				const saved = yield* send(app, "PUT", "/medicine-memory", permission);
+				expect(saved.status).toBe(200);
+
+				// The write fails once the socket is gone; `app.ts` answers both errors as 503.
+				link.drop();
+				const write = yield* Effect.promise(() =>
+					Promise.resolve(
+						app.request("/medicine-memory", {
+							method: "PUT",
+							body: JSON.stringify(permission),
+							headers: { "content-type": "application/json" },
+						}),
+					).then(
+						() => undefined,
+						(caught: unknown) => caught,
+					),
+				);
+				expect(write).toBeInstanceOf(DbUnavailable);
+				// The cached permission is stale now and never leaves the server.
+				const read = yield* Effect.promise(() =>
+					Promise.resolve(app.request("/medicine-memory")).then(
+						() => undefined,
+						(caught: unknown) => caught,
+					),
+				);
+				expect(read).toEqual(
+					new DbUnavailable({
+						reason: "connection closed; cached rows are stale",
+					}),
+				);
 			}),
 		));
 });

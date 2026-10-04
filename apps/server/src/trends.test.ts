@@ -223,4 +223,131 @@ describe("explainTrend", () => {
 			expect.stringContaining("heart attack"),
 		);
 	});
+
+	test("narrow consent, partial syncs, warnings, and missing values are named", () => {
+		const reply = explain({
+			labs: [
+				subject(
+					[
+						lab("TSH", null, "2026-10-01"),
+						{ ...lab("CRP", 4, "2026-10-02"), sourceName: null, source: null },
+					],
+					{
+						access: "not_granted",
+						syncStatus: "partial",
+						warnings: ["rate limited"],
+					},
+				),
+				subject([], { syncStatus: null }),
+			],
+		});
+		expect(reply.unknown).toEqual([
+			"WHOOP data through NOOP: not connected.",
+			"No wearable or device samples in the last 7 days.",
+			"Lab results: the patient's consent does not cover labs.",
+			"Lab results: the FinchNode sync is partial.",
+			"Lab results: FinchNode warning rate limited.",
+			"TSH: the source gave no value.",
+			"Nutrition estimates: none are recorded.",
+		]);
+		expect(reply.observations.find((o) => o.label === "CRP")?.source).toBe(
+			"FinchNode · unnamed source",
+		);
+	});
+
+	test("two sources of one measure in different units are a conflict", () => {
+		const reply = explain({
+			samples: [
+				sample("hrv", 40, "2026-10-03T08:00:00Z"),
+				sample("hrv", 0.04, "2026-10-03T08:00:00Z", {
+					source: "strap-b",
+					unit: "s",
+				}),
+				sample("steps", 900, "2026-10-03T08:00:00Z", { unit: "count" }),
+				sample("steps", 800, "2026-10-03T09:00:00Z", {
+					source: "phone",
+					unit: "count",
+				}),
+			],
+		});
+		expect(reply.conflicts).toEqual([
+			"hrv: the sources use different units (ms, s).",
+		]);
+	});
+
+	test("a shared care plan offers routines and verified care only", () => {
+		const profile = {
+			preferredName: null,
+			language: null,
+			timeZone: "Europe/London",
+			accessibilityNeeds: null,
+			diagnoses: null,
+			allergies: null,
+			dietaryRestrictions: null,
+			fluidRestrictions: null,
+			activityRestrictions: null,
+			routines: [{ name: "Morning walk", time: "08:00" }],
+			contacts: null,
+			familiarDestinations: null,
+			devices: null,
+			declinedPrompts: [],
+		};
+		const instruction = (
+			name: string,
+			kind: "care" | "medication",
+			verification: "verified" | "unverified",
+		) => ({
+			kind,
+			name,
+			instruction: `${name} as written`,
+			times: ["09:00"],
+			reason: null,
+			source: "discharge sheet",
+			effectiveDate: "2026-09-01",
+			id: name,
+			familyId: "1",
+			timeZone: "Europe/London",
+			editedBy: "a".repeat(64),
+			editedAt: "2026-09-01T00:00:00Z",
+			verification,
+			verifiedBy: null,
+			verifiedAt: null,
+		});
+		const instructions = [
+			instruction("Stretch", "care", "verified"),
+			instruction("Ice pack", "care", "unverified"),
+			instruction("Metformin", "medication", "verified"),
+		];
+		expect(explain({ care: { profile, instructions } }).carePlan).toEqual({
+			status: "shared",
+			routines: [
+				{ name: "Morning walk", time: "08:00", timeZone: "Europe/London" },
+			],
+			instructions: [
+				{
+					name: "Stretch",
+					instruction: "Stretch as written",
+					times: ["09:00"],
+					timeZone: "Europe/London",
+					source: "discharge sheet",
+					effectiveDate: "2026-09-01",
+				},
+			],
+			notes: [
+				"Ice pack (unverified, discharge sheet, 2026-09-01): not verified, ask your caregiver.",
+				"Medication instructions are never offered from a trend.",
+			],
+		});
+		const notes = (routines: typeof profile.routines | null) =>
+			explain({ care: { profile: { ...profile, routines }, instructions: [] } })
+				.carePlan.notes;
+		expect(notes(null)).toEqual([
+			"Routines unknown.",
+			"Medication instructions are never offered from a trend.",
+		]);
+		expect(notes([])).toEqual([
+			"No routines saved.",
+			"Medication instructions are never offered from a trend.",
+		]);
+	});
 });

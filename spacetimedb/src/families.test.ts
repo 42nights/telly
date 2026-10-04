@@ -154,13 +154,32 @@ describe("recordSample", () => {
 		["clock too far ahead", { sourceTime: at("2026-01-05T12:01:01Z") }],
 		["unit mismatch", { unit: "bps" }],
 		["other metric", { metric: "spo2" }],
-		["unvalidated", { quality: { tag: "Unvalidated" } }],
+		["unvalidated, not from NOOP", { quality: { tag: "Unvalidated" } }],
+		[
+			"synthetic NOOP demo data",
+			{
+				source: "noop:my-whoop",
+				synthetic: true,
+				quality: { tag: "Unvalidated" },
+			},
+		],
 	])("raises nothing: %s", (_, over) => {
 		const h = withRules();
 		h.call(mod.recordSample, alice, sample(over));
 		expect(h.rows("healthSample")).toHaveLength(1);
 		expect(h.rows("alert")).toEqual([]);
 		expect(h.rows("alertDelivery")).toEqual([]);
+	});
+
+	test("an unvalidated real WHOOP reading through NOOP raises an alert", () => {
+		const h = withRules();
+		h.call(
+			mod.recordSample,
+			alice,
+			sample({ source: "noop:my-whoop", quality: { tag: "Unvalidated" } }),
+		);
+		expect(h.rows("alert")).toMatchObject([{ familyId: 1n, sampleId: 1n }]);
+		expect(h.rows("alertDelivery")).toHaveLength(1);
 	});
 
 	test("a resent reading alerts once; another source alerts again", () => {

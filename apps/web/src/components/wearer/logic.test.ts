@@ -2,15 +2,21 @@ import { describe, expect, test } from "bun:test";
 import type { HealthSample } from "@health/contracts";
 
 import {
+	ago,
+	barPercent,
+	categoryOfRequest,
 	currentHeartRate,
+	direction,
 	emergencyIntent,
 	evidenceLine,
 	HEART_RATE_FRESH_MS,
-	isMedicineRequest,
+	isFindRequest,
 	itemFromRequest,
 	marker,
 	SIGHTING_OLD_MS,
 	sightingState,
+	USUAL_BPM,
+	whoopHeartRate,
 } from "./logic";
 
 const now = Date.parse("2026-10-04T12:00:00Z");
@@ -55,12 +61,23 @@ describe("currentHeartRate", () => {
 	});
 });
 
-describe("medicine requests", () => {
-	test("medicine words open the finder; other questions do not", () => {
-		expect(isMedicineRequest("Where are my meds?")).toBe(true);
-		expect(isMedicineRequest("did I take my PILLS")).toBe(true);
-		expect(isMedicineRequest("When is Priya calling?")).toBe(false);
-		expect(isMedicineRequest("Remind me about the medal")).toBe(false);
+describe("find requests", () => {
+	test("medicine words, and finding a known object, open the finder; other questions do not", () => {
+		expect(isFindRequest("Where are my meds?")).toBe(true);
+		expect(isFindRequest("did I take my PILLS")).toBe(true);
+		expect(isFindRequest("where are my keys?")).toBe(true);
+		expect(isFindRequest("I lost my reading glasses")).toBe(true);
+		expect(isFindRequest("Call my phone")).toBe(false);
+		expect(isFindRequest("Where is my daughter?")).toBe(false);
+		expect(isFindRequest("When is Priya calling?")).toBe(false);
+		expect(isFindRequest("Remind me about the medal")).toBe(false);
+	});
+
+	test("the request names the category the arrow prefers", () => {
+		expect(categoryOfRequest("where are my pills")).toBe("medicine");
+		expect(categoryOfRequest("find my hearing aid")).toBe("hearing aid");
+		expect(categoryOfRequest("where did I leave my purse")).toBe("wallet");
+		expect(categoryOfRequest("")).toBeNull();
 	});
 
 	test("the item name comes from the request words", () => {
@@ -70,7 +87,8 @@ describe("medicine requests", () => {
 		);
 		expect(itemFromRequest("I need my pills now")).toBe("your pills");
 		expect(itemFromRequest("where are the vitamins")).toBe("your vitamins");
-		expect(itemFromRequest("")).toBe("your medicine");
+		expect(itemFromRequest("where are my car keys?")).toBe("your car keys");
+		expect(itemFromRequest("")).toBe("your things");
 	});
 });
 
@@ -132,4 +150,42 @@ test("a remembered sighting is marked old, outdated, or unsure, never current", 
 	expect(sightingState(moved, now).outdated).toBe(true);
 	expect(sightingState({ ...seen, confidence: 0.5 }, now).unsure).toBe(true);
 	expect(sightingState({ ...seen, labelRead: false }, now).unsure).toBe(true);
+});
+
+test("the WHOOP reading counts only the WHOOP source, validated or not", () => {
+	const samples = [
+		sample("phone", 1),
+		sample("whoop", 2, { source: "noop:whoop", quality: "unvalidated" }),
+		sample("whoop demo", 1, { source: "noop:whoop", synthetic: true }),
+	];
+	expect(whoopHeartRate(samples, "1", now)?.id).toBe("whoop");
+	expect(whoopHeartRate([sample("phone", 1)], "1", now)).toBeNull();
+	expect(currentHeartRate(samples, "1", now)?.id).toBe("phone");
+});
+
+test("an age reads in the largest whole unit", () => {
+	expect(ago(4_000)).toBe("just now");
+	expect(ago(42_000)).toBe("42 s ago");
+	expect(ago(3 * 60_000)).toBe("3 min ago");
+	expect(ago(2 * 3600_000)).toBe("2 h ago");
+});
+
+test("the range bar places a reading and clamps it to the bar ends", () => {
+	expect(barPercent(105)).toBe(50);
+	expect(barPercent(USUAL_BPM.low)).toBe(20);
+	expect(barPercent(10)).toBe(0);
+	expect(barPercent(250)).toBe(100);
+});
+
+test("a direction names the side and the height of the box centre", () => {
+	const frame = { width: 900, height: 900 };
+	expect(direction({ x: 0, y: 0, width: 100, height: 100 }, frame)).toBe(
+		"Look to the left, high up.",
+	);
+	expect(direction({ x: 800, y: 800, width: 100, height: 100 }, frame)).toBe(
+		"Look to the right, low down.",
+	);
+	expect(direction({ x: 400, y: 400, width: 100, height: 100 }, frame)).toBe(
+		"Look straight ahead.",
+	);
 });

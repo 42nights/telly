@@ -296,3 +296,5 @@ export const harness = (start = "2026-01-05T12:00:00Z") => {
 	};
 	return h;
 };
+
+export type Harness = ReturnType<typeof harness>;

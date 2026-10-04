@@ -5,7 +5,8 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
-import { apiRequest } from "@/lib/api";
+import { apiQuery } from "@/lib/api";
+import { queryClient } from "@/lib/query";
 import { getSessionToken, returnPath } from "@/lib/session";
 import { finishSignIn, signInConfig, startSignIn } from "@/lib/sign-in";
 
@@ -45,19 +46,26 @@ const failure = (error: unknown): Step => {
 	};
 };
 
-/** A first-time user with no family starts on Family, which tells how to pair a person. */
+/**
+ * A first-time user with no family starts onboarding, unless they came to join a family by invite.
+ * A member of a family never lands on onboarding: they go to the page they asked for, or Home.
+ * The list it reads stays cached for the first screen.
+ */
 const landing = async (returnTo: string) => {
-	const families = await apiRequest(FamilyList, "/api/families");
-	return families.kind === "ready" && families.value.families.length === 0
-		? "/family"
-		: returnPath(returnTo);
+	const path = returnPath(returnTo);
+	const families = await queryClient
+		.fetchQuery(apiQuery(FamilyList, "/api/families"))
+		.catch(() => null);
+	if (families === null) return path;
+	if (families.families.length > 0)
+		return path.startsWith("/welcome") ? "/hud" : path;
+	return path.startsWith("/join/") ? path : "/welcome";
 };
 
 function SignIn() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
 	const [step, setStep] = useState<Step>({ kind: "ready" });
-
 	useEffect(() => {
 		if (config === null) return;
 		if (search.error !== undefined) {

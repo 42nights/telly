@@ -15,7 +15,7 @@ import {
 	NewCareInstruction,
 } from "@health/contracts/care-profile";
 import { Schema } from "effect";
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { Identity } from "spacetimedb";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
@@ -81,6 +81,27 @@ export const requireScope = (c: Ctx, scope: CareScope) => {
 			"forbidden",
 			`Your care access in this family does not include ${scope}`,
 		);
+};
+
+/**
+ * Health records (samples, alerts, reports, reminder history) answer `forbidden` unless the caller
+ * holds `health_records` or is the wearer (the family's first member), who always reads their own.
+ * The module's `healthReader` views apply the same rule.
+ */
+export const requireHealthRecords: MiddlewareHandler<FamilyEnv> = async (
+	c,
+	next,
+) => {
+	let wearer: { id: bigint; member: Identity } | undefined;
+	for (const m of c.var.db.connection.db.myFamilyMembers.iter())
+		if (
+			m.familyId === c.var.familyId &&
+			(wearer === undefined || m.id < wearer.id)
+		)
+			wearer = m;
+	if (wearer?.member.toHexString() !== c.var.db.identity)
+		requireScope(c, "health_records");
+	await next();
 };
 
 export const readProfile = (c: Ctx): CareProfileRecord => {

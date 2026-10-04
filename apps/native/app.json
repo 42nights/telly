@@ -11,7 +11,6 @@
 			"supportsTablet": true,
 			"bundleIdentifier": "com.anonymous.health",
 			"infoPlist": {
-				"NSCameraUsageDescription": "The medicine finder looks for a medicine box in the camera frame.",
 				"NSMicrophoneUsageDescription": "Voice requests are spoken to the app."
 			}
 		},
@@ -31,6 +30,16 @@
 		},
 		"plugins": [
 			"expo-router",
+			"./modules/telly-ar/app.plugin.js",
+			[
+				"expo-location",
+				{
+					"locationWhenInUsePermission": "Telly uses your location to notice when you go out and to show the family members you chose where you are.",
+					"locationAlwaysAndWhenInUsePermission": "Telly uses your location in the background to notice when you go out and come back, and tells only the family members you chose.",
+					"locationAlwaysPermission": "Telly uses your location in the background to notice when you go out and come back, and tells only the family members you chose.",
+					"isIosBackgroundLocationEnabled": true
+				}
+			],
 			[
 				"expo-splash-screen",
 				{

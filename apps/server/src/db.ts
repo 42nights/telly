@@ -33,8 +33,12 @@ const views = [
 	"SELECT * FROM my_trip_events",
 	"SELECT * FROM my_locations",
 	"SELECT * FROM my_location_shares",
-	"SELECT * FROM my_medicine_memory",
+	"SELECT * FROM my_home_watch",
+	"SELECT * FROM my_away_events",
+	"SELECT * FROM my_medicine_places",
 	"SELECT * FROM my_medicine_sightings",
+	"SELECT * FROM my_medicine_ar_pins",
+	"SELECT * FROM my_family_members",
 	"SELECT * FROM my_care_profiles",
 	"SELECT * FROM my_care_instructions",
 	"SELECT * FROM my_care_grants",
@@ -51,6 +55,11 @@ const views = [
 	"SELECT * FROM my_appointments",
 	"SELECT * FROM my_clinician_shares",
 	"SELECT * FROM my_cooking_profiles",
+	"SELECT * FROM my_report_email_settings",
+	"SELECT * FROM my_report_emails",
+	"SELECT * FROM my_family_invites",
+	"SELECT * FROM my_push_tokens",
+	"SELECT * FROM my_family_people",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
 ];
@@ -232,4 +241,18 @@ export const readFamilyRecords = ({ connection }: FamilyDb): FamilyRecords => {
 			acknowledgedAt: row.acknowledgedAt.toISOString(),
 		})),
 	};
+};
+
+/** The family a WHOOP push token hash belongs to, as seen by the NOOP ingest identity. */
+export const pushTokenFamily = (
+	{ connection }: FamilyDb,
+	tokenHash: string,
+) => {
+	if (!connection.isActive)
+		throw new DbUnavailable({
+			reason: "connection closed; cached rows are stale",
+		});
+	for (const row of connection.db.myPushTokens.iter())
+		if (row.tokenHash === tokenHash) return row.familyId;
+	return undefined;
 };

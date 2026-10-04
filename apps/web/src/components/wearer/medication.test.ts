@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CareInstruction } from "@health/contracts/care-profile";
+import type { MedicineSighting } from "@health/contracts/medicine-memory";
 import type {
 	ReminderEvent,
 	ReminderOccurrence,
@@ -9,6 +10,7 @@ import {
 	instructionInEffect,
 	medicationPrompt,
 	medicationReason,
+	questionSummary,
 	uncertaintyAnswer,
 } from "./medication";
 
@@ -92,6 +94,22 @@ describe("instruction in effect", () => {
 		for (const plan of cases)
 			expect(instructionInEffect(occurrence, plan, now)).toBeNull();
 	});
+
+	test("a plan without a time zone uses this device's date", () => {
+		expect(
+			instructionInEffect(occurrence, [version("10", { timeZone: null })], now)
+				?.id,
+		).toBe("10");
+	});
+});
+
+describe("question summary", () => {
+	test("names the dose time and the time asked, but no medicine", () => {
+		const summary = questionSummary(occurrence, "2026-10-04T08:06:00.000Z");
+		expect(summary).toContain("scheduled 2026-10-04T08:00:00.000Z");
+		expect(summary).toContain("asked 2026-10-04T08:06:00.000Z");
+		expect(summary).not.toContain("Morning tablet");
+	});
 });
 
 describe("medication prompt", () => {
@@ -110,6 +128,12 @@ describe("medication prompt", () => {
 	test("an unknown reason is said as unknown, not guessed", () => {
 		expect(medicationReason(version("10", { reason: null }))).toContain(
 			"does not say why",
+		);
+	});
+
+	test("a saved reason is quoted from the plan", () => {
+		expect(medicationReason(version("10"))).toBe(
+			"Your saved plan says you take Synthetic Med A for: “blood pressure”.",
 		);
 	});
 });
@@ -161,17 +185,26 @@ describe("did I take it?", () => {
 	});
 
 	test("a container sighting since the dose time reads as found, never taken", () => {
-		const sighting = (id: string, seenAt: string) => ({
+		const sighting = (
+			id: string,
+			seenAt: string,
+			category: MedicineSighting["category"] = "medicine",
+		): MedicineSighting => ({
 			id,
 			familyId: "1",
+			personId: "a".repeat(64),
 			container: "SYNTHETIC A 10 mg tablets",
 			place: "Kitchen counter",
 			seenAt,
-			source: "camera_check" as const,
+			source: "camera_check",
 			confidence: 0.9,
 			labelRead: true,
 			savedBy: "me",
 			notFoundAt: null,
+			category,
+			thumbnail: "",
+			usualPlace: null,
+			pinned: false,
 		});
 		const answer = uncertaintyAnswer(
 			occurrence,
@@ -180,6 +213,8 @@ describe("did I take it?", () => {
 				sighting("9", "2026-10-04T08:03:00.000Z"),
 				// Before this dose time: not evidence for it.
 				sighting("8", "2026-10-03T20:00:00.000Z"),
+				// Not medicine (#301): never evidence about a dose.
+				sighting("7", "2026-10-04T08:04:00.000Z", "keys"),
 			],
 			(actor) => actor,
 			time,
@@ -189,5 +224,6 @@ describe("did I take it?", () => {
 			"08:05, me: the reminder was left open.",
 		]);
 		expect(answer.join("\n")).not.toContain("20:00");
+		expect(answer.join("\n")).not.toContain("08:04");
 	});
 });

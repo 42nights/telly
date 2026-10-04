@@ -1,13 +1,11 @@
-// The wearer's open reminders (#28) with the home-speaker handoff (#46). This screen gives each due
-// prompt once: while the glasses charge it first asks the home speaker. When the speaker is off,
-// offline, or refuses, the prompt is shown here instead. A prompt the speaker said is shown here
-// without a second announcement, so the wearer can still answer it.
+// The wearer's open reminders (#28). This screen gives each due prompt once and records that it was
+// shown. No glasses state reaches the app, so this screen never hands a prompt to the home speaker
+// (#46); the bedtime screen does, because the glasses are off at bedtime.
 import {
 	ReminderHistory,
 	ReminderOccurrenceDetail,
 	type ReminderResponse,
 } from "@health/contracts/reminders";
-import { SpeakerHandoff } from "@health/contracts/speaker";
 import { Button } from "@health/ui/components/button";
 import { useEffect, useRef, useState } from "react";
 
@@ -15,12 +13,6 @@ import { ApiNotice } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
 import { STATE_TEXT } from "./history";
-
-const REASON_TEXT: Record<NonNullable<SpeakerHandoff["reason"]>, string> = {
-	disabled: "The home speaker is off",
-	offline: "The home speaker is offline",
-	refused: "The home speaker refused it",
-};
 
 const ANSWERS: readonly [ReminderResponse, string][] = [
 	["okay", "Okay"],
@@ -31,40 +23,18 @@ const ANSWERS: readonly [ReminderResponse, string][] = [
 export function DueReminders({ familyId }: { familyId: string | null }) {
 	const base =
 		familyId === null ? null : familyPath(familyId, "/reminder-occurrences");
-	const [refreshKey, setRefreshKey] = useState(0);
-	const history = useApi(ReminderHistory, base, {
-		pollMs: 15_000,
-		refreshKey,
-	});
-	// No glasses state reaches the app yet, so the wearer sets it here for the demonstration.
-	const [charging, setCharging] = useState(false);
+	const history = useApi(ReminderHistory, base, { pollMs: 15_000 });
 	const [notes, setNotes] = useState<Record<string, string>>({});
 	const given = useRef(new Set<string>());
 
 	useEffect(() => {
 		if (base === null || history.kind !== "ready") return;
-		const refresh = () => setRefreshKey((k) => k + 1);
 		const give = async (id: string, clientId: string) => {
-			const path = `${base}/${encodeURIComponent(id)}`;
-			if (charging) {
-				const handoff = await apiRequest(
-					SpeakerHandoff,
-					`${path}/speaker-handoffs`,
-					{ method: "POST", body: { clientId } },
-				);
-				if (handoff.kind === "ready" && handoff.value.outcome !== "use_phone")
-					return refresh();
-				const why =
-					handoff.kind === "ready" && handoff.value.reason !== null
-						? REASON_TEXT[handoff.value.reason]
-						: "The home speaker could not be reached";
-				setNotes((n) => ({ ...n, [id]: `${why}, so it is shown here.` }));
-			}
-			await apiRequest(ReminderOccurrenceDetail, `${path}/deliveries`, {
-				method: "POST",
-				body: { clientId, source: "web" },
-			});
-			refresh();
+			await apiRequest(
+				ReminderOccurrenceDetail,
+				`${base}/${encodeURIComponent(id)}/deliveries`,
+				{ method: "POST", body: { clientId, source: "web" } },
+			);
 		};
 		for (const { occurrence, events } of history.value.occurrences) {
 			if (!occurrence.promptDue) continue;
@@ -74,7 +44,7 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 			given.current.add(clientId);
 			void give(occurrence.id, clientId);
 		}
-	}, [base, history, charging]);
+	}, [base, history]);
 
 	if (base === null) return null;
 	const answer = async (
@@ -104,7 +74,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 						? "Sign in to answer."
 						: `Not saved: ${result.message}`,
 			}));
-		setRefreshKey((k) => k + 1);
 	};
 	const open =
 		history.kind === "ready"
@@ -121,14 +90,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 			<h2 id="due-reminders" className="font-bold text-[16px]">
 				Reminders
 			</h2>
-			<label className="flex min-h-11 items-center gap-2">
-				<input
-					type="checkbox"
-					checked={charging}
-					onChange={(e) => setCharging(e.target.checked)}
-				/>
-				My glasses are charging (simulated)
-			</label>
 			{history.kind !== "ready" ? (
 				<ApiNotice state={history} what="reminders" />
 			) : open.length === 0 ? (

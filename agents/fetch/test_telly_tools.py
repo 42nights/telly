@@ -1,9 +1,12 @@
 """Tests for telly_tools. The aiohttp.web upstream here is a test-only fake telly server."""
 
 import asyncio
+import dataclasses
 import json
 import socket
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import aiohttp
@@ -37,12 +40,14 @@ def config(server_url: str) -> Config:
 class HandleCallTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.calls: list[tuple[str, str | None, dict]] = []
+        self.delegations: list[str | None] = []
         self.reply: web.StreamResponse = web.json_response(ALERTS)
 
         async def tools(request: web.Request) -> web.StreamResponse:
             self.calls.append(
                 (request.path_qs, request.headers.get("Authorization"), await request.json())
             )
+            self.delegations.append(request.headers.get("X-Telly-Delegation"))
             return self.reply
 
         app = web.Application()
@@ -111,6 +116,29 @@ class HandleCallTest(unittest.IsolatedAsyncioTestCase):
         status, body = await handle_call(config(f"http://127.0.0.1:{port}"), SENDER, "12", REQUEST)
         self.assertEqual((status, body["error"]), (503, "unavailable"))
 
+    async def test_wildcard_grant_needs_the_servers_delegation(self) -> None:
+        cfg = dataclasses.replace(self.cfg, grants={SENDER: frozenset({"*"})})
+        status, body = await handle_call(cfg, SENDER, "99", REQUEST)
+        self.assertEqual((status, body["error"]), (403, "forbidden"))
+        self.assertEqual(self.calls, [])
+        status, body = await handle_call(cfg, SENDER, "99", REQUEST, "lent-for-99")
+        self.assertEqual((status, body), (200, ALERTS))
+        self.assertEqual(self.delegations, ["lent-for-99"])
+        # Another sender gets nothing from the wildcard, delegation or not.
+        status, _ = await handle_call(cfg, OTHER, "99", REQUEST, "lent-for-99")
+        self.assertEqual(status, 403)
+
+    async def test_token_file_is_read_on_each_call(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "token"
+            cfg = dataclasses.replace(self.cfg, token="", token_file=str(path))
+            status, body = await handle_call(cfg, SENDER, "12", REQUEST)
+            self.assertEqual((status, body["error"]), (503, "unavailable"))
+            for token in ("first", "second"):
+                path.write_text(f"{token}\n")
+                await handle_call(cfg, SENDER, "12", REQUEST)
+        self.assertEqual([auth for _, auth, _ in self.calls], ["Bearer first", "Bearer second"])
+
 
 class LoadConfigTest(unittest.TestCase):
     ENV = {
@@ -165,6 +193,14 @@ class BridgeCallTest(unittest.IsolatedAsyncioTestCase):
         result = await self.call()
         self.assertEqual((result.status, result.body), (200, ALERTS))
         self.assertEqual(self.sent, [ToolCall(family_id="12", request=REQUEST)])
+
+    async def test_delegation_goes_to_the_worker(self) -> None:
+        await bridge_call(
+            self.CFG,
+            BridgeCall(token="server-secret", family_id="12", request=REQUEST, delegation="lent"),
+            self.send,
+        )
+        self.assertEqual(self.sent, [ToolCall(family_id="12", request=REQUEST, delegation="lent")])
 
     async def test_no_reply_is_unavailable_and_other_family_is_upstream_error(self) -> None:
         self.reply = None

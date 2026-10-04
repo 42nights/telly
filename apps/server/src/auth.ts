@@ -32,11 +32,17 @@ const Discovery = Schema.Struct({
 const Jwks = Schema.Struct({
 	keys: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
 });
-// `exp` is required here; the JWT check only rejects an expired `exp` that is present.
+// `exp` is required here; the JWT check only rejects an expired `exp` that is present. The profile
+// claims come with Google's `email profile` scopes. Only `name` is stored (`GET /api/me`), for the
+// members of the caller's families; the others are shown to the caller only.
 const Claims = Schema.Struct({
 	iss: Schema.String,
 	sub: Schema.NonEmptyString,
 	exp: Schema.Finite,
+	name: Schema.optional(Schema.String),
+	given_name: Schema.optional(Schema.String),
+	email: Schema.optional(Schema.String),
+	picture: Schema.optional(Schema.String),
 });
 
 const fetchTimeoutMs = 5_000;
@@ -111,7 +117,14 @@ const oidcVerifier = (issuer: string, audience: string) => {
 				verification: { iss: issuer, aud: audience },
 			});
 			const claims = Schema.decodeUnknownSync(Claims)(payload);
-			return { issuer: claims.iss, subject: claims.sub };
+			return {
+				issuer: claims.iss,
+				subject: claims.sub,
+				name: claims.name ?? null,
+				givenName: claims.given_name ?? null,
+				email: claims.email ?? null,
+				picture: claims.picture ?? null,
+			};
 		} catch {
 			throw invalid;
 		}
@@ -170,18 +183,25 @@ export const authenticate = (
 	};
 };
 
-/** Requires that the caller's database identity is a member of the path's `familyId`. */
-export const requireFamilyMember: MiddlewareHandler<FamilyEnv> = async (
-	c,
-	next,
-) => {
-	const raw = c.req.param("familyId") ?? "";
-	const familyId = /^(0|[1-9][0-9]{0,19})$/.test(raw) ? BigInt(raw) : undefined;
+/** The path's `familyId` as a database id (u64); anything else is `invalid_request`. */
+export const familyIdParam = (raw: string | undefined): bigint => {
+	const familyId = /^(0|[1-9][0-9]{0,19})$/.test(raw ?? "")
+		? BigInt(raw ?? "")
+		: undefined;
 	if (familyId === undefined || familyId >= 2n ** 64n)
 		throw new ApiFailure(
 			"invalid_request",
 			"The family id must be a database id",
 		);
+	return familyId;
+};
+
+/** Requires that the caller's database identity is a member of the path's `familyId`. */
+export const requireFamilyMember: MiddlewareHandler<FamilyEnv> = async (
+	c,
+	next,
+) => {
+	const familyId = familyIdParam(c.req.param("familyId"));
 	// `my_families` holds only the families the database identity belongs to.
 	const member = c.var.db.connection.db.myFamilies
 		.iter()

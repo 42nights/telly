@@ -15,13 +15,20 @@ import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
 import { accountRoutes } from "./routes/families";
 import { familyDomainRoutes } from "./routes/index";
 import { signInRoutes } from "./routes/sign-in";
+import { toolRoutes } from "./routes/tools";
 
-export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
+export const createApp = (
+	config: ServerConfig,
+	ingest?: NoopIngest,
+	// Photon Spectrum Cloud webhook (src/imessage/cloud.ts); undefined without the iMessage configuration.
+	imessageWebhook?: (request: Request) => Promise<Response>,
+) => {
 	const noop = noopRoutes(ingest);
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyDomainRoutes(config));
+		.route("/", familyDomainRoutes(config))
+		.post("/whoop-token", noop.pushToken);
 
 	const app = new Hono()
 		// Redact the NOOP ingest key from logged URLs.
@@ -42,11 +49,25 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 			c.json({ sources: [noop.status(Date.now())] } satisfies Sources),
 		)
 		.post("/api/noop/ingest", noop.ingest)
+		// Spectrum signs each delivery; the handler verifies it instead of a sign-in.
+		.post("/api/imessage/webhook", (c) =>
+			imessageWebhook
+				? imessageWebhook(c.req.raw)
+				: c.json(
+						{
+							error: "unavailable",
+							message: "iMessage is not running",
+						} satisfies ApiError,
+						503,
+					),
+		)
 		// Sign-in itself cannot require sign-in.
 		.route("/api/sign-in", signInRoutes(config.auth))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())
+		// Before the membership check: a delegated Fetch.ai tool call comes from a non-member.
+		.route("/api/families/:familyId", toolRoutes())
 		.route("/api/families/:familyId", family);
 
 	app.notFound((c) =>

@@ -42,7 +42,8 @@ export function FamilyGate({
 	if (data.family === null)
 		return (
 			<p className={emptyClassName}>
-				No person is paired with this account yet. People are paired manually.
+				No person is set up with this account yet.{" "}
+				<Link to="/welcome">Set up a person</Link>
 			</p>
 		);
 	return children(data.family);
@@ -84,14 +85,14 @@ export function ReadingsGlance({
 	familyId: string;
 	now: number;
 }) {
-	const { records, thresholds } = data;
-	if (records.kind !== "ready")
-		return <ApiNotice state={records} what="readings" />;
+	const { readings, thresholds } = data;
+	if (readings.kind !== "ready")
+		return <ApiNotice state={readings} what="readings" />;
 	return (
 		<GlanceList
 			now={now}
 			glance={newestPerMetric(
-				records.value.samples.filter((s) => s.familyId === familyId),
+				readings.value.samples.filter((s) => s.familyId === familyId),
 				thresholds.kind === "ready" ? thresholds.value.thresholds : [],
 				now,
 			)}
@@ -271,10 +272,10 @@ function NoAlert({ monitoring }: { monitoring: ApiState<Monitoring> }) {
 				{level === null
 					? "Monitoring state is unknown, so an alert could be missed."
 					: level === "on"
-						? "Every threshold has a fresh validated reading."
+						? "Every threshold has a fresh validated or WHOOP reading."
 						: level === "partial"
-							? "Some thresholds have no fresh validated reading, so an alert could be missed."
-							: "Monitoring is stopped: no threshold has a fresh validated reading."}
+							? "Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed."
+							: "Monitoring is stopped: no threshold has a fresh validated or WHOOP reading."}
 			</p>
 		</div>
 	);
@@ -380,14 +381,16 @@ export function MonitoringList({
 					</li>
 				))
 			)}
-			<li className="flex justify-between gap-2 p-2">
-				<span>WHOOP</span>
-				<span>
-					{whoop === null
-						? "NOOP not connected"
-						: `Connected · ${ago(whoop.sourceTime, now)} · unvalidated`}
-				</span>
-			</li>
+			{records.kind !== "forbidden" && (
+				<li className="flex justify-between gap-2 p-2">
+					<span>WHOOP</span>
+					<span>
+						{whoop === null
+							? "NOOP not connected"
+							: `Connected · ${ago(whoop.sourceTime, now)} · unvalidated`}
+					</span>
+				</li>
+			)}
 		</ul>
 	);
 }

@@ -308,25 +308,32 @@ def trial(job):
     est_px, true_px = project(est_c)[0], project(true_c)[0]
     res.update(relocalized=True, reloc_frame=first, err_cm=100 * float(np.linalg.norm(est_c - true_c)),
                err_px=float(np.linalg.norm(est_px - true_px)))
-    if evidence_dir and seed < 3:  # same pose and light, without the occluder, so the box is visible
-        draw = R.capture(R.render(faces, true2[-1]), np.random.default_rng(seed), light, cfg["gradient"], tint)
-        cv2.drawMarker(draw, tuple(int(v) for v in true_px), (0, 0, 255), cv2.MARKER_CROSS, 40, 2)
-        cv2.circle(draw, tuple(int(v) for v in est_px), 14, (0, 255, 0), 3)
-        cv2.putText(draw, f"{case}: {res['err_cm']:.1f} cm, {res['err_px']:.1f} px (green=pin, red=truth)",
-                    (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
-    if evidence_dir and seed < 3 and arrow_k is not None:  # the first frame that showed an arrow
-        k, true_c, est_c = arrow_k
-        draw = R.capture(R.render(faces, true2[k]), np.random.default_rng(seed), light, cfg["gradient"], tint)
-        c = np.array([R.W / 2, R.H / 2])
-        for Xc, color, width in ((est_c, (0, 255, 0), 6), (true_c, (0, 0, 255), 2)):
-            # The arrow ends at the guess when it is on screen, and points toward it from the centre when not.
-            tip = project(Xc[None])[0] if on_screen(Xc) else c + 160 * np.array([np.cos(arrow(Xc)), np.sin(arrow(Xc))])
-            cv2.arrowedLine(draw, tuple(int(v) for v in c), tuple(int(v) for v in tip), color, width, tipLength=0.25)
-        cv2.putText(draw, f"{case}: arrow before the marker (green=app, red=truth)",
-                    (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}-arrow.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if evidence_dir and seed < 3:
+        draw_evidence(evidence_dir, case, seed, res, faces, true2, (light, cfg["gradient"], tint), (true_px, est_px), arrow_k)
     return res
+
+
+def draw_evidence(evidence_dir, case, seed, res, faces, true2, look, marker_px, arrow_k):
+    """Marker and arrow frames for the README: same pose and light, without the occluder, so the box is visible."""
+    true_px, est_px = marker_px
+    draw = R.capture(R.render(faces, true2[-1]), np.random.default_rng(seed), *look)
+    cv2.drawMarker(draw, tuple(int(v) for v in true_px), (0, 0, 255), cv2.MARKER_CROSS, 40, 2)
+    cv2.circle(draw, tuple(int(v) for v in est_px), 14, (0, 255, 0), 3)
+    cv2.putText(draw, f"{case}: {res['err_cm']:.1f} cm, {res['err_px']:.1f} px (green=pin, red=truth)",
+                (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if arrow_k is None:
+        return
+    k, true_c, est_c = arrow_k  # the first frame that showed an arrow
+    draw = R.capture(R.render(faces, true2[k]), np.random.default_rng(seed), *look)
+    c = np.array([R.W / 2, R.H / 2])
+    for Xc, color, width in ((est_c, (0, 255, 0), 6), (true_c, (0, 0, 255), 2)):
+        # The arrow ends at the guess when it is on screen, and points toward it from the centre when not.
+        tip = project(Xc[None])[0] if on_screen(Xc) else c + 160 * np.array([np.cos(arrow(Xc)), np.sin(arrow(Xc))])
+        cv2.arrowedLine(draw, tuple(int(v) for v in c), tuple(int(v) for v in tip), color, width, tipLength=0.25)
+    cv2.putText(draw, f"{case}: arrow before the marker (green=app, red=truth)",
+                (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}-arrow.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
 
 
 def best_guess(fixes):

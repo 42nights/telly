@@ -1,6 +1,6 @@
 # Family questions API
 
-Backend for family questions ([#86](https://github.com/ayaangazali/telly/issues/86), part of [#11](https://github.com/ayaangazali/telly/issues/11) and [#16](https://github.com/ayaangazali/telly/issues/16)). Gemini answers the question. Its data tools run through Fetch.ai Agentverse. ElevenLabs transcribes and speaks voice questions. Plan: [`docs/plan.md`](plan.md) (Family, Requests) and the board flow "How is Mom sleeping?".
+Backend for family questions ([#86](https://github.com/ayaangazali/telly/issues/86), part of [#11](https://github.com/ayaangazali/telly/issues/11) and [#16](https://github.com/ayaangazali/telly/issues/16)). Gemini answers the question. Its data tools run through Fetch.ai Agentverse when the bridge is configured, and otherwise on the asking member's own database connection. ElevenLabs transcribes and speaks voice questions. Plan: [`docs/plan.md`](plan.md) (Family, Requests) and the board flow "How is Mom sleeping?".
 
 Schemas: `@health/contracts/ask` (`packages/contracts/src/ask.ts`). Routes: `apps/server/src/routes/ask.ts`. Gemini adapter: `apps/server/src/integrations/gemini-chat.ts`. Family tools (tool list, evidence, freshness): `familyTools` in `apps/server/src/family-tools.ts`, described in [`chat.md`](chat.md).
 
@@ -34,7 +34,7 @@ Errors use the `ApiError` JSON body:
 | 400 | `invalid_request` | Bad body, unknown keys, bad time zone, more than 4 files, an unsupported file type, a file over 5 MiB, files over 8 MiB in total, or an empty, oversized, or non-audio recording |
 | 401 | `unauthorized` | No valid sign-in token |
 | 403 | `forbidden` | The caller is not a member of the family, or the tool route refused the call |
-| 503 | `unavailable` | `GEMINI_API_KEY`, the Fetch.ai bridge, `ELEVENLABS_API_KEY` (voice only), or sign-in is not configured |
+| 503 | `unavailable` | `GEMINI_API_KEY`, `ELEVENLABS_API_KEY` (voice only), or sign-in is not configured |
 | 502 | `upstream_error` | Gemini or ElevenLabs failed, sent an invalid reply, or did not answer in time |
 
 When the client disconnects, the server aborts the provider request and answers 499 with no body.
@@ -53,7 +53,7 @@ This part is for [#35](https://github.com/ayaangazali/telly/issues/35). Plan: [`
 - The final answer is structured output: JSON `{ answer, follow_ups }` from a JSON schema in `response_format` ([structured outputs with tools](https://ai.google.dev/gemini-api/docs/structured-output)). An answer that is not valid JSON or has an empty `answer` fails.
 - Attachments go in the `user_input` step: PDF as `document`, images as `image`, and plain text as a `text` part with the file name.
 - Requests set `store: false`. The server sends the whole conversation each round, so Google keeps no copy for later retrieval.
-- The tools come from `familyTools` (the Fetch.ai tool set in `@health/contracts/tools`). Each call goes through `callAgentTool`: bridge, Agentverse, worker, then `POST /api/families/:familyId/tools`. There is no direct database fallback.
+- The tools come from `familyTools` (the Fetch.ai tool set in `@health/contracts/tools`). With `TELLY_FETCH_BRIDGE_URL` set, each call goes through `callAgentTool`: bridge, Agentverse, worker, then `POST /api/families/:familyId/tools`. The call carries a delegation that lets the worker read this one family through the asking member's connection while the question runs, so every family works and the worker holds no standing access ([agents/fetch/README.md](../agents/fetch/README.md)). Without the bridge, each call runs `runTool` (the code behind that route) on the asking member's own database connection. The Cloudflare deployment uses the live bridge on the team host.
 - One provider request is bounded at 30 s, and one question (all rounds and retries) at 45 s, so a voice reply with transcription and speech comes before a phone gives up at about 60 s. The model gets at most 4 tool rounds.
 - An overloaded call (HTTP 429 or 503: nothing ran, nothing is billed) goes at once to `gemini-3.5-flash`, then to both models again after 1 s and after 3 s. Only the refused round is sent again: finished tool rounds and their tool calls are kept. When every try is refused, or the 45 s pass, the answer fails with `upstream_error` and the message "The assistant is busy right now. Try again in a minute", followed by the cause. Other failures are not retried, because each call is billed and has no idempotency key.
 - Every reply is validated. An empty, incomplete, or endless answer fails; the server never makes up an answer.
@@ -65,5 +65,5 @@ These come from `apps/server/.env.schema` (Varlock). The vision route uses the s
 
 - `GEMINI_API_KEY`: server-only.
 - `GEMINI_BASE_URL`: the API origin. Set a local test server for isolated proofs.
-- `TELLY_FETCH_BRIDGE_URL` and `TELLY_FETCH_BRIDGE_TOKEN`: the Fetch.ai bridge.
+- `TELLY_FETCH_BRIDGE_URL` and `TELLY_FETCH_BRIDGE_TOKEN`: the Fetch.ai bridge. Optional: without them, the tools read the database directly.
 - `ELEVENLABS_*`: voice, as in [`voice.md`](voice.md).

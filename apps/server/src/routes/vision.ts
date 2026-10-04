@@ -1,14 +1,14 @@
 import {
 	MAX_VISION_IMAGE_BYTES,
-	type MedicineDetection,
-	MedicineDetectionRequest,
-	type MedicineDetections,
+	type ObjectDetection,
+	ObjectDetectionRequest,
+	type ObjectDetections,
 	type VisionFrame,
 } from "@health/contracts/vision";
 import { Cause, Effect, Exit } from "effect";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
+import { ApiFailure, decodeBody, type FamilyEnv, typedFailure } from "../http";
 import {
 	createGeminiDetector,
 	type GeminiBox,
@@ -16,7 +16,7 @@ import {
 	overloaded,
 } from "../integrations/gemini";
 
-/** Below this model confidence a marker asks the user to check the label. */
+/** Below this model confidence a marker asks the user to check the object. */
 const VERIFY_BELOW = 0.7;
 
 // Base64 grows 4/3; the rest is frame metadata.
@@ -24,7 +24,7 @@ const MAX_BODY_BYTES = Math.ceil(MAX_VISION_IMAGE_BYTES / 3) * 4 + 16 * 1024;
 
 /** Reads the pixel size from a PNG or baseline/progressive JPEG header; `undefined` if malformed. */
 export const imageSize = (
-	type: MedicineDetectionRequest["image"]["type"],
+	type: ObjectDetectionRequest["image"]["type"],
 	bytes: Buffer,
 ): { width: number; height: number } | undefined => {
 	if (type === "image/png") {
@@ -55,7 +55,7 @@ export const imageSize = (
 export const toFramePixels = (
 	frame: VisionFrame,
 	[ymin, xmin, ymax, xmax]: GeminiBox["box"],
-): MedicineDetection["box"] => {
+): ObjectDetection["box"] => {
 	// Undo the clockwise rotation: image-normalized (u, v) → crop-normalized point.
 	const unrotate = (u: number, v: number): [number, number] => {
 		switch (frame.rotation) {
@@ -81,7 +81,7 @@ export const toFramePixels = (
 };
 
 /** Rejects an image that does not match its declared type or provenance. */
-const checkImage = ({ frame, image }: MedicineDetectionRequest) => {
+const checkImage = ({ frame, image }: ObjectDetectionRequest) => {
 	const invalid = (message: string) =>
 		new ApiFailure("invalid_request", message);
 	const { crop } = frame;
@@ -108,7 +108,7 @@ const checkImage = ({ frame, image }: MedicineDetectionRequest) => {
 export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 	const detect = gemini && createGeminiDetector(gemini);
 	return new Hono<FamilyEnv>().post(
-		"/medicine-detections",
+		"/object-detections",
 		bodyLimit({
 			maxSize: MAX_BODY_BYTES,
 			onError: () => {
@@ -119,10 +119,10 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 			if (detect === undefined)
 				throw new ApiFailure(
 					"unavailable",
-					"Medicine detection is not configured",
+					"Object detection is not configured",
 				);
 			// decodeBody's message never echoes the body, so the image stays out of the reply.
-			const request = await decodeBody(c, MedicineDetectionRequest);
+			const request = await decodeBody(c, ObjectDetectionRequest);
 			checkImage(request);
 
 			// The request signal interrupts the provider call when the client disconnects.
@@ -134,19 +134,20 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 					frame: request.frame,
 					model: result.value.model,
 					analyzedAt: new Date().toISOString(),
-					detections: result.value.boxes.map(({ box, label, confidence }) => ({
-						label,
-						confidence,
-						needsVerification: label === null || confidence < VERIFY_BELOW,
-						box: toFramePixels(request.frame, box),
-					})),
-				} satisfies MedicineDetections);
+					detections: result.value.boxes.map(
+						({ box, category, label, confidence }) => ({
+							category,
+							label,
+							confidence,
+							needsVerification: label === null || confidence < VERIFY_BELOW,
+							box: toFramePixels(request.frame, box),
+						}),
+					),
+				} satisfies ObjectDetections);
 			// 499: the client closed the request; nobody reads this response.
 			if (Cause.hasInterruptsOnly(result.cause))
 				return new Response(null, { status: 499 });
-			const failure = Cause.findErrorOption(result.cause);
-			if (failure._tag === "None") throw Cause.squash(result.cause);
-			const { reason, status } = failure.value;
+			const { reason, status } = typedFailure(result.cause);
 			console.warn("gemini vision failed", { reason, status });
 			// The web screen shows this after "Something went wrong while checking the picture."
 			throw new ApiFailure(
@@ -155,7 +156,7 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 					? "The picture checker is busy right now and did not answer in time. Try again in a minute."
 					: status !== undefined && overloaded(status)
 						? `The picture checker is busy right now (Gemini HTTP ${status}). Try again in a minute.`
-						: "Medicine detection failed",
+						: "Object detection failed",
 			);
 		},
 	);

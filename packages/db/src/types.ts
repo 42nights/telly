@@ -99,6 +99,28 @@ export const AttemptStatus = __t.enum("AttemptStatus", {
 });
 export type AttemptStatus = __Infer<typeof AttemptStatus>;
 
+export const AwayEvent = __t.object("AwayEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get kind() {
+    return AwayKind;
+  },
+  manual: __t.bool(),
+  get fix() {
+    return __t.option(LocationFix);
+  },
+  at: __t.timestamp(),
+});
+export type AwayEvent = __Infer<typeof AwayEvent>;
+
+// The tagged union or sum type for the algebraic type `AwayKind`.
+export const AwayKind = __t.enum("AwayKind", {
+  Left: __t.unit(),
+  Back: __t.unit(),
+});
+export type AwayKind = __Infer<typeof AwayKind>;
+
 export const CareGrantEvent = __t.object("CareGrantEvent", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -270,6 +292,23 @@ export const DeliveryStatus = __t.enum("DeliveryStatus", {
 });
 export type DeliveryStatus = __Infer<typeof DeliveryStatus>;
 
+export const DemoReplay = __t.object("DemoReplay", {
+  familyId: __t.u64(),
+  recordingFamilyId: __t.u64(),
+  next: __t.u32(),
+  lastAlertAt: __t.option(__t.timestamp()),
+  startedBy: __t.identity(),
+  startedAt: __t.timestamp(),
+});
+export type DemoReplay = __Infer<typeof DemoReplay>;
+
+export const DemoTimer = __t.object("DemoTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  familyId: __t.u64(),
+});
+export type DemoTimer = __Infer<typeof DemoTimer>;
+
 export const ExerciseEvent = __t.object("ExerciseEvent", {
   id: __t.string(),
   familyId: __t.u64(),
@@ -300,6 +339,25 @@ export const Family = __t.object("Family", {
 });
 export type Family = __Infer<typeof Family>;
 
+export const FamilyDeletion = __t.object("FamilyDeletion", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  deletedBy: __t.identity(),
+  deletedAt: __t.timestamp(),
+});
+export type FamilyDeletion = __Infer<typeof FamilyDeletion>;
+
+export const FamilyInvite = __t.object("FamilyInvite", {
+  codeHash: __t.string(),
+  familyId: __t.u64(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  expiresAt: __t.timestamp(),
+  usedBy: __t.option(__t.identity()),
+  usedAt: __t.option(__t.timestamp()),
+});
+export type FamilyInvite = __Infer<typeof FamilyInvite>;
+
 export const FamilyMember = __t.object("FamilyMember", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -307,6 +365,22 @@ export const FamilyMember = __t.object("FamilyMember", {
   addedAt: __t.timestamp(),
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
+
+export const FamilyPerson = __t.object("FamilyPerson", {
+  familyId: __t.u64(),
+  member: __t.identity(),
+  name: __t.option(__t.string()),
+});
+export type FamilyPerson = __Infer<typeof FamilyPerson>;
+
+export const FamilyPushToken = __t.object("FamilyPushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+  ingest: __t.identity(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type FamilyPushToken = __Infer<typeof FamilyPushToken>;
 
 export const FinchnodeLink = __t.object("FinchnodeLink", {
   id: __t.u64(),
@@ -334,6 +408,28 @@ export const HealthSample = __t.object("HealthSample", {
   recordedBy: __t.identity(),
 });
 export type HealthSample = __Infer<typeof HealthSample>;
+
+export const HomePoint = __t.object("HomePoint", {
+  latitude: __t.f64(),
+  longitude: __t.f64(),
+});
+export type HomePoint = __Infer<typeof HomePoint>;
+
+export const HomeWatch = __t.object("HomeWatch", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get home() {
+    return __t.option(HomePoint);
+  },
+  radiusMeters: __t.u32(),
+  autoTrip: __t.bool(),
+  outsideSince: __t.option(__t.timestamp()),
+  awaySince: __t.option(__t.timestamp()),
+  distanceMeters: __t.option(__t.f64()),
+  updatedAt: __t.timestamp(),
+});
+export type HomeWatch = __Infer<typeof HomeWatch>;
 
 export const LadderTimer = __t.object("LadderTimer", {
   scheduledId: __t.u64(),
@@ -403,6 +499,18 @@ export const MealFact = __t.object("MealFact", {
 });
 export type MealFact = __Infer<typeof MealFact>;
 
+export const MedicineArPin = __t.object("MedicineArPin", {
+  containerId: __t.u64(),
+  familyId: __t.u64(),
+  anchorId: __t.string(),
+  mapBytes: __t.u32(),
+  savedBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+  personId: __t.identity(),
+});
+export type MedicineArPin = __Infer<typeof MedicineArPin>;
+
 export const MedicineMemory = __t.object("MedicineMemory", {
   familyId: __t.u64(),
   places: __t.array(__t.string()),
@@ -410,6 +518,16 @@ export const MedicineMemory = __t.object("MedicineMemory", {
   setAt: __t.timestamp(),
 });
 export type MedicineMemory = __Infer<typeof MedicineMemory>;
+
+export const MedicinePlaces = __t.object("MedicinePlaces", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  personId: __t.identity(),
+  places: __t.array(__t.string()),
+  setBy: __t.identity(),
+  setAt: __t.timestamp(),
+});
+export type MedicinePlaces = __Infer<typeof MedicinePlaces>;
 
 export const MedicineSighting = __t.object("MedicineSighting", {
   id: __t.u64(),
@@ -422,8 +540,19 @@ export const MedicineSighting = __t.object("MedicineSighting", {
   labelRead: __t.bool(),
   savedBy: __t.identity(),
   notFoundAt: __t.option(__t.timestamp()),
+  personId: __t.identity(),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()),
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
+
+export const MemberName = __t.object("MemberName", {
+  member: __t.identity(),
+  name: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type MemberName = __Infer<typeof MemberName>;
 
 export const Message = __t.object("Message", {
   id: __t.u64(),
@@ -449,6 +578,9 @@ export type MyAlerts = __Infer<typeof MyAlerts>;
 
 export const MyAppointments = __t.object("MyAppointments", {});
 export type MyAppointments = __Infer<typeof MyAppointments>;
+
+export const MyAwayEvents = __t.object("MyAwayEvents", {});
+export type MyAwayEvents = __Infer<typeof MyAwayEvents>;
 
 export const MyCareGrants = __t.object("MyCareGrants", {});
 export type MyCareGrants = __Infer<typeof MyCareGrants>;
@@ -486,11 +618,23 @@ export type MyExercisePlans = __Infer<typeof MyExercisePlans>;
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
+export const MyFamilyInvites = __t.object("MyFamilyInvites", {});
+export type MyFamilyInvites = __Infer<typeof MyFamilyInvites>;
+
+export const MyFamilyMembers = __t.object("MyFamilyMembers", {});
+export type MyFamilyMembers = __Infer<typeof MyFamilyMembers>;
+
+export const MyFamilyPeople = __t.object("MyFamilyPeople", {});
+export type MyFamilyPeople = __Infer<typeof MyFamilyPeople>;
+
 export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
 export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
+
+export const MyHomeWatch = __t.object("MyHomeWatch", {});
+export type MyHomeWatch = __Infer<typeof MyHomeWatch>;
 
 export const MyLocationShares = __t.object("MyLocationShares", {});
 export type MyLocationShares = __Infer<typeof MyLocationShares>;
@@ -501,14 +645,20 @@ export type MyLocations = __Infer<typeof MyLocations>;
 export const MyMealFacts = __t.object("MyMealFacts", {});
 export type MyMealFacts = __Infer<typeof MyMealFacts>;
 
-export const MyMedicineMemory = __t.object("MyMedicineMemory", {});
-export type MyMedicineMemory = __Infer<typeof MyMedicineMemory>;
+export const MyMedicineArPins = __t.object("MyMedicineArPins", {});
+export type MyMedicineArPins = __Infer<typeof MyMedicineArPins>;
+
+export const MyMedicinePlaces = __t.object("MyMedicinePlaces", {});
+export type MyMedicinePlaces = __Infer<typeof MyMedicinePlaces>;
 
 export const MyMedicineSightings = __t.object("MyMedicineSightings", {});
 export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
+
+export const MyPushTokens = __t.object("MyPushTokens", {});
+export type MyPushTokens = __Infer<typeof MyPushTokens>;
 
 export const MyReminderEvents = __t.object("MyReminderEvents", {});
 export type MyReminderEvents = __Infer<typeof MyReminderEvents>;
@@ -521,6 +671,12 @@ export type MyReminderSettings = __Infer<typeof MyReminderSettings>;
 
 export const MyReminders = __t.object("MyReminders", {});
 export type MyReminders = __Infer<typeof MyReminders>;
+
+export const MyReportEmailSettings = __t.object("MyReportEmailSettings", {});
+export type MyReportEmailSettings = __Infer<typeof MyReportEmailSettings>;
+
+export const MyReportEmails = __t.object("MyReportEmails", {});
+export type MyReportEmails = __Infer<typeof MyReportEmails>;
 
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
@@ -599,6 +755,12 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const PushToken = __t.object("PushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+});
+export type PushToken = __Infer<typeof PushToken>;
 
 export const Reminder = __t.object("Reminder", {
   id: __t.u64(),
@@ -681,6 +843,28 @@ export const Report = __t.object("Report", {
   reviewedAt: __t.option(__t.timestamp()),
 });
 export type Report = __Infer<typeof Report>;
+
+export const ReportEmail = __t.object("ReportEmail", {
+  reportId: __t.string(),
+  familyId: __t.u64(),
+  sendId: __t.string(),
+  recipient: __t.string(),
+  status: __t.string(),
+  reason: __t.option(__t.string()),
+  automatic: __t.bool(),
+  requestedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmail = __Infer<typeof ReportEmail>;
+
+export const ReportEmailSettings = __t.object("ReportEmailSettings", {
+  familyId: __t.u64(),
+  enabled: __t.bool(),
+  recipient: __t.string(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmailSettings = __Infer<typeof ReportEmailSettings>;
 
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {

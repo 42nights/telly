@@ -50,12 +50,76 @@ export const LocationShare = Schema.Struct({
 });
 export type LocationShare = typeof LocationShare.Type;
 
-/** `GET /location`: the caller's own location and those shared with the caller, and the caller's shares. */
+/**
+ * A trip start (`left`) or end (`back`). `manual`: the person pressed a button; otherwise `fix` is
+ * the position that decided it.
+ */
+export const AwayEvent = Schema.Struct({
+	id: DbId,
+	familyId: DbId,
+	sharer: IdentityHex,
+	kind: Schema.Literals(["left", "back"]),
+	manual: Schema.Boolean,
+	fix: Schema.NullOr(LocationFix),
+	at: UtcTime,
+});
+export type AwayEvent = typeof AwayEvent.Type;
+
+/**
+ * `GET /location`: the caller's own location and those shared with the caller, and the caller's
+ * shares. Another person's location needs both their share and the caller's `location` care scope
+ * (#26); `seesShared` is false when the caller lacks that scope, so `locations` holds only their own.
+ */
 export const FamilyLocations = Schema.Struct({
 	locations: Schema.Array(SharedLocation),
 	shares: Schema.Array(LocationShare),
+	seesShared: Schema.Boolean,
+	/** Trip starts and ends that the caller may see, under the same rule, newest first. */
+	events: Schema.Array(AwayEvent),
 });
 export type FamilyLocations = typeof FamilyLocations.Type;
+
+/** The home radius, in meters: a person farther away than this for a minute is out (#302). */
+export const HOME_RADIUS = { default: 200, minimum: 100, maximum: 5000 };
+
+export const HomePoint = Schema.Struct({
+	latitude: LocationFix.fields.latitude,
+	longitude: LocationFix.fields.longitude,
+});
+export type HomePoint = typeof HomePoint.Type;
+
+/**
+ * `PUT /location/home` body: the caller's home, the radius that counts as home, and whether the
+ * caller's location reports start and end trips. Only the caller reads their home.
+ */
+export const HomeInput = Schema.Struct({
+	home: Schema.NullOr(HomePoint),
+	radiusMeters: Schema.Int.check(
+		Schema.isBetween({
+			minimum: HOME_RADIUS.minimum,
+			maximum: HOME_RADIUS.maximum,
+		}),
+	),
+	autoTrip: Schema.Boolean,
+});
+export type HomeInput = typeof HomeInput.Type;
+
+/**
+ * `GET`/`PUT /location/home` and `POST /location/away` reply. `awaySince` is null at home.
+ * `distanceMeters`: how far the latest reported position was from home, or null when unknown.
+ * `sharing`: the caller shares their location with someone, so their reports are accepted.
+ */
+export const HomeWatch = Schema.Struct({
+	...HomeInput.fields,
+	awaySince: Schema.NullOr(UtcTime),
+	distanceMeters: Schema.NullOr(Schema.Finite),
+	sharing: Schema.Boolean,
+});
+export type HomeWatch = typeof HomeWatch.Type;
+
+/** `POST /location/away` body: "I'm going out" (`true`) or "I'm home" (`false`). */
+export const AwayInput = Schema.Struct({ away: Schema.Boolean });
+export type AwayInput = typeof AwayInput.Type;
 
 /** A fix older than this is no longer current. */
 export const STALE_FIX_MS = 10 * 60_000;

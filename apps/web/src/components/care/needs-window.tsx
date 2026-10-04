@@ -1,6 +1,6 @@
-// Care needs and the family contact ladder (issue #30), shown on the care plan screen (#209). Every
-// family client polls the same needs, so each shows the same state. Calls are simulated; Telly
-// places no real calls or texts.
+// Care needs and the family contact ladder (issue #30): the Care screen's Needs and Contacts tabs.
+// Every family client polls the same needs, so each shows the same state. Calls are simulated;
+// Telly places no real calls or texts.
 import {
 	CareNeed,
 	CareNeeds,
@@ -10,7 +10,7 @@ import {
 } from "@health/contracts/care";
 import { Me } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake, PhoneForwarded } from "lucide-react";
 import { useState } from "react";
 
 import { LadderForm } from "@/components/care/ladder-form";
@@ -22,19 +22,29 @@ import { apiRequest, familyPath, useApi } from "@/lib/api";
 const POLL_MS = 5_000;
 const field = "win95-inset win95-field h-11 min-w-0 bg-card px-2 text-sm";
 
-export function CareNeedsWindow({ familyId }: { familyId: string }) {
+/** One Care tab's window: the needs with the ask form, or the contact ladder. */
+export function CareWindow({
+	familyId,
+	part,
+}: {
+	familyId: string;
+	part: "needs" | "ladder";
+}) {
 	const meState = useApi(Me, "/api/me");
 	const me = meState.kind === "ready" ? meState.value.identity : null;
 	const base = familyPath(familyId, "/care");
 	return (
 		<Window
-			title="Family help"
-			icon={HeartHandshake}
+			title={part === "needs" ? "Care needs" : "Contact ladder"}
+			icon={part === "needs" ? HeartHandshake : PhoneForwarded}
 			status="Calls are simulated. Only accepting and then confirming help closes a need."
 		>
 			<div className="grid gap-4 p-2 text-sm">
-				<NeedsSection base={base} me={me} />
-				<LadderSection base={base} me={me} />
+				{part === "needs" ? (
+					<NeedsSection base={base} me={me} />
+				) : (
+					<LadderSection base={base} me={me} />
+				)}
 			</div>
 		</Window>
 	);
@@ -42,12 +52,7 @@ export function CareNeedsWindow({ familyId }: { familyId: string }) {
 
 /** The family's needs, polled so every family client shows the same state, and the ask form. */
 function NeedsSection({ base, me }: { base: string; me: string | null }) {
-	const [refreshKey, setRefreshKey] = useState(0);
-	const refresh = () => setRefreshKey((key) => key + 1);
-	const needs = useApi(CareNeeds, `${base}/needs`, {
-		pollMs: POLL_MS,
-		refreshKey,
-	});
+	const needs = useApi(CareNeeds, `${base}/needs`, { pollMs: POLL_MS });
 	const [busy, setBusy] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -63,8 +68,7 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 			{ method: "POST", body: { response } satisfies CareResponse },
 		);
 		setBusy(null);
-		if (result.kind === "ready") refresh();
-		else
+		if (result.kind !== "ready")
 			setError(
 				result.kind === "signed_out"
 					? "Sign in to answer."
@@ -103,15 +107,14 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 				<h3 id="ask" className="font-bold">
 					Ask the family
 				</h3>
-				<NewNeedForm path={`${base}/needs`} onSaved={refresh} />
+				<NewNeedForm path={`${base}/needs`} />
 			</section>
 		</>
 	);
 }
 
 function LadderSection({ base, me }: { base: string; me: string | null }) {
-	const [refreshKey, setRefreshKey] = useState(0);
-	const ladder = useApi(ContactLadderReply, `${base}/ladder`, { refreshKey });
+	const ladder = useApi(ContactLadderReply, `${base}/ladder`);
 	return (
 		<section aria-labelledby="ladder" className="grid gap-2">
 			<h3 id="ladder" className="font-bold">
@@ -125,14 +128,13 @@ function LadderSection({ base, me }: { base: string; me: string | null }) {
 					path={`${base}/ladder`}
 					ladder={ladder.value.ladder}
 					me={me}
-					onSaved={() => setRefreshKey((key) => key + 1)}
 				/>
 			)}
 		</section>
 	);
 }
 
-function NewNeedForm({ path, onSaved }: { path: string; onSaved: () => void }) {
+function NewNeedForm({ path }: { path: string }) {
 	const [kind, setKind] = useState<NewCareNeed["kind"]>("help");
 	const [summary, setSummary] = useState("");
 	const [due, setDue] = useState("");
@@ -163,7 +165,6 @@ function NewNeedForm({ path, onSaved }: { path: string; onSaved: () => void }) {
 		setSummary("");
 		setDue("");
 		setClientId(crypto.randomUUID());
-		onSaved();
 	};
 	return (
 		<form

@@ -18,7 +18,7 @@ import {
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { Link } from "@tanstack/react-router";
 import { Pill, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
 import {
@@ -79,7 +79,6 @@ function useOccurrenceActions(
 	occurrence: ReminderOccurrence,
 	sightings: readonly MedicineSighting[],
 	me: string | null,
-	onChange: () => void,
 ) {
 	const [step, setStep] = useState<Step>({ kind: "prompt" });
 	const [failure, setFailure] = useState<string | null>(null);
@@ -96,8 +95,8 @@ function useOccurrenceActions(
 				clientId: `show-${occurrence.id}-${occurrence.prompts}`,
 				source: "web",
 			},
-		}).then((r) => r.kind === "ready" && onChange());
-	}, [path, occurrence.id, occurrence.prompts, occurrence.promptDue, onChange]);
+		});
+	}, [path, occurrence.id, occurrence.prompts, occurrence.promptDue]);
 
 	const answer = async (response: ReminderResponse, words: string) => {
 		setFailure(null);
@@ -137,7 +136,6 @@ function useOccurrenceActions(
 						);
 			setStep({ kind: response, text: lines.join("\n") });
 		}
-		onChange();
 	};
 
 	const askFamily = async () => {
@@ -184,21 +182,18 @@ function Occurrence({
 	instructions,
 	sightings,
 	me,
-	onChange,
 }: {
 	familyId: string;
 	occurrence: ReminderOccurrence;
 	instructions: ApiState<CareInstructions>;
 	sightings: readonly MedicineSighting[];
 	me: string | null;
-	onChange: () => void;
 }) {
 	const { step, setStep, failure, answer, askFamily } = useOccurrenceActions(
 		familyId,
 		occurrence,
 		sightings,
 		me,
-		onChange,
 	);
 	const { speech, say } = useSpeech(familyId);
 	const instruction =
@@ -270,7 +265,7 @@ function Occurrence({
 					className={buttonVariants({ variant: "outline", className: big })}
 					data-slot="button"
 					search={{ q: `find my ${instruction?.name ?? occurrence.title}` }}
-					to="/medicine"
+					to="/find"
 				>
 					<Pill aria-hidden />
 					Find it
@@ -299,12 +294,10 @@ function Occurrence({
  * none is due; a failed read shows as a failure, never as "no medication".
  */
 export function MedicationReminders({ familyId }: { familyId: string }) {
-	const [refresh, setRefresh] = useState(0);
-	const onChange = useCallback(() => setRefresh((n) => n + 1), []);
 	const history = useApi(
 		ReminderHistory,
 		familyPath(familyId, "/reminder-occurrences"),
-		{ pollMs: 30_000, refreshKey: refresh },
+		{ pollMs: 30_000 },
 	);
 	const instructions = useApi(
 		CareInstructions,
@@ -342,7 +335,6 @@ export function MedicationReminders({ familyId }: { familyId: string }) {
 					key={occurrence.id}
 					me={me.kind === "ready" ? me.value.identity : null}
 					occurrence={occurrence}
-					onChange={onChange}
 					sightings={memory.kind === "ready" ? memory.value.sightings : []}
 				/>
 			))}

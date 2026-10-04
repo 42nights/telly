@@ -12,6 +12,8 @@ import {
 import { Cause, Effect, Exit, Schema } from "effect";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import type { FamilyDb } from "../db";
+import { delegate } from "../delegation";
 import { familyTools } from "../family-tools";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import { maxAudioBytes, type Voice } from "../integrations/elevenlabs";
@@ -94,6 +96,11 @@ const wearerRules = [
 	"Use short, simple sentences. Give at most one next step.",
 ].join("\n");
 
+// A whole message of greeting, thanks, goodbye, or a question about Telly itself. It needs no
+// records, so Gemini answers it without tools and no Fetch.ai call runs.
+const SMALL_TALK =
+	/^(hi+|hello|hey|hiya|yo|good (morning|afternoon|evening|night)|thanks?( you)?( so much)?|thank u|thx|ty|ok|okay|cool|great|nice|got it|bye|goodbye|see (you|ya)|how are (you|u)|who are (you|u)|what can (you|u) do|hola|gracias|buen[oa]s (dias|tardes|noches)|adios)( telly)?$/;
+
 /**
  * Saved facts the wearer may hear again. The #26 profile only when the caller holds
  * `health_records`, as everywhere else; the latest trip plan and the caller's own requests are
@@ -157,7 +164,8 @@ const wearerFacts = (c: Context<FamilyEnv>): string[] => {
 
 /**
  * Answers one family question; the routes and the iMessage agent share it. `facts` gives the
- * saved facts a wearer may hear again; it is read only for a wearer's question.
+ * saved facts a wearer may hear again; it is read only for a wearer's question. `db` is the asking
+ * member's connection: without the Fetch.ai bridge, the tools read the records through it.
  */
 export const familyAnswer =
 	({ gemini, fetchAgent }: Pick<AskDeps, "gemini" | "fetchAgent">) =>
@@ -165,6 +173,7 @@ export const familyAnswer =
 		familyId: bigint,
 		question: FamilyQuestion,
 		facts: () => readonly string[] = () => [],
+		db?: FamilyDb,
 	) => {
 		const now = new Date();
 		// Checked before any provider, so help never waits on a model or a missing configuration.
@@ -181,27 +190,55 @@ export const familyAnswer =
 				urgent: true,
 			});
 		// Checked first, so Gemini never runs a question whose tools cannot read records.
-		if (fetchAgent === undefined)
+		const source = fetchAgent ?? db;
+		if (source === undefined)
 			throw new ApiFailure(
 				"unavailable",
 				"Fetch.ai tool routing is not configured",
 			);
-		const family = familyTools(fetchAgent, familyId, now, question.timeZone);
-		const rules =
-			question.asker === "wearer"
-				? [family.rules, wearerRules, ...facts()].join("\n")
-				: family.rules;
-		return askGemini(gemini, question, { ...family, rules }).pipe(
-			Effect.map(
-				({ text, model, followUps }): FamilyAnswer => ({
-					answer: text,
-					...family.cited(),
-					model,
-					answeredAt: now.toISOString(),
-					followUps,
-					urgent: false,
-				}),
-			),
+		const chat =
+			(question.attachments ?? []).length === 0 &&
+			SMALL_TALK.test(
+				question.question
+					.normalize("NFD")
+					.replace(/\p{M}/gu, "")
+					.toLowerCase()
+					.replace(/[^\p{L}\p{N}]+/gu, " ")
+					.trim(),
+			);
+		const answer = (delegation?: string) => {
+			const family = familyTools(
+				source,
+				familyId,
+				now,
+				question.timeZone,
+				delegation,
+			);
+			const rules =
+				question.asker === "wearer"
+					? [family.rules, wearerRules, ...facts()].join("\n")
+					: family.rules;
+			const tools = chat ? [] : family.tools;
+			return askGemini(gemini, question, { ...family, rules, tools }).pipe(
+				Effect.map(
+					({ text, model, followUps }): FamilyAnswer => ({
+						answer: text,
+						...family.cited(),
+						model,
+						answeredAt: now.toISOString(),
+						followUps,
+						urgent: false,
+					}),
+				),
+			);
+		};
+		// Through Fetch.ai, the worker reads through the asker's connection for this family while the
+		// question runs (`delegation.ts`), so it needs no standing access to any family.
+		if (fetchAgent === undefined || db === undefined || chat) return answer();
+		return Effect.acquireUseRelease(
+			Effect.sync(() => delegate(db, familyId)),
+			({ token }) => answer(token),
+			({ release }) => Effect.sync(release),
 		);
 	};
 
@@ -224,7 +261,7 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 				checkAttachments(question);
 				const answer = await run(
 					c.req.raw.signal,
-					askFamily(c.var.familyId, question, () => wearerFacts(c)),
+					askFamily(c.var.familyId, question, () => wearerFacts(c), c.var.db),
 				);
 				if (answer === undefined) return gone();
 				c.header("cache-control", "no-store");
@@ -268,7 +305,12 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 					);
 				const answer = await run(
 					signal,
-					askFamily(c.var.familyId, question.value, () => wearerFacts(c)),
+					askFamily(
+						c.var.familyId,
+						question.value,
+						() => wearerFacts(c),
+						c.var.db,
+					),
 				);
 				if (answer === undefined) return gone();
 				// The text answer stands when speech fails; the reason stays explicit.

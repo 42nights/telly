@@ -157,20 +157,30 @@ const ownCount = () => {
 export const usePendingCount = (): number =>
 	useSyncExternalStore(subscribe, ownCount, () => 0);
 
-/** Resends waiting actions now, and again on reconnect, on sign-in, and every `RETRY_MS`. Call once. */
+/**
+ * Resends waiting actions now, and again on reconnect, on sign-in, and every `RETRY_MS`. Call once.
+ * Returns a function that stops the sync.
+ */
 export const startPendingSync = () => {
 	const flush = () => void flushPending();
+	const changed = (event: StorageEvent) => {
+		// Another tab changed the queue: show the new count.
+		if (event.key === KEY) for (const listener of listeners) listener();
+	};
 	flush();
 	window.addEventListener("online", flush);
-	// Another tab changed the queue: show the new count.
-	window.addEventListener("storage", (event) => {
-		if (event.key === KEY) for (const listener of listeners) listener();
-	});
-	onSessionChange(() => {
+	window.addEventListener("storage", changed);
+	const unsubscribe = onSessionChange(() => {
 		for (const listener of listeners) listener();
 		flush();
 	});
-	setInterval(() => {
+	const timer = setInterval(() => {
 		if (ownCount() > 0) flush();
 	}, RETRY_MS);
+	return () => {
+		window.removeEventListener("online", flush);
+		window.removeEventListener("storage", changed);
+		unsubscribe();
+		clearInterval(timer);
+	};
 };

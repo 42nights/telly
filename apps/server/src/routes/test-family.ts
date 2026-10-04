@@ -44,6 +44,38 @@ export const openFamily = (config: DbConfig, name: string) =>
 	});
 
 /**
+ * A new identity that `owner` adds to `familyId` with `scopes` (a member starts with none, #26), on
+ * a new connection whose views already hold the grants.
+ */
+export const joinFamily = (
+	config: DbConfig,
+	owner: FamilyDb,
+	familyId: string,
+	scopes: readonly string[],
+) =>
+	Effect.gen(function* () {
+		const member = yield* openFamilyDb(config);
+		const ids = {
+			familyId: BigInt(familyId),
+			member: Identity.fromString(member.identity),
+		};
+		yield* Effect.promise(() => owner.connection.reducers.addFamilyMember(ids));
+		yield* Effect.forEach(
+			scopes,
+			(scope) =>
+				Effect.promise(() =>
+					owner.connection.reducers.setCareGrant({
+						...ids,
+						scope,
+						granted: true,
+					}),
+				),
+			{ discard: true },
+		);
+		return yield* openFamilyDb({ ...config, token: member.token });
+	});
+
+/**
  * Grants or revokes the caller's own care scopes. A founder holds every scope from `createFamily`
  * (#188) and keeps `family_access`, so a test revokes a scope to show what it gates.
  */
@@ -75,7 +107,14 @@ export const familyApp = (
 ) =>
 	new Hono<FamilyEnv>()
 		.use(async (c, next) => {
-			c.set("identity", { issuer: "test", subject: db.identity });
+			c.set("identity", {
+				issuer: "test",
+				subject: db.identity,
+				name: null,
+				givenName: null,
+				email: null,
+				picture: null,
+			});
 			c.set("db", db);
 			c.set("familyId", BigInt(familyId));
 			await next();

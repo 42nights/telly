@@ -1,5 +1,5 @@
-// The family screen (docs/board.html#wf-phone, #wf-dash): the alert to act on, today's readings,
-// monitoring, alert history, messages, and the plans. It also holds the old dashboard (#209).
+// Family › Overview (docs/board.html#wf-phone, #wf-dash): the alert to act on, today's readings,
+// monitoring, messages, and the plans. The other Family tabs are Alerts, Trends, and Thresholds.
 import type { Family } from "@health/contracts";
 import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
@@ -8,10 +8,14 @@ import { Users } from "lucide-react";
 
 import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
-import { type FamilyData, useFamilyData } from "@/components/family/data";
+import {
+	type FamilyData,
+	familyReads,
+	useFamilyData,
+} from "@/components/family/data";
+import { FamilyPeople } from "@/components/family/invite";
 import {
 	KeyNumbers,
-	RecentAlerts,
 	RecentMessages,
 	SourceList,
 } from "@/components/family/overview";
@@ -25,36 +29,34 @@ import {
 import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
+import { UseDemoData } from "@/components/settings/demo-data";
 import { FamilyLocationSection } from "@/components/trip/location";
-import { PersonPicker } from "@/lib/family";
+import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
-	component: FamilyPhone,
+	loader: loadFamilyReads(familyReads),
+	component: FamilyOverview,
 });
 
-const linkButton = cn(buttonVariants(), "h-11 justify-self-start");
-
-function FamilyPhone() {
+function FamilyOverview() {
 	const data = useFamilyData();
 	return (
-		<main className="win95-desktop min-h-0 overflow-y-auto p-2 sm:p-4">
+		<main className="p-2 sm:p-4">
 			<Window
 				title={`Family · ${data.family?.name ?? "No person"}`}
 				icon={Users}
-				className="mx-auto w-full max-w-3xl"
+				className="mx-auto w-full max-w-4xl"
 			>
 				<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
 				<FamilyGate data={data} emptyClassName="p-3 text-sm">
-					{(family) => (
-						<FamilyBody key={family.id} data={data} family={family} />
-					)}
+					{(family) => <Overview key={family.id} data={data} family={family} />}
 				</FamilyGate>
 			</Window>
 		</main>
 	);
 }
 
-function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
+function Overview({ data, family }: { data: FamilyData; family: Family }) {
 	const now = Date.now();
 	return (
 		<div className="grid grid-cols-[minmax(0,1fr)] gap-4 p-2 text-sm">
@@ -70,6 +72,11 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</h2>
 				<MonitoringBadge state={data.monitoring} />
 			</header>
+			<FamilyPeople
+				familyId={family.id}
+				familyName={family.name}
+				me={data.me}
+			/>
 
 			<AlertSection data={data} now={now} />
 
@@ -82,10 +89,11 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<KeyNumbers data={data} family={family} />
 				<ReadingsGlance data={data} familyId={family.id} now={now} />
+				{data.readings.kind === "ready" &&
+					!data.readings.value.samples.some(
+						(s) => s.familyId === family.id && s.source.startsWith("noop:"),
+					) && <UseDemoData familyId={family.id} />}
 				<SourceList />
-				<Link to="/trends" data-slot="button" className={linkButton}>
-					See trends
-				</Link>
 			</section>
 
 			<section aria-labelledby="monitoring" className="grid gap-2">
@@ -94,19 +102,10 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList
 					state={data.monitoring}
-					records={data.records}
+					records={data.readings}
 					familyId={family.id}
 					now={now}
 				/>
-			</section>
-
-			<section aria-labelledby="recent" className="grid gap-2">
-				<h3 id="recent" className="font-bold">
-					Recent alerts
-				</h3>
-				<div className="win95-inset max-h-64 overflow-auto bg-card">
-					<RecentAlerts data={data} />
-				</div>
 			</section>
 
 			<ReminderHistorySection familyId={family.id} me={data.me} />
@@ -116,7 +115,11 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 					Recent messages
 				</h3>
 				<RecentMessages data={data} familyId={family.id} />
-				<Link to="/chat" data-slot="button" className={linkButton}>
+				<Link
+					to="/chat"
+					data-slot="button"
+					className={cn(buttonVariants(), "h-11 justify-self-start")}
+				>
 					Open chat
 				</Link>
 			</section>
