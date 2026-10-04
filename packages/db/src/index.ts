@@ -38,6 +38,7 @@ import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
 import AddCareInstructionReducer from "./add_care_instruction_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
 import AnswerReminderReducer from "./answer_reminder_reducer";
+import AnswerTextedReminderReducer from "./answer_texted_reminder_reducer";
 import ApproveClinicianShareReducer from "./approve_clinician_share_reducer";
 import BackfillFounderCareGrantsReducer from "./backfill_founder_care_grants_reducer";
 import CancelAppointmentReducer from "./cancel_appointment_reducer";
@@ -47,6 +48,7 @@ import ConfirmReminderReducer from "./confirm_reminder_reducer";
 import CreateExercisePlanReducer from "./create_exercise_plan_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
 import CreateFamilyInviteReducer from "./create_family_invite_reducer";
+import CreateFinderLinkReducer from "./create_finder_link_reducer";
 import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
 import DeleteFamilyReducer from "./delete_family_reducer";
@@ -61,6 +63,7 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import MarkMedicineNotFoundReducer from "./mark_medicine_not_found_reducer";
 import MigrateMedicineMembersReducer from "./migrate_medicine_members_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
+import OpenFinderLinkReducer from "./open_finder_link_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import QueueReportEmailReducer from "./queue_report_email_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
@@ -70,6 +73,7 @@ import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RecordTripEventReducer from "./record_trip_event_reducer";
+import RememberByFinderLinkReducer from "./remember_by_finder_link_reducer";
 import RememberMedicineReducer from "./remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import RenameFamilyReducer from "./rename_family_reducer";
@@ -93,10 +97,12 @@ import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetHomeReducer from "./set_home_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetMyNameReducer from "./set_my_name_reducer";
+import SetMyPhoneReducer from "./set_my_phone_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
 import SettleReportEmailReducer from "./settle_report_email_reducer";
+import SettleWearerTextReducer from "./settle_wearer_text_reducer";
 import ShareLocationReducer from "./share_location_reducer";
 import ShowDemoAlertReducer from "./show_demo_alert_reducer";
 import SuggestAppointmentReducer from "./suggest_appointment_reducer";
@@ -108,6 +114,8 @@ import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import FinderLinksRow from "./finder_links_table";
+import MemberPhonesRow from "./member_phones_table";
 import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
@@ -139,6 +147,7 @@ import MyMedicineArPinsRow from "./my_medicine_ar_pins_table";
 import MyMedicinePlacesRow from "./my_medicine_places_table";
 import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
+import MyPhoneRow from "./my_phone_table";
 import MyPushTokensRow from "./my_push_tokens_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
 import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
@@ -150,11 +159,26 @@ import MyReportsRow from "./my_reports_table";
 import MySpeakerSettingsRow from "./my_speaker_settings_table";
 import MyTripEventsRow from "./my_trip_events_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
+import PendingWearerTextsRow from "./pending_wearer_texts_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  finderLinks: __table({
+    name: 'finder_links',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, FinderLinksRow),
+  memberPhones: __table({
+    name: 'member_phones',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MemberPhonesRow),
   myAcknowledgements: __table({
     name: 'my_acknowledgements',
     indexes: [
@@ -372,6 +396,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessagesRow),
+  myPhone: __table({
+    name: 'my_phone',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPhoneRow),
   myPushTokens: __table({
     name: 'my_push_tokens',
     indexes: [
@@ -449,6 +480,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, PendingAlertDeliveriesRow),
+  pendingWearerTexts: __table({
+    name: 'pending_wearer_texts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PendingWearerTextsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -457,6 +495,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_care_instruction", AddCareInstructionReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
   __reducerSchema("answer_reminder", AnswerReminderReducer),
+  __reducerSchema("answer_texted_reminder", AnswerTextedReminderReducer),
   __reducerSchema("approve_clinician_share", ApproveClinicianShareReducer),
   __reducerSchema("backfill_founder_care_grants", BackfillFounderCareGrantsReducer),
   __reducerSchema("cancel_appointment", CancelAppointmentReducer),
@@ -466,6 +505,7 @@ const reducersSchema = __reducers(
   __reducerSchema("create_exercise_plan", CreateExercisePlanReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
   __reducerSchema("create_family_invite", CreateFamilyInviteReducer),
+  __reducerSchema("create_finder_link", CreateFinderLinkReducer),
   __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
   __reducerSchema("delete_family", DeleteFamilyReducer),
@@ -480,6 +520,7 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_medicine_not_found", MarkMedicineNotFoundReducer),
   __reducerSchema("migrate_medicine_members", MigrateMedicineMembersReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
+  __reducerSchema("open_finder_link", OpenFinderLinkReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("queue_report_email", QueueReportEmailReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
@@ -489,6 +530,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("record_trip_event", RecordTripEventReducer),
+  __reducerSchema("remember_by_finder_link", RememberByFinderLinkReducer),
   __reducerSchema("remember_medicine", RememberMedicineReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("rename_family", RenameFamilyReducer),
@@ -512,10 +554,12 @@ const reducersSchema = __reducers(
   __reducerSchema("set_home", SetHomeReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_my_name", SetMyNameReducer),
+  __reducerSchema("set_my_phone", SetMyPhoneReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
   __reducerSchema("settle_report_email", SettleReportEmailReducer),
+  __reducerSchema("settle_wearer_text", SettleWearerTextReducer),
   __reducerSchema("share_location", ShareLocationReducer),
   __reducerSchema("show_demo_alert", ShowDemoAlertReducer),
   __reducerSchema("suggest_appointment", SuggestAppointmentReducer),

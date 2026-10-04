@@ -150,7 +150,7 @@ describe("useFamilyData", () => {
 		expect(
 			await view.findByRole("article", { name: "Alert: Alert a1" }),
 		).toBeDefined();
-		expect(await view.findByText("72")).toBeDefined();
+		expect(await view.findByText("72 bpm")).toBeDefined();
 		expect(new Set(calls.map((c) => `${c.method} ${c.path}`))).toEqual(
 			new Set([
 				"GET /api/families",
@@ -269,7 +269,7 @@ describe("useFamilyData", () => {
 		).toBeDefined();
 		expect(view.getByRole("heading", { name: "Dad" })).toBeDefined();
 		expect(view.queryByText(/Could not mark as seen/)).toBeNull();
-		expect(await view.findByText("64")).toBeDefined();
+		expect(await view.findByText("64 bpm")).toBeDefined();
 	});
 
 	test("with no person selected, Mark as seen sends nothing", async () => {

@@ -1,7 +1,10 @@
-// Phone numbers for the "Call Mom", "Call family", and "Call 911" buttons. There is no server
-// contract for contact numbers yet, so they are saved on this device only and the screens say so.
+// Phone numbers for the "Call Mom", "Call family", and "Call 911" buttons, saved on this device.
+// The wearer's "Call my family" first uses the care profile's contacts (#26), which the server keeps.
 // Calls start in the phone's own dialer through `tel:` links; the app never calls or texts by itself.
+import type { CareProfileRecord } from "@health/contracts/care-profile";
 import { useEffect, useState } from "react";
+
+import { type ApiState, apiRequest } from "./api";
 
 export type Contacts = {
 	readonly momPhone: string | null;
@@ -30,6 +33,63 @@ export const isFullPhoneNumber = (value: string): boolean => {
 /** A `tel:` link that keeps only the leading `+` and the digits. */
 export const telHref = (value: string): string =>
 	`tel:${value.trim().startsWith("+") ? "+" : ""}${value.replace(/\D/g, "")}`;
+
+/**
+ * `value` in E.164 form (`+15550100123`), or null when it is no full number. A number without a
+ * country code is taken as a US number: 10 digits, or 11 that start with 1.
+ */
+export const toE164 = (value: string): string | null => {
+	if (!/^\+?[0-9()\s.-]+$/.test(value.trim())) return null;
+	const digits = value.replace(/\D/g, "");
+	const full = value.trim().startsWith("+")
+		? digits
+		: digits.length === 10
+			? `1${digits}`
+			: digits.length === 11 && digits.startsWith("1")
+				? digits
+				: "";
+	return /^[1-9][0-9]{6,14}$/.test(full) ? `+${full}` : null;
+};
+
+/** Opens the phone's dialer with `number`, for a call that starts after a form submit, not a link. */
+export const dial = (number: string): void => {
+	window.location.href = telHref(number);
+};
+
+/**
+ * Adds `phone` as contact `name` to the care profile at `path`, so every device and the family's
+ * agent have it. Resolves to null when kept, else why it stays on this phone only.
+ */
+export const shareContactPhone = async (
+	path: string | null,
+	profile: ApiState<CareProfileRecord>,
+	phone: string,
+	name: string,
+): Promise<string | null> => {
+	if (path === null || profile.kind !== "ready")
+		return `Saved on this phone only. ${
+			"message" in profile
+				? profile.message
+				: "Sign in to share it with your family."
+		}`;
+	const current = profile.value.profile;
+	const result = await apiRequest(null, path, {
+		method: "PUT",
+		body: {
+			...current,
+			contacts: [
+				...(current.contacts ?? []),
+				{ name, relationship: name, phone },
+			],
+		},
+	});
+	if (result.kind === "ready") return null;
+	return `Saved on this phone only. ${
+		result.kind === "signed_out"
+			? "Sign in again to share it with your family."
+			: result.message
+	}`;
+};
 
 const phoneOrNull = (stored: object, key: string): string | null => {
 	const value: unknown = key in stored ? Reflect.get(stored, key) : null;

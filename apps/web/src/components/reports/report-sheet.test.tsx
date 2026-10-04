@@ -119,11 +119,7 @@ describe("ReportScreen before a report", () => {
 			[REPORTS]: () => ({ json: { reports } }),
 			"POST /api/families/1/reports": () => created.promise,
 		});
-		await waitFor(() =>
-			view.getByText(
-				"No reports yet. A new report collects the latest reading of each measure saved for Ada.",
-			),
-		);
+		await waitFor(() => view.getByText("No reports yet."));
 		view.getByText("No reports yet");
 		fireEvent.click(view.getByRole("button", { name: "New report" }));
 		const creating = view.getByRole("button", { name: "Creating…" });

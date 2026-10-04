@@ -12,8 +12,8 @@ export function CareScreen({
 }) {
 	const { state, family } = useFamily();
 	return (
-		<main className="p-2 sm:p-4">
-			<div className="mx-auto grid w-full max-w-5xl gap-3">
+		<main>
+			<div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-2">
 				<PersonPicker />
 				{state.kind !== "ready" ? (
 					<ApiNotice state={state} what="your family" />

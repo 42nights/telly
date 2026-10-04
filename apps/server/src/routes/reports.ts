@@ -21,6 +21,7 @@ import type { R2Bucket } from "../integrations/r2";
 import type { Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
+import { issuePdfLink } from "../report-pdf-links";
 import { readAccess, requireHealthRecords } from "./care-profile";
 import { readMeals } from "./meal-facts";
 
@@ -161,6 +162,14 @@ const needStorage = (storage: R2Bucket | undefined) => {
 };
 
 /**
+ * The PDF that an email of `report` attaches. Only a reviewed report is emailed, and review freezes
+ * it, so the PDF is made as of the review: every send and every preview has the same bytes. A draft
+ * shows as it stands now.
+ */
+const emailedPdf = (report: Report) =>
+	reportPdf(report, new Date(report.review?.reviewedAt ?? Date.now()));
+
+/**
  * Queues an email of a reviewed report, sends it with the PDF attached, and records the result. The
  * module decides whether anything is queued: an automatic send happens once per report, and only
  * while the setting is on. Only the attempt whose `sendId` the module stored sends.
@@ -192,7 +201,7 @@ const emailReport = async (
 				].join("\n\n"),
 				attachment: {
 					filename: `lab-report-${report.id.slice(0, 8)}.pdf`,
-					content: reportPdf(report, new Date()),
+					content: emailedPdf(report),
 				},
 				idempotencyKey: sendId,
 			});
@@ -254,6 +263,25 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 			return c.json(findReport(c, id) satisfies Report, 201);
 		})
 		.get("/reports/:reportId", (c) => c.json(findReport(c) satisfies Report))
+		// The PDF an email attaches, streamed to the caller only; it is never stored or linked.
+		.get("/reports/:reportId/pdf", (c) => {
+			const report = findReport(c);
+			return c.body(emailedPdf(report), 200, {
+				"Content-Type": "application/pdf",
+				"Content-Disposition": `inline; filename="lab-report-${report.id.slice(0, 8)}.pdf"`,
+				"Cache-Control": "private, no-store",
+			});
+		})
+		// A one-use link to the same PDF, for the iOS app's system viewer (#364).
+		.post("/reports/:reportId/pdf-link", (c) => {
+			const report = findReport(c);
+			return c.json(
+				issuePdfLink(
+					emailedPdf(report),
+					`Telly lab report ${report.createdAt.slice(0, 10)}.pdf`,
+				) satisfies ReportPdfLink,
+			);
+		})
 		.post("/reports/:reportId/fields", async (c) => {
 			const fields = await decodeBody(c, ReportFields);
 			const report = findReport(c);

@@ -8,8 +8,9 @@ export const memberLabel = (identity: string, me: string | null): string =>
 	identity === me ? "You" : `Member ${identity.slice(0, 6)}`;
 
 /**
- * The members of a family and a label for each (#302): the name they signed in with, or "Family
- * member" until they open the app. Never an identity.
+ * The members of a family and a label for each (#302): the name they signed in with, or the part of
+ * their email before the @. A member who has not opened the app since names were stored has
+ * neither yet and shows as `memberLabel`.
  */
 export function useMemberNames(familyId: string | null) {
 	const state = useApi(
@@ -18,7 +19,8 @@ export function useMemberNames(familyId: string | null) {
 	);
 	const members = state.kind === "ready" ? state.value.members : [];
 	const nameOf = (identity: string) =>
-		members.find((m) => m.identity === identity)?.name ?? "Family member";
+		members.find((m) => m.identity === identity)?.name ??
+		memberLabel(identity, null);
 	return { state, members, nameOf };
 }
 

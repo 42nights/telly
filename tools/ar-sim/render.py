@@ -81,16 +81,78 @@ def box_faces(rng, lo, hi, kind, inward=False, px_per_m=PX_PER_M):
     return faces
 
 
-def make_scene(rng, plain_walls=False):
-    """Randomized living room with a medicine box on a cabinet; returns (faces, true pin point)."""
+def _furniture(rng, plain_walls):
+    """The room with a cabinet, a sofa, and a bookshelf; returns (faces, cabinet y)."""
     faces = box_faces(rng, (0, 0, 0), ROOM, "plain" if plain_walls else "rich", inward=True)
     cab_y = rng.uniform(0.3, 2.5)
     faces += box_faces(rng, (4.4, cab_y, 0), (4.98, cab_y + 1.2, 0.85), "rich")  # cabinet
     faces += box_faces(rng, (0.4, 3.3, 0), (2.6, 3.95, 0.8), "rich")  # sofa
     faces += box_faces(rng, (0.05, 0.6, 0), (0.4, 1.8, 1.9), "rich")  # bookshelf
+    return faces, cab_y
+
+
+def make_scene(rng, plain_walls=False):
+    """Randomized living room with a medicine box on a cabinet; returns (faces, true pin point)."""
+    faces, cab_y = _furniture(rng, plain_walls)
     bx, by = rng.uniform(4.45, 4.75), rng.uniform(cab_y + 0.1, cab_y + 0.98)
     faces += box_faces(rng, (bx, by, 0.85), (bx + 0.08, by + 0.12, 1.0), "label", px_per_m=1200)
     return faces, np.array([bx, by + 0.06, 0.925])  # centre of the face toward the room
+
+
+def make_multi_scene(rng, n):
+    """The same room plus a low table, with n pinned containers on the cabinet, the sofa, and the table.
+
+    Containers stand 10 to 30 cm apart in groups, about a third of them share a label design with
+    another one (look-alikes: identical boxes), and tall unpinned boxes stand in front of some of them.
+    Returns (faces, objects, boxes, surfaces): each object is {pin, lo, hi, surface, design}; boxes are
+    the (lo, hi) of every solid thing, for occlusion tests. A surface is (x0, y0, x1, y1, top z, front
+    angle): the side the room sees it from, and the side session 1 scans it from."""
+    faces, cab_y = _furniture(rng, False)
+    table = ((1.9, 1.5, 0.0), (2.7, 2.3, 0.72))
+    faces += box_faces(rng, *table, "rich")
+    boxes = [((4.4, cab_y, 0), (4.98, cab_y + 1.2, 0.85)), ((0.4, 3.3, 0), (2.6, 3.95, 0.8)),
+             ((0.05, 0.6, 0), (0.4, 1.8, 1.9)), table]
+    surfaces = [(4.42, cab_y + 0.02, 4.96, cab_y + 1.18, 0.85, np.pi), (0.42, 3.32, 2.58, 3.93, 0.8, -np.pi / 2),
+                (1.92, 1.52, 2.68, 2.28, 0.72, 0.0)]
+    designs = [(int(rng.integers(1 << 30)), rng.uniform(0.07, 0.09), rng.uniform(0.1, 0.13), rng.uniform(0.1, 0.16))
+               for _ in range(max(1, (2 * n) // 3))]  # (texture seed, x, y, height): fewer designs than boxes
+    taken, objects = [], []
+
+    def free(lo, hi, s):
+        x0, y0, x1, y1 = surfaces[s][:4]
+        return (x0 <= lo[0] and hi[0] <= x1 and y0 <= lo[1] and hi[1] <= y1
+                and all(hi[0] + 0.02 <= a[0] or b[0] + 0.02 <= lo[0] or hi[1] + 0.02 <= a[1] or b[1] + 0.02 <= lo[1] for a, b in taken))
+
+    while len(objects) < n:
+        d = int(rng.integers(len(designs))) if len(objects) >= len(designs) else len(objects)
+        seed, dx, dy, dz = designs[d]
+        if objects and rng.random() < 0.75:  # next to an earlier container, 10 to 30 cm centre to centre
+            near = objects[int(rng.integers(len(objects)))]
+            s, a = near["surface"], rng.uniform(0, 2 * np.pi)
+            c = (near["lo"][:2] + near["hi"][:2]) / 2 + rng.uniform(0.1, 0.3) * np.array([np.cos(a), np.sin(a)])
+        else:
+            s = int(rng.integers(len(surfaces)))
+            c = rng.uniform(surfaces[s][:2], surfaces[s][2:4])
+        z = surfaces[s][4]
+        lo, hi = np.array([c[0] - dx / 2, c[1] - dy / 2, z]), np.array([c[0] + dx / 2, c[1] + dy / 2, z + dz])
+        if not free(lo, hi, s):
+            continue
+        taken.append((lo, hi))
+        faces += box_faces(np.random.default_rng(seed), lo, hi, "label", px_per_m=1200)
+        front = np.array([np.cos(surfaces[s][5]), np.sin(surfaces[s][5]), 0.0])
+        pin = (lo + hi) / 2 + front * (hi - lo) / 2  # centre of the face toward the scan side
+        objects.append({"pin": pin, "lo": lo, "hi": hi, "surface": s, "design": d})
+    for o in objects:  # tall unpinned boxes (a cereal box, a bottle) in front of about one in four
+        if rng.random() < 0.25:
+            s = o["surface"]
+            c = (o["lo"] + o["hi"])[:2] / 2 + 0.16 * np.array([np.cos(surfaces[s][5]), np.sin(surfaces[s][5])])
+            lo = np.array([c[0] - 0.05, c[1] - 0.05, surfaces[s][4]])
+            hi = lo + (0.1, 0.1, rng.uniform(0.2, 0.3))
+            if free(lo, hi, s):
+                taken.append((lo, hi))
+                faces += box_faces(rng, lo, hi, "rich", px_per_m=800)
+    boxes += taken
+    return faces, objects, [(np.asarray(a, float), np.asarray(b, float)) for a, b in boxes], surfaces
 
 
 def _clip_near(poly):
@@ -104,8 +166,9 @@ def _clip_near(poly):
     return np.array(out)
 
 
-def render(faces, T_wc):
-    """8-bit BGR image of the scene from camera pose T_wc (camera to world, OpenCV camera axes)."""
+def render(faces, T_wc, depth=False):
+    """8-bit BGR image of the scene from camera pose T_wc (camera to world, OpenCV camera axes), and with
+    depth=True also the inverse depth 1/z per pixel (0 where nothing is drawn)."""
     Rcw = T_wc[:3, :3].T
     tcw = -Rcw @ T_wc[:3, 3]
     img = np.zeros((H, W, 3), np.uint8)
@@ -134,7 +197,7 @@ def render(faces, T_wc):
         m = (mask > 0) & (invz > zb)
         zb[m] = invz[m]
         img[y0:y1, x0:x1][m] = warped[m]
-    return img
+    return (img, zbuf) if depth else img
 
 
 def capture(img, rng, light=1.0, gradient=0.0, tint=(1.0, 1.0, 1.0), blur_px=0.0, occluder=False):

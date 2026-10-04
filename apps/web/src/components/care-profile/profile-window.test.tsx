@@ -81,9 +81,12 @@ test("before the first save every fact is unknown, and a viewer cannot edit", ()
 	expect(view.getByLabelText("Preferred name").hasAttribute("readonly")).toBe(
 		true,
 	);
-	expect(view.getByLabelText("Routines").getAttribute("aria-describedby")).toBe(
-		"care-routines-hint",
-	);
+	// A format hint is a tooltip next to its box, not another line.
+	expect(
+		view.getByRole("button", {
+			name: "One per line: name; HH:MM (time optional).",
+		}),
+	).toBeDefined();
 	expect(
 		view.getByText("Your access does not include editing the care plan."),
 	).toBeDefined();

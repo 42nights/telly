@@ -10,7 +10,7 @@ import {
 import { Button } from "@health/ui/components/button";
 import { useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
 import { demandText, outcomeText, reasonText } from "./logic";
@@ -204,7 +204,7 @@ export function ExerciseSection({ familyId }: { familyId: string }) {
 	const { plans, sessions } = records.value;
 
 	return (
-		<div className="win95-inset grid gap-3 bg-card p-2">
+		<div className="grid gap-3">
 			{plans.length === 0 && <p>No agreed activity yet.</p>}
 			<ul className="grid gap-2">
 				{plans.map((plan) => (
@@ -246,7 +246,10 @@ export function ExerciseSection({ familyId }: { familyId: string }) {
 			)}
 			<h4 className="font-bold">Sessions</h4>
 			{sessions.length === 0 ? (
-				<p>No sessions recorded yet. No answer is not counted as exercise.</p>
+				<p className="flex items-center gap-1">
+					No sessions recorded yet.
+					<Tip text="No answer is not counted as exercise." />
+				</p>
 			) : (
 				<ul className="grid gap-1">
 					{sessions.map((s) => (

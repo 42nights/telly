@@ -158,7 +158,9 @@ test("a new suggestion posts the visit in its own zone, then clears the form and
 			}),
 	});
 	const { view } = await show();
-	const form = await view.findByRole("region", { name: "Suggest a visit" });
+	fireEvent.click(await view.findByRole("button", { name: "Suggest a visit" }));
+	const form = view.getByRole("dialog", { name: "Suggest a visit" });
+	expect(form.hasAttribute("open")).toBe(true);
 	const panel = within(form);
 	const save = panel.getByRole("button", { name: "Save suggestion" });
 	expect(panel.getByText("A suggestion is not a booking.")).toBeDefined();
@@ -219,6 +221,7 @@ test("a new suggestion posts the visit in its own zone, then clears the form and
 			calls.filter((call) => call.path.endsWith("/appointments")),
 		).toHaveLength(3),
 	);
+	expect(form.hasAttribute("open")).toBe(false);
 	expect((panel.getByLabelText("Visit") as HTMLInputElement).value).toBe("");
 	expect(
 		(panel.getByLabelText("Transportation") as HTMLInputElement).value,
@@ -243,7 +246,8 @@ test("a failed save keeps the form and shows why; an incomplete form sends nothi
 		},
 	});
 	const { view } = await show();
-	const form = await view.findByRole("region", { name: "Suggest a visit" });
+	fireEvent.click(await view.findByRole("button", { name: "Suggest a visit" }));
+	const form = view.getByRole("dialog", { name: "Suggest a visit" });
 	const panel = within(form);
 	const title = panel.getByLabelText("Visit") as HTMLInputElement;
 	fireEvent.change(title, { target: { value: "Eye check" } });

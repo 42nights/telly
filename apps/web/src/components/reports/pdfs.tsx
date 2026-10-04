@@ -4,19 +4,27 @@ import {
 	ReportPdfLink,
 	ReportPdfs,
 } from "@health/contracts/reports";
-import { Button } from "@health/ui/components/button";
-import { useState } from "react";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { useEffect, useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
-import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
+import { ApiNotice, Tip } from "@/components/win95";
+import { ENV } from "@/env";
+import {
+	type ApiFailure,
+	type ApiResult,
+	apiBlob,
+	apiRequest,
+	familyPath,
+	useApi,
+} from "@/lib/api";
 
 import { DataTable } from "./data-table";
 import { formatTime } from "./logic";
 import { failureText } from "./use-report-sheet";
 
 /**
- * The Save as PDF and Past PDFs buttons, for a row beside Send. A PDF is kept in the caller's
- * private storage; saving one sends nothing.
+ * The Preview PDF, Save as PDF, and Past PDFs buttons, for a row beside Send. A PDF is kept in the
+ * caller's private storage; saving or previewing one sends nothing.
  */
 export function PdfActions({
 	familyId,
@@ -30,6 +38,7 @@ export function PdfActions({
 	const [busy, setBusy] = useState(false);
 	const [result, setResult] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
+	const [previewing, setPreviewing] = useState(false);
 
 	const save = async () => {
 		setBusy(true);
@@ -45,9 +54,18 @@ export function PdfActions({
 				: `PDF not saved: ${failureText(saved)}`,
 		);
 	};
+	const made = reports.find((r) => r.id === reportId)?.createdAt.slice(0, 10);
+	const filename = `Telly lab report ${made ?? reportId.slice(0, 8)}.pdf`;
 
 	return (
 		<>
+			<Button
+				type="button"
+				className="h-11 px-4 text-sm"
+				onClick={() => setPreviewing(true)}
+			>
+				Preview PDF
+			</Button>
 			<Button
 				type="button"
 				className="h-11 px-4 text-sm"
@@ -63,8 +81,9 @@ export function PdfActions({
 			>
 				Past PDFs…
 			</Button>
+			<Tip text="Saving a PDF does not send it to anyone." />
 			<p role="status" className="basis-full">
-				{result ?? "Saving a PDF does not send it to anyone."}
+				{result}
 			</p>
 			{open && (
 				<PastPdfsDialog
@@ -73,7 +92,144 @@ export function PdfActions({
 					onClose={() => setOpen(false)}
 				/>
 			)}
+			{previewing && (
+				<PreviewDialog
+					familyId={familyId}
+					reportId={reportId}
+					filename={filename}
+					onClose={() => setPreviewing(false)}
+				/>
+			)}
 		</>
+	);
+}
+
+/**
+ * The PDF that an email of the report attaches, fetched with the caller's sign-in and shown from
+ * memory. Phones have no inline PDF viewer that shows every page, so they get only the buttons.
+ * The iOS app's WebView can neither open nor save a `blob:` URL (#364), so there the buttons ask
+ * for a one-use link and leave the page for it; the shell hands it to the system PDF viewer.
+ */
+function PreviewDialog({
+	familyId,
+	reportId,
+	filename,
+	onClose,
+}: {
+	familyId: string;
+	reportId: string;
+	filename: string;
+	onClose: () => void;
+}) {
+	const [pdf, setPdf] = useState<ApiResult<string> | null>(null);
+	const [failure, setFailure] = useState<ApiFailure | null>(null);
+	const reportPath = `/reports/${encodeURIComponent(reportId)}`;
+	useEffect(() => {
+		let url: string | undefined;
+		let live = true;
+		void apiBlob(familyPath(familyId, `${reportPath}/pdf`), {
+			method: "GET",
+		}).then((result) => {
+			if (!live) return;
+			if (result.kind !== "ready") return setPdf(result);
+			url = URL.createObjectURL(result.value);
+			setPdf({ kind: "ready", value: url });
+		});
+		return () => {
+			live = false;
+			if (url !== undefined) URL.revokeObjectURL(url);
+		};
+	}, [familyId, reportPath]);
+	const link = `${buttonVariants()} h-11 px-4 text-sm`;
+	const openLink = async (download: boolean) => {
+		const made = await apiRequest(
+			ReportPdfLink,
+			familyPath(familyId, `${reportPath}/pdf-link`),
+			{ method: "POST" },
+		);
+		if (made.kind !== "ready") return setFailure(made);
+		setFailure(null);
+		window.location.assign(
+			`${ENV.VITE_SERVER_URL}${made.value.url}${download ? "?download" : ""}`,
+		);
+	};
+
+	return (
+		<div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-3">
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="report-preview-title"
+				onKeyDown={(event) => event.key === "Escape" && onClose()}
+				className="win95-raised flex max-h-full w-full max-w-4xl flex-col"
+			>
+				<h3
+					id="report-preview-title"
+					className="win95-titlebar px-2 py-1 text-sm"
+				>
+					Preview PDF
+				</h3>
+				<div className="grid min-h-0 gap-3 p-3 text-sm">
+					{pdf === null ? (
+						<p role="status">Making the PDF…</p>
+					) : pdf.kind !== "ready" ? (
+						<p role="alert">Not previewed: {failureText(pdf)}</p>
+					) : (
+						<iframe
+							title="Lab report PDF"
+							src={pdf.value}
+							className="hidden h-[70dvh] w-full border border-border bg-white md:block"
+						/>
+					)}
+					{failure !== null && (
+						<p role="alert">Not opened: {failureText(failure)}</p>
+					)}
+					<div className="flex flex-wrap justify-end gap-2">
+						{pdf?.kind === "ready" &&
+							(globalThis.ReactNativeWebView === undefined ? (
+								<>
+									<a
+										href={pdf.value}
+										target="_blank"
+										rel="noopener"
+										className={link}
+									>
+										Open in new tab
+									</a>
+									<a href={pdf.value} download={filename} className={link}>
+										Download
+									</a>
+								</>
+							) : (
+								<>
+									<Button
+										type="button"
+										className="h-11 px-4 text-sm"
+										onClick={() => void openLink(false)}
+									>
+										Open
+									</Button>
+									<Button
+										type="button"
+										className="h-11 px-4 text-sm"
+										onClick={() => void openLink(true)}
+									>
+										Download
+									</Button>
+								</>
+							))}
+						<Button
+							type="button"
+							className="h-11 px-4 text-sm"
+							autoFocus
+							onClick={onClose}
+						>
+							Close
+						</Button>
+					</div>
+				</div>
+			</div>
+		</div>
 	);
 }
 

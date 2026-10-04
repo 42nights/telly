@@ -189,7 +189,7 @@ test("asks only once a question has text, and sends the question and period", as
 	const { router } = renderRoute("/trends");
 
 	expect(
-		await screen.findByRole("heading", { name: "Grandma Rose" }),
+		await screen.findByRole("region", { name: "Health trends" }),
 	).toBeTruthy();
 	expect(router.state.location.pathname).toBe("/family/trends");
 	const button = await screen.findByRole("button", {
@@ -246,9 +246,7 @@ test("shows each kind of evidence apart with its source, period, quality, and sy
 		"Chest pain can be a heart attack. Call emergency services.",
 	);
 	expect(
-		screen.getByText(
-			"Records from Sep 27, 2026 to Oct 4, 2026. Labs keep their own dates.",
-		),
+		screen.getByText("Records from Sep 27, 2026 to Oct 4, 2026."),
 	).toBeTruthy();
 
 	// The caller's own report shows as "You" once /api/me loads; another member by a short id.
@@ -266,15 +264,21 @@ test("shows each kind of evidence apart with its source, period, quality, and sy
 	expect(theirs).toEndWith("synced 30 min ago");
 
 	const [heart, lab] = items("Measured (devices and labs)");
+	// The source, period, count, and sync age are the row's tooltip; no row says "validated".
 	expect(heart).toStartWith(
-		"Resting heart rate62 bpm → 55 bpm · went down · 5 valuesOura · validated · ",
+		"Resting heart rate62 bpm → 55 bpm · went downOura · ",
 	);
+	expect(heart).toContain(" · 5 values · ");
 	expect(lab).toBe(
-		"Hemoglobin13.1 · one value · 1 valueOldQuest lab · as the lab reported it · Mar 1, 2026 · synced 2 days ago",
+		"Hemoglobin13.1 · one valueOldQuest lab · as the lab reported it · Mar 1, 2026 · 1 value · synced 2 days ago",
 	);
 	expect(items("Derived scores")[0]).toStartWith(
-		"Recovery70 % → 71 % · about the same · 5 valuesSynthetic demo dataWhoop · not validated · ",
+		"Recovery70 % → 71 % · about the sameSynthetic demo dataWhoop · ",
 	);
+	expect(
+		items("Measured (devices and labs)").join() +
+			items("Derived scores").join(),
+	).not.toContain("validated");
 	expect(items("Nutrition estimates")).toEqual([]);
 	expect(
 		within(

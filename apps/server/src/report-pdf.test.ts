@@ -207,7 +207,7 @@ describe("reportPdf", () => {
 		);
 		expect(text).toContain("Name: Ada");
 		expect(text).toContain(
-			"Resting heart rate: 62 bpm. Source strap-a, measured 2026-10-01T08:00:00.000Z, validated.",
+			"Resting heart rate: 62 bpm. Source strap-a, measured 2026-10-01T08:00:00.000Z.",
 		);
 		// The correction stands indented on its own line, right after the original value.
 		const corrected = text.indexOf(
@@ -215,7 +215,7 @@ describe("reportPdf", () => {
 		);
 		expect(text[corrected - 1]).toStartWith("Resting heart rate: 62 bpm.");
 		expect(joined).toContain(
-			"Sleep hours: 6.5 h. Source synthetic-demo, measured 2026-10-01T08:00:00.000Z, not validated. DEMO VALUE, NOT MEASURED.",
+			"Sleep hours: 6.5 h. Source synthetic-demo, measured 2026-10-01T08:00:00.000Z. DEMO VALUE, NOT MEASURED.",
 		);
 		expect(text).toContain("Spo2: Unavailable. No reading was saved.");
 		expect(text).toContain(

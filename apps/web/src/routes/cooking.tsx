@@ -2,9 +2,9 @@ import {
 	CookingSuggestions,
 	type MealSuggestion,
 } from "@health/contracts/cooking";
-import { Button, buttonVariants } from "@health/ui/components/button";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ChefHat, Loader2 } from "lucide-react";
+import { Button } from "@health/ui/components/button";
+import { createFileRoute } from "@tanstack/react-router";
+import { ChefHat, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 import { CookingSession } from "@/components/cooking/session";
@@ -147,17 +147,6 @@ function CookingComponent() {
 		<main className="mx-auto w-full max-w-3xl p-2 md:p-4">
 			<Window icon={ChefHat} title="Cook">
 				<div className="grid gap-4 p-2 md:p-5">
-					<Link
-						className={buttonVariants({
-							variant: "ghost",
-							className: "h-12 justify-self-start text-[18px] [&_svg]:size-5",
-						})}
-						data-slot="button"
-						to="/hud"
-					>
-						<ArrowLeft aria-hidden />
-						Home
-					</Link>
 					{meal !== null ? (
 						<CookingSession
 							familyId={familyId}

@@ -44,6 +44,10 @@ export type IMessageConfig = {
 	readonly projectSecret: string;
 	readonly webhookSecret: string;
 	readonly senders: ReadonlyMap<string, bigint>;
+	/** The web app's address, the first `CORS_ORIGIN`: finder links in texts open there. */
+	readonly appUrl: string;
+	/** The Telly line's own iMessage address (phone number) that people text; undefined: not shown. */
+	readonly address: string | undefined;
 };
 
 export type Env = {
@@ -77,6 +81,7 @@ export type Env = {
 	readonly SPECTRUM_PROJECT_SECRET?: string | undefined;
 	readonly SPECTRUM_WEBHOOK_SECRET?: string | undefined;
 	readonly TELLY_IMESSAGE_SENDERS?: string | undefined;
+	readonly TELLY_IMESSAGE_ADDRESS?: string | undefined;
 } & Parameters<typeof qwenConfigFrom>[0];
 
 /** `bun run secrets:pull` lists every key it wrote in TELLY_REQUIRED_KEYS. A listed key that is
@@ -130,7 +135,14 @@ const imessageConfig = (env: Env): IMessageConfig | undefined => {
 			);
 		senders.set(match[1] as string, BigInt(match[2] as string));
 	}
-	return { projectId, projectSecret, webhookSecret, senders };
+	return {
+		projectId,
+		projectSecret,
+		webhookSecret,
+		senders,
+		appUrl: env.CORS_ORIGIN.split(",")[0]?.trim() ?? "",
+		address: env.TELLY_IMESSAGE_ADDRESS?.trim() || undefined,
+	};
 };
 
 /** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */

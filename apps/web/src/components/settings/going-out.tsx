@@ -10,7 +10,7 @@ import { Window } from "@/components/hud/window";
 import { useAutoTrip } from "@/components/trip/auto-trip";
 import { ThisIsHome } from "@/components/trip/home-button";
 import { HOME_ADDRESS_KEY } from "@/components/trip/logic";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import type { ApiResult } from "@/lib/api";
 
 const RADII = [100, 200, 300, 500, 1000, 2000] as const;
@@ -62,21 +62,18 @@ function GoingOutForm({ watch }: { watch: HomeWatch }) {
 				save(watch.home);
 			}}
 		>
-			<label className="flex min-h-11 items-center gap-2">
-				<input
-					checked={autoTrip}
-					className="size-5"
-					onChange={(event) => setAutoTrip(event.target.checked)}
-					type="checkbox"
-				/>
-				Notice when this person goes out
-			</label>
-			<p>
-				Telly uses this phone's location. When the person stays farther from
-				home than the distance below for a minute, Telly tells the people they
-				share their location with, and again when they are back. Nothing is sent
-				without the phone's location permission and a share.
-			</p>
+			<div className="flex items-center gap-1">
+				<label className="flex min-h-11 items-center gap-2">
+					<input
+						checked={autoTrip}
+						className="size-5"
+						onChange={(event) => setAutoTrip(event.target.checked)}
+						type="checkbox"
+					/>
+					Notice when this person goes out
+				</label>
+				<Tip text="Telly uses this phone's location. When the person stays farther from home than the distance below for a minute, Telly tells the people they share their location with, and again when they are back. Nothing is sent without the phone's location permission and a share." />
+			</div>
 			{!watch.sharing && (
 				<p className="font-bold">
 					This person shares their location with nobody yet. Share it in{" "}
@@ -115,22 +112,17 @@ function GoingOutForm({ watch }: { watch: HomeWatch }) {
 			</Button>
 			<fieldset className="grid gap-2 border border-border p-2">
 				<legend className="px-1">Home</legend>
-				<p>
-					{watch.home === null
-						? "No home is saved. Press the button while at home."
-						: "Home is saved as a position. Only this person can see it."}
+				<p className="flex items-center gap-1">
+					{watch.home === null ? "No home saved yet." : "Home saved."}
+					<Tip
+						text={
+							watch.home === null
+								? "Telly saves home from this phone's first position. Press the button to save it now."
+								: "Home is saved as a position. Only this person can see it. If it is wrong, press the button while at home."
+						}
+					/>
 				</p>
 				<ThisIsHome className="h-11 justify-self-start" />
-				{watch.home !== null && (
-					<Button
-						className="h-11 justify-self-start"
-						onClick={() => save(null)}
-						type="button"
-						variant="outline"
-					>
-						Forget home
-					</Button>
-				)}
 			</fieldset>
 		</form>
 	);
@@ -142,17 +134,20 @@ function AddressField() {
 		() => localStorage.getItem(HOME_ADDRESS_KEY) ?? "",
 	);
 	return (
-		<label className="grid gap-1 p-2 text-sm">
-			Home address, for Directions home when no position is saved (optional,
-			kept on this device only)
+		<div className="grid gap-1 p-2 text-sm">
+			<span className="flex items-center gap-1">
+				<label htmlFor="home-address">Home address (optional)</label>
+				<Tip text="Used for Directions home when no position is saved. Kept on this device only." />
+			</span>
 			<input
 				className="win95-inset win95-field h-11 bg-card px-2 text-base"
+				id="home-address"
 				onChange={(event) => {
 					setAddress(event.target.value);
 					localStorage.setItem(HOME_ADDRESS_KEY, event.target.value);
 				}}
 				value={address}
 			/>
-		</label>
+		</div>
 	);
 }

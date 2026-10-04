@@ -9,6 +9,7 @@ import type { Evidence } from "@health/contracts/chat";
 import { Schema } from "effect";
 
 import type { ApiFailure, ApiResult } from "@/lib/api";
+import { metricLabel, readingValue, sourceName } from "@/lib/readings";
 
 /** `FamilyQuestion` accepts at most this many files. */
 const MAX_FILES = 4;
@@ -153,8 +154,8 @@ export function evidenceLine(
 	formatTime: (iso: string) => string,
 ): string {
 	const parts = [
-		`${evidence.metric} ${evidence.value} ${evidence.unit}`,
-		evidence.source,
+		`${metricLabel(evidence.metric)} ${readingValue(evidence)}`,
+		sourceName(evidence.source),
 		formatTime(evidence.sourceTime),
 	];
 	if (evidence.synthetic) parts.push("demo, not real");

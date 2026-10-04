@@ -5,7 +5,7 @@ setupDom();
 
 // Dynamic: these modules read `document`, which `@/lib/test/dom` sets up first.
 const { act, renderHook } = await import("@testing-library/react");
-const { isFullPhoneNumber, telHref, useContacts } = await import(
+const { isFullPhoneNumber, telHref, toE164, useContacts } = await import(
 	"@/lib/contacts"
 );
 
@@ -36,6 +36,21 @@ test("a tel: link keeps only a leading plus and the digits", () => {
 	expect(telHref(" +1 (555) 010-0199 ")).toBe("tel:+15550100199");
 	expect(telHref("555.0100")).toBe("tel:5550100");
 	expect(telHref("911")).toBe("tel:911");
+});
+
+test("a saved Telly phone is E.164; a number without a country code is a US number", () => {
+	expect(toE164("(415) 595-1440")).toBe("+14155951440");
+	expect(toE164("1 415 595 1440")).toBe("+14155951440");
+	expect(toE164("+44 20 7946 0123")).toBe("+442079460123");
+	for (const bad of [
+		"595-1440",
+		"911",
+		"+0 123 4567",
+		"call me",
+		"",
+		"2 415 595 1440",
+	])
+		expect(toE164(bad)).toBeNull();
 });
 
 test("with nothing saved, there are no family numbers and the emergency number is 911", () => {

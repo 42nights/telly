@@ -8,8 +8,9 @@ import {
 	type NeedKind,
 } from "@health/contracts/care";
 import { Button } from "@health/ui/components/button";
-import { useState } from "react";
+import { useId, useState } from "react";
 
+import { Tip } from "@/components/win95";
 import { apiRequest } from "@/lib/api";
 
 import { kindLabel } from "./logic";
@@ -37,7 +38,7 @@ function ContactFields({
 	const set = (patch: Partial<LadderContact>) =>
 		onChange({ ...value, ...patch });
 	return (
-		<fieldset className="win95-inset grid gap-2 bg-card p-2 sm:grid-cols-2">
+		<fieldset className="grid gap-2 border border-border p-2 sm:grid-cols-2">
 			<legend className="px-1 font-bold">{label}</legend>
 			<label className="grid gap-1">
 				Name
@@ -120,6 +121,7 @@ export function LadderForm({
 			followUpSeconds: 1800,
 		},
 	);
+	const id = useId();
 	const [status, setStatus] = useState<string>(
 		ladder === null ? "No ladder yet: alerts contact nobody." : "Saved",
 	);
@@ -150,24 +152,29 @@ export function LadderForm({
 				void save();
 			}}
 		>
-			<p className="text-xs">
-				Your member identity:{" "}
-				<code className="break-all">{me ?? "loading…"}</code>. Ask each family
-				member for theirs; only members can be contacts.
-			</p>
-			{draft.contacts.map((contact, index) => (
-				<ContactFields
-					// biome-ignore lint/suspicious/noArrayIndexKey: the ladder order is the identity of a row.
-					key={index}
-					label={`Contact ${index + 1}`}
-					value={contact}
-					onChange={(next) => setContact(index, next)}
+			<p className="flex items-center gap-1 text-xs">
+				Only family members can be contacts.
+				<Tip
+					text={`Ask each family member for their member identity. Yours is ${me ?? "loading…"}.`}
 				/>
-			))}
-			<div className="flex flex-wrap gap-2">
+			</p>
+			{/* ponytail: a list box with a fixed share of the screen; the ladder holds at most 5 contacts. */}
+			{/* A desktop scrolls the contacts in this box; a phone scrolls the whole screen (#366). */}
+			<div className="grid gap-2 md:max-h-[25svh] md:overflow-y-auto">
+				{draft.contacts.map((contact, index) => (
+					<ContactFields
+						// biome-ignore lint/suspicious/noArrayIndexKey: the ladder order is the identity of a row.
+						key={index}
+						label={`Contact ${index + 1}`}
+						value={contact}
+						onChange={(next) => setContact(index, next)}
+					/>
+				))}
+			</div>
+			<div className="grid grid-cols-3 gap-2">
 				<Button
 					type="button"
-					className="h-11"
+					className="h-11 px-2 text-sm"
 					disabled={draft.contacts.length >= 5}
 					onClick={() =>
 						setDraft({ ...draft, contacts: [...draft.contacts, blank("")] })
@@ -177,7 +184,7 @@ export function LadderForm({
 				</Button>
 				<Button
 					type="button"
-					className="h-11"
+					className="h-11 px-2 text-sm"
 					disabled={draft.contacts.length <= 1}
 					onClick={() =>
 						setDraft({ ...draft, contacts: draft.contacts.slice(0, -1) })
@@ -187,7 +194,7 @@ export function LadderForm({
 				</Button>
 				<Button
 					type="button"
-					className="h-11"
+					className="h-11 px-2 text-sm"
 					onClick={() =>
 						setDraft({
 							...draft,
@@ -205,10 +212,14 @@ export function LadderForm({
 					onChange={(backup) => setDraft({ ...draft, backup })}
 				/>
 			)}
-			<div className="grid gap-2 sm:grid-cols-2">
-				<label className="grid gap-1">
-					Seconds to accept before the next contact
+			<div className="grid grid-cols-2 gap-2">
+				<div className="grid gap-1">
+					<span className="flex items-center gap-1">
+						<label htmlFor={`${id}-accept`}>Seconds to accept</label>
+						<Tip text="How long a contact has to accept before Telly asks the next contact." />
+					</span>
 					<input
+						id={`${id}-accept`}
 						type="number"
 						min={10}
 						max={86400}
@@ -218,10 +229,14 @@ export function LadderForm({
 							setDraft({ ...draft, answerSeconds: Number(e.target.value) })
 						}
 					/>
-				</label>
-				<label className="grid gap-1">
-					Seconds to confirm help after accepting
+				</div>
+				<div className="grid gap-1">
+					<span className="flex items-center gap-1">
+						<label htmlFor={`${id}-confirm`}>Seconds to confirm</label>
+						<Tip text="How long a contact who accepted has to confirm that help arrived." />
+					</span>
 					<input
+						id={`${id}-confirm`}
 						type="number"
 						min={10}
 						max={604800}
@@ -231,7 +246,7 @@ export function LadderForm({
 							setDraft({ ...draft, followUpSeconds: Number(e.target.value) })
 						}
 					/>
-				</label>
+				</div>
 			</div>
 			<div className="flex items-center gap-2">
 				<Button type="submit" className="h-11">

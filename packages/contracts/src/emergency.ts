@@ -1,6 +1,6 @@
 // Emergency help, "Call my family", and the suspected-event check-in (issue #34), under
-// `/api/families/:familyId/emergency`. Every emergency call here is a simulation: no route places a
-// real call, and a connected call never means the medical record reached a dispatcher.
+// `/api/families/:familyId/emergency`. No route places a call: the wearer's phone dials from a
+// `tel:` link. These routes alert the family and return what to tell the emergency operator.
 import { Schema } from "effect";
 import { DbId, UtcTime } from "./families";
 
@@ -108,7 +108,7 @@ export const CheckIn = Schema.Struct({
 });
 export type CheckIn = typeof CheckIn.Type;
 
-/** What a dispatcher would hear. Unknown values stay null or unavailable. */
+/** What to tell the emergency operator. Unknown values stay null or unavailable. */
 export const Handoff = Schema.Struct({
 	name: Schema.NullOr(Schema.String),
 	callback: Schema.NullOr(Schema.String),
@@ -147,15 +147,6 @@ export const Handoff = Schema.Struct({
 });
 export type Handoff = typeof Handoff.Type;
 
-/** A simulated call. `recordDelivered` is always false: a connected call does not carry the record. */
-export const SimulatedCall = Schema.Struct({
-	simulated: Schema.Literal(true),
-	states: Schema.Array(Schema.Literals(["connecting", "connected", "failed"])),
-	outcome: Schema.Literals(["connected", "failed"]),
-	recordDelivered: Schema.Literal(false),
-});
-export type SimulatedCall = typeof SimulatedCall.Type;
-
 /** The family alert (issue #5) for this request, or why it was not raised. */
 export const FamilyNotice = Schema.Union([
 	Schema.Struct({
@@ -172,8 +163,7 @@ export type FamilyNotice = typeof FamilyNotice.Type;
  */
 export const EmergencyOutcome = Schema.Union([
 	Schema.Struct({
-		action: Schema.Literal("dispatch"),
-		call: SimulatedCall,
+		action: Schema.Literal("help"),
 		handoff: Handoff,
 		family: FamilyNotice,
 	}),

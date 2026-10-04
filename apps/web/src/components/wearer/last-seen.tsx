@@ -28,7 +28,7 @@ import {
 } from "@/lib/api";
 import { arCapabilities } from "@/lib/ar-bridge";
 import type { MedicineMemoryChange as Change } from "@/lib/medicine-memory";
-import { type ArOutcome, pinInAr, showInAr } from "./ar-pin";
+import { type ArMember, type ArOutcome, pinInAr, showInAr } from "./ar-pin";
 import { objectName, sightingState, whenSeen } from "./logic";
 import { type PictureCheck, thumbnail } from "./medicine-check";
 import { useNow } from "./use-now";
@@ -133,16 +133,18 @@ function ArResult({ step }: { step: ArStep | null }) {
 function ArPin({
 	familyId,
 	sighting,
+	member,
 	findNow,
 }: {
 	familyId: string;
 	sighting: MedicineSighting;
+	member: ArMember;
 	findNow: boolean;
 }) {
 	const [step, setStep] = useState<ArStep | null>(null);
 	const run = async (flow: typeof pinInAr, text: string) => {
 		setStep({ kind: "busy", text });
-		setStep(await flow(familyId, sighting));
+		setStep(await flow(familyId, sighting, member));
 	};
 	const started = useRef(false);
 	useEffect(() => {
@@ -178,6 +180,7 @@ function ArPin({
 
 function Sighting({
 	sighting,
+	sightings,
 	now,
 	change,
 	ar,
@@ -186,6 +189,8 @@ function Sighting({
 	findNow,
 }: {
 	sighting: MedicineSighting;
+	/** All the member's saved things: the AR screen follows the pinned ones. */
+	sightings: readonly MedicineSighting[];
 	now: number;
 	change: Change;
 	/** The family, when this device can pin in AR. */
@@ -249,6 +254,7 @@ function Sighting({
 				<ArPin
 					familyId={ar}
 					findNow={findNow && sighting.pinned}
+					member={{ sightings, change }}
 					sighting={sighting}
 				/>
 			)}
@@ -367,6 +373,7 @@ export function SavedThings({
 						now={now}
 						places={places}
 						sighting={shown}
+						sightings={sightings}
 					/>
 					<p className="text-[16px]">
 						This is where it was seen before, not where it is now. Go there and
@@ -466,7 +473,12 @@ function SaveForm({
 		);
 		if (object === undefined) return;
 		setPin({ kind: "busy", text: PIN_TEXT });
-		setPin(await pinInAr(ar, object));
+		setPin(
+			await pinInAr(ar, object, {
+				sightings: result.value.sightings,
+				change,
+			}),
+		);
 	};
 	return (
 		<form

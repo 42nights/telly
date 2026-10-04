@@ -2,8 +2,10 @@ import { ReportCorrection, type ReportMarker } from "@health/contracts/reports";
 import { Button } from "@health/ui/components/button";
 import { Schema } from "effect";
 import { type FormEvent, useId, useState } from "react";
+import { Tip } from "@/components/win95";
+import { metricLabel } from "@/lib/readings";
 
-import { markerValue, metricLabel } from "./logic";
+import { markerValue } from "./logic";
 import type { ReportSheetState } from "./use-report-sheet";
 
 /**
@@ -54,7 +56,10 @@ export function CorrectionForm({
 	return (
 		<form onSubmit={add}>
 			<fieldset className="grid gap-2 border border-border p-2 sm:grid-cols-3">
-				<legend className="px-1">Correct a value</legend>
+				<legend className="px-1">
+					Correct a value{" "}
+					<Tip text="The value from the source stays in the report beside the correction." />
+				</legend>
 				<label className="grid gap-1" htmlFor={`${id}-metric`}>
 					Marker
 					<select
@@ -97,9 +102,6 @@ export function CorrectionForm({
 						{error}
 					</p>
 				)}
-				<p className="sm:col-span-2">
-					The value from the source stays in the report beside the correction.
-				</p>
 				<Button type="submit" className="h-11 justify-self-start px-4 text-sm">
 					Add correction
 				</Button>

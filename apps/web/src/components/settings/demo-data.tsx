@@ -6,6 +6,7 @@ import { PlayCircle } from "lucide-react";
 import { useState } from "react";
 
 import { Window } from "@/components/hud/window";
+import { Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
@@ -70,21 +71,19 @@ function DemoDataWindow({ familyId, on }: { familyId: string; on: boolean }) {
 	return (
 		<Window title="Settings · Demo data" icon={PlayCircle}>
 			<div className="grid gap-3 p-2 text-sm">
-				<label className="flex min-h-11 items-center gap-2">
-					<input
-						checked={on}
-						className="size-5"
-						disabled={busy}
-						onChange={(event) => void setOn(event.target.checked)}
-						type="checkbox"
-					/>
-					Demo data
-				</label>
-				<p>
-					Replays a real WHOOP recording as if the strap were live, so every
-					screen shows current readings. Turning it off deletes the replayed
-					readings; real readings stay.
-				</p>
+				<div className="flex items-center gap-1">
+					<label className="flex min-h-11 items-center gap-2">
+						<input
+							checked={on}
+							className="size-5"
+							disabled={busy}
+							onChange={(event) => void setOn(event.target.checked)}
+							type="checkbox"
+						/>
+						Demo data
+					</label>
+					<Tip text="Replays a real WHOOP recording as if the strap were live, so every screen shows current readings. Turning it off deletes the replayed readings; real readings stay." />
+				</div>
 				{on && (
 					<Button
 						className="h-11 justify-self-start px-6 text-sm"
@@ -115,16 +114,4 @@ export function UseDemoData({ familyId }: { familyId: string }) {
 			<WriteError error={error} />
 		</div>
 	);
-}
-
-/** The status bar's "Demo" pane, shown only while the selected family replays demo data. */
-export function DemoPane() {
-	return useDemoData()?.on === true ? (
-		<p
-			className="win95-status px-2 py-0.5"
-			title="Replaying a real WHOOP recording"
-		>
-			Demo
-		</p>
-	) : null;
 }

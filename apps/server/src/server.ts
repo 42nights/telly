@@ -5,6 +5,8 @@ import { createApp } from "./app";
 import type { NoopConfig, ServerConfig } from "./config";
 import { openFamilyDb } from "./db";
 import { startCloudIMessage } from "./imessage/cloud";
+import { photoReader, wearerActions, withOperator } from "./imessage/finder";
+import { wearerPhones, wearerTextWorker } from "./imessage/texts";
 import { type NoopIngest, noopIngest } from "./integrations/noop-ingest";
 import { familyAnswer } from "./routes/ask";
 
@@ -36,14 +38,23 @@ const close = (server: ServerType) =>
 		});
 	});
 
-/** The HTTP server, the iMessage agent, and the alert outbox, each closed when the layer's scope ends. */
+/**
+ * The HTTP server, the iMessage agent, the alert outbox, and the wearer text outbox, each closed
+ * when the layer's scope ends.
+ */
 export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
+	// The module publisher's identity: it delivers alerts and wearer texts and opens finder links.
+	const db = config.auth?.db;
+	const operator =
+		env.ALERT_OPERATOR_TOKEN && db
+			? { ...db, token: env.ALERT_OPERATOR_TOKEN }
+			: undefined;
 	const listen = (
 		ingest: NoopIngest | undefined,
 		imessageWebhook: ((request: Request) => Promise<Response>) | undefined,
 	) =>
 		Effect.callback<ServerType, Error>((resume) => {
-			const app = createApp(config, ingest, imessageWebhook);
+			const app = createApp(config, ingest, imessageWebhook, operator);
 			const server = serve(
 				{ fetch: app.fetch, hostname: env.HOST, port: env.PORT },
 				() => resume(Effect.succeed(server)),
@@ -62,8 +73,24 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 	const startIMessage = (settings: NonNullable<typeof imessage>) =>
 		Effect.acquireRelease(
 			Effect.tryPromise(() =>
-				startCloudIMessage(settings, (familyId, question) =>
-					Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
+				startCloudIMessage(
+					settings,
+					(familyId, question) =>
+						Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
+					operator === undefined
+						? undefined
+						: wearerActions(
+								operator,
+								settings.appUrl,
+								photoReader(config.gemini),
+							),
+					// Opens one operator connection per message from a sender that is not allowlisted.
+					operator === undefined
+						? undefined
+						: () =>
+								withOperator(operator, async (db) => [
+									...db.connection.db.memberPhones.iter(),
+								]),
 				),
 			),
 			(agent) => Effect.promise(() => agent.stop()),
@@ -89,19 +116,21 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 			yield* Effect.log(`server listening on http://${env.HOST}:${env.PORT}`);
 			if (agent)
 				yield* Effect.log("imessage agent listening on /api/imessage/webhook");
+			// Texts the wearer what the wearer screens used to show (#308).
+			if (agent && imessage && operator)
+				yield* Effect.forkScoped(
+					wearerTextWorker(
+						operator,
+						agent.text,
+						wearerPhones(imessage.senders),
+					),
+				);
 		}),
 	);
 
-	const db = config.auth?.db;
 	// Delivers alerts to each family's in-app message thread.
 	const AlertOutbox = Layer.effectDiscard(
-		Effect.forkScoped(
-			alertOutboxWorker(
-				env.ALERT_OPERATOR_TOKEN && db
-					? { ...db, token: env.ALERT_OPERATOR_TOKEN }
-					: undefined,
-			),
-		),
+		Effect.forkScoped(alertOutboxWorker(operator)),
 	);
 
 	return Layer.mergeAll(HttpServer, AlertOutbox);
