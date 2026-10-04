@@ -267,7 +267,7 @@
     <g id="sys-training"><title>Train Gemma on River AI, then deploy the model to cloud inference</title>
       <rect class="n" x="652" y="618" width="256" height="70" rx="14"/>
       <text class="t" x="670" y="646"><tspan class="sp">River AI</tspan> training</text>
-      <text class="s" x="670" y="668">Gemma 3B post-train · J + A</text>
+      <text class="s" x="670" y="668">Gemma 3B post-train · J</text>
       <path class="e" d="M780 616 V564" marker-end="url(#ah)"/>
     </g>
 
@@ -585,7 +585,7 @@
     <span class="chip">J · undeemed</span>
     <span class="chip">A · ayaangazali</span>
   </div>
-  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. On 2026-10-04 every issue that Mahesh (maheshwarmurugesan) owned moved to undeemed. Mahesh wrote the October 3 backlog (#25–#51) and opened draft PR #90. Deployment needs an approved target and credentials.</p>
+  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. On 2026-10-04 every issue that Mahesh (maheshwarmurugesan) owned moved to undeemed. Mahesh wrote the October 3 backlog (#25–#51) and opened draft PR #90. The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK; his other issues moved to undeemed. Deployment needs an approved target and credentials.</p>
 </section>
 
 <!-- 06 STACK -->
@@ -769,7 +769,7 @@
     <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
     <div class="integration"><strong>One schema owner</strong><p>Database source lives in spacetimedb/. Generate packages/db from it. Commit both together; never edit generated files.</p></div>
     <div class="integration"><strong>No dependency cycles</strong><p>Contracts import no apps, database code, or secrets. Apps never import each other. Python workers use the API, not TypeScript internals.</p></div>
-    <div class="integration"><strong>Parallel ownership</strong><p>J owns the web HUD, reports, native, dashboard, family chat, and Gemma. A owns data, alerts, Fetch.ai, Finchnode, and River. Claim shared-file edits in an issue.</p></div>
+    <div class="integration"><strong>Parallel ownership</strong><p>J owns the web HUD, reports, native, dashboard, family chat, data, alerts, Fetch.ai, Finchnode, Gemma, and River. A owns NOOP and the optional Meta glasses SDK. Claim shared-file edits in an issue.</p></div>
   </div>
   <details class="stack-notes" id="repo-app-files">
     <summary>App files · shallow until the code grows</summary>
@@ -1065,10 +1065,10 @@ const el = (tag, attrs, text) => {
 /* 03 flows */
 const flows = [
   { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · J", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
-  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · A, J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
+  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
   { id: "ask", title: '"How is Mom sleeping?"', own: "Gemini → data tools · J", steps: ['Family asks', 'Gemini agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
   { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'] },
-  { id: "lab", title: "Lab report → hospital", own: "report tool · Finchnode reads labs · J, A", steps: ['Markers + labs', 'Report tool', 'Review report', 'Delivery choice', 'Hospital'] },
+  { id: "lab", title: "Lab report → hospital", own: "report tool · Finchnode reads labs · J", steps: ['Markers + labs', 'Report tool', 'Review report', 'Delivery choice', 'Hospital'] },
 ];
 const list = document.getElementById("flow-list");
 for (const f of flows) {
@@ -1105,7 +1105,7 @@ const team = document.getElementById("team-svg");
 const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows", "camera + validated data"], ["3 · Family loop", "durable alert + ask"], ["4 · Recovery", "report + failure checks"]];
 const lanes = [
   ["M", "J", "Jerry (M)", "Jerry · reassigned from Mahesh on 2026-10-04", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
-  ["A", "A", "Ayaan", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode labs"]]],
+  ["A", "J", "Jerry (A)", "Jerry · reassigned from Ayaan on 2026-10-04; Ayaan keeps NOOP and the Meta glasses SDK", [["NOOP link · Ayaan", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode labs"]]],
   ["J", "J", "Jerry", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Gemini family chat"], ["Dashboard + recovery"]]],
 ];
 const CX = 110, CW = 222, LY = 74, LH = 84;

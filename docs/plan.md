@@ -74,10 +74,10 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, Gemma training and inference, service reliability, optional glasses bridge and square layout |
-| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode lab results, River setup |
+| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, SpacetimeDB, threshold alerts and durable delivery, data quality, Fetch.ai Agentverse, Finchnode lab results, River setup, Gemma training and inference, service reliability |
+| Ayaan | `ayaangazali` | NOOP connection boundary, optional Meta glasses SDK bridge and square layout |
 
-On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigned to `undeemed`. Mahesh wrote the October 3 backlog (#25–#51).
+On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigned to `undeemed`. Mahesh wrote the October 3 backlog (#25–#51). The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK, and his other issues moved to `undeemed`.
 
 ## Build order
 
