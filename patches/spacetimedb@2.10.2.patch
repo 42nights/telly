@@ -1,3 +1,52 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 7e4ec806cc18d67a4516572bbe00b010025bac9c..94cdb8cb614a06d92dd4428e145305e3a81bbdbf 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -5123,7 +5123,8 @@ async function openWebSocket({
+   authToken,
+   compression,
+   lightMode,
+-  confirmedReads
++  confirmedReads,
++  signal
+ }) {
+   const headers = new Headers();
+   const WS = await resolveWS();
+@@ -5132,7 +5133,7 @@ async function openWebSocket({
+     headers.set("Authorization", `Bearer ${authToken}`);
+     const tokenUrl = new URL("v1/identity/websocket-token", url);
+     tokenUrl.protocol = url.protocol === "wss:" ? "https:" : "http:";
+-    const response = await fetch(tokenUrl, { method: "POST", headers });
++    const response = await fetch(tokenUrl, { method: "POST", headers, signal });
+     if (response.ok) {
+       const { token } = await response.json();
+       temporaryAuthToken = token;
+@@ -5963,6 +5964,7 @@ var DbConnectionImpl = class {
+     this.db = this.#makeDbView();
+     this.reducers = this.#makeReducers(remoteModule);
+     this.procedures = this.#makeProcedures(remoteModule);
++    this.tokenFetchAbort = new AbortController();
+     this.wsPromise = createWSFn({
+       url,
+       nameOrAddress,
+@@ -5970,7 +5972,8 @@ var DbConnectionImpl = class {
+       authToken: token,
+       compression,
+       lightMode,
+-      confirmedReads
++      confirmedReads,
++      signal: this.tokenFetchAbort.signal
+     }).then((v) => {
+       this.ws = v;
+       this.ws.onclose = () => {
+@@ -6754,6 +6757,7 @@ var DbConnectionImpl = class {
+    */
+   disconnect() {
+     this.isDisconnectRequested = true;
++    this.tokenFetchAbort.abort();
+     this.wsPromise.then((ws) => ws?.close());
+   }
+   on(eventName, callback) {
 diff --git a/dist/lib/constraints.d.ts b/dist/lib/constraints.d.ts
 index bf711623aa283f813cb935cb53c76bf10eb46b2e..329dc8e56b26f47ed4c34a1564998e44536b7dd6 100644
 --- a/dist/lib/constraints.d.ts

@@ -17,9 +17,21 @@ const listen = (port: number) =>
 		server.once("error", (error) => resume(Effect.fail(error)));
 	});
 
+// In-flight requests get this long to finish after SIGTERM. Then their sockets close, which aborts
+// each request's signal, interrupts its scope, and closes its database connection. `close` itself
+// closes idle keep-alive sockets at once.
+const shutdownGraceMs = 3_000;
+
 const close = (server: ServerType) =>
 	Effect.callback<void>((resume) => {
-		server.close(() => resume(Effect.void));
+		const timer =
+			"closeAllConnections" in server
+				? setTimeout(() => server.closeAllConnections(), shutdownGraceMs)
+				: undefined;
+		server.close(() => {
+			clearTimeout(timer);
+			resume(Effect.void);
+		});
 	});
 
 // The server is a scoped resource: SIGINT/SIGTERM interrupt the layer, which closes the listener.

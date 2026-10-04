@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { authenticate, requireFamilyMember } from "./auth";
 import type { ServerConfig } from "./config";
+import { DbUnavailable } from "./db";
 import {
 	ApiFailure,
 	errorStatus,
@@ -58,13 +59,19 @@ export const createApp = (config: ServerConfig) => {
 			404,
 		),
 	);
-	app.onError((error, c) => {
+	app.onError((caught, c) => {
+		// A closed database connection must read as an outage, never as an empty result.
+		const error =
+			caught instanceof DbUnavailable
+				? new ApiFailure("unavailable", "The database is not reachable")
+				: caught;
 		if (error instanceof ApiFailure)
 			return c.json(
 				{ error: error.code, message: error.message } satisfies ApiError,
 				errorStatus[error.code],
 			);
-		console.error(error);
+		// A cancelled request arrives here as an interruption; the client is gone, so do not log it.
+		if (!c.req.raw.signal.aborted) console.error(error);
 		return c.json(
 			{
 				error: "internal",

@@ -4,7 +4,15 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { Identity, Timestamp } from "spacetimedb";
-import { type DbConfig, openFamilyDb, readFamilyRecords } from "./db";
+import {
+	callDb,
+	type DbConfig,
+	DbRejected,
+	DbUnavailable,
+	openFamilyDb,
+	readFamilyRecords,
+} from "./db";
+import { closed, dbProxy } from "./db-proxy";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -145,9 +153,103 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					).toEqual(
 						writes.map(() => "SenderError: not a member of this family"),
 					);
+					// Through `callDb`, a refusal is `DbRejected`, distinct from an outage.
+					const refused = yield* Effect.flip(
+						callDb(outsider, (c) =>
+							c.reducers.sendMessage({ familyId, body: "x" }),
+						),
+					);
+					expect(refused).toEqual(
+						new DbRejected({ reason: "not a member of this family" }),
+					);
 
 					expect(readFamilyRecords(owner)).toEqual(before);
 				}),
 			),
 		));
+
+	test("a dropped connection fails as unavailable, serves no stale rows, and a new connection sees every committed row", () =>
+		run((config) =>
+			Effect.gen(function* () {
+				const link = yield* Effect.promise(() => dbProxy(config.uri));
+				const viaProxy = { ...config, uri: link.uri };
+				const token = yield* Effect.scoped(
+					Effect.gen(function* () {
+						const family = yield* openFamilyDb(viaProxy);
+						yield* callDb(family, (c) =>
+							c.reducers.createFamily({ name: "Haddad" }),
+						);
+						expect(readFamilyRecords(family).families).toHaveLength(1);
+
+						// The call is sent, then the network drops before any reply can arrive.
+						const inFlight = yield* Effect.flip(
+							callDb(family, (c) => {
+								const pending = c.reducers.createFamily({ name: "Lost" });
+								link.drop();
+								return pending;
+							}),
+						);
+						expect(inFlight).toEqual(
+							new DbUnavailable({ reason: "connection dropped" }),
+						);
+						expect(() => readFamilyRecords(family)).toThrow(DbUnavailable);
+						const after = yield* Effect.flip(
+							callDb(family, (c) => c.reducers.createFamily({ name: "Later" })),
+						);
+						expect(after).toEqual(
+							new DbUnavailable({ reason: "connection closed" }),
+						);
+						return family.token;
+					}),
+				);
+
+				// Recovery is a new connection as the same identity; the committed row is intact.
+				yield* Effect.scoped(
+					Effect.gen(function* () {
+						const family = yield* openFamilyDb({ ...viaProxy, token });
+						const names = readFamilyRecords(family)
+							.families.map((f) => f.name)
+							.filter((name) => name !== "Lost");
+						expect(names).toEqual(["Haddad"]);
+					}),
+				);
+				link.close();
+			}),
+		));
+
+	// Without a token the first socket is the WebSocket; with one, it is the SDK's token fetch.
+	test.each([
+		["the WebSocket handshake", {}],
+		["the token fetch", { token: "unchecked" }],
+	])("an interrupted open closes its socket during %s", async (_, token) => {
+		if (config === undefined) throw new Error("no database configured");
+		const hung = await dbProxy(config.uri);
+		hung.setMode("freeze");
+		const accepted = hung.nextSocket();
+		const abort = new AbortController();
+		const opening = Effect.runPromise(
+			Effect.scoped(openFamilyDb({ ...config, ...token, uri: hung.uri })),
+			{ signal: abort.signal },
+		);
+		const released = closed(await accepted);
+		abort.abort();
+		await expect(opening).rejects.toThrow();
+		// A leaked socket never closes, and the test times out here.
+		await released;
+		hung.close();
+	});
+
+	test("an unreachable database fails as unavailable after bounded retries", async () => {
+		if (config === undefined) throw new Error("no database configured");
+		const down = await dbProxy(config.uri);
+		down.setMode("refuse");
+		const started = Date.now();
+		const error = await Effect.runPromise(
+			Effect.flip(Effect.scoped(openFamilyDb({ ...config, uri: down.uri }))),
+		);
+		expect(error).toEqual(new DbUnavailable({ reason: "connect failed" }));
+		// Three attempts with 250 ms and 500 ms backoff, far below the 5 s per-attempt timeout.
+		expect(Date.now() - started).toBeLessThan(3000);
+		down.close();
+	});
 });
