@@ -56,13 +56,13 @@ journalctl --user -u telly-autodeploy.service -f
 
 ## Care grants backfill (#188)
 
-Families created before #188 have no care grants, so their routes answer 403. After you publish the module with #188, run this once with the login that first published database `telly` (the module's operator):
+Families created before #188 can lack care grants, so their routes answer 403. After you publish a module that changes this reducer, run this with the login that first published database `telly` (the module's operator):
 
 ```bash
 spacetime call --server maincloud telly backfill_founder_care_grants
 ```
 
-It gives the founder of each family that has no grant event every care scope. It deletes nothing, and a second call changes nothing.
+It gives each family's founder every care scope that the founder has no grant event for. A scope the founder granted or revoked keeps that choice. It deletes nothing, and a second call changes nothing.
 
 ## Rollback
 
