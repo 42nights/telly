@@ -1,9 +1,9 @@
 // The provider tests talk HTTP to a local protocol server that speaks the OpenAI-compatible chat
 // API River deployments expose. They prove this server's side of the protocol, not a live River
 // deployment or a trained checkpoint.
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { ApiError, type HealthSample } from "@health/contracts";
-import { CueKind, cueFormat } from "@health/contracts/cues";
+import { CueKind, cueFormat, HealthCue } from "@health/contracts/cues";
 import { Effect, Exit, Schema } from "effect";
 import { Hono } from "hono";
 import type { FamilyDb } from "../db";
@@ -107,10 +107,35 @@ describe("cue route", () => {
 			throw new Error("database read");
 		},
 	});
-	const appWith = (config: QwenConfig | undefined) => {
+	// This file runs without SpacetimeDB, so this stands in for the rows `readFamilyRecords` (db.ts)
+	// reads: only the sample view has rows. Update it when that function reads rows differently.
+	const dbWith = (samples: ReadonlyArray<HealthSample>) => {
+		const none = { iter: () => [] };
+		const rows = samples.map((s) => ({
+			...s,
+			id: BigInt(s.id),
+			familyId: BigInt(s.familyId),
+			sourceTime: { toISOString: () => s.sourceTime },
+			receivedAt: { toISOString: () => s.receivedAt },
+			quality: { tag: s.quality === "validated" ? "Validated" : "Unvalidated" },
+		}));
+		return {
+			connection: {
+				isActive: true,
+				db: {
+					myFamilies: none,
+					myHealthSamples: { iter: () => rows },
+					myAlerts: none,
+					myMessages: none,
+					myAcknowledgements: none,
+				},
+			},
+		} as unknown as FamilyDb;
+	};
+	const appWith = (config: QwenConfig | undefined, db = untouched) => {
 		const app = new Hono<FamilyEnv>()
 			.use(async (c, next) => {
-				c.set("db", untouched);
+				c.set("db", db);
 				c.set("familyId", 7n);
 				await next();
 			})
@@ -126,12 +151,45 @@ describe("cue route", () => {
 		);
 		return app;
 	};
-	const post = (config: QwenConfig | undefined, body: string) =>
-		appWith(config).request("/cues", {
+	const post = (
+		config: QwenConfig | undefined,
+		body: string,
+		db = untouched,
+		signal: AbortSignal | null = null,
+	) =>
+		appWith(config, db).request("/cues", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body,
+			signal,
 		});
+
+	const demo = sample({ id: "1" });
+	const watch = sample({
+		id: "2",
+		metric: "heart_rate",
+		value: 71.5,
+		unit: "bpm",
+		source: "apple-health",
+		synthetic: false,
+	});
+	const watchLater = sample({
+		id: "3",
+		metric: "heart_rate",
+		value: 74,
+		unit: "bpm",
+		source: "apple-health",
+		synthetic: false,
+	});
+	const familyDb = dbWith([
+		demo,
+		watch,
+		watchLater,
+		sample({ id: "4", quality: "unvalidated" }),
+		sample({ id: "5", familyId: "8" }),
+	]);
+	const cueFor = (sampleIds: ReadonlyArray<string>) =>
+		post(qwen, JSON.stringify({ sampleIds }), familyDb);
 
 	test("an unconfigured deployment is unavailable, never a canned cue", async () => {
 		const response = await post(
@@ -161,6 +219,133 @@ describe("cue route", () => {
 		expect(
 			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
 		).toBe("invalid_request");
+	});
+
+	test("answers the provider's cue with its model and input provenance", async () => {
+		reply = () =>
+			completion('{"kind":"rest","text":"A calm evening may help."}');
+		const before = Date.now();
+		const response = await cueFor(["2", "3", "1"]);
+		expect(response.status).toBe(200);
+		const cue = Schema.decodeUnknownSync(HealthCue)(await response.json());
+		expect(cue).toEqual({
+			kind: "rest",
+			text: "A calm evening may help.",
+			format: "health-cue-v1",
+			model: {
+				provider: "river",
+				deployment: "dep-test",
+				checkpoint: qwen.checkpoint,
+			},
+			input: {
+				sampleIds: ["2", "3", "1"],
+				sources: ["apple-health", "synthetic-demo"],
+				synthetic: true,
+			},
+			generatedAt: cue.generatedAt,
+		});
+		expect(Date.parse(cue.generatedAt)).toBeGreaterThanOrEqual(before);
+		// The provider reads the samples in request order.
+		expect(seen?.body).toMatchObject({
+			messages: [
+				{ role: "system" },
+				{ role: "user", content: renderCueInput([watch, watchLater, demo]) },
+			],
+		});
+	});
+
+	test("marks a cue from real samples only as not synthetic", async () => {
+		reply = () => completion('{"kind":"walk","text":"A short walk."}');
+		const response = await cueFor(["2"]);
+		expect(response.status).toBe(200);
+		const { input } = Schema.decodeUnknownSync(HealthCue)(
+			await response.json(),
+		);
+		expect(input).toEqual({
+			sampleIds: ["2"],
+			sources: ["apple-health"],
+			synthetic: false,
+		});
+	});
+
+	test.each([
+		["another family's sample", ["1", "5"]],
+		["an unvalidated sample", ["4"]],
+	])("rejects %s without calling the provider", async (_, sampleIds) => {
+		seen = undefined;
+		const response = await cueFor(sampleIds);
+		expect(response.status).toBe(400);
+		expect(
+			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
+		).toBe("invalid_request");
+		expect(seen).toBeUndefined();
+	});
+
+	test.each([
+		[
+			"a deployment that is not serving",
+			() => new Response("scaled to zero", { status: 503 }),
+			503,
+			"unavailable",
+			"Qwen deployment is not serving",
+		],
+		[
+			"an auth failure",
+			() => new Response("bad key test-key", { status: 401 }),
+			502,
+			"upstream_error",
+			"Qwen deployment returned HTTP 401",
+		],
+		[
+			"an invalid cue",
+			() => completion('{"kind":"diagnose","text":"x"}'),
+			502,
+			"upstream_error",
+			"Qwen reply is not a valid cue",
+		],
+	])(
+		"maps %s to %d %s and logs only the typed reason",
+		async (_, make, status, code, message) => {
+			reply = make;
+			const warn = spyOn(console, "warn").mockImplementation(() => {});
+			try {
+				const response = await cueFor(["1"]);
+				expect(response.status).toBe(status);
+				const body = Schema.decodeUnknownSync(ApiError)(await response.json());
+				expect(body).toMatchObject({ error: code, message });
+				expect(JSON.stringify(body)).not.toContain("test-key");
+				expect(warn).toHaveBeenCalledWith("qwen cue failed", {
+					_tag:
+						code === "unavailable" ? "QwenUnavailable" : "QwenUpstreamError",
+					message,
+				});
+			} finally {
+				warn.mockRestore();
+			}
+		},
+	);
+
+	test("a client disconnect cancels the provider call and answers 499", async () => {
+		const { promise: arrived, resolve: arrive } = Promise.withResolvers<void>();
+		const { promise: closed, resolve: close } = Promise.withResolvers<void>();
+		reply = (signal) => {
+			signal.addEventListener("abort", () => close());
+			arrive();
+			return new Promise<Response>(() => {});
+		};
+		const controller = new AbortController();
+		const pending = post(
+			qwen,
+			JSON.stringify({ sampleIds: ["1"] }),
+			familyDb,
+			controller.signal,
+		);
+		await arrived;
+		controller.abort();
+		const response = await pending;
+		await closed;
+		expect(response.status).toBe(499);
+		expect(await response.text()).toBe("");
 	});
 });
 

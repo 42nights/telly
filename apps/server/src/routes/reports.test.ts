@@ -1,6 +1,7 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`). All records
 // are synthetic. Each connection is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
+import { ReminderHistory } from "@health/contracts/reminders";
 import {
 	Report,
 	ReportPdf,
@@ -13,6 +14,7 @@ import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import { openFamilyDb } from "../db";
 import type { R2Bucket } from "../integrations/r2";
+import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import {
 	dbConfig,
@@ -168,6 +170,54 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 			}),
 		));
 
+	test("a report lists only the reminders that ended unresolved", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Unresolved");
+				const reminders = familyApp(db, familyId, reminderRoutes());
+				yield* send(reminders, "PUT", "/reminder-settings", {
+					timeZone: "UTC",
+					quietHours: null,
+					repeatEveryMinutes: 1,
+					maxPrompts: 1,
+					snoozeMinutes: 1,
+				});
+				// Hours away, so no database timer settles either occurrence during the test.
+				const hoursAhead = (hours: number) =>
+					new Date(Date.now() + hours * 3_600_000).toISOString().slice(11, 16);
+				yield* send(reminders, "POST", "/reminders", {
+					kind: "meal",
+					subjectId: null,
+					title: "Synthetic lunch",
+					times: [hoursAhead(3), hoursAhead(4)],
+				});
+				const [unsure, open] = Schema.decodeUnknownSync(ReminderHistory)(
+					(yield* send(reminders, "GET", "/reminder-occurrences")).json,
+				).occurrences.map((d) => d.occurrence.id);
+				if (unsure === undefined || open === undefined)
+					throw new Error("expected one occurrence per reminder time");
+				yield* send(
+					reminders,
+					"POST",
+					`/reminder-occurrences/${unsure}/answers`,
+					{
+						clientId: "unsure-1",
+						source: "phone",
+						response: "unsure",
+						wording: "I don't remember if I ate",
+					},
+				);
+
+				const app = familyApp(db, familyId, reportRoutes());
+				const report = Schema.decodeUnknownSync(Report)(
+					(yield* send(app, "POST", "/reports")).json,
+				);
+				expect(report.unresolved?.map((d) => d.occurrence.id)).toEqual([
+					unsure,
+				]);
+			}),
+		));
+
 	test("another family's identity cannot read or change a report", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
@@ -208,18 +258,19 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				// The storage stand-in keeps objects by key; the routes alone decide the keys.
-				const objects = new Map<string, Uint8Array>();
+				const objects = new Map<string, { body: Uint8Array; at: string }>();
 				const bucket: R2Bucket = {
-					put: async (key, body) => void objects.set(key, body),
+					put: async (key, body) =>
+						void objects.set(key, { body, at: new Date().toISOString() }),
 					exists: async (key) => objects.has(key),
 					presign: async (key) => `https://storage.test/${key}?signed`,
 					list: async (prefix) =>
 						[...objects]
 							.filter(([key]) => key.startsWith(prefix))
-							.map(([key, body]) => ({
+							.map(([key, { body, at }]) => ({
 								key,
 								size: body.length,
-								lastModified: new Date().toISOString(),
+								lastModified: at,
 							})),
 				};
 				const { db: owner, familyId } = yield* openFamily(config, "Pdf");
@@ -251,9 +302,19 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				expect(key).toBe(
 					`report-pdfs/${familyId}/${owner.identity}/${pdf.id}.pdf`,
 				);
-				const text = new TextDecoder("latin1").decode(objects.get(key));
+				const text = new TextDecoder("latin1").decode(objects.get(key)?.body);
 				expect(text.startsWith("%PDF-1.4")).toBe(true);
 				expect(text).toContain(`(Layout version 2 - report ${report.id})`);
+
+				// A later PDF of the same report lists first.
+				yield* Effect.sleep("5 millis");
+				const later = Schema.decodeUnknownSync(ReportPdf)(
+					(yield* send(ownerApp, "POST", `/reports/${report.id}/pdfs`)).json,
+				);
+				const both = yield* send(ownerApp, "GET", "/report-pdfs");
+				expect(
+					Schema.decodeUnknownSync(ReportPdfs)(both.json).pdfs.map((p) => p.id),
+				).toEqual([later.id, pdf.id]);
 
 				// Another member of the same family sees none of it, even with the exact id.
 				const relativeApp = familyApp(relative, familyId, reportRoutes(bucket));

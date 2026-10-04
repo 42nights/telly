@@ -6,15 +6,18 @@ import {
 	VoiceAnswer,
 } from "@health/contracts/ask";
 import type { CareProfile } from "@health/contracts/care-profile";
+import { TripCheckIn } from "@health/contracts/trips";
 import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import { Identity } from "spacetimedb";
-import { openFamilyDb } from "../db";
+import { type FamilyDb, openFamilyDb } from "../db";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
-import { elevenLabsVoice } from "../integrations/elevenlabs";
+import { elevenLabsVoice, maxAudioBytes } from "../integrations/elevenlabs";
 import { askRoutes } from "./ask";
+import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
 import { dbConfig, familyApp, openFamily, send, withDb } from "./test-family";
+import { tripRoutes } from "./trips";
 
 // Isolated local protocol servers stand in for Gemini, the Fetch.ai bridge, and ElevenLabs. Test
 // credentials and synthetic records only: local protocol proof, not live-provider proof.
@@ -66,18 +69,30 @@ const bridge = Bun.serve({
 	},
 });
 
-let speech: () => Response;
+type Reply = (request: Request) => Response | Promise<Response>;
+let transcribe: Reply;
+let speech: Reply;
+let transcriptions = 0;
 const elevenLabs = Bun.serve({
 	port: 0,
-	fetch: (request) =>
-		new URL(request.url).pathname === "/v1/speech-to-text"
-			? Response.json({
-					text: "How did Mom sleep?",
-					language_code: "eng",
-					language_probability: 0.98,
-				})
-			: speech(),
+	fetch: (request) => {
+		if (new URL(request.url).pathname !== "/v1/speech-to-text")
+			return speech(request);
+		transcriptions++;
+		return transcribe(request);
+	},
 });
+// Answers a provider request never, and resolves `aborted` when the caller drops it.
+const stall = () => {
+	const started = Promise.withResolvers<void>();
+	const aborted = Promise.withResolvers<void>();
+	const reply = (request: Request) => {
+		request.signal.addEventListener("abort", () => aborted.resolve());
+		started.resolve();
+		return new Promise<Response>(() => {});
+	};
+	return { reply, started: started.promise, aborted: aborted.promise };
+};
 afterAll(() => {
 	for (const server of [geminiServer, bridge, elevenLabs]) server.stop(true);
 });
@@ -119,8 +134,15 @@ const answerWith = (followUps: unknown) => {
 beforeEach(() => {
 	geminiBodies.length = 0;
 	bridgeCalls.length = 0;
+	transcriptions = 0;
 	samples = [sleepSample(new Date().toISOString())];
 	answerWith(["Did Mom nap today?"]);
+	transcribe = () =>
+		Response.json({
+			text: "How did Mom sleep?",
+			language_code: "eng",
+			language_probability: 0.98,
+		});
 	speech = () =>
 		new Response(new Uint8Array([0xff, 0xf3, 1, 2]), {
 			headers: { "content-type": "audio/mpeg" },
@@ -427,29 +449,28 @@ describe("POST /ask", () => {
 	});
 
 	test("a client disconnect aborts the Gemini request", async () => {
-		const aborted = Promise.withResolvers<void>();
-		const started = Promise.withResolvers<void>();
-		gemini = (_body, request) => {
-			request.signal.addEventListener("abort", () => aborted.resolve());
-			started.resolve();
-			return new Promise<Response>(() => {});
-		};
+		const hang = stall();
+		gemini = (_body, request) => hang.reply(request);
 		const cancel = new AbortController();
 		const pending = ask({ question: "Sleep?" }, app, cancel.signal);
-		await started.promise;
+		await hang.started;
 		cancel.abort();
 		expect((await pending).status).toBe(499);
 		// Hangs (and the test times out) if the provider request stays open.
-		await aborted.promise;
+		await hang.aborted;
 	});
 });
 
 describe("POST /ask/voice", () => {
-	const askVoice = () =>
-		app.request("http://test/api/families/7/ask/voice?timeZone=Europe/Berlin", {
+	const askVoice = (
+		init: RequestInit = {},
+		query = "?timeZone=Europe/Berlin",
+	) =>
+		app.request(`http://test/api/families/7/ask/voice${query}`, {
 			method: "POST",
 			headers: { "content-type": "audio/webm" },
 			body: new Uint8Array([1, 2, 3]),
+			...init,
 		});
 
 	test("transcribes, answers, and speaks in the question's language", async () => {
@@ -475,6 +496,75 @@ describe("POST /ask/voice", () => {
 		expect(reply.answer.answer).toBe("Mom slept 7.5 hours (synthetic).");
 		expect(reply.speech.status).toBe("upstream_error");
 	});
+
+	test("a recording at 10 MiB is answered", async () => {
+		const response = await askVoice({ body: new Uint8Array(maxAudioBytes) });
+		expect(response.status).toBe(200);
+		expect(transcriptions).toBe(1);
+	});
+
+	test("a recording that is too large, empty, or not audio is rejected before any provider call", async () => {
+		const rejected: Array<[RequestInit, string]> = [
+			[{ body: new Uint8Array(maxAudioBytes + 1) }, "10 MiB at most"],
+			[{ body: new Uint8Array() }, "The recording is empty"],
+			[{ headers: { "content-type": "text/plain" } }, "audio/* Content-Type"],
+			[{ headers: {} }, "audio/* Content-Type"],
+		];
+		for (const [init, message] of rejected) {
+			const response = await askVoice(init);
+			expect(response.status).toBe(400);
+			expect(await errorOf(response)).toEqual({
+				error: "invalid_request",
+				message: expect.stringContaining(message),
+			});
+		}
+		expect(transcriptions).toBe(0);
+		expect(geminiBodies).toHaveLength(0);
+	});
+
+	test("silence, or a bad timeZone or asker, is rejected before Gemini", async () => {
+		transcribe = () =>
+			Response.json({
+				text: "   ",
+				language_code: "eng",
+				language_probability: 0.5,
+			});
+		const silent = await askVoice();
+		transcribe = () =>
+			Response.json({
+				text: "How did Mom sleep?",
+				language_code: "eng",
+				language_probability: 0.98,
+			});
+		for (const response of [
+			silent,
+			await askVoice({}, "?timeZone=Mars/Base"),
+			await askVoice({}, "?asker=robot"),
+		]) {
+			expect(response.status).toBe(400);
+			expect((await errorOf(response)).message).toBe(
+				"No question was recognized, or timeZone or asker is not valid",
+			);
+		}
+		expect(transcriptions).toBe(3);
+		expect(geminiBodies).toHaveLength(0);
+	});
+
+	for (const stage of ["transcription", "answer", "speech"] as const)
+		test(`a client disconnect during ${stage} aborts that provider request`, async () => {
+			const hang = stall();
+			if (stage === "transcription") transcribe = hang.reply;
+			else if (stage === "answer")
+				gemini = (_body, request) => hang.reply(request);
+			else speech = hang.reply;
+			const cancel = new AbortController();
+			const pending = askVoice({ signal: cancel.signal });
+			await hang.started;
+			cancel.abort();
+			expect((await pending).status).toBe(499);
+			// Hangs (and the test times out) if the provider request stays open.
+			await hang.aborted;
+		});
 
 	test("when Gemini stays overloaded after every retry, the error says it is busy", async () => {
 		gemini = () => new Response("high demand detail", { status: 503 });
@@ -514,6 +604,30 @@ describe.skipIf(dbConfig === undefined)(
 			devices: null,
 			declinedPrompts: [],
 		};
+		// What Gemini is told when the wearer asks `db`'s app a question.
+		const prompt = (db: FamilyDb, familyId: string, voiced = false) =>
+			Effect.gen(function* () {
+				geminiBodies.length = 0;
+				const app = familyApp(
+					db,
+					familyId,
+					askRoutes({ gemini: geminiConfig, fetchAgent, voice }),
+				);
+				const response = voiced
+					? yield* Effect.promise(async () =>
+							app.request("/ask/voice?asker=wearer", {
+								method: "POST",
+								headers: { "content-type": "audio/webm" },
+								body: new Uint8Array([1, 2, 3]),
+							}),
+						)
+					: yield* send(app, "POST", "/ask", {
+							question: "Who visits me?",
+							asker: "wearer",
+						});
+				expect(response.status).toBe(200);
+				return geminiBodies[0]?.system_instruction ?? "";
+			});
 
 		test("only a health_records holder gives Gemini the profile, and never a phone number", () =>
 			withDb((config) =>
@@ -540,17 +654,7 @@ describe.skipIf(dbConfig === undefined)(
 					expect(
 						(yield* send(care, "PUT", "/care-profile", profile)).status,
 					).toBe(204);
-					const deps = { gemini: geminiConfig, fetchAgent, voice };
-					const prompt = (db: typeof owner) =>
-						Effect.gen(function* () {
-							geminiBodies.length = 0;
-							const app = familyApp(db, familyId, askRoutes(deps));
-							const body = { question: "Who visits me?", asker: "wearer" };
-							expect((yield* send(app, "POST", "/ask", body)).status).toBe(200);
-							return geminiBodies[0]?.system_instruction ?? "";
-						});
-
-					const granted = yield* prompt(owner);
+					const granted = yield* prompt(owner, familyId);
 					expect(granted).toContain("Their preferred name: Synthetic Sam.");
 					expect(granted).toContain("Their preferred language: es.");
 					expect(granted).toContain("Their routines: synthetic walk at 10:00.");
@@ -558,9 +662,105 @@ describe.skipIf(dbConfig === undefined)(
 					expect(granted).not.toContain("555");
 
 					// Membership alone gives no profile fact: the model says it is not saved.
-					const member = yield* prompt(relative);
+					const member = yield* prompt(relative, familyId);
 					expect(member).toContain("You are an assistant");
 					expect(member).not.toContain("Synthetic");
+				}),
+			));
+
+		test("the wearer hears the latest trip plan and only their own 3 newest requests", () =>
+			withDb((config) =>
+				Effect.gen(function* () {
+					const { db: wearer, familyId } = yield* openFamily(
+						config,
+						"Ask memories",
+					);
+					const relative = yield* openFamilyDb(config);
+					yield* Effect.promise(() =>
+						wearer.connection.reducers.addFamilyMember({
+							familyId: BigInt(familyId),
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					// Nothing saved yet. The founder holds health_records (#188), so the model hears that the
+					// profile is empty, and no trip plan or request.
+					const empty = yield* prompt(wearer, familyId);
+					expect(empty).toContain("Their preferred name: not saved.");
+					expect(empty).not.toContain("Their latest trip plan");
+					expect(empty).not.toContain("They asked their family");
+
+					const trips = familyApp(wearer, familyId, tripRoutes());
+					const checkIn = yield* send(trips, "POST", "/trips/check-in", {
+						source: "manual",
+					});
+					const trip = `/trips/${Schema.decodeUnknownSync(TripCheckIn)(checkIn.json).trip.id}`;
+					const leaving = yield* send(trips, "POST", `${trip}/answer`, {
+						answer: "leaving",
+						purpose: "Synthetic checkup",
+						destination: "Synthetic Clinic",
+						notify: { departure: false, arrival: false },
+						battery: null,
+					});
+					expect(leaving.status).toBe(200);
+					const plan =
+						/Their latest trip plan, stated \d{4}-\d\d-\d\dT[\d:.]+Z: Synthetic checkup, to Synthetic Clinic\. Now: /;
+					const left = yield* prompt(wearer, familyId);
+					expect(left).toContain("Saved facts you may repeat:");
+					expect(left).toMatch(new RegExp(`${plan.source}leaving\\.`));
+					expect(
+						(yield* send(trips, "POST", `${trip}/answer`, {
+							answer: "arrived",
+						})).status,
+					).toBe(200);
+					// The plan stays; the step moves on. Every member may read the trip. Another identity's
+					// view updates asynchronously, so the relative reads through a new connection, as the
+					// server does per request.
+					expect(yield* prompt(wearer, familyId)).toMatch(
+						new RegExp(`${plan.source}arrived\\.`),
+					);
+					const relativeNow = yield* openFamilyDb({
+						...config,
+						token: relative.token,
+					});
+					expect(yield* prompt(relativeNow, familyId)).toMatch(
+						new RegExp(`${plan.source}arrived\\.`),
+					);
+
+					const need = (db: FamilyDb, summary: string, kind = "help") =>
+						send(familyApp(db, familyId, careRoutes()), "POST", "/needs", {
+							clientId: crypto.randomUUID(),
+							kind,
+							summary,
+							sampleIds: [],
+							dueAt: null,
+						});
+					for (const n of [1, 2, 3])
+						expect((yield* need(wearer, `Synthetic request ${n}`)).status).toBe(
+							201,
+						);
+					expect(
+						(yield* need(relative, "Synthetic relative request")).status,
+					).toBe(201);
+					expect(
+						(yield* need(wearer, "Synthetic call request", "call_reminder"))
+							.status,
+					).toBe(201);
+
+					const asked = (yield* prompt(wearer, familyId, true))
+						.split("\n")
+						.filter((line) => line.startsWith("They asked their family"));
+					expect(asked).toEqual([
+						expect.stringMatching(
+							/^They asked their family, \d{4}-\d\d-\d\dT[\d:.]+Z: “Synthetic call request”\. Status: unresolved\.$/,
+						),
+						expect.stringContaining("“Synthetic request 3”"),
+						expect.stringContaining("“Synthetic request 2”"),
+					]);
+					// The relative's own request is theirs alone to hear.
+					const theirs = yield* prompt(relative, familyId);
+					expect(theirs).toContain("“Synthetic relative request”");
+					expect(theirs).not.toContain("Synthetic request");
+					expect(theirs).not.toContain("Synthetic call request");
 				}),
 			));
 	},

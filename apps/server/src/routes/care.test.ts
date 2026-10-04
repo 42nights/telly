@@ -7,6 +7,7 @@ import {
 	CareNeed,
 	CareNeeds,
 	type ContactLadderInput,
+	ContactLadderReply,
 } from "@health/contracts/care";
 import { FamilyMessages } from "@health/contracts/chat";
 import { Me } from "@health/contracts/families";
@@ -165,6 +166,12 @@ describe.skipIf(app === undefined)("family contact ladder", () => {
 				followUpSeconds: 600,
 			};
 
+			expect(
+				await json(
+					ContactLadderReply,
+					await call(alice, "GET", `${path}/care/ladder`),
+				),
+			).toEqual({ ladder: null });
 			// Only family members can be contacts, and outsiders cannot set the ladder.
 			expect(
 				await errorOf(
@@ -188,6 +195,12 @@ describe.skipIf(app === undefined)("family contact ladder", () => {
 			expect(
 				(await call(alice, "PUT", `${path}/care/ladder`, ladder)).status,
 			).toBe(200);
+			// Every member reads the ladder as set.
+			const { ladder: saved } = await json(
+				ContactLadderReply,
+				await call(bob, "GET", `${path}/care/ladder`),
+			);
+			expect(saved).toMatchObject(ladder);
 
 			const sample = (await (
 				await call(alice, "POST", `${path}/samples`, {
