@@ -91,6 +91,7 @@ const app =
 				corsOrigin: "http://localhost:3001",
 				auth: { issuer, audience, db: { uri, database } },
 				voice: noVoice,
+				fetchAgent: undefined,
 			})
 		: undefined;
 
@@ -159,6 +160,7 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 				db: { uri: "ws://127.0.0.1:1", database: "health-test" },
 			},
 			voice: noVoice,
+			fetchAgent: undefined,
 		});
 		const response = await offline.request("/api/families", {
 			headers: { Authorization: `Bearer ${await token("alice")}` },
