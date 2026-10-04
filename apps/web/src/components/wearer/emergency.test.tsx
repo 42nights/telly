@@ -6,10 +6,13 @@ import {
 	describe,
 	expect,
 	setSystemTime,
+	spyOn,
 	test,
 } from "bun:test";
 import type { EmergencyOutcome } from "@health/contracts/emergency";
+import * as contacts from "@/lib/contacts";
 import {
+	type Call,
 	fireEvent,
 	installDom,
 	render,
@@ -24,6 +27,7 @@ installDom();
 
 const EMERGENCY = "POST /api/families/1/emergency";
 const CHECK_IN = "POST /api/families/1/emergency/check-in";
+const PROFILE = "GET /api/families/1/care-profile";
 const WEARER = { name: null, callback: null };
 
 /** The wearer home's part: the panel, plus the request box that calls `start`. */
@@ -44,13 +48,6 @@ function Home({ familyId }: { familyId: string | null }) {
 		</>
 	);
 }
-
-const call = {
-	simulated: true,
-	states: ["connecting", "connected"],
-	outcome: "connected",
-	recordDelivered: false,
-} as const;
 
 const handoff = {
 	name: null,
@@ -76,12 +73,45 @@ const handoff = {
 
 const raised = { status: "raised", alertId: "7", summary: "Help" } as const;
 
-const dispatch: EmergencyOutcome = {
-	action: "dispatch",
-	call,
+const helpOutcome: EmergencyOutcome = {
+	action: "help",
 	handoff,
 	family: raised,
 };
+
+const profile = {
+	preferredName: null,
+	language: null,
+	timeZone: null,
+	accessibilityNeeds: null,
+	diagnoses: null,
+	allergies: null,
+	dietaryRestrictions: null,
+	fluidRestrictions: null,
+	activityRestrictions: null,
+	routines: null,
+	contacts: null,
+	familiarDestinations: null,
+	devices: null,
+	declinedPrompts: [],
+};
+
+/** The care profile read, with `contacts` in contact order. */
+const profileWith = (contacts: unknown) => ({
+	json: {
+		familyId: "1",
+		profile: { ...profile, contacts },
+		editedBy: null,
+		editedAt: null,
+		history: [],
+	},
+});
+
+/** A care profile whose first contact with a number is the family's. */
+const withFamily = profileWith([
+	{ name: "Neighbour", relationship: null, phone: null },
+	{ name: "Sam", relationship: "Son", phone: "+1 (555) 010-0200" },
+]);
 
 const checkIn: EmergencyOutcome = {
 	action: "check_in",
@@ -125,7 +155,16 @@ afterEach(() => {
 			geolocation,
 		);
 	setSystemTime();
+	dialed.mockClear();
 });
+
+// The dialer is the phone's: tests record the number it would open.
+const dialed = spyOn(contacts, "dial").mockImplementation(() => {});
+
+const posts = (calls: Call[]) => calls.filter((c) => c.method !== "GET");
+
+const link = (view: ReturnType<typeof render>, name: string) =>
+	view.getByRole("link", { name }).getAttribute("href");
 
 const rows = (container: HTMLElement) =>
 	Object.fromEntries(
@@ -135,46 +174,52 @@ const rows = (container: HTMLElement) =>
 		]),
 	);
 
+/** No "practice" or "simulated" words anywhere: every call is real. */
+const noPretendCalls = (view: ReturnType<typeof render>) =>
+	expect(view.container.textContent ?? "").not.toMatch(/simulat|practice/i);
+
 describe("Emergency", () => {
-	test("without a paired person the calls are off and a request fails as signed out", async () => {
+	test("without a paired person the dialer still opens, and only the alert needs sign-in", async () => {
 		const calls = serve({});
 		const view = render(<Home familyId={null} />);
-		expect(
-			view.getByRole("button", { name: "Call emergency help" }),
-		).toHaveProperty("disabled", true);
-		expect(view.getByRole("button", { name: "Call my family" })).toHaveProperty(
-			"disabled",
-			true,
+		expect(link(view, "Call emergency help")).toBe("tel:911");
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
+		view.getByText(
+			"Sign in with a paired person so a call also alerts your family.",
 		);
-		view.getByText("Emergency calls need a paired person and sign-in.");
+		// No number on file anywhere: the field asks for one.
+		view.getByRole("textbox", { name: "Family phone number" });
 		fireEvent.click(view.getByRole("button", { name: "Say ouch" }));
 		expect((await view.findByRole("alert")).textContent).toBe(
-			"The request did not go through: sign in first. Get help another way.",
+			"The family alert did not go through: sign in first. Call for help with the buttons above.",
 		);
 		expect(calls).toEqual([]);
+		noPretendCalls(view);
 	});
 
-	test("emergency help connects a practice call and shows what a dispatcher would hear", async () => {
-		const reply = held();
-		const calls = serve({ [EMERGENCY]: reply.route });
-		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call emergency help" }));
-		expect((await view.findByRole("status")).textContent).toBe(
-			"Connecting (simulated)…",
+	test("emergency help opens the saved emergency number and alerts the family", async () => {
+		localStorage.setItem(
+			"telly.contacts",
+			JSON.stringify({ emergency: "112", savedAt: 1 }),
 		);
-		const helpButton = view.getByRole("button", {
-			name: "Call emergency help",
-		});
-		expect(helpButton).toHaveProperty("disabled", true);
-		expect(helpButton.querySelector(".animate-spin")).not.toBeNull();
+		const reply = held();
+		const calls = serve({ [EMERGENCY]: reply.route, [PROFILE]: withFamily });
+		const view = render(<Home familyId="1" />);
+		await waitFor(() =>
+			expect(link(view, "Call emergency help")).toBe("tel:112"),
+		);
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
+		expect((await view.findByRole("status")).textContent).toBe(
+			"Telling your family…",
+		);
 		expect(
 			view
-				.getByRole("button", { name: "Call my family" })
+				.getByRole("link", { name: "Call emergency help" })
 				.querySelector(".animate-spin"),
-		).toBeNull();
-		await waitFor(() => expect(calls).toHaveLength(1));
+		).not.toBeNull();
+		await waitFor(() => expect(posts(calls)).toHaveLength(1));
 		// No geolocation in this browser: the location is unavailable, never a guess.
-		expect(calls[0]).toEqual({
+		expect(posts(calls)[0]).toEqual({
 			method: "POST",
 			path: "/api/families/1/emergency",
 			body: {
@@ -184,10 +229,9 @@ describe("Emergency", () => {
 				location: { status: "unavailable" },
 			},
 		});
-		reply.release({ json: dispatch });
-		await view.findByText("Practice call connected (simulated).");
-		view.getByText(/No real call was made\./);
-		view.getByText("Your family got an alert.");
+		reply.release({ json: helpOutcome });
+		await view.findByText("Your family got an alert.");
+		view.getByText("Tell the operator:");
 		expect(rows(view.container)).toEqual({
 			Name: "Not on file",
 			Callback: "Not on file",
@@ -199,22 +243,15 @@ describe("Emergency", () => {
 			"Verified medicines": "Lisinopril 10 mg, Metformin 500 mg",
 			Location: "Current: 51.50000, -0.12000 · ±12 m · 30 s old",
 		});
-		// Done: the buttons work again.
-		expect(
-			view.getByRole("button", { name: "Call emergency help" }),
-		).toHaveProperty("disabled", false);
+		noPretendCalls(view);
 	});
 
-	test("a failed practice call says to get help another way and shows what is missing", async () => {
+	test("a spoken request for help alerts the family and shows what is missing", async () => {
 		serve({
+			[PROFILE]: withFamily,
 			[EMERGENCY]: {
 				json: {
-					action: "dispatch",
-					call: {
-						...call,
-						states: ["connecting", "failed"],
-						outcome: "failed",
-					},
+					action: "help",
 					handoff: {
 						...handoff,
 						name: "Ada",
@@ -235,9 +272,11 @@ describe("Emergency", () => {
 		const view = render(<Home familyId="1" />);
 		fireEvent.click(view.getByRole("button", { name: "Say help" }));
 		await view.findByText(
-			"Practice call failed (simulated). Get help another way.",
+			"Your family was not alerted: No family member to alert.",
 		);
-		view.getByText("Your family was not alerted: No family member to alert.");
+		// It never dials by itself: the buttons stay for the person to press.
+		expect(dialed).not.toHaveBeenCalled();
+		view.getByRole("link", { name: "Call emergency help" });
 		expect(rows(view.container)).toEqual({
 			Name: "Ada",
 			Callback: "+44 20 7946 0000",
@@ -256,15 +295,17 @@ describe("Emergency", () => {
 		"a handoff without a fix (%s) says why",
 		async (status, words) => {
 			serve({
+				[PROFILE]: withFamily,
 				[EMERGENCY]: {
-					json: { ...dispatch, handoff: { ...handoff, location: { status } } },
+					json: {
+						...helpOutcome,
+						handoff: { ...handoff, location: { status } },
+					},
 				},
 			});
 			const view = render(<Home familyId="1" />);
-			fireEvent.click(
-				view.getByRole("button", { name: "Call emergency help" }),
-			);
-			await view.findByText("Practice call connected (simulated).");
+			fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
+			await view.findByText("Tell the operator:");
 			expect(rows(view.container).Location).toBe(words);
 		},
 	);
@@ -277,11 +318,11 @@ describe("Emergency", () => {
 				timestamp: captured,
 			} as GeolocationPosition),
 		);
-		const calls = serve({ [EMERGENCY]: { json: dispatch } });
+		const calls = serve({ [EMERGENCY]: { json: helpOutcome } });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call emergency help" }));
-		await view.findByText("Practice call connected (simulated).");
-		expect(calls[0]?.body).toMatchObject({
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
+		await view.findByText("Tell the operator:");
+		expect(posts(calls)[0]?.body).toMatchObject({
 			location: {
 				status: "fix",
 				latitude: 51.5,
@@ -299,53 +340,147 @@ describe("Emergency", () => {
 		stubLocation((_success, failure) =>
 			failure?.({ code, PERMISSION_DENIED: 1 } as GeolocationPositionError),
 		);
-		const calls = serve({ [EMERGENCY]: { json: dispatch } });
+		const calls = serve({ [EMERGENCY]: { json: helpOutcome } });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call emergency help" }));
-		await view.findByText("Practice call connected (simulated).");
-		expect(calls[0]?.body).toMatchObject({ location: { status } });
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
+		await view.findByText("Tell the operator:");
+		expect(posts(calls)[0]?.body).toMatchObject({ location: { status } });
 	});
 
-	test("call my family tells the family and says so", async () => {
+	test("call my family dials the first care-profile contact with a number and alerts the family", async () => {
+		// A number saved on this phone loses to the care profile's contact order.
+		localStorage.setItem(
+			"telly.contacts",
+			JSON.stringify({ familyPhone: "+1 555 010 0999", savedAt: 1 }),
+		);
 		const reply = held();
-		const calls = serve({ [EMERGENCY]: reply.route });
+		const calls = serve({ [EMERGENCY]: reply.route, [PROFILE]: withFamily });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		await waitFor(() =>
+			expect(link(view, "Call my family")).toBe("tel:+15550100200"),
+		);
+		fireEvent.click(view.getByRole("link", { name: "Call my family" }));
 		expect(view.getByRole("status").textContent).toBe("Telling your family…");
 		expect(
 			view
-				.getByRole("button", { name: "Call my family" })
+				.getByRole("link", { name: "Call my family" })
 				.querySelector(".animate-spin"),
 		).not.toBeNull();
 		reply.release({ json: { action: "family", family: raised } });
 		await view.findByText("I told your family.");
 		view.getByText("Your family got an alert.");
 		expect(view.queryByText(/Nothing here confirms/)).toBeNull();
-		expect(calls.map((c) => c.body)).toEqual([
+		expect(posts(calls).map((c) => c.body)).toEqual([
 			{ kind: "family", report: null },
 		]);
+		noPretendCalls(view);
+	});
+
+	test("with no contact number in the profile, the number saved on this phone is called", async () => {
+		localStorage.setItem(
+			"telly.contacts",
+			JSON.stringify({ familyPhone: "+1 555 010 0999", savedAt: 1 }),
+		);
+		serve({ [PROFILE]: profileWith(null) });
+		const view = render(<Home familyId="1" />);
+		await waitFor(() =>
+			expect(link(view, "Call my family")).toBe("tel:+15550100999"),
+		);
+	});
+
+	test("with no number, Save & Call saves it to the care profile and opens the dialer", async () => {
+		const existing = [{ name: "Neighbour", relationship: null, phone: null }];
+		const calls = serve({
+			[PROFILE]: profileWith(existing),
+			"PUT /api/families/1/care-profile": { status: 204 },
+			[EMERGENCY]: { json: { action: "family", family: raised } },
+		});
+		const view = render(<Home familyId="1" />);
+		const field = await view.findByRole("textbox", {
+			name: "Family phone number",
+		});
+		expect(view.queryByRole("link", { name: "Call my family" })).toBeNull();
+
+		// A short number is refused before anything is saved or dialed.
+		fireEvent.change(field, { target: { value: "5550" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		view.getByText("Enter the full phone number, with the area code.");
+		expect(dialed).not.toHaveBeenCalled();
+
+		fireEvent.change(field, { target: { value: "+1 555 010 0300" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		expect(dialed.mock.calls).toEqual([["+1 555 010 0300"]]);
+		await view.findByText("I told your family.");
+		expect(posts(calls)).toEqual([
+			{
+				method: "PUT",
+				path: "/api/families/1/care-profile",
+				body: {
+					...profile,
+					contacts: [
+						...existing,
+						{
+							name: "Family",
+							relationship: "Family",
+							phone: "+1 555 010 0300",
+						},
+					],
+				},
+			},
+			{
+				method: "POST",
+				path: "/api/families/1/emergency",
+				body: { kind: "family", report: null },
+			},
+		]);
+		// The next press is a plain call link.
+		expect(link(view, "Call my family")).toBe("tel:+15550100300");
+		noPretendCalls(view);
+	});
+
+	test("a member who cannot edit the profile still calls, with the number kept on this phone", async () => {
+		const calls = serve({
+			[PROFILE]: {
+				status: 403,
+				body: { error: "forbidden", message: "No health records access." },
+			},
+			[EMERGENCY]: { json: { action: "family", family: raised } },
+		});
+		const view = render(<Home familyId="1" />);
+		fireEvent.change(
+			await view.findByRole("textbox", { name: "Family phone number" }),
+			{ target: { value: "555 010 0400" } },
+		);
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		expect(dialed.mock.calls).toEqual([["555 010 0400"]]);
+		await view.findByText(
+			"Saved on this phone only. No health records access.",
+		);
+		expect(posts(calls).map((c) => c.method)).toEqual(["POST"]);
+		expect(link(view, "Call my family")).toBe("tel:5550100400");
 	});
 
 	test.each([
-		[503, "Calls are not configured."],
+		[503, "Alerts are not configured."],
 		[500, "Something broke."],
 	])("a %i reply shows the server's reason", async (status, message) => {
 		serve({
+			[PROFILE]: withFamily,
 			[EMERGENCY]: { status, body: { error: "unavailable", message } },
 		});
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		fireEvent.click(await view.findByRole("link", { name: "Call my family" }));
 		expect((await view.findByRole("alert")).textContent).toBe(
-			`The request did not go through: ${message} Get help another way.`,
+			`The family alert did not go through: ${message} Call for help with the buttons above.`,
 		);
 	});
 
 	test("a 401 reply asks to sign in", async () => {
 		serve({ [EMERGENCY]: { status: 401 } });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call emergency help" }));
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
 		expect((await view.findByRole("alert")).textContent).toBe(
-			"The request did not go through: sign in first. Get help another way.",
+			"The family alert did not go through: sign in first. Call for help with the buttons above.",
 		);
 	});
 
@@ -366,9 +501,10 @@ describe("Emergency", () => {
 		const dialog = await view.findByRole("alertdialog", { name: "Check-in" });
 		expect(dialog.textContent).toContain("Are you OK?");
 		expect(dialog.textContent).toContain(
-			"If you don't answer in 30 seconds, I'll call for help (simulated)",
+			"If you don't answer in 30 seconds, I'll alert your family.",
 		);
-		expect(calls[0]?.body).toMatchObject({
+		noPretendCalls(view);
+		expect(posts(calls)[0]?.body).toMatchObject({
 			kind: "event",
 			event: { kind: "ouch", report: "ouch" },
 		});
@@ -378,7 +514,7 @@ describe("Emergency", () => {
 			"Nothing here confirms you are safe. Ask for help any time.",
 		);
 		expect(view.queryByRole("alertdialog")).toBeNull();
-		expect(calls[1]).toEqual({
+		expect(posts(calls)[1]).toEqual({
 			method: "POST",
 			path: "/api/families/1/emergency/check-in",
 			body: {
@@ -390,22 +526,25 @@ describe("Emergency", () => {
 		});
 	});
 
-	test("I need help in a check-in dispatches", async () => {
+	test("I need help in a check-in alerts the family and shows the call buttons", async () => {
 		const calls = serve({
+			[PROFILE]: withFamily,
 			[EMERGENCY]: { json: checkIn },
-			[CHECK_IN]: { json: dispatch },
+			[CHECK_IN]: { json: helpOutcome },
 		});
 		const view = render(<Home familyId="1" />);
 		fireEvent.click(view.getByRole("button", { name: "Say ouch" }));
 		fireEvent.click(await view.findByRole("button", { name: "I need help" }));
-		await view.findByText("Practice call connected (simulated).");
-		expect(calls[1]?.body).toMatchObject({
+		await view.findByText("Your family got an alert.");
+		view.getByRole("link", { name: "Call emergency help" });
+		expect(posts(calls)[1]?.body).toMatchObject({
 			reply: { kind: "speech", speaker: "wearer", text: "I need help" },
 		});
 	});
 
-	test("no answer by the deadline is sent as no response", async () => {
+	test("no answer by the deadline alerts the family and shows the call buttons", async () => {
 		const calls = serve({
+			[PROFILE]: withFamily,
 			// The check-in opened 30 s ago: its deadline has passed when the prompt shows.
 			[EMERGENCY]: () => {
 				setSystemTime();
@@ -413,27 +552,29 @@ describe("Emergency", () => {
 			},
 			[CHECK_IN]: {
 				json: {
-					action: "none",
-					reason: "not_an_emergency",
-					safety: "unconfirmed",
-					family: { status: "failed", message: "Alerts are off." },
+					...helpOutcome,
+					handoff: { ...handoff, responsiveness: "not_responding" },
 				},
 			},
 		});
 		const view = render(<Home familyId="1" />);
 		setSystemTime(new Date(Date.now() - 30_000));
 		fireEvent.click(view.getByRole("button", { name: "Say ouch" }));
-		await view.findByText("This is not an emergency by itself.");
-		view.getByText("Your family was not alerted: Alerts are off.");
-		expect(calls[1]?.body).toMatchObject({
+		await view.findByText("Your family got an alert.");
+		expect(rows(view.container).Responding).toBe("No answer");
+		expect(link(view, "Call emergency help")).toBe("tel:911");
+		expect(link(view, "Call my family")).toBe("tel:+15550100200");
+		expect(dialed).not.toHaveBeenCalled();
+		expect(posts(calls)[1]?.body).toMatchObject({
 			reply: { kind: "no_response", waitedSeconds: 30 },
 		});
+		noPretendCalls(view);
 	});
 
 	test("an unexpected reply is an error, not a result", async () => {
 		serve({ [EMERGENCY]: { json: { action: "maybe" } } });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		fireEvent.click(view.getByRole("link", { name: "Call emergency help" }));
 		expect((await view.findByRole("alert")).textContent).toContain(
 			"The server sent an unexpected reply",
 		);
