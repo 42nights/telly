@@ -63,11 +63,12 @@ export function FirstMedicine({
 	} | null>(null);
 	const [directions, setDirections] = useState("");
 	const [time, setTime] = useState("");
+	// Reminder cadence is an app setting, not data about the person: start from a visible suggestion.
 	const [rules, setRules] = useState({
 		zone: "",
-		repeat: "",
-		max: "",
-		snooze: "",
+		repeat: "10",
+		max: "3",
+		snooze: "15",
 	});
 	const [instructionId, setInstructionId] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -286,7 +287,8 @@ export function FirstMedicine({
 				<fieldset className="grid gap-2 border border-border p-2">
 					<legend className="px-1 font-bold">How Telly reminds</legend>
 					<p className="text-xs">
-						This family has no reminder rules yet. Choose them once.
+						This family has no reminder rules yet. These are suggestions; change
+						them if needed.
 					</p>
 					<div className="grid gap-1">
 						<label htmlFor="rule-zone" className="font-bold">
