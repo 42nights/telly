@@ -198,6 +198,7 @@ describe("createGeminiDetector", () => {
 				},
 				{ box: [5, 5, 6, 6], category: "glasses", label: null, confidence: 1 },
 			],
+			landmarks: [],
 		});
 		expect(sent).toHaveLength(1);
 		expect(sent[0]?.key).toBe("test-gemini-key");
@@ -228,6 +229,7 @@ describe("createGeminiDetector", () => {
 				: detections([]);
 		expect(await Effect.runPromise(detect())).toEqual({
 			boxes: [],
+			landmarks: [],
 			model: GEMINI_FALLBACK_MODEL,
 		});
 	});
