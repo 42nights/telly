@@ -1074,6 +1074,17 @@ const memberName = table(
 	},
 );
 
+// The phone number each person saved for texting Telly (`setMyPhone`), in E.164 form. At most one
+// person per number, so an iMessage sender maps to one person (`memberPhones`).
+const memberPhone = table(
+	{ name: "member_phone" },
+	{
+		member: t.identity().primaryKey(),
+		phone: t.string().unique(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // Demo data (#334): the captain's exception to "real data only", for the demo video. While a family
 // has a `demoReplay` row, the database replays a real WHOOP recording as live (`setDemoData`).
 const demoReplay = table(
@@ -1153,6 +1164,7 @@ const spacetimedb = schema({
 	memberName,
 	demoReplay,
 	demoTimer,
+	memberPhone,
 });
 export default spacetimedb;
 
@@ -5014,6 +5026,59 @@ export const myFamilyPeople = spacetimedb.view(
 					}));
 			},
 		),
+);
+
+/** Saves the caller's phone number for texting Telly, or deletes it with none. */
+export const setMyPhone = spacetimedb.reducer(
+	{ phone: t.option(t.string()) },
+	(ctx, { phone }) => {
+		if (phone === undefined) {
+			ctx.db.memberPhone.member.delete(ctx.sender);
+			return;
+		}
+		if (!/^\+[1-9][0-9]{6,14}$/.test(phone))
+			throw new SenderError(
+				"Enter a full phone number with its country code, like +1 555 010 0123",
+			);
+		const owner = ctx.db.memberPhone.phone.find(phone)?.member;
+		if (owner !== undefined && !owner.isEqual(ctx.sender))
+			throw new SenderError("Another person already saved this phone number");
+		const row = { member: ctx.sender, phone, updatedAt: ctx.timestamp };
+		if (ctx.db.memberPhone.member.find(ctx.sender) === null)
+			ctx.db.memberPhone.insert(row);
+		else ctx.db.memberPhone.member.update(row);
+	},
+);
+
+// The caller's own saved phone number: one row, or none.
+export const myPhone = spacetimedb.view(
+	{ name: "my_phone", public: true },
+	t.array(memberPhone.rowType),
+	(ctx) => {
+		const row = ctx.db.memberPhone.member.find(ctx.sender);
+		return row === null ? [] : [row];
+	},
+);
+
+// The delivery operator's map of saved phone numbers to each person's families, for the iMessage
+// agent. Empty for every other identity.
+export const memberPhones = spacetimedb.view(
+	{ name: "member_phones", public: true },
+	t.array(
+		t.object("SenderPhone", {
+			phone: t.string(),
+			member: t.identity(),
+			familyId: t.u64(),
+		}),
+	),
+	(ctx) =>
+		ctx.db.operator.identity.find(ctx.sender) === null
+			? []
+			: [...ctx.db.memberPhone.iter()].flatMap(({ phone, member }) =>
+					[...ctx.db.familyMember.member.filter(member)].map(
+						({ familyId }) => ({ phone, member, familyId }),
+					),
+				),
 );
 
 // Demo data (#334). `setDemoData` copies a real WHOOP recording into the family with every time

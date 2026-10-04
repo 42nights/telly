@@ -114,3 +114,22 @@ export const NewHealthSample = Schema.Struct({
 	quality: SampleQuality,
 });
 export type NewHealthSample = typeof NewHealthSample.Type;
+
+/** A phone number in E.164 form, such as `+15550100123`. */
+export const E164 = Schema.String.check(
+	Schema.isPattern(/^\+[1-9][0-9]{6,14}$/),
+);
+
+/**
+ * `GET /api/text-telly`: the Telly line's iMessage number (null when this server has none set up)
+ * and the caller's own saved phone number. Telly answers texts from that saved number.
+ */
+export const TextTelly = Schema.Struct({
+	tellyNumber: Schema.NullOr(E164),
+	myPhone: Schema.NullOr(E164),
+});
+export type TextTelly = typeof TextTelly.Type;
+
+/** `PUT /api/me/phone`: saves the caller's phone number, or deletes it with null. */
+export const MyPhone = Schema.Struct({ phone: Schema.NullOr(E164) });
+export type MyPhone = typeof MyPhone.Type;

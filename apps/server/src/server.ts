@@ -5,7 +5,7 @@ import { createApp } from "./app";
 import type { NoopConfig, ServerConfig } from "./config";
 import { openFamilyDb } from "./db";
 import { startCloudIMessage } from "./imessage/cloud";
-import { photoReader, wearerActions } from "./imessage/finder";
+import { photoReader, wearerActions, withOperator } from "./imessage/finder";
 import { wearerPhones, wearerTextWorker } from "./imessage/texts";
 import { type NoopIngest, noopIngest } from "./integrations/noop-ingest";
 import { familyAnswer } from "./routes/ask";
@@ -84,6 +84,13 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 								settings.appUrl,
 								photoReader(config.gemini),
 							),
+					// Opens one operator connection per message from a sender that is not allowlisted.
+					operator === undefined
+						? undefined
+						: () =>
+								withOperator(operator, async (db) => [
+									...db.connection.db.memberPhones.iter(),
+								]),
 				),
 			),
 			(agent) => Effect.promise(() => agent.stop()),

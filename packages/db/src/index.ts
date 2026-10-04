@@ -97,6 +97,7 @@ import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetHomeReducer from "./set_home_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetMyNameReducer from "./set_my_name_reducer";
+import SetMyPhoneReducer from "./set_my_phone_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
@@ -114,6 +115,7 @@ import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
 
 // Import all table schema definitions
 import FinderLinksRow from "./finder_links_table";
+import MemberPhonesRow from "./member_phones_table";
 import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
@@ -145,6 +147,7 @@ import MyMedicineArPinsRow from "./my_medicine_ar_pins_table";
 import MyMedicinePlacesRow from "./my_medicine_places_table";
 import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
+import MyPhoneRow from "./my_phone_table";
 import MyPushTokensRow from "./my_push_tokens_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
 import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
@@ -169,6 +172,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, FinderLinksRow),
+  memberPhones: __table({
+    name: 'member_phones',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MemberPhonesRow),
   myAcknowledgements: __table({
     name: 'my_acknowledgements',
     indexes: [
@@ -386,6 +396,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessagesRow),
+  myPhone: __table({
+    name: 'my_phone',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPhoneRow),
   myPushTokens: __table({
     name: 'my_push_tokens',
     indexes: [
@@ -537,6 +554,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_home", SetHomeReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_my_name", SetMyNameReducer),
+  __reducerSchema("set_my_phone", SetMyPhoneReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),

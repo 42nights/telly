@@ -2,7 +2,12 @@
 // future `exp`, stored where the sign-in screen stores it) and the whole server API (`page.route` on
 // VITE_SERVER_URL). Every other non-app request is blocked and reported as a problem.
 import type { FamilyRecords } from "@health/contracts";
-import type { FamilyList, FamilyMembers, Me } from "@health/contracts/families";
+import type {
+	FamilyList,
+	FamilyMembers,
+	Me,
+	TextTelly,
+} from "@health/contracts/families";
 import type { LinkedFinder } from "@health/contracts/finder-link";
 import type { ReminderHistory } from "@health/contracts/reminders";
 import type { Page } from "@playwright/test";
@@ -28,6 +33,10 @@ export const replies: Record<string, unknown> = {
 		email: null,
 		picture: null,
 	} satisfies Me,
+	"/api/text-telly": {
+		tellyNumber: "+15550100123",
+		myPhone: null,
+	} satisfies TextTelly,
 	"/api/families": { families: [family] } satisfies FamilyList,
 	"/api/families/1": {
 		families: [family],

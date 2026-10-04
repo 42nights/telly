@@ -8,7 +8,7 @@ import {
 } from "@spectrum-ts/core";
 import { imessage } from "@spectrum-ts/imessage";
 import type { IMessageConfig } from "../config";
-import { iMessageHandler } from "./agent";
+import { iMessageHandler, type SenderPhone } from "./agent";
 import type { WearerActions } from "./finder";
 
 // The published 12.10.1 types infer iMessage's definition as `never`; the runtime value is a normal platform.
@@ -18,6 +18,7 @@ export const startCloudIMessage = async (
 	{ projectId, projectSecret, webhookSecret, senders }: IMessageConfig,
 	answer: (familyId: bigint, question: FamilyQuestion) => Promise<FamilyAnswer>,
 	wearer: WearerActions | undefined,
+	memberPhones: (() => Promise<Iterable<SenderPhone>>) | undefined,
 ) => {
 	const app = await Spectrum({
 		projectId,
@@ -25,7 +26,7 @@ export const startCloudIMessage = async (
 		webhookSecret,
 		providers: [provider.config()],
 	});
-	const handle = iMessageHandler({ senders, answer, wearer });
+	const handle = iMessageHandler({ senders, memberPhones, answer, wearer });
 	return {
 		stop: () => app.stop(),
 		/** Verifies the signature, answers 2xx at once, then replies to the message in the background. */
