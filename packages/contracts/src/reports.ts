@@ -70,6 +70,17 @@ export const ReportReview = Schema.Struct({
 });
 export type ReportReview = typeof ReportReview.Type;
 
+/** The latest email of a report (#8). `failed` carries the reason; `queued` means not answered yet. */
+export const ReportEmail = Schema.Struct({
+	status: Schema.Literals(["queued", "sent", "failed"]),
+	recipient: Schema.String,
+	reason: Schema.NullOr(Schema.String),
+	/** Sent because the report was reviewed while automatic email was on. */
+	automatic: Schema.Boolean,
+	updatedAt: Schema.String,
+});
+export type ReportEmail = typeof ReportEmail.Type;
+
 export const Report = Schema.Struct({
 	id: Schema.String,
 	familyId: Schema.String,
@@ -90,8 +101,32 @@ export const Report = Schema.Struct({
 	fields: ReportFields,
 	/** `null` while the report is a draft. A reviewed report no longer changes. */
 	review: Schema.NullOr(ReportReview),
+	/** `null` until the report is emailed. */
+	email: Schema.NullOr(ReportEmail),
 });
 export type Report = typeof Report.Type;
+
+export const EmailAddress = Schema.String.check(
+	Schema.isMaxLength(254),
+	Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
+);
+
+/**
+ * `GET` and `PUT /api/families/:familyId/report-email`: email each report to `recipient` when a
+ * member marks it as reviewed. Only a family admin (`family_access`) can change it.
+ */
+export const ReportEmailSettings = Schema.Struct({
+	enabled: Schema.Boolean,
+	recipient: Schema.NullOr(EmailAddress),
+}).check(
+	Schema.makeFilter(
+		(s) =>
+			!s.enabled ||
+			s.recipient !== null ||
+			"Automatic email needs a recipient address",
+	),
+);
+export type ReportEmailSettings = typeof ReportEmailSettings.Type;
 
 /** One meal fact in plain words for the report screen and PDF. An estimate stays an estimate. */
 export const mealFactText = ({ fact, recordedAt }: MealRecord): string => {

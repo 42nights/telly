@@ -82,7 +82,9 @@ describe("session tokens", () => {
 			response_type: "code",
 			client_id: "c",
 			redirect_uri: "health://sign-in",
-			scope: "openid",
+			scope: "openid email profile",
+			access_type: "offline",
+			prompt: "consent",
 			state: "s",
 			nonce: "n",
 			code_challenge: "ch",
@@ -96,8 +98,10 @@ describe("session tokens", () => {
 		redirectUri: "r",
 	});
 
-	test("exchangeSignInCode returns the ID token", async () => {
-		expect(await exchangeSignInCode(base, request("good"))).toBe("tok");
+	test("exchangeSignInCode returns the server's tokens", async () => {
+		expect(await exchangeSignInCode(base, request("good"))).toEqual({
+			idToken: "tok",
+		});
 	});
 
 	test("exchangeSignInCode rejects with the server message or the HTTP status", async () => {

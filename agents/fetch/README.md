@@ -136,7 +136,23 @@ systemctl --user list-units 'telly-fetch*'     # status
 journalctl --user -u telly-fetch-worker -f     # chat sender, family, tool, and status
 ```
 
-To update the worker code, copy `agents/fetch/` to `~/.local/share/telly-fetch/agent/` (keep `.venv/`), then restart the worker. To use the live API instead, the worker needs a sign-in token for the live issuer (a Google ID token for the `telly-fetch-worker` service account, which expires after one hour) and a synthetic family on the live database; change only `worker.env` and `worker.sh`.
+To update the worker code, copy `agents/fetch/` to `~/.local/share/telly-fetch/agent/` (keep `.venv/`), then restart the worker. This published agent serves only the synthetic demo backend; the live API has its own pair (below).
+
+### Live API
+
+The live API (`https://api.saintess.tech`) has its own worker and bridge on the team host, with their own seeds and Agentverse mailboxes. They are not granted to any chat sender.
+
+| Part | Value |
+| --- | --- |
+| Worker | `agent1qwsv95h9qfcxpsvt4qf8zxwtsgyulzgnvdx5y5ax39as3qq0clxv6wry99v`, port 8011, `TELLY_SERVER_URL=https://api.saintess.tech` |
+| Bridge | `agent1qwgryychlnac5v0vjyzlm48zflu2593tq2wzu7jpvzt9dg3d8dhy5xlf0m9`, port 8012, the shared store's `TELLY_FETCH_BRIDGE_TOKEN` |
+| Public bridge URL | `https://agents.tailc4c9b.ts.net:10000` (`TELLY_FETCH_BRIDGE_URL` in `deploy/cloudflare/settings.env`): a Tailscale Funnel that exposes only `/tool-call` (`sudo tailscale funnel --bg --https=10000 --set-path=/tool-call http://127.0.0.1:8012/tool-call`) |
+| Worker identity | The Google service account `telly-fetch-worker` in the Google Cloud project `Telly`. Its key pair was made on the host; only the public certificate is uploaded. `mint.ts` signs a JWT with it and gets a one-hour Google ID token for the web client audience. |
+| Grants | `TELLY_FETCH_GRANTS` gives the bridge each served family. The worker identity must also be a member of each family (`POST /api/families/:familyId/members` with its identity from `GET /api/me`). |
+
+Files are in `~/.local/share/telly-fetch-live/` (mode 700): `worker.env`, `bridge.env`, `sa-key.pem`, `mint.ts`, `worker.sh`, and `agent/`. The units are `telly-fetch-live-worker` and `telly-fetch-live-bridge` under `telly-fetch-live.target`. The worker unit restarts every 50 minutes (`RuntimeMaxSec`) to sign in with a fresh ID token; Agentverse keeps messages that arrive meanwhile.
+
+A family that is not in the grants, or that the worker identity is not a member of, gets `403 forbidden` for its questions. Add both for a new family, then restart the worker.
 
 ## Run locally without Agentverse
 

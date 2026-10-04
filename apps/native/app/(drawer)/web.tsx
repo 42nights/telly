@@ -1,6 +1,7 @@
 // The iOS shell (issue #94): the web app full screen in a WebView. Only the web app's origin loads
 // here. The issuer's sign-in page starts the native sign-in instead (Google refuses sign-in in a
 // WebView). Other sites open in Safari, and `tel:` and `mailto:` links open the phone and mail apps.
+import { SESSION_KEYS, type SignInToken } from "@health/contracts/session";
 import { Schema } from "effect";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
@@ -9,7 +10,7 @@ import { WebView } from "react-native-webview";
 
 import { ArRequest, answerArRequest } from "@/lib/ar-bridge";
 import { originOf } from "@/lib/origin";
-import { readSessionToken, writeSessionToken } from "@/lib/session";
+import { readSession, writeSession } from "@/lib/session";
 import { issuer, signIn } from "@/lib/sign-in";
 import TellyAr from "@/modules/telly-ar";
 import { ENV } from "@/src/env";
@@ -36,14 +37,14 @@ const decodeBridgeMessage = (data: string) => {
 const styles = StyleSheet.create({ fill: { flex: 1 } });
 
 export default function WebApp() {
-	// `undefined` until SecureStore answers. `readSessionToken` drops an expired token.
-	const [token, setToken] = useState<string | null>();
+	// `undefined` until SecureStore answers. `readSession` renews or drops an expired ID token.
+	const [session, setSession] = useState<SignInToken | null>();
 	const [signingIn, setSigningIn] = useState(false);
 	const webView = useRef<WebView>(null);
 
 	useFocusEffect(
 		useCallback(() => {
-			void readSessionToken().then(setToken);
+			void readSession().then(setSession);
 		}, []),
 	);
 
@@ -51,10 +52,10 @@ export default function WebApp() {
 		if (signingIn) return;
 		setSigningIn(true);
 		signIn()
-			.then(async (idToken) => {
-				if (idToken === null) return;
-				await writeSessionToken(idToken);
-				setToken(idToken);
+			.then(async (signedIn) => {
+				if (signedIn === null) return;
+				await writeSession(signedIn);
+				setSession(signedIn);
 			})
 			.catch((error: unknown) =>
 				Alert.alert(
@@ -65,19 +66,27 @@ export default function WebApp() {
 			.finally(() => setSigningIn(false));
 	};
 
-	if (token === undefined || WEB_ORIGIN === null) return null;
+	if (session === undefined || WEB_ORIGIN === null) return null;
+	// The web app's session keys, written before the page loads. The web app renews the ID token
+	// itself with the refresh token (`apps/web/src/lib/session.ts`).
+	const storage = Object.entries({
+		[SESSION_KEYS.idToken]: session?.idToken,
+		[SESSION_KEYS.refreshToken]: session?.refreshToken,
+	})
+		.map(([key, value]) =>
+			value === undefined
+				? `sessionStorage.removeItem(${JSON.stringify(key)});`
+				: `sessionStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(value)});`,
+		)
+		.join(" ");
 	return (
 		<WebView
 			ref={webView}
-			// A new token reloads the page, so the web app always starts with the stored session.
-			key={token ?? "signed-out"}
+			// A new session reloads the page, so the web app always starts with the stored session.
+			key={session?.idToken ?? "signed-out"}
 			source={{ uri: ENV.EXPO_PUBLIC_WEB_URL }}
-			// The token goes only into the web app's own origin, in the main frame.
-			injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${
-				token === null
-					? `sessionStorage.removeItem("telly.session.token");`
-					: `sessionStorage.setItem("telly.session.token", ${JSON.stringify(token)});`
-			} } true;`}
+			// The session goes only into the web app's own origin, in the main frame.
+			injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${storage} } true;`}
 			// Every URL reaches the check below; the library default opens other schemes itself.
 			originWhitelist={["*"]}
 			onShouldStartLoadWithRequest={({ url, isTopFrame }) => {
@@ -98,7 +107,7 @@ export default function WebApp() {
 				const message = decodeBridgeMessage(nativeEvent.data);
 				if (message === null) return;
 				if (message.type === "sign-out") {
-					void writeSessionToken(null).then(() => setToken(null));
+					void writeSession(null).then(() => setSession(null));
 					return;
 				}
 				// The answer (a room scan for a saved pin) goes only to the web app's origin.

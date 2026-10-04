@@ -20,6 +20,7 @@ The server keys are the items in `apps/server/.env.schema` without `@public`. Th
 | `FINCHNODE_API_KEY` | FinchNode `api` mode | Only `off` or `demo` mode works |
 | `RIVER_API_KEY` | The Qwen cue model on River | The cue route answers `unavailable` |
 | `ALERT_OPERATOR_TOKEN` | The alert outbox | Deliveries stay queued |
+| `RESEND_API_KEY` | Report email through Resend (free plan, "Sending access" key) | "Send by email" answers `unavailable`; an automatic email is recorded as failed |
 
 The teammate who holds the provider account owns its key. Record the owner and key name on the issue, never the value.
 

@@ -10,9 +10,11 @@ import {
 	type FieldName,
 	fieldErrors,
 	fieldsOf,
+	formatTime,
 	labRange,
 	labValue,
 	markerValue,
+	metricLabel,
 } from "./logic";
 
 const empty = draftOf(
@@ -106,4 +108,32 @@ test("demoText says demo for synthetic, in the same case", () => {
 		"Demo records, not real patient data",
 	);
 	expect(demoText("4.5 mmol/L")).toBe("4.5 mmol/L");
+});
+
+test("metricLabel turns a metric key into a sentence-case label", () => {
+	expect(metricLabel("heart_rate")).toBe("Heart rate");
+	expect(metricLabel("blood_oxygen_level")).toBe("Blood oxygen level");
+	expect(metricLabel("hrv")).toBe("Hrv");
+});
+
+test("a too-long field says its length and the limit", () => {
+	expect(fieldErrors({ ...empty, notes: "x".repeat(4001) }).notes).toBe(
+		"Notes for the physician is 4001 characters. The limit is 4000.",
+	);
+});
+
+describe("formatTime", () => {
+	test("a valid time is shown in the reader's locale", () => {
+		const iso = "2026-03-05T14:30:00Z";
+		const expected = new Date(iso).toLocaleString(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		});
+		expect(formatTime(iso)).toBe(expected);
+		expect(formatTime(Date.parse(iso))).toBe(expected);
+	});
+
+	test("a time that does not parse is shown as the source sent it", () => {
+		expect(formatTime("last Tuesday")).toBe("last Tuesday");
+	});
 });

@@ -4,6 +4,7 @@ import type { FamilyEnv, FamilyRoutes } from "../http";
 import { simulatedDelivery } from "../integrations/delivery";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { r2Bucket } from "../integrations/r2";
+import { resendMailer } from "../integrations/resend";
 import { alertRoutes } from "./alerts";
 import { appointmentRoutes } from "./appointments";
 import { askRoutes } from "./ask";
@@ -37,7 +38,10 @@ import { voiceRoutes } from "./voice";
 export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 	const voice = elevenLabsVoice(config.voice);
 	return new Hono<FamilyEnv>()
-		.route("/", familyRoutes())
+		.route(
+			"/",
+			familyRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+		)
 		.route("/", alertRoutes())
 		.route("/", voiceRoutes(voice))
 		.route(
@@ -53,7 +57,12 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", mealRoutes(config.gemini))
 		.route(
 			"/",
-			reportRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+			reportRoutes(
+				config.r2 === undefined ? undefined : r2Bucket(config.r2),
+				config.reportEmail === undefined
+					? undefined
+					: resendMailer(config.reportEmail),
+			),
 		)
 		.route("/", reminderRoutes())
 		.route("/", speakerRoutes())

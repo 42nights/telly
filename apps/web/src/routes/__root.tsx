@@ -7,9 +7,10 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
-import Header from "@/components/header";
+import { OnboardingRedirect } from "@/components/onboarding/redirect";
+import { Shell } from "@/components/shell";
 import { ThemeProvider } from "@/components/theme-provider";
-import { FamilyProvider, NewFamilyBar } from "@/lib/family";
+import { FamilyProvider } from "@/lib/family";
 import { requireSession } from "@/lib/session";
 
 import "../index.css";
@@ -54,18 +55,13 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				{signingIn ? (
-					<div className="win95-desktop h-svh overflow-y-auto">
+					<div className="win95-desktop h-[calc(100svh-var(--win95-top-band))] overflow-y-auto">
 						<Outlet />
 					</div>
 				) : (
 					<FamilyProvider>
-						<div className="win95-desktop flex h-svh flex-col">
-							<Header />
-							<NewFamilyBar />
-							<div className="min-h-0 flex-1 overflow-y-auto">
-								<Outlet />
-							</div>
-						</div>
+						<OnboardingRedirect />
+						<Shell />
 					</FamilyProvider>
 				)}
 				<Toaster richColors />

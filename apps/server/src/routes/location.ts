@@ -1,5 +1,6 @@
 // Family location routes (issue #40), mounted at `/api/families/:familyId`. The module's reducers
-// and views enforce membership, per-person shares, and revocation, so these handlers add no rule.
+// and views enforce membership, per-person shares, revocation, and the `location` care scope (#26),
+// so these handlers add no rule.
 import { IdentityHex } from "@health/contracts/families";
 import {
 	type FamilyLocations,
@@ -12,6 +13,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
+import { readAccess } from "./care-profile";
 
 const status = {
 	Fix: "fix",
@@ -43,6 +45,7 @@ const readLocations = (c: Context<FamilyEnv>): FamilyLocations => {
 				viewer: row.viewer.toHexString(),
 				sharedAt: row.sharedAt.toISOString(),
 			})),
+		seesShared: readAccess(c).mine.includes("location"),
 	};
 };
 

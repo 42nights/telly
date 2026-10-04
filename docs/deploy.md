@@ -6,7 +6,8 @@ Issue #2. Target (captain decision `telly-cd-target`): the 42nights Cloudflare a
 | --- | --- |
 | Web app and API | Worker `telly`. The web app is at `https://app.saintess.tech`; the API is at `https://api.saintess.tech`. Both are custom domains of the Worker. `https://telly.jerry-2c0.workers.dev` also answers. `/health` and `/api/*` go to the Node API in one Cloudflare Container (`telly-api`); every other path serves the web app. |
 | Landing page | `https://saintess.tech`, also a custom domain of the Worker `telly`. On `LANDING_HOST` the Worker serves the static files in `deploy/cloudflare/landing/`, including `/privacy` and `/terms` for the Google OAuth consent screen, and sends any other path (an app route) to `https://app.saintess.tech`. |
-| Domain | Zone `saintess.tech` on 42nights (Free plan), registered at get.tech with the zone's Cloudflare nameservers. A zone redirect rule sends `www.saintess.tech` to `https://saintess.tech` (301). The Fetch agents use an Agentverse mailbox and expose no public port, so they have no subdomain. |
+| Domain | Zone `saintess.tech` on 42nights (Free plan), registered at get.tech with the zone's Cloudflare nameservers. A zone redirect rule sends `www.saintess.tech` to `https://saintess.tech` (301). |
+| Fetch.ai tools | The live worker and bridge run on the team host ([agents/fetch/README.md](../agents/fetch/README.md#live-api)). The API calls the bridge at `TELLY_FETCH_BRIDGE_URL`, the host's Tailscale Funnel, which exposes only `POST /tool-call`. The bridge reaches the worker through Agentverse mailboxes. |
 | Database | SpacetimeDB Maincloud, database `telly` (`wss://maincloud.spacetimedb.com`), published by the captain's SpacetimeDB login. |
 | Sign-in | Google (`https://accounts.google.com`), OAuth client `telly-web` in the Google Cloud project `Telly`. Its redirect URIs are `/sign-in` on each web host and `/api/sign-in/callback` on each API host. The consent screen is in production (External): any Google account can sign in. |
 | Keys | The shared key store (docs/cloudflare-keys.md). The container pulls only the keys in `TELLY_PULL_KEYS` at start. |
@@ -56,13 +57,13 @@ journalctl --user -u telly-autodeploy.service -f
 
 ## Care grants backfill (#188)
 
-Families created before #188 have no care grants, so their routes answer 403. After you publish the module with #188, run this once with the login that first published database `telly` (the module's operator):
+Families created before #188 can lack care grants, so their routes answer 403. After you publish a module that changes this reducer, run this with the login that first published database `telly` (the module's operator):
 
 ```bash
 spacetime call --server maincloud telly backfill_founder_care_grants
 ```
 
-It gives the founder of each family that has no grant event every care scope. It deletes nothing, and a second call changes nothing.
+It gives each family's founder every care scope that the founder has no grant event for. A scope the founder granted or revoked keeps that choice. It deletes nothing, and a second call changes nothing.
 
 ## Rollback
 

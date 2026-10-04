@@ -87,6 +87,31 @@ describe("family tools (local Fetch.ai bridge stand-in)", () => {
 		expect(sent).toEqual([]);
 	});
 
+	test("returned alerts are cited once each, without samples", async () => {
+		const alert = (id: string) => ({
+			id,
+			familyId: "7",
+			sampleId: null,
+			summary: `alert ${id}`,
+			raisedBy: "aa",
+			createdAt: "2026-01-02T08:00:00.000Z",
+		});
+		const body = {
+			tool: "alerts",
+			alerts: [alert("1"), alert("2")],
+			acknowledgements: [],
+		};
+		reply = () => ({ status: 200, body });
+		const family = familyTools(fetchAgent, 7n, now);
+		expect(await family.run("alerts", {})).toEqual(body);
+		await family.run("alerts", { limit: 1 });
+		expect(family.cited()).toEqual({
+			evidence: [],
+			alerts: [alert("1"), alert("2")],
+			unavailable: [],
+		});
+	});
+
 	test("a Fetch.ai failure stops the answer instead of continuing without data", async () => {
 		reply = () => ({
 			status: 403,

@@ -21,23 +21,32 @@ const winAnsi = (text: string) =>
 		.replace(/[\u2018\u2019]/g, "'")
 		.replace(/[\u201c\u201d]/g, '"')
 		.replace(/\u2026/g, "...")
-		.replace(/[^\n\x20-\x7e\xa0-\xff]/g, "?");
+		.replace(/[^\n\x20-\x7e\xa0-\xff]/gu, "?");
 
-/** Word-wraps at the width of the widest Helvetica text that fits, about 0.55 em per character. */
+/**
+ * Word-wraps at the width of the widest Helvetica text that fits, about 0.55 em per character. A
+ * paragraph's leading spaces, at most half the width, indent each of its lines and count toward
+ * the width.
+ */
 const wrap = ({ text, bold, size = 10 }: Line): Line[] => {
 	const max = Math.floor((PAGE.width - 2 * PAGE.margin) / (size * 0.55));
 	const lines: Line[] = [];
 	for (const paragraph of winAnsi(text).split("\n")) {
+		const words = paragraph.replace(/^ +/, "");
+		const indent = " ".repeat(
+			Math.min(paragraph.length - words.length, Math.floor(max / 2)),
+		);
+		const width = max - indent.length;
 		let line = "";
-		for (const word of paragraph.split(" ")) {
+		for (const word of words.split(" ")) {
 			const next = line === "" ? word : `${line} ${word}`;
-			if (next.length <= max) line = next;
+			if (next.length <= width) line = next;
 			else {
-				if (line !== "") lines.push({ text: line, bold, size });
-				line = word.slice(0, max);
+				if (line !== "") lines.push({ text: indent + line, bold, size });
+				line = word.slice(0, width);
 			}
 		}
-		lines.push({ text: line, bold, size });
+		lines.push({ text: indent + line, bold, size });
 	}
 	return lines;
 };

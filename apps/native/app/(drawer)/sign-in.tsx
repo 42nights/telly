@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { NAV_THEME } from "@/lib/constants";
-import { writeSessionToken } from "@/lib/session";
+import { writeSession } from "@/lib/session";
 import { clientId, issuer, signIn } from "@/lib/sign-in";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -21,10 +21,10 @@ export default function SignIn() {
 		setProblem(undefined);
 		setWorking(true);
 		signIn()
-			.then(async (idToken) => {
+			.then(async (session) => {
 				setWorking(false);
-				if (idToken === null) return;
-				await writeSessionToken(idToken);
+				if (session === null) return;
+				await writeSession(session);
 				router.replace("/");
 			})
 			.catch((error: unknown) => {
