@@ -14,7 +14,8 @@
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
-		"./session": "./src/session.ts"
+		"./session": "./src/session.ts",
+		"./care": "./src/care.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
