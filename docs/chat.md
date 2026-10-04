@@ -21,13 +21,13 @@ The client makes a `clientId` (letters, digits, `_`, `-`, at most 128) one time 
 
 ## Family questions (not in this change)
 
-By captain decision, family questions use the Grok Voice API. The Grok Bot app and a text-only Responses API agent are not used. The voice transport, the session routes, and the short-lived credentials belong to the Grok integration task. The question orchestration and the agent's data tools belong to this area.
+By captain decision, Gemini is the only chat model for family questions, and ElevenLabs stays for speech. Grok is not used. The Gemini adapter and the question routes belong to the Gemini integration task. The provider-independent family tools belong to this area.
 
 - The agent's data tools go through Fetch.ai Agentverse with `callAgentTool(config.fetchAgent, familyId, request, signal)` from PR #65. They never call the tool helper directly.
 - An answer gives each value with its source and source time, says when data is synthetic, unvalidated, or stale, and reports missing data as unavailable. NOOP stays not connected.
 - A family message that must reach a person outside the app will use the alert outbox seam (`AlertTransport` in `apps/server/src/alerts/outbox.ts`). That keeps delivery durable and keeps "sent" separate from "acknowledged".
 
-Earlier question-route work (an unselected Responses API agent and the `/ask` routes) is kept on branch `fm/telly-grok-ask-wip` for reference only.
+Earlier question-route work with Grok is not the selected provider. It is kept on branch `fm/telly-grok-ask-wip` for reference only.
 
 ## Verification
 
