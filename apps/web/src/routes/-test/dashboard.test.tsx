@@ -352,15 +352,3 @@ test("shows the loading notices before replies arrive", async () => {
 		(await section("Recent messages")).getByText("Loading messages…"),
 	).toBeTruthy();
 });
-
-test("asks a signed-out visitor to sign in and reads no family data", async () => {
-	const calls = serve(routes());
-	renderRoute("/dashboard");
-	expect(
-		await screen.findByRole("heading", { name: "No person" }),
-	).toBeTruthy();
-	expect(
-		(await screen.findAllByRole("link", { name: "Go to Sign in" })).length,
-	).toBeGreaterThan(0);
-	expect(calls.filter((c) => c.path.startsWith("/api/families"))).toEqual([]);
-});

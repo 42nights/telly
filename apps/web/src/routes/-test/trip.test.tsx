@@ -309,18 +309,6 @@ test("help with no family set up fails without a request", async () => {
 	expect(calls.some((c) => c.method === "POST")).toBe(false);
 });
 
-test("signed out: location and help show sign-in notices, no fetch", async () => {
-	const calls = serve({});
-	renderRoute("/trip");
-	expect(
-		await screen.findByRole("heading", { name: "My location" }),
-	).toBeTruthy();
-	await waitFor(() =>
-		expect(screen.getAllByText(/sign in/i).length).toBeGreaterThan(0),
-	);
-	expect(calls).toEqual([]);
-});
-
 test("location forbidden, unavailable, and unreachable show notices", async () => {
 	for (const reply of [
 		json(403, { error: "forbidden", message: "Not yours." }),

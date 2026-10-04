@@ -251,6 +251,20 @@ describe("apiBlob", () => {
 			apiBlob("/api/speech", { signal: controller.signal }),
 		).rejects.toThrow();
 	});
+
+	test("a 401 ends the session, unless a newer token replaced it during the request", async () => {
+		setSessionToken("token");
+		reply(401, { error: "unauthorized", message: "bad token" });
+		expect(await apiBlob("/api/speech")).toEqual({ kind: "signed_out" });
+		expect(getSessionToken()).toBeNull();
+		setSessionToken("old");
+		fake(() => {
+			setSessionToken("newer");
+			return new Response("{}", { status: 401 });
+		});
+		expect(await apiBlob("/api/speech")).toEqual({ kind: "signed_out" });
+		expect(getSessionToken()).toBe("newer");
+	});
 });
 
 test("familyPath encodes the family id", () => {

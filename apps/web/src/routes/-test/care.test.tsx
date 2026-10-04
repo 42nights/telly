@@ -9,6 +9,7 @@ const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
+const { getSessionToken } = await import("@/lib/session");
 
 const ME = "a".repeat(64);
 const NEEDS = "/api/families/fam-1/care/needs";
@@ -76,16 +77,6 @@ const family = {
 
 const gets = (calls: { method: string; path: string }[], path: string) =>
 	calls.filter((call) => call.method === "GET" && call.path === path).length;
-
-test("asks a signed-out visitor to sign in and reads nothing", async () => {
-	const calls = serve({});
-
-	renderRoute("/care");
-
-	expect(await screen.findByText("Sign in to see your family.")).toBeTruthy();
-	expect(screen.getByRole("region", { name: "Care · No person" })).toBeTruthy();
-	expect(calls).toEqual([]);
-});
 
 test("says so when no person is paired with the account", async () => {
 	signIn();
@@ -217,11 +208,11 @@ test("shows why an answer was not sent", async () => {
 		),
 	);
 
+	// A 401 ends the session, so the screen asks the person to sign in again.
 	respond = () => json(401, { error: "unauthorized", message: "Expired" });
 	fireEvent.click(screen.getByRole("button", { name: "I'll take it" }));
-	await waitFor(() =>
-		expect(screen.getByRole("alert").textContent).toBe("Sign in to answer."),
-	);
+	expect(await screen.findByText("Sign in to see your family.")).toBeTruthy();
+	expect(getSessionToken()).toBeNull();
 });
 
 test("asking the family sends the need once per client id and clears the form", async () => {
@@ -288,7 +279,8 @@ test("asking the family sends the need once per client id and clears the form", 
 		target: { value: "Fetch the mail" },
 	});
 	fireEvent.click(ask);
-	expect(await screen.findByText("Sign in to ask.")).toBeTruthy();
+	expect(await screen.findByText("Sign in to see your family.")).toBeTruthy();
+	expect(getSessionToken()).toBeNull();
 	const next = sent()[2];
 	expect(next).toMatchObject({
 		kind: "call_reminder",

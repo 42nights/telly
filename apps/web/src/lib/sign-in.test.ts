@@ -18,7 +18,12 @@ afterEach(() => assign.mockClear());
 const pending = (state = "s-1", nonce = "n-1") =>
 	sessionStorage.setItem(
 		PENDING,
-		JSON.stringify({ verifier: "v".repeat(43), state, nonce }),
+		JSON.stringify({
+			verifier: "v".repeat(43),
+			state,
+			nonce,
+			returnTo: "/trip",
+		}),
 	);
 
 test("signInConfig reads the issuer and client id", () => {
@@ -34,7 +39,7 @@ test("startSignIn reads discovery, saves PKCE state, and redirects to the issuer
 			authorization_endpoint: "https://issuer.test/auth",
 		},
 	});
-	await startSignIn(CONFIG);
+	await startSignIn(CONFIG, "/trip");
 	expect(calls.map((c) => c.path)).toEqual([
 		"/.well-known/openid-configuration",
 	]);
@@ -55,12 +60,13 @@ test("startSignIn reads discovery, saves PKCE state, and redirects to the issuer
 	expect(url.searchParams.get("code_challenge")).toBe(
 		Buffer.from(digest).toString("base64url"),
 	);
+	expect(saved.returnTo).toBe("/trip");
 	expect(saved.verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
 });
 
 test("startSignIn fails on a discovery HTTP error without redirecting", async () => {
 	serve({ "GET /.well-known/openid-configuration": json(503, {}) });
-	await expect(startSignIn(CONFIG)).rejects.toThrow(
+	await expect(startSignIn(CONFIG, "/trip")).rejects.toThrow(
 		"The sign-in server replied HTTP 503.",
 	);
 	expect(assign).not.toHaveBeenCalled();
@@ -69,15 +75,17 @@ test("startSignIn fails on a discovery HTTP error without redirecting", async ()
 
 test("startSignIn rejects a malformed discovery document", async () => {
 	serve({ "GET /.well-known/openid-configuration": { issuer: "x" } });
-	await expect(startSignIn(CONFIG)).rejects.toThrow();
+	await expect(startSignIn(CONFIG, "/trip")).rejects.toThrow();
 	expect(assign).not.toHaveBeenCalled();
 });
 
-test("finishSignIn exchanges the code and stores the matching token", async () => {
+test("finishSignIn exchanges the code and stores the matching token, and returns returnTo", async () => {
 	pending();
 	const token = signedInToken({ iss: CONFIG.issuer, nonce: "n-1" });
 	const calls = serve({ "POST /api/sign-in/token": { idToken: token } });
-	await finishSignIn(CONFIG, { code: "c-1", state: "s-1" });
+	expect(await finishSignIn(CONFIG, { code: "c-1", state: "s-1" })).toBe(
+		"/trip",
+	);
 	expect(calls[0]?.body).toEqual({
 		code: "c-1",
 		codeVerifier: "v".repeat(43),

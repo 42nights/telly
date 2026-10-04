@@ -61,16 +61,6 @@ const plan = (mine: string[], base = BASE) => ({
 	},
 });
 
-test("asks a signed-out visitor to sign in and reads nothing", async () => {
-	const calls = serve({});
-
-	renderRoute("/care-profile");
-
-	expect(await screen.findByText("Sign in to see your family.")).toBeTruthy();
-	expect(screen.getByLabelText("Person")).toHaveProperty("disabled", true);
-	expect(calls).toEqual([]);
-});
-
 test("says so when no person is paired with the account", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [] } });

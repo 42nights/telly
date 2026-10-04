@@ -18,8 +18,10 @@ mock.module("./routeTree.gen", () => ({ routeTree }));
 // the page still exists.
 const { default: ReactDOM } = await import("react-dom/client");
 const pending = await import("@/lib/pending");
+const session = await import("@/lib/session");
 const { createRoot } = ReactDOM;
 const { startPendingSync } = pending;
+const { followSession } = session;
 const roots: Root[] = [];
 const stops: (() => void)[] = [];
 const rootSpy = spyOn(ReactDOM, "createRoot").mockImplementation(
@@ -34,6 +36,13 @@ const syncSpy = spyOn(pending, "startPendingSync").mockImplementation(() => {
 	stops.push(stop);
 	return stop;
 });
+const followSpy = spyOn(session, "followSession").mockImplementation(
+	(router) => {
+		const stop = followSession(router);
+		stops.push(stop);
+		return stop;
+	},
+);
 afterEach(() => {
 	act(() => {
 		for (const root of roots.splice(0)) root.unmount();
@@ -43,6 +52,7 @@ afterEach(() => {
 afterAll(() => {
 	rootSpy.mockRestore();
 	syncSpy.mockRestore();
+	followSpy.mockRestore();
 });
 
 // A copy of main.tsx per case. The specifier is not a literal so TypeScript does not resolve it.

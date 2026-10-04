@@ -22,7 +22,7 @@ const timers = {
 };
 
 const cleanup = async () => {
-	const { cleanup } = await import("@testing-library/react");
+	const { cleanup } = await import("@testing-library/react/pure");
 	cleanup();
 };
 

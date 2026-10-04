@@ -27,17 +27,6 @@ const RECORDS = {
 	acknowledgements: [],
 };
 
-test("signed out, Talk explains that signing in is needed", async () => {
-	serve({});
-	renderRoute("/hud");
-
-	expect(
-		await screen.findByText("Sign in to use Talk. You can still type."),
-	).toBeTruthy();
-	expect(screen.getByRole("link", { name: "Meal" })).toBeTruthy();
-	expect(screen.getByRole("link", { name: "Cook" })).toBeTruthy();
-});
-
 test("with no paired person, alerts and messages say so", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });

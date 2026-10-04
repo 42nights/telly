@@ -47,22 +47,6 @@ const family = (routes: Record<string, unknown>) =>
 const messageBox = () =>
 	screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
 
-test("signed out: asks to sign in and reads nothing", async () => {
-	const calls = serve({});
-	renderRoute("/chat");
-
-	expect(await screen.findByText("Sign-in required")).toBeTruthy();
-	expect(screen.getByText("Sign in to see family.")).toBeTruthy();
-	expect(screen.getByText("Gemini")).toBeTruthy();
-	expect(screen.getByRole("region", { name: "Family chat" })).toBeTruthy();
-	expect(
-		screen.getByRole("button", {
-			name: /^In this chat: the members of your family/,
-		}),
-	).toBeTruthy();
-	expect(calls).toEqual([]);
-});
-
 test("a person without a family is told that pairing is manual", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });

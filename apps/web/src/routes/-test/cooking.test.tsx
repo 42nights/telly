@@ -203,19 +203,6 @@ test("a press before the family list arrives says it is still loading", async ()
 	expect(posts(calls)).toEqual([]);
 });
 
-test("signed out, a press asks to sign in instead of claiming no person is paired", async () => {
-	const calls = serve({});
-	renderRoute("/cooking");
-
-	fireEvent.click(await findMeals());
-
-	expect(await screen.findByText("Sign-in required")).toBeTruthy();
-	expect(screen.getByText("Sign in to see meal ideas.")).toBeTruthy();
-	expect(screen.getByRole("link", { name: "Go to Sign in" })).toBeTruthy();
-	expect(screen.queryByText("No person is paired yet.")).toBeNull();
-	expect(calls).toEqual([]);
-});
-
 test("an unavailable family list (503) shows its reason on a press", async () => {
 	signIn();
 	const calls = serve({

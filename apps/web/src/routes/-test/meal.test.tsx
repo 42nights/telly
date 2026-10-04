@@ -214,20 +214,3 @@ test("says the caller cannot add meals for a person they are not a member of", a
 		).toHaveLength(2),
 	);
 });
-
-test("asks a signed-out visitor to pair a person and sends no meal request", async () => {
-	const calls = serve({});
-	renderRoute("/meal");
-
-	fireEvent.change(
-		await screen.findByLabelText("No photo? Tell me what you have."),
-		{ target: { value: "Soup" } },
-	);
-	fireEvent.click(screen.getByRole("button", { name: "Estimate" }));
-	expect(
-		await screen.findByText(
-			"The estimate did not work. Try again, or describe the meal instead.",
-		),
-	).toBeTruthy();
-	expect(calls).toEqual([]);
-});

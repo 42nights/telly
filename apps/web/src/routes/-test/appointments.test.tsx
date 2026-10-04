@@ -47,13 +47,3 @@ test("with no paired person, says so and reads no visits", async () => {
 	expect(await screen.findByText("No person is paired yet.")).toBeTruthy();
 	expect(calls.map((call) => call.path)).toEqual(["/api/families"]);
 });
-
-test("signed out, asks the person to sign in and fetches nothing", async () => {
-	const calls = serve({});
-	renderRoute("/appointments");
-
-	expect(
-		await screen.findByText("Sign in to see appointments.", { exact: false }),
-	).toBeTruthy();
-	expect(calls).toEqual([]);
-});

@@ -4,9 +4,10 @@ import { setupDom } from "@/lib/test/dom";
 setupDom();
 
 // Dynamic: `dom` must register `document` and mock `@/env` before the app loads.
-const { renderRoute, screen, serve } = await import("@/lib/test/app");
+const { renderRoute, screen, serve, signIn } = await import("@/lib/test/app");
 
 test("shows the phone, speaker, and medicine place settings in that order", async () => {
+	signIn();
 	serve({});
 	renderRoute("/settings");
 	await screen.findByRole("heading", { name: "Settings · Phone numbers" });

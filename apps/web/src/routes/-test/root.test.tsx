@@ -9,6 +9,45 @@ const { FAMILY, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
 
+const PATHS = [
+	"/",
+	"/hud",
+	"/medicine",
+	"/bedtime",
+	"/trip",
+	"/family",
+	"/care-profile",
+	"/chat",
+	"/care",
+	"/dashboard",
+	"/reports",
+	"/appointments",
+	"/settings",
+	"/trends",
+	"/meal",
+	"/cooking",
+];
+
+test("signed out, every app page shows only the sign-in screen and returns there after", async () => {
+	for (const path of PATHS) {
+		const href = `${path}?x=1`;
+		const calls = serve({});
+		const { router, unmount } = renderRoute(href);
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe("/sign-in"),
+		);
+		expect(router.state.location.search).toEqual({ redirect: href });
+		expect(
+			await screen.findByRole("heading", {
+				name: "Sign in or create an account",
+			}),
+		).toBeTruthy();
+		expect(screen.queryByRole("navigation", { name: "Screens" })).toBeNull();
+		expect(calls.filter((c) => c.path.startsWith("/api"))).toEqual([]);
+		unmount();
+	}
+});
+
 test("/ redirects to the HUD inside the app layout with its head tags", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [FAMILY] } });

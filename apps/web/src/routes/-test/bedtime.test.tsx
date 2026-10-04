@@ -128,18 +128,6 @@ test("shows the speaker as unknown and the server as silent when they fail", asy
 	).toBeTruthy();
 });
 
-test("signed out, no family is loaded and nothing is fetched for it", async () => {
-	const calls = serve(base);
-	renderRoute("/bedtime");
-
-	expect(
-		await screen.findByText(
-			"Home speaker unknown · prompts show on this phone.",
-		),
-	).toBeTruthy();
-	expect(calls.some((c) => c.path.startsWith("/api/families/"))).toBe(false);
-});
-
 test("plays, changes volume and timer, and pauses the sleep sound", async () => {
 	signIn();
 	serve({ ...base, ...speakerOn });

@@ -354,18 +354,6 @@ test("shows why the explanation failed", async () => {
 	);
 });
 
-test("signed out, asks the person to sign in and sends nothing", async () => {
-	const calls = serve({});
-	renderRoute("/trends");
-
-	expect(
-		await screen.findByText("Sign in to see health trends.", { exact: false }),
-	).toBeTruthy();
-	expect(screen.getByRole("heading", { name: "No person" })).toBeTruthy();
-	expect(screen.queryByText(/No person is paired/)).toBeNull();
-	expect(calls).toEqual([]);
-});
-
 test("when the people cannot load, says why instead of claiming none is paired", async () => {
 	signIn();
 	serve({

@@ -143,13 +143,6 @@ test("says no person is paired when the account has no family", async () => {
 	expect(screen.getByText("Family · No person")).toBeTruthy();
 });
 
-test("asks a signed-out visitor to sign in and sends no request", async () => {
-	const calls = serve({});
-	renderRoute("/family");
-	expect(await screen.findByText("Sign in to see your family.")).toBeTruthy();
-	expect(calls).toEqual([]);
-});
-
 test("reports an unavailable family list", async () => {
 	signIn();
 	serve({
