@@ -113,7 +113,9 @@ test("after every grant is revoked, or without an identity, set up is not offere
 		/>,
 	);
 	expect(noMe.getByText("Nobody has access now.")).toBeDefined();
-	expect(noMe.queryByRole("button")).toBeNull();
+	expect(
+		noMe.queryByRole("button", { name: /^Set up sharing/ }),
+	).toBeNull();
 });
 
 test("a manager sees each member's grants and can revoke one", async () => {

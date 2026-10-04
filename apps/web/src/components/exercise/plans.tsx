@@ -204,7 +204,7 @@ export function ExerciseSection({ familyId }: { familyId: string }) {
 	const { plans, sessions } = records.value;
 
 	return (
-		<div className="win95-inset grid gap-3 bg-card p-2">
+		<div className="grid gap-3">
 			{plans.length === 0 && <p>No agreed activity yet.</p>}
 			<ul className="grid gap-2">
 				{plans.map((plan) => (

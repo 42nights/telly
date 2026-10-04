@@ -85,9 +85,9 @@ test("with nothing saved, medicines are unknown and a viewer cannot add", () => 
 		view.getByText("No instructions saved. Medicines are unknown."),
 	).toBeDefined();
 	expect(
-		view.getByText(
-			"Only verified instructions are read to the wearer. A change waits for verification.",
-		),
+		view.getByRole("button", {
+			name: "Only verified instructions are read to the wearer. A change waits for verification.",
+		}),
 	).toBeDefined();
 	expect(view.queryByRole("form", { name: "Add an instruction" })).toBeNull();
 });

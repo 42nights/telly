@@ -1,6 +1,7 @@
 // Layout smoke test (captain: "it should fill the box its in ... if its too big then thats probably
-// a sign to compact or break it apart"): no page scrolls as a whole at two desktop sizes and on a
-// phone. Only long lists scroll, inside their own box. Wearer Home is out of scope here.
+// a sign to compact or break it apart"; "nested windows + elements are all over the place"): no
+// page scrolls as a whole at two desktop sizes and on a phone, and no page shows a window inside the
+// app frame's window. Only long lists scroll, inside their own box. Wearer Home is out of scope.
 import { expect, test } from "@playwright/test";
 
 import { family, replies, signIn, watch } from "./fake-api";
@@ -57,6 +58,7 @@ const routes: Record<string, unknown> = {
 const paths = [
 	"/family",
 	"/family/daily",
+	"/family/reminders",
 	"/family/exercise",
 	"/family/cooking",
 	"/family/alerts",
@@ -87,17 +89,13 @@ const paths = [
 // The wearer view has its own menu and Settings rows, so its screens are checked in that view too.
 const wearerPaths = ["/find", "/trip", "/settings"];
 
-// Open product decision (PR #314): the big-button Meal screen does not fit a 390 px phone without
-// a redesign into steps. Desktop sizes are checked; the phone is not yet.
-const phonePending = ["/meal"];
-
 for (const [width, height] of [
 	[1440, 900],
 	[1280, 800],
 	[390, 844],
 ] as const)
 	for (const view of ["family", "wearer"] as const)
-		test(`no page scrolls as a whole at ${width}x${height} in the ${view} view`, async ({
+		test(`each page is one window that fits ${width}x${height} in the ${view} view`, async ({
 			page,
 			baseURL,
 		}) => {
@@ -111,8 +109,8 @@ for (const [width, height] of [
 			);
 			await watch(page, baseURL, routes);
 			const overflow: string[] = [];
+			const nested: string[] = [];
 			for (const path of view === "family" ? paths : wearerPaths) {
-				if (width === 390 && phonePending.includes(path)) continue;
 				await page.goto(path);
 				// Every read has answered and the screen has its final content, then measure.
 				await page.waitForLoadState("networkidle");
@@ -125,7 +123,20 @@ for (const [width, height] of [
 						desktop === null ? 0 : desktop.scrollHeight - desktop.clientHeight,
 					);
 				});
+				// One window per page (#357): no blue title bar inside the frame, except in a dialog.
+				const bars = await page
+					.locator(".win95-desktop .win95-titlebar")
+					.evaluateAll(
+						(all) =>
+							all.filter(
+								(bar) =>
+									bar.closest("dialog") === null &&
+									getComputedStyle(bar).backgroundImage !== "none",
+							).length,
+					);
+				if (bars > 0) nested.push(`${path} has ${bars} inner title bars`);
 				if (extra > 1) overflow.push(`${path} scrolls by ${extra} px`);
 			}
 			expect(overflow).toEqual([]);
+			expect(nested).toEqual([]);
 		});

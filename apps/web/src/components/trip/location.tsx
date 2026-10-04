@@ -10,7 +10,7 @@ import {
 import { useState } from "react";
 
 import { clock } from "@/components/family/logic";
-import { ApiNotice, Tip } from "@/components/win95";
+import { ApiNotice } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 import { useMemberNames } from "@/lib/members";
 
@@ -221,6 +221,13 @@ export function FamilyLocationSection({
 		state.kind === "ready"
 			? state.value.locations.filter((l) => l.sharer !== me)
 			: [];
+	// Nothing shared with me, or no Location access: the section is hidden, not an empty line.
+	if (
+		state.kind === "ready" &&
+		(!state.value.seesShared ||
+			(shared.length === 0 && !state.value.events.some((e) => e.sharer !== me)))
+	)
+		return null;
 	return (
 		<section aria-labelledby="location" className="grid gap-2">
 			<h3 id="location" className="font-bold">
@@ -228,13 +235,6 @@ export function FamilyLocationSection({
 			</h3>
 			{state.kind !== "ready" ? (
 				<ApiNotice state={state} what="location" />
-			) : !state.value.seesShared ? (
-				<p role="status" className="flex items-center gap-1">
-					Location sharing is off for you.
-					<Tip text="Someone with family access can turn on Location for you in Sharing." />
-				</p>
-			) : shared.length === 0 ? (
-				<p>Nobody shares a location with you.</p>
 			) : (
 				shared.map((location) => (
 					<LocationCard
@@ -245,7 +245,7 @@ export function FamilyLocationSection({
 					/>
 				))
 			)}
-			{state.kind === "ready" && state.value.seesShared && (
+			{state.kind === "ready" && (
 				<AwayNotices locations={state.value} me={me} nameOf={nameOf} />
 			)}
 		</section>

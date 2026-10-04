@@ -24,17 +24,18 @@ import {
 	render,
 	type ServerReply,
 	serve,
+	waitFor,
 	within,
 } from "../test/dom";
 
-import { MealStatusSection } from "./family-status";
+import { MealReminders, MealStatusSection } from "./family-status";
 
 installDom();
 
 const HISTORY = "GET /api/families/7/reminder-occurrences";
 const REMINDERS = "/api/families/7/reminders";
 const SETTINGS = "/api/families/7/reminder-settings";
-// The reminder editor's reads: no reminders and no saved settings yet.
+// The reminder list's reads: no reminders and no saved settings yet.
 const EDITOR = {
 	[`GET ${REMINDERS}`]: { json: { reminders: [] } },
 	[`GET ${SETTINGS}`]: { json: { settings: null } },
@@ -77,14 +78,12 @@ const history = (
 	},
 });
 
-/** `ApiNotice` links to Sign in, so the section renders inside an in-memory router. */
-const show = () =>
+/** `ApiNotice` links to Sign in, so each part renders inside an in-memory router. */
+const show = (part = <MealStatusSection familyId="7" />) =>
 	render(
 		<RouterProvider
 			router={createRouter({
-				routeTree: createRootRoute({
-					component: () => <MealStatusSection familyId="7" />,
-				}),
+				routeTree: createRootRoute({ component: () => part }),
 				history: createMemoryHistory(),
 			})}
 		/>,
@@ -96,7 +95,6 @@ describe("MealStatusSection", () => {
 
 	test("waits for the server while the history loads", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: () => Promise.withResolvers<ServerReply>().promise,
 		});
 		const view = show();
@@ -111,7 +109,6 @@ describe("MealStatusSection", () => {
 
 	test("a failed read shows the failure, not an empty list", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: { status: 500, body: { error: "internal", message: "Boom." } },
 		});
 		const view = show();
@@ -123,7 +120,6 @@ describe("MealStatusSection", () => {
 
 	test("signed out links to Sign in", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: { status: 401 },
 		});
 		const view = show();
@@ -132,24 +128,20 @@ describe("MealStatusSection", () => {
 		).toBeGreaterThan(0);
 	});
 
-	test("future check-ins and other reminder kinds are not shown as due", async () => {
+	test("with no meal or drink check-in due, the section is hidden", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: history(
 				[occurrence({ scheduledFor: "2026-10-04T13:00:00.000Z" }), []],
 				[occurrence({ id: "2", kind: "medication", title: "Pills" }), []],
 			),
 		});
 		const view = show();
-		expect(
-			await view.findByText("No meal or drink check-in has come due yet."),
-		).toBeDefined();
-		expect(view.queryByText(/Pills/)).toBeNull();
+		await view.findByText("Loading meal check-ins…");
+		await waitFor(() => expect(view.container.textContent).toBe(""));
 	});
 
 	test("each due check-in shows shown, self-report, and unresolved as separate facts", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: history(
 				[
 					occurrence({ title: "Lunch" }),
@@ -181,7 +173,9 @@ describe("MealStatusSection", () => {
 		const view = show();
 		const [lunch, water] = await view.findAllByRole("article");
 		if (lunch === undefined || water === undefined) throw new Error("two");
-		expect(view.getByText(/is the person's own report/)).toBeDefined();
+		expect(
+			view.getByRole("button", { name: /is the person's own report/ }),
+		).toBeDefined();
 		const facts = (article: HTMLElement) =>
 			within(article)
 				.getAllByRole("listitem")
@@ -215,7 +209,6 @@ describe("MealStatusSection", () => {
 
 	test("shows at most six due check-ins", async () => {
 		serve({
-			...EDITOR,
 			[HISTORY]: history(
 				...Array.from(
 					{ length: 8 },
@@ -232,11 +225,12 @@ describe("MealStatusSection", () => {
 				.map((a) => a.querySelector("h4")?.firstChild?.textContent),
 		).toEqual(["Meal 0", "Meal 1", "Meal 2", "Meal 3", "Meal 4", "Meal 5"]);
 	});
+});
 
-	test("saving a reminder saves this browser's time zone first, then the reminder", async () => {
+describe("MealReminders", () => {
+	test("Add opens a dialog; saving stores this browser's time zone first, then the reminder", async () => {
 		const calls = serve({
 			...EDITOR,
-			[HISTORY]: history(),
 			[`PUT ${SETTINGS}`]: { status: 204 },
 			[`POST ${REMINDERS}`]: {
 				json: {
@@ -251,12 +245,24 @@ describe("MealStatusSection", () => {
 				},
 			},
 		});
-		const view = show();
-		const form = await view.findByRole("form", {
-			name: "Meal and drink reminders",
+		const view = show(<MealReminders familyId="7" />);
+		expect(
+			await view.findByText("No meal or drink reminder yet."),
+		).toBeDefined();
+		const add = view.getByRole("button", { name: "Add" });
+		await waitFor(() => expect(add.hasAttribute("disabled")).toBe(false));
+		fireEvent.click(add);
+		const dialog = view.getByRole("dialog", { hidden: true });
+		expect(dialog.hasAttribute("open")).toBe(true);
+		const form = within(dialog).getByRole("form", {
+			name: "Add a meal or drink reminder",
 		});
 		const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		await view.findByText(`Uses this browser's time zone, ${zone}.`);
+		expect(
+			within(form).getByRole("button", {
+				name: `Uses this browser's time zone, ${zone}.`,
+			}),
+		).toBeDefined();
 		fireEvent.change(within(form).getByLabelText("What"), {
 			target: { value: " Drink water " },
 		});
@@ -266,7 +272,9 @@ describe("MealStatusSection", () => {
 		fireEvent.change(within(form).getByLabelText("Time 1"), {
 			target: { value: "15:30" },
 		});
-		fireEvent.click(within(form).getByText("Add another time"));
+		fireEvent.click(
+			within(form).getByRole("button", { name: "Add another time" }),
+		);
 		fireEvent.change(within(form).getByLabelText("Time 2"), {
 			target: { value: "09:00" },
 		});
@@ -275,6 +283,8 @@ describe("MealStatusSection", () => {
 		expect((await view.findByText("Saved: Drink water.")).textContent).toBe(
 			"Saved: Drink water.",
 		);
+		expect(dialog.hasAttribute("open")).toBe(false);
+
 		const writes = calls.filter((c) => c.method !== "GET");
 		expect(writes).toEqual([
 			{

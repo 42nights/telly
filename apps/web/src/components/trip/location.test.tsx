@@ -264,48 +264,28 @@ describe("FamilyLocationSection", () => {
 			).toContain("mlat=51.500123456");
 	});
 
-	test("says when nobody shares a location", async () => {
-		serve({
-			[path]: {
-				json: {
-					locations: [location({})],
-					shares: [],
-					seesShared: true,
-					events: [],
+	// Only my own location, or no Location access: the section is hidden, not an empty line.
+	for (const [name, seesShared] of [
+		["nobody else shares a location", true],
+		["location sharing is off for me", false],
+	] as const)
+		test(`hides the section when ${name}`, async () => {
+			serve({
+				[path]: {
+					json: {
+						locations: [location({})],
+						shares: [],
+						seesShared,
+						events: [],
+					},
 				},
-			},
+			});
+			const view = render(
+				<FamilyLocationSection familyId="1" me={sister} now={now} />,
+			);
+			expect(view.container.textContent).toContain("Loading location…");
+			await waitFor(() => expect(view.container.textContent).toBe(""));
 		});
-		const view = render(
-			<FamilyLocationSection familyId="1" me={sister} now={now} />,
-		);
-		await waitFor(() =>
-			expect(view.container.textContent).toContain(
-				"Nobody shares a location with you.",
-			),
-		);
-	});
-
-	test("says when location sharing is off for me", async () => {
-		serve({
-			[path]: {
-				json: {
-					locations: [location({})],
-					shares: [],
-					seesShared: false,
-					events: [],
-				},
-			},
-		});
-		const view = render(
-			<FamilyLocationSection familyId="1" me={sister} now={now} />,
-		);
-		await waitFor(() =>
-			expect(view.getByRole("status").textContent).toStartWith(
-				"Location sharing is off for you.",
-			),
-		);
-		expect(view.queryByRole("article")).toBeNull();
-	});
 
 	test("shows loading, then a failed read as a failure, never as a location", async () => {
 		const reply = Promise.withResolvers<ServerReply>();

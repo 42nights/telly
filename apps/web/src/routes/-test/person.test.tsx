@@ -16,17 +16,12 @@ test("the address picks this tab's person over the device default, and screens k
 	serve({ "GET /api/families": { families: [FAMILY, OTHER] } });
 	const { router } = renderRoute("/family/trends?person=fam-2");
 
-	expect(
-		await screen.findByRole("heading", { name: "Grandpa Joe" }),
-	).toBeTruthy();
+	const picker = () =>
+		screen.getByRole<HTMLSelectElement>("combobox", { name: "Person" });
+	await waitFor(() => expect(picker().value).toBe("fam-2"));
 
-	fireEvent.change(
-		screen.getByRole<HTMLSelectElement>("combobox", { name: "Person" }),
-		{ target: { value: "fam-1" } },
-	);
-	expect(
-		await screen.findByRole("heading", { name: "Grandma Rose" }),
-	).toBeTruthy();
+	fireEvent.change(picker(), { target: { value: "fam-1" } });
+	await waitFor(() => expect(picker().value).toBe("fam-1"));
 	await waitFor(() =>
 		expect(router.state.location.search).toEqual({ person: "fam-1" }),
 	);
