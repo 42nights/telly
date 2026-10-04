@@ -79,16 +79,16 @@ flowchart LR
     q["Family question"] -->|"POST …/ask"| api
     meal["Meal photo"] -->|"…/meals"| api
     api -->|"store: false"| gem["Gemini<br/>gemini-3.8-flash"]
-    gem -.->|"429 or 503"| fb["gemini-3.5-flash<br/>one retry: vision, questions"]
+    gem -.->|"429 or 503"| fb["gemini-3.5-flash<br/>vision: one retry<br/>questions: retries after 1 s, 3 s"]
     gem -->|"function calls"| tools["Family data tools<br/>via Fetch.ai"]
     gem --> out["Boxes in frame pixels ·<br/>cited answer · meal estimate"]
     out --> app["App draws the marker<br/>or shows the answer"]
 ```
 
-- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision and questions retry once on `gemini-3.5-flash`.
+- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision retries once on `gemini-3.5-flash`. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
 - **Code:** `apps/server/src/integrations/gemini.ts`, `gemini-chat.ts`, `gemini-meal.ts`. **Key:** `GEMINI_API_KEY`.
 - **Proof:** live medicine detection answered 200 ([#174](https://github.com/ayaangazali/telly/pull/174)). Live Gemini checks for calm support, meal photos, and medicine memory are in [#180](https://github.com/ayaangazali/telly/pull/180). A request with the stored key returned 200 ([#126](https://github.com/ayaangazali/telly/pull/126)).
-- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota, Telly shows "unavailable". A found box does not confirm that a dose was taken.
+- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota or overloaded, a question says "The assistant is busy right now". A found box does not confirm that a dose was taken.
 
 - **Screenshots:** No screenshot yet: a live answer needs a signed-in session and Gemini quota. The proof is the PR record.
 
@@ -256,7 +256,7 @@ flowchart LR
     routes -->|"verify issuer keys"| db[("SpacetimeDB<br/>family membership")]
 ```
 
-- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership.
+- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership. Without a valid session, every web page shows only the sign-in screen, which returns to the requested page after sign-in.
 - **Code:** `apps/server/src/auth.ts`, `routes/sign-in.ts`. **Keys:** `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_SECRET`.
 - **Proof:** real Google discovery and keys loaded, and a forged token got 401 ([#162](https://github.com/ayaangazali/telly/pull/162)). Web and phone flows: [#130](https://github.com/ayaangazali/telly/pull/130).
 - **Limits:** the consent screen is in Testing mode, so only listed test users can sign in. No phone sign-in has run on a device.

@@ -4,6 +4,7 @@
 import { ApiError } from "@health/contracts";
 import { Effect, Schema, type Scope } from "effect";
 import { Hono } from "hono";
+import { Identity } from "spacetimedb";
 import {
 	type DbConfig,
 	type FamilyDb,
@@ -41,6 +42,30 @@ export const openFamily = (config: DbConfig, name: string) =>
 		if (family === undefined) throw new Error("family was not created");
 		return { db, familyId: family.id };
 	});
+
+/**
+ * Grants or revokes the caller's own care scopes. A founder holds every scope from `createFamily`
+ * (#188) and keeps `family_access`, so a test revokes a scope to show what it gates.
+ */
+export const setOwnScopes = (
+	db: FamilyDb,
+	familyId: string,
+	scopes: readonly string[],
+	granted: boolean,
+) =>
+	Effect.forEach(
+		scopes,
+		(scope) =>
+			Effect.promise(() =>
+				db.connection.reducers.setCareGrant({
+					familyId: BigInt(familyId),
+					member: Identity.fromString(db.identity),
+					scope,
+					granted,
+				}),
+			),
+		{ discard: true },
+	);
 
 /** Mounts `routes` as `app.ts` does, for the caller `db` in `familyId`. */
 export const familyApp = (
