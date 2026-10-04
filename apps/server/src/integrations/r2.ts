@@ -45,6 +45,43 @@ const failed = (action: string, status: number) =>
 const tag = (xml: string, name: string) =>
 	xml.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1];
 
+// Reads a ListObjectsV2 reply page by page (`send` signs and sends one request).
+const listObjects = async (
+	send: (input: string) => Promise<Response>,
+	base: string,
+	prefix: string,
+) => {
+	const objects: StoredObject[] = [];
+	let token: string | undefined;
+	do {
+		const query = new URLSearchParams({ "list-type": "2", prefix });
+		if (token !== undefined) query.set("continuation-token", token);
+		const response = await send(`${base}?${query}`);
+		const xml = await response.text();
+		if (!response.ok) throw failed("list the files", response.status);
+		for (const [, entry = ""] of xml.matchAll(
+			/<Contents>([\s\S]*?)<\/Contents>/g,
+		)) {
+			const key = tag(entry, "Key");
+			const size = Number(tag(entry, "Size"));
+			const lastModified = tag(entry, "LastModified");
+			if (
+				key === undefined ||
+				lastModified === undefined ||
+				!Number.isFinite(size)
+			)
+				throw new ApiFailure(
+					"upstream_error",
+					"File storage sent an unreadable listing",
+				);
+			objects.push({ key, size, lastModified });
+		}
+		const next = tag(xml, "NextContinuationToken");
+		token = tag(xml, "IsTruncated") === "true" ? next : undefined;
+	} while (token !== undefined);
+	return objects;
+};
+
 export const r2Bucket = (config: R2Config): R2Bucket => {
 	// R2 takes the region "auto" (https://developers.cloudflare.com/r2/api/s3/api/).
 	const client = new AwsClient({
@@ -107,36 +144,6 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 			});
 			return signed.url;
 		},
-		list: async (prefix) => {
-			const objects: StoredObject[] = [];
-			let token: string | undefined;
-			do {
-				const query = new URLSearchParams({ "list-type": "2", prefix });
-				if (token !== undefined) query.set("continuation-token", token);
-				const response = await send(`${base}?${query}`);
-				const xml = await response.text();
-				if (!response.ok) throw failed("list the files", response.status);
-				for (const [, entry = ""] of xml.matchAll(
-					/<Contents>([\s\S]*?)<\/Contents>/g,
-				)) {
-					const key = tag(entry, "Key");
-					const size = Number(tag(entry, "Size"));
-					const lastModified = tag(entry, "LastModified");
-					if (
-						key === undefined ||
-						lastModified === undefined ||
-						!Number.isFinite(size)
-					)
-						throw new ApiFailure(
-							"upstream_error",
-							"File storage sent an unreadable listing",
-						);
-					objects.push({ key, size, lastModified });
-				}
-				const next = tag(xml, "NextContinuationToken");
-				token = tag(xml, "IsTruncated") === "true" ? next : undefined;
-			} while (token !== undefined);
-			return objects;
-		},
+		list: (prefix) => listObjects(send, base, prefix),
 	};
 };

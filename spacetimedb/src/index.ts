@@ -2195,8 +2195,11 @@ export const saveMedicineArPin = spacetimedb.reducer(
 	},
 	(ctx, { objectId, ...pin }) => {
 		const sighting = ctx.db.medicineSighting.id.find(objectId);
-		if (sighting?.familyId !== pin.familyId)
+		if (sighting?.familyId !== pin.familyId) {
+			requireMember(ctx, pin.familyId);
 			throw new SenderError("no such sighting in this family");
+		}
+		// The member rule of #291: the sighting's member, or a manager of everyone's things.
 		requireMedicineOf(ctx, pin.familyId, sighting.personId);
 		if (placesOf(ctx, pin.familyId, sighting.personId) === undefined)
 			throw new SenderError("medicine memory is off for this member");

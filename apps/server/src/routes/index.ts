@@ -25,7 +25,6 @@ import { medicineMemoryRoutes } from "./medicine-memory";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import { speakerRoutes } from "./speaker";
-import { toolRoutes } from "./tools";
 import { trendRoutes } from "./trends";
 import { tripRoutes } from "./trips";
 import { visionRoutes } from "./vision";
@@ -73,7 +72,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", speakerRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", appointmentRoutes(config.finchnode))
-		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())

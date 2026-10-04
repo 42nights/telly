@@ -23,13 +23,15 @@ const upstream = () =>
 /**
  * Runs one agent tool through Fetch.ai Agentverse: this server -> local bridge uAgent (HTTP) ->
  * Agentverse mailbox -> worker uAgent -> `POST /api/families/:familyId/tools`. The result holds
- * only the granted family's records. No retries and no direct fallback.
+ * only the family's records. `delegation` (`delegation.ts`) lets the worker read through the asking
+ * member's connection; without it the worker must be a member. No retries and no direct fallback.
  */
 export const callAgentTool = async (
 	config: FetchAgentConfig | undefined,
 	familyId: bigint | string,
 	request: ToolRequest,
 	signal?: AbortSignal,
+	delegation?: string,
 ): Promise<ToolResponse> => {
 	if (!config)
 		throw new ApiFailure(
@@ -42,7 +44,12 @@ export const callAgentTool = async (
 		response = await fetch(`${config.bridgeUrl.replace(/\/$/, "")}/tool-call`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ token: config.bridgeToken, family_id, request }),
+			body: JSON.stringify({
+				token: config.bridgeToken,
+				family_id,
+				request,
+				...(delegation === undefined ? {} : { delegation }),
+			}),
 			signal: AbortSignal.any([
 				AbortSignal.timeout(TIMEOUT_MS),
 				...(signal ? [signal] : []),

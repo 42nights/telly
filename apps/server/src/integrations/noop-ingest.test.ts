@@ -289,6 +289,24 @@ describe("noopRoutes ingest", () => {
 		expect(routes.status(lastSeen + 10 * 60_000 - 1).status).toBe("connected");
 		expect(routes.status(lastSeen + 10 * 60_000).status).toBe("not_connected");
 	});
+
+	test("after a restart, status comes from the newest stored NOOP sample", () => {
+		const receivedAt = 1_790_000_000_000;
+		const routes = noopRoutes({
+			identity: "0".repeat(64),
+			tokenFamily: () => undefined,
+			record: async () => {},
+			lastReceivedAt: () => receivedAt,
+		});
+		expect(routes.status(receivedAt + 60_000)).toEqual({
+			source: "noop",
+			status: "connected",
+			lastSeenAt: new Date(receivedAt).toISOString(),
+		});
+		expect(routes.status(receivedAt + 10 * 60_000).status).toBe(
+			"not_connected",
+		);
+	});
 });
 
 describe("unstoredSamples", () => {
