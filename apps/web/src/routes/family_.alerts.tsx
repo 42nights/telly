@@ -26,10 +26,16 @@ function FamilyAlerts() {
 					{() => (
 						<div className="grid gap-3 p-2 text-sm">
 							<AlertSection data={data} now={Date.now()} />
-							<h3 className="font-bold">Recent alerts</h3>
-							<div className="win95-inset overflow-x-auto bg-card">
-								<RecentAlerts data={data} />
-							</div>
+							{/* An empty list is hidden: the summary above already says no alert. */}
+							{(data.alerts.kind !== "ready" ||
+								data.alerts.value.alerts.length > 0) && (
+								<>
+									<h3 className="font-bold">Recent alerts</h3>
+									<div className="win95-inset overflow-x-auto bg-card">
+										<RecentAlerts data={data} />
+									</div>
+								</>
+							)}
 						</div>
 					)}
 				</FamilyGate>
