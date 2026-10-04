@@ -2,8 +2,6 @@
 // isolated in-memory database, publishes, sets SPACETIMEDB_URI and SPACETIMEDB_DATABASE, and runs
 // this file. Each connection below is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
-import { once } from "node:events";
-import { type AddressInfo, connect, createServer, type Socket } from "node:net";
 import { Effect } from "effect";
 import { Identity, Timestamp } from "spacetimedb";
 import {
@@ -14,6 +12,7 @@ import {
 	openFamilyDb,
 	readFamilyRecords,
 } from "./db";
+import { closed, dbProxy } from "./db-proxy";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -30,36 +29,6 @@ const run = (
 		: Effect.runPromise(body(config));
 
 const sourceTime = Timestamp.fromDate(new Date("2026-01-01T08:00:00.000Z"));
-
-// A TCP proxy in front of the database. `drop` destroys every socket, which the client sees as a
-// real network drop. With `forward: false` it accepts sockets and never answers, like a hung host.
-const proxy = async (target: string, forward = true) => {
-	const { hostname, port } = new URL(target);
-	const sockets = new Set<Socket>();
-	const server = createServer((client) => {
-		sockets.add(client);
-		client.on("close", () => sockets.delete(client));
-		client.on("error", () => client.destroy());
-		if (!forward) return;
-		const upstream = connect(Number(port), hostname);
-		upstream.on("error", () => client.destroy());
-		upstream.on("close", () => client.destroy());
-		client.on("close", () => upstream.destroy());
-		client.pipe(upstream).pipe(client);
-	});
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	return {
-		uri: `ws://127.0.0.1:${(server.address() as AddressInfo).port}`,
-		server,
-		drop: () => {
-			for (const socket of sockets) socket.destroy();
-		},
-		close: () => {
-			for (const socket of sockets) socket.destroy();
-			server.close();
-		},
-	};
-};
 
 describe.skipIf(config === undefined)("family-scoped database", () => {
 	test("a stored sample keeps source time, receive time, unit, provenance, and quality", () =>
@@ -202,7 +171,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 	test("a dropped connection fails as unavailable, serves no stale rows, and a new connection sees every committed row", () =>
 		run((config) =>
 			Effect.gen(function* () {
-				const link = yield* Effect.promise(() => proxy(config.uri));
+				const link = yield* Effect.promise(() => dbProxy(config.uri));
 				const viaProxy = { ...config, uri: link.uri };
 				const token = yield* Effect.scoped(
 					Effect.gen(function* () {
@@ -248,36 +217,39 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 			}),
 		));
 
-	test("an interrupted open closes its half-open socket", async () => {
-		const hung = await proxy("ws://127.0.0.1:9", false);
-		const accepted = once(hung.server, "connection");
+	// Without a token the first socket is the WebSocket; with one, it is the SDK's token fetch.
+	test.each([
+		["the WebSocket handshake", {}],
+		["the token fetch", { token: "unchecked" }],
+	])("an interrupted open closes its socket during %s", async (_, token) => {
+		if (config === undefined) throw new Error("no database configured");
+		const hung = await dbProxy(config.uri);
+		hung.setMode("freeze");
+		const accepted = hung.nextSocket();
 		const abort = new AbortController();
 		const opening = Effect.runPromise(
-			Effect.scoped(openFamilyDb({ uri: hung.uri, database: "health-test" })),
+			Effect.scoped(openFamilyDb({ ...config, ...token, uri: hung.uri })),
 			{ signal: abort.signal },
 		);
-		const [socket] = (await accepted) as [Socket];
-		// `events.once` would reject on the client's reset; only the close matters here.
-		const released = Promise.withResolvers<void>();
-		socket.on("close", () => released.resolve());
+		const released = closed(await accepted);
 		abort.abort();
 		await expect(opening).rejects.toThrow();
 		// A leaked socket never closes, and the test times out here.
-		await released.promise;
+		await released;
 		hung.close();
 	});
 
 	test("an unreachable database fails as unavailable after bounded retries", async () => {
-		const gone = await proxy("ws://127.0.0.1:9");
-		gone.close();
+		if (config === undefined) throw new Error("no database configured");
+		const down = await dbProxy(config.uri);
+		down.setMode("refuse");
 		const started = Date.now();
 		const error = await Effect.runPromise(
-			Effect.flip(
-				Effect.scoped(openFamilyDb({ uri: gone.uri, database: "health-test" })),
-			),
+			Effect.flip(Effect.scoped(openFamilyDb({ ...config, uri: down.uri }))),
 		);
 		expect(error).toEqual(new DbUnavailable({ reason: "connect failed" }));
 		// Three attempts with 250 ms and 500 ms backoff, far below the 5 s per-attempt timeout.
 		expect(Date.now() - started).toBeLessThan(3000);
+		down.close();
 	});
 });

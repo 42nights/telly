@@ -122,7 +122,8 @@ export const openFamilyDb = (config: DbConfig) =>
 /**
  * Runs one reducer or procedure call with a bounded timeout. Fails with `DbUnavailable` when the
  * connection is already closed, closes during the call, or does not answer in time, and with
- * `DbRejected` when the database refuses the call. It never retries: a reducer call is not idempotent.
+ * `DbRejected` when the module refuses the call (a `SenderError`). Any other rejection is a defect.
+ * It never retries: a reducer call is not idempotent.
  */
 export const callDb = <A>(
 	{ connection }: FamilyDb,
@@ -134,10 +135,11 @@ export const callDb = <A>(
 	return Effect.raceFirst(
 		Effect.tryPromise({
 			try: () => call(connection),
-			catch: (error) =>
-				new DbRejected({
-					reason: error instanceof Error ? error.message : String(error),
-				}),
+			catch: (error) => {
+				if (error instanceof Error && error.name === "SenderError")
+					return new DbRejected({ reason: error.message });
+				throw error;
+			},
 		}),
 		Effect.promise(() => socketClosed).pipe(
 			Effect.andThen(

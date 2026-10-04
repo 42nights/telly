@@ -109,7 +109,7 @@ bun run test              # Behavior tests
 bun run check:quality     # Fallow: unused code, duplication, complexity, import boundaries
 bun run check:structure   # Sentrux rules and regression gate
 bun run --filter server build && bun run smoke   # Real server responses under Node
-bun run db:test           # Family-access, alert, and outbox tests on an isolated in-memory local SpacetimeDB
+bun run db:test           # Family-access, alert, outbox, connection-recovery, and server-lifecycle tests on an isolated in-memory local SpacetimeDB
 bun run db:drill          # Crash-restart and backup/restore drill on isolated local data
 bun run build             # Production build of every app
 ```
@@ -140,15 +140,16 @@ The setup record is in [#21](https://github.com/ayaangazali/telly/issues/21).
 
 <br>
 
-`apps/server/src/db.ts` bounds every database call:
+The server bounds every database call:
 
 | Operation | Timeout | Retries | On failure |
 | --- | --- | --- | --- |
-| Open a connection (`openFamilyDb`) | 5 s per attempt | 2, after 250 ms and 500 ms | `DbUnavailable` |
-| Reducer or procedure call (`callDb`) | 5 s | none: a reducer call is not idempotent | `DbUnavailable`, or `DbRejected` when the database refuses it |
-| Read cached rows (`readFamilyRecords`) | none (local) | none | throws `DbUnavailable` when the connection has closed |
+| Open a connection (`openFamilyDb`) | 5 s per attempt; sign-in caps the whole open at 10 s | 2, after 250 ms and 500 ms | `DbUnavailable`; sign-in answers `503 unavailable` |
+| Reducer call (`callReducer(db, (c) => c.reducers.x(...))`, built on `callDb`) | 5 s; fails at once when the connection drops | none: a reducer call is not idempotent | `DbUnavailable` (`503 unavailable`), or `DbRejected`, which becomes `403` or `400` |
+| Read cached rows (`readFamilyRecords`) | none (local) | none | throws `DbUnavailable` (`503 unavailable`) when the connection has closed |
+| Shutdown (`SIGTERM`) | 3 s grace for requests in flight | none | then the server closes their sockets, which aborts each request and closes its database connection |
 
-A cancelled request or shutdown interrupts an open and closes its socket. A dropped connection is not reopened in place: the call in flight fails at once, the cached rows count as stale, and the next request opens a new connection. Routes map `DbUnavailable` to the `unavailable` API error, never to an empty result. With a token, the SDK first fetches a short-lived token over HTTP without a timeout; an interrupted open returns at once, but that fetch can stay open until the runtime closes it.
+Each request opens its own connection and closes it when the request ends or is cancelled. A dropped connection is not reopened in place: the cached rows count as stale, and the next request opens a new connection. An outage is always an `unavailable` error, never an empty result. With a token, the SDK first fetches a short-lived token over HTTP. The SDK patch in `patches/` aborts that fetch when the connection closes, so a cancelled or timed-out open releases it too.
 
 **Back up.** SpacetimeDB 2.10.2 has no online backup command, so take a cold backup:
 

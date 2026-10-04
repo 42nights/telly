@@ -80,9 +80,9 @@ jobs:
             run: bun run check:quality
           - name: build-smoke
             run: bun run --filter server build && bun run smoke && bun run --filter web build
-          # Fails when packages/db is stale against spacetimedb/, then runs the family-access and
-          # connection-recovery tests against an isolated in-memory local database, then the
-          # crash-restart and backup/restore drill on temporary local data.
+          # Fails when packages/db is stale against spacetimedb/, then runs the family-access,
+          # connection-recovery, and server-lifecycle tests (the built server under Node) against an
+          # isolated in-memory local database, then the crash-restart and backup/restore drill.
           - name: db
             run: >-
               bun run db:generate &&
@@ -97,7 +97,7 @@ jobs:
         with:
           bun-version-file: package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: matrix.name == 'build-smoke'
+        if: matrix.name == 'build-smoke' || matrix.name == 'db'
         with:
           node-version: 24
       - name: Install SpacetimeDB CLI (checksum-verified)
