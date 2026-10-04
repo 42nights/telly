@@ -536,4 +536,51 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 				expect(failure(none)).toEqual([503, "unavailable"]);
 			}),
 		));
+
+	test("the preview is the PDF every email attaches, and only health records holders see it", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Preview");
+				const relative = yield* joinFamily(config, owner, familyId, []);
+				const outsider = yield* openFamilyDb(config);
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(owner, familyId, reportRoutes(undefined, mailer));
+				yield* send(app, "PUT", "/report-email", { enabled: true, recipient });
+				const report = yield* reviewedReport(app);
+				yield* send(app, "POST", `/reports/${report.id}/email`);
+				expect(sent).toHaveLength(2);
+
+				const preview = yield* Effect.promise(async () =>
+					app.request(`/reports/${report.id}/pdf`),
+				);
+				expect(preview.status).toBe(200);
+				expect(preview.headers.get("content-type")).toBe("application/pdf");
+				const bytes = new Uint8Array(
+					yield* Effect.promise(() => preview.arrayBuffer()),
+				);
+				for (const mail of sent) expect(mail.attachment.content).toEqual(bytes);
+
+				// A draft previews as it stands; only a member with health records sees any of it.
+				const draft = Schema.decodeUnknownSync(Report)(
+					(yield* send(app, "POST", "/reports")).json,
+				);
+				const drafted = yield* Effect.promise(async () =>
+					app.request(`/reports/${draft.id}/pdf`),
+				);
+				expect(drafted.status).toBe(200);
+				expect(
+					new TextDecoder("latin1").decode(
+						yield* Effect.promise(() => drafted.arrayBuffer()),
+					),
+				).toContain("Draft: not reviewed.");
+				for (const caller of [relative, outsider]) {
+					const refused = yield* send(
+						familyApp(caller, familyId, reportRoutes()),
+						"GET",
+						`/reports/${report.id}/pdf`,
+					);
+					expect(failure(refused)).toEqual([403, "forbidden"]);
+				}
+			}),
+		));
 });
