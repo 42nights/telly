@@ -18,6 +18,7 @@ import { alertRoutes } from "./routes/alerts";
 import { accountRoutes, familyRoutes } from "./routes/families";
 import { finchnodeRoutes } from "./routes/finchnode";
 import { reportRoutes } from "./routes/reports";
+import { toolRoutes } from "./routes/tools";
 import { visionRoutes } from "./routes/vision";
 import { voiceRoutes } from "./routes/voice";
 
@@ -30,7 +31,8 @@ export const createApp = (config: ServerConfig) => {
 		.route("/", voiceRoutes(elevenLabsVoice(config.voice)))
 		.route("/vision", visionRoutes(config.gemini))
 		.route("/", reportRoutes())
-		.route("/", finchnodeRoutes(config.finchnode));
+		.route("/", finchnodeRoutes(config.finchnode))
+		.route("/", toolRoutes());
 
 	const app = new Hono()
 		.use(logger())

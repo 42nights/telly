@@ -1,5 +1,6 @@
 import type { AuthConfig } from "./auth";
 import type { ElevenLabsConfig } from "./integrations/elevenlabs";
+import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 
@@ -13,6 +14,8 @@ export type ServerConfig = {
 	readonly gemini?: GeminiConfig | undefined;
 	/** Undefined when FinchNode is off: its routes then answer `unavailable`. */
 	readonly finchnode?: Finchnode;
+	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
+	readonly fetchAgent?: FetchAgentConfig | undefined;
 };
 
 type Env = {
@@ -28,6 +31,22 @@ type Env = {
 	readonly GEMINI_BASE_URL: string;
 	readonly FINCHNODE_MODE?: "off" | "demo" | "api" | undefined;
 	readonly FINCHNODE_API_KEY?: string | undefined;
+	readonly TELLY_FETCH_BRIDGE_URL?: string | undefined;
+	readonly TELLY_FETCH_BRIDGE_TOKEN?: string | undefined;
+};
+
+/** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
+const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
+	const {
+		TELLY_FETCH_BRIDGE_URL: bridgeUrl,
+		TELLY_FETCH_BRIDGE_TOKEN: bridgeToken,
+	} = env;
+	if (bridgeUrl && bridgeToken) return { bridgeUrl, bridgeToken };
+	if (bridgeUrl || bridgeToken)
+		throw new Error(
+			"Set both TELLY_FETCH_BRIDGE_URL and TELLY_FETCH_BRIDGE_TOKEN, or neither",
+		);
+	return undefined;
 };
 
 /** Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. */
@@ -50,6 +69,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 			baseUrl: env.ELEVENLABS_API_URL,
 		},
 		...(finchnode === undefined ? {} : { finchnode }),
+		fetchAgent: fetchAgentConfig(env),
 	};
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
