@@ -17,8 +17,8 @@ import type { MedicineMemoryChange } from "@/lib/medicine-memory";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -236,10 +236,10 @@ describe("LastSeen", () => {
 	});
 
 	test("a container that moved shows other places and asks the family once", async () => {
-		let reply: (r: Reply) => void = () => {};
+		let reply: (r: ServerReply) => void = () => {};
 		const calls = serve({
 			"POST /api/families/1/messages": () => {
-				const next = Promise.withResolvers<Reply>();
+				const next = Promise.withResolvers<ServerReply>();
 				reply = next.resolve;
 				return next.promise;
 			},

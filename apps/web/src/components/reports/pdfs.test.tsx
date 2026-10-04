@@ -13,8 +13,8 @@ import type { Report } from "@health/contracts/reports";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -63,9 +63,9 @@ const renderActions = () =>
 
 describe("Save as PDF", () => {
 	test("says saving sends nothing, shows progress, then the saved time", async () => {
-		let reply: (value: Reply) => void = () => {};
+		let reply: (value: ServerReply) => void = () => {};
 		const calls = serve({
-			[SAVE]: () => new Promise<Reply>((resolve) => (reply = resolve)),
+			[SAVE]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const view = renderActions();
 		expect(view.getByRole("status").textContent).toBe(
@@ -101,7 +101,7 @@ describe("Save as PDF", () => {
 			{ json: { id: "p1" } },
 			"PDF not saved: The server sent an unexpected reply",
 		],
-	] satisfies [Reply, string][])(
+	] satisfies [ServerReply, string][])(
 		"a failed save says why (%#)",
 		async (reply, text) => {
 			serve({ [SAVE]: reply });
@@ -128,9 +128,9 @@ describe("Past PDFs", () => {
 	};
 
 	test("waits for the list, then shows each PDF with its report and size", async () => {
-		let reply: (value: Reply) => void = () => {};
+		let reply: (value: ServerReply) => void = () => {};
 		serve({
-			[LIST]: () => new Promise<Reply>((resolve) => (reply = resolve)),
+			[LIST]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const view = open();
 		const dialog = view.getByRole("dialog", { name: "Past PDFs" });
@@ -178,7 +178,7 @@ describe("Past PDFs", () => {
 	});
 
 	test("downloads through a short-lived link; a refused link says why", async () => {
-		let link: Reply = {
+		let link: ServerReply = {
 			status: 403,
 			body: { error: "forbidden", message: "Not your PDF" },
 		};

@@ -1,13 +1,19 @@
 // Test-only stand-ins for `Audio` and blob URLs, which happy-dom cannot play or make.
 import { afterEach, beforeEach } from "bun:test";
 
-/** Stands in for `Audio`: records what was played, and how fast. */
+/**
+ * Stands in for `Audio`: records what was played, and how fast. `speech.tsx` sets and calls these
+ * members through the `Audio` type, so fallow does not see them used.
+ */
 export class FakeAudio {
 	static made: FakeAudio[] = [];
 	static play: () => Promise<void> = () => Promise.resolve();
+	// fallow-ignore-next-line unused-class-member
 	defaultPlaybackRate = 1;
+	// fallow-ignore-next-line unused-class-member
 	playbackRate = 1;
 	paused = false;
+	// fallow-ignore-next-line unused-class-member
 	onended: (() => void) | null = null;
 	constructor(readonly src: string) {
 		FakeAudio.made.push(this);
@@ -15,6 +21,7 @@ export class FakeAudio {
 	play() {
 		return FakeAudio.play();
 	}
+	// fallow-ignore-next-line unused-class-member
 	pause() {
 		this.paused = true;
 	}

@@ -5,8 +5,8 @@ import { FamilyProvider } from "@/lib/family";
 import {
 	act,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -53,7 +53,7 @@ const show = () => {
 describe("useWearerRecords", () => {
 	test("while the family list loads, the records show its loading state", () => {
 		serve({
-			"GET /api/families": () => Promise.withResolvers<Reply>().promise,
+			"GET /api/families": () => Promise.withResolvers<ServerReply>().promise,
 		});
 		const { text } = show();
 		expect(text("families")).toBe("loading");

@@ -21,8 +21,8 @@ import type { ApiState } from "@/lib/api";
 import {
 	act,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -157,7 +157,7 @@ describe("Messages", () => {
 	});
 
 	test("Listen reads that message aloud and then offers to say it again", async () => {
-		const speech = Promise.withResolvers<Reply>();
+		const speech = Promise.withResolvers<ServerReply>();
 		const calls = serve({
 			...meRoute,
 			"POST /api/families/1/voice/speech": () => speech.promise,

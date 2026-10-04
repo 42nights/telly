@@ -6,9 +6,9 @@ import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	type Routes,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -66,7 +66,7 @@ const reportReads = (calls: readonly { method: string; path: string }[]) =>
 describe("ReportScreen before a report", () => {
 	test("waits for the family list", () => {
 		const { view } = screen({
-			"GET /api/families": () => Promise.withResolvers<Reply>().promise,
+			"GET /api/families": () => Promise.withResolvers<ServerReply>().promise,
 		});
 		view.getByText("Waiting for the server.");
 		view.getByText("No report");
@@ -102,7 +102,7 @@ describe("ReportScreen before a report", () => {
 
 	test("creates the first report and opens it", async () => {
 		let reports: Report[] = [];
-		const created = Promise.withResolvers<Reply>();
+		const created = Promise.withResolvers<ServerReply>();
 		const { calls, view } = screen({
 			[REPORTS]: () => ({ json: { reports } }),
 			"POST /api/families/1/reports": () => created.promise,

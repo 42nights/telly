@@ -5,9 +5,9 @@ import { FakeAudio, installFakeAudio } from "../test/audio";
 import {
 	act,
 	installDom,
-	type Reply,
 	render,
 	renderHook,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -106,7 +106,7 @@ describe("useSpeech", () => {
 	});
 
 	test("stop while the voice loads keeps the key idle and drops the late audio", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ [speechPath]: () => reply.promise });
 		const { result } = renderHook(() => useSpeech("f1"));
 		let said: Promise<void> = Promise.resolve();
@@ -124,7 +124,7 @@ describe("useSpeech", () => {
 	});
 
 	test("a new text replaces one still loading, and the first one's failure is ignored", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ [speechPath]: () => reply.promise });
 		const { result } = renderHook(() => useSpeech("f1"));
 		let first: Promise<void> = Promise.resolve();

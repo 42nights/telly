@@ -5,8 +5,8 @@ import type { Trip } from "@health/contracts/trips";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -49,7 +49,7 @@ describe("TripCheckInCard", () => {
 	});
 
 	test("waits for the server, then shows a failed read as a failure", async () => {
-		const pending = Promise.withResolvers<Reply>();
+		const pending = Promise.withResolvers<ServerReply>();
 		serve({ [CURRENT]: () => pending.promise });
 		const view = render(<TripCheckInCard familyId="1" />);
 		expect(view.getByText("Waiting for the server.")).toBeDefined();
@@ -282,7 +282,7 @@ describe("TripCheckInCard", () => {
 
 	test("a signed-out save asks to sign in", async () => {
 		// The re-read after the send stays pending, so the alert is the last change.
-		const later = Promise.withResolvers<Reply>();
+		const later = Promise.withResolvers<ServerReply>();
 		const calls = serve({
 			[CURRENT]: () =>
 				calls.length === 1 ? { json: { trip: null } } : later.promise,

@@ -18,9 +18,9 @@ import {
 	type Call,
 	fireEvent,
 	installDom,
-	type Reply,
 	type Routes,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -175,7 +175,7 @@ const answersOf = (calls: Call[]) =>
 
 describe("MedicationReminders", () => {
 	test("shows nothing while loading, then a failed read as a failure", async () => {
-		const pending = Promise.withResolvers<Reply>();
+		const pending = Promise.withResolvers<ServerReply>();
 		server(() => [], { [HISTORY]: () => pending.promise });
 		const view = show();
 		await waitFor(() =>
@@ -236,7 +236,7 @@ describe("MedicationReminders", () => {
 	});
 
 	test("a failed delivery does not read the history again", async () => {
-		const later = Promise.withResolvers<Reply>();
+		const later = Promise.withResolvers<ServerReply>();
 		const calls = server(() => [occurrence({ promptDue: true })], {
 			[`POST ${BASE}/reminder-occurrences/7/deliveries`]: () => later.promise,
 		});

@@ -5,8 +5,8 @@ import {
 	act,
 	cleanup,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -141,7 +141,7 @@ describe("useLocationReporter", () => {
 		setSystemTime();
 	});
 
-	const report = (call: { body: unknown }): Reply => {
+	const report = (call: { body: unknown }): ServerReply => {
 		const body = call.body;
 		const status =
 			typeof body === "object" && body !== null && "status" in body
@@ -243,7 +243,7 @@ describe("useLocationReporter", () => {
 	);
 
 	test("a report still in flight when sharing stops changes nothing", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({
 			"POST /api/families/1/location": () => reply.promise,
 		});
@@ -260,7 +260,7 @@ describe("useLocationReporter", () => {
 	});
 
 	test("a report that fails after the family changed does not show as a failure", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ "POST /api/families/1/location": () => reply.promise });
 		const { watchers } = fakeGeolocation();
 		const view = render(<ReporterProbe active familyId="1" />);

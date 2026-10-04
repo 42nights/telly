@@ -5,8 +5,8 @@ import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -16,7 +16,7 @@ import { SettingsForm } from "./settings-form";
 
 installDom();
 
-const ROSE: Reply = {
+const ROSE: ServerReply = {
 	json: {
 		families: [
 			{ id: "7", name: "rose", createdAt: "2026-01-01T00:00:00.000Z" },
@@ -25,7 +25,7 @@ const ROSE: Reply = {
 };
 const INVALID = "Enter a full phone number, like (555) 010-0123";
 
-const show = (families: Reply | (() => Promise<Reply>) = ROSE) => {
+const show = (families: ServerReply | (() => Promise<ServerReply>) = ROSE) => {
 	serve({ "GET /api/families": families });
 	const view = render(
 		<FamilyProvider>
@@ -137,7 +137,7 @@ describe("SettingsForm", () => {
 	});
 
 	test("says why there is no person", async () => {
-		const loading = show(() => new Promise<Reply>(() => {}));
+		const loading = show(() => new Promise<ServerReply>(() => {}));
 		expect(loading.view.getByText("Loading…")).toBeDefined();
 		expect(loading.view.getByText("?")).toBeDefined();
 		loading.view.unmount();

@@ -12,8 +12,8 @@ import type { EmergencyOutcome } from "@health/contracts/emergency";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -96,7 +96,7 @@ const checkIn: EmergencyOutcome = {
 
 /** A route that stays open until `release` answers it, so the waiting state can be checked. */
 const held = () => {
-	const { promise, resolve } = Promise.withResolvers<Reply>();
+	const { promise, resolve } = Promise.withResolvers<ServerReply>();
 	return { route: () => promise, release: resolve };
 };
 

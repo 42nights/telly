@@ -18,7 +18,13 @@ import {
 	createRouter,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { installDom, type Reply, render, serve, within } from "../test/dom";
+import {
+	installDom,
+	render,
+	type ServerReply,
+	serve,
+	within,
+} from "../test/dom";
 
 import { MealStatusSection } from "./family-status";
 
@@ -57,7 +63,7 @@ const event = (e: Partial<ReminderEvent>): ReminderEvent => ({
 
 const history = (
 	...rows: (readonly [ReminderOccurrence, readonly ReminderEvent[]])[]
-): Reply => ({
+): ServerReply => ({
 	json: {
 		occurrences: rows.map(([o, events]) => ({ occurrence: o, events })),
 	},
@@ -81,7 +87,7 @@ describe("MealStatusSection", () => {
 	afterEach(() => setSystemTime());
 
 	test("waits for the server while the history loads", async () => {
-		serve({ [HISTORY]: () => Promise.withResolvers<Reply>().promise });
+		serve({ [HISTORY]: () => Promise.withResolvers<ServerReply>().promise });
 		const view = show();
 		expect(
 			(await view.findByRole("heading", { name: "Meals and drinks" }))

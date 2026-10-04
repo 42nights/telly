@@ -8,7 +8,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { initVarlockEnv } from "varlock/env";
 
-export const SERVER = "http://server.test";
+const SERVER = "http://server.test";
 
 // React's scheduler keeps the timer functions it finds when it loads, once per process. happy-dom's
 // timers stop when its window closes after a test file, so later files would never render an

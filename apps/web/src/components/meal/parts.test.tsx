@@ -10,8 +10,8 @@ import type {
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -26,7 +26,7 @@ import type { EstimateState, ReportState } from "./use-meal";
 installDom();
 
 const TRANSCRIBE = "POST /api/families/f1/voice/transcriptions";
-const heard = (text: string): Reply => ({
+const heard = (text: string): ServerReply => ({
 	json: { text, languageCode: "en", languageProbability: 0.9 },
 });
 
@@ -133,10 +133,10 @@ describe("DescribeMeal", () => {
 	});
 
 	test("records speech, shows it is listening and working, then fills in and sends the words", async () => {
-		let answer: (reply: Reply) => void = () => {};
+		let answer: (reply: ServerReply) => void = () => {};
 		const calls = serve({
 			[TRANSCRIBE]: () =>
-				new Promise<Reply>((resolve) => {
+				new Promise<ServerReply>((resolve) => {
 					answer = resolve;
 				}),
 		});

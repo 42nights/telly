@@ -19,8 +19,8 @@ import {
 	type Call,
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -51,11 +51,11 @@ const occurrence = (
 	...o,
 });
 
-const history = (...os: ReminderOccurrence[]): Reply => ({
+const history = (...os: ReminderOccurrence[]): ServerReply => ({
 	json: { occurrences: os.map((o) => ({ occurrence: o, events: [] })) },
 });
 
-const profile = (p: Partial<CareProfile> = {}): Reply => ({
+const profile = (p: Partial<CareProfile> = {}): ServerReply => ({
 	json: {
 		familyId: "7",
 		profile: {
@@ -81,7 +81,7 @@ const profile = (p: Partial<CareProfile> = {}): Reply => ({
 	},
 });
 
-const detail: Reply = { json: { occurrence: occurrence(), events: [] } };
+const detail: ServerReply = { json: { occurrence: occurrence(), events: [] } };
 
 /** Renders the check-in on `/` of an in-memory router that also has the `/cooking` page. */
 const show = (onUrgent: (words: string) => void = () => {}) => {
@@ -117,7 +117,7 @@ describe("MealCheckIn", () => {
 	});
 
 	test("shows nothing while loading and when no meal or drink is due", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({ [HISTORY]: () => reply.promise });
 		const { view } = show();
 		await waitFor(() => expect(calls.length).toBe(1));
@@ -190,7 +190,7 @@ describe("MealCheckIn", () => {
 	});
 
 	test("I ate records done, shows saving, then reads the history again", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({
 			[HISTORY]: history(occurrence()),
 			[PROFILE]: profile(),

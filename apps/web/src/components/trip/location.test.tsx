@@ -13,8 +13,8 @@ import {
 	act,
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -139,7 +139,7 @@ const records = (
 });
 const sharesPath = (viewer: string) =>
 	`/api/families/1/location/shares/${viewer}`;
-const ok: Reply = { json: locations([]) };
+const ok: ServerReply = { json: locations([]) };
 
 describe("SharingControls", () => {
 	test("with no shares it says nothing is sent, and offers no members while records load", () => {
@@ -256,7 +256,7 @@ describe("SharingControls", () => {
 	});
 
 	test("buttons are off while a change is in flight", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ [`DELETE ${sharesPath(sister)}`]: () => reply.promise });
 		const view = render(
 			<SharingControls
@@ -357,7 +357,7 @@ describe("FamilyLocationSection", () => {
 	});
 
 	test("shows loading, then a failed read as a failure, never as a location", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ [path]: () => reply.promise });
 		const view = render(
 			<FamilyLocationSection familyId="1" me={me} now={now} />,

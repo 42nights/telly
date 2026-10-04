@@ -13,8 +13,8 @@ import type { ApiFailure } from "@/lib/api";
 import {
 	act,
 	installDom,
-	type Reply,
 	renderHook,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -142,7 +142,7 @@ describe("useReportSheet", () => {
 	});
 
 	test("save sends the fields with empty boxes as null and stays busy until the reply", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({ [`${BASE}/fields`]: () => reply.promise });
 		const { hook, onChanged } = sheetOf(report());
 		act(() =>

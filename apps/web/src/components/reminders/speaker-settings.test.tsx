@@ -9,9 +9,9 @@ import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	type Routes,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -22,7 +22,7 @@ import { SpeakerSettingsWindow } from "./speaker-settings";
 installDom();
 
 const FAMILY = "/api/families/7";
-const FAMILIES: Reply = {
+const FAMILIES: ServerReply = {
 	json: {
 		families: [
 			{ id: "7", name: "Rose", createdAt: "2026-01-01T00:00:00.000Z" },
@@ -40,7 +40,7 @@ const QUIET: SpeakerStatus = {
 	announcements: [],
 };
 
-const failure = (status: number, message: string): Reply => ({
+const failure = (status: number, message: string): ServerReply => ({
 	status,
 	body: { error: "internal", message },
 });
@@ -186,7 +186,7 @@ describe("SpeakerSettingsWindow", () => {
 				},
 			],
 		};
-		let reply: Reply | null = null;
+		let reply: ServerReply | null = null;
 		const { view, calls } = show({
 			[`GET ${FAMILY}/speaker`]: () => ({ json: status }),
 			[`PUT ${FAMILY}/speaker/simulator`]: () => {

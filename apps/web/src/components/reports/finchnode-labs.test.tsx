@@ -17,8 +17,8 @@ import type {
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -108,10 +108,10 @@ describe("FinchnodeLabsPanel", () => {
 	});
 
 	test("shows each step while it works and blocks a second fetch", async () => {
-		let reply: (value: Reply) => void = () => {};
+		let reply: (value: ServerReply) => void = () => {};
 		serve({
 			[START]: session(true),
-			[LABS]: () => new Promise<Reply>((resolve) => (reply = resolve)),
+			[LABS]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const { view, fetchButton } = renderPanel();
 		fireEvent.click(fetchButton);
@@ -187,7 +187,7 @@ describe("FinchnodeLabsPanel", () => {
 			{ status: 502, body: { error: "upstream_error", message: "Timed out" } },
 			"FinchNode is not reachable: Timed out",
 		],
-	] satisfies [Reply, string][])(
+	] satisfies [ServerReply, string][])(
 		"a failed start says why (%#)",
 		async (reply, text) => {
 			serve({ [START]: reply });
@@ -199,7 +199,7 @@ describe("FinchnodeLabsPanel", () => {
 	);
 
 	test("a failed sharing check or lab read says why", async () => {
-		let labsReply: Reply = {
+		let labsReply: ServerReply = {
 			status: 503,
 			body: { error: "unavailable", message: "Labs down" },
 		};

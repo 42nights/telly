@@ -6,9 +6,9 @@ import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
 	installDom,
-	type Reply,
 	type Routes,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 	within,
@@ -133,7 +133,7 @@ describe("MedicineMemorySettings", () => {
 	});
 
 	test("says why a save failed", async () => {
-		let reply: Reply = {
+		let reply: ServerReply = {
 			status: 500,
 			body: { error: "internal", message: "Disk full" },
 		};

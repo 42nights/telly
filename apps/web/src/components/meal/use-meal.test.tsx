@@ -12,8 +12,8 @@ import type { Meal, MealEstimate } from "@health/contracts/meal-facts";
 import {
 	act,
 	installDom,
-	type Reply,
 	renderHook,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -65,9 +65,9 @@ const estimatePath = (mealId: string) =>
 
 /** A reply the test sends later, so the request stays in flight until then. */
 const deferred = () => {
-	let resolve: (reply: Reply) => void = () => {};
+	let resolve: (reply: ServerReply) => void = () => {};
 	let reject: (error: Error) => void = () => {};
-	const promise = new Promise<Reply>((ok, fail) => {
+	const promise = new Promise<ServerReply>((ok, fail) => {
 		resolve = ok;
 		reject = fail;
 	});
@@ -269,7 +269,7 @@ describe("useMeal", () => {
 		const { result, unmount } = renderHook(() => useMeal("f1"));
 		const calls = serve({
 			[`POST ${estimatePath(result.current.mealId)}`]: () =>
-				new Promise<Reply>(() => {}),
+				new Promise<ServerReply>(() => {}),
 		});
 		const signals: (AbortSignal | null | undefined)[] = [];
 		const served = globalThis.fetch;

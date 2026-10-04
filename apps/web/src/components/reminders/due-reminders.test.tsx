@@ -10,8 +10,8 @@ import {
 	act,
 	fireEvent,
 	installDom,
-	type Reply,
 	render,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -56,27 +56,27 @@ const detail = (
 	events,
 });
 
-const list = (...occurrences: ReminderOccurrenceDetail[]): Reply => ({
+const list = (...occurrences: ReminderOccurrenceDetail[]): ServerReply => ({
 	json: { occurrences },
 });
 
-const failure = (status: number, message: string): Reply => ({
+const failure = (status: number, message: string): ServerReply => ({
 	status,
 	body: { error: "internal", message },
 });
 
 /** A list route whose first reply waits for `release`; later reads answer `next`. */
-const held = (next: Reply) => {
-	let release = (_reply: Reply) => {};
+const held = (next: ServerReply) => {
+	let release = (_reply: ServerReply) => {};
 	let first = true;
 	const route = () => {
 		if (!first) return next;
 		first = false;
-		return new Promise<Reply>((resolve) => {
+		return new Promise<ServerReply>((resolve) => {
 			release = resolve;
 		});
 	};
-	return { route, release: (reply: Reply) => act(() => release(reply)) };
+	return { route, release: (reply: ServerReply) => act(() => release(reply)) };
 };
 
 const reads = (calls: { method: string; path: string }[]) =>

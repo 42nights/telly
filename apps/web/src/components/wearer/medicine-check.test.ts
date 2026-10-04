@@ -20,8 +20,8 @@ import {
 	act,
 	type Call,
 	installDom,
-	type Reply,
 	renderHook,
+	type ServerReply,
 	serve,
 	waitFor,
 } from "../test/dom";
@@ -101,7 +101,7 @@ const detection = (confidence: number): MedicineDetection => ({
 /** Answers a detection request for the frame it was sent, or for `frameId` when given. */
 const detected =
 	(detections: MedicineDetection[], frameId?: string) =>
-	(call: Call): Reply => {
+	(call: Call): ServerReply => {
 		const { frame } = Schema.decodeUnknownSync(MedicineDetectionRequest)(
 			call.body,
 		);
@@ -258,7 +258,7 @@ describe("usePictureCheck", () => {
 	});
 
 	test("stop drops the picture and its late reply", async () => {
-		const reply = Promise.withResolvers<Reply>();
+		const reply = Promise.withResolvers<ServerReply>();
 		serve({ [detectionsPath]: () => reply.promise });
 		const { result } = renderHook(() => usePictureCheck("f1", ready));
 		let looked: Promise<void> = Promise.resolve();
@@ -273,7 +273,7 @@ describe("usePictureCheck", () => {
 	});
 
 	test("a new look replaces a pending one, whose failure is dropped", async () => {
-		const first = Promise.withResolvers<Reply>();
+		const first = Promise.withResolvers<ServerReply>();
 		const replies = [() => first.promise, detected([detection(0.9)])];
 		const calls = serve({
 			[detectionsPath]: (call) =>

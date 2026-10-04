@@ -23,14 +23,14 @@ export type Call = {
 };
 
 /** A reply: a JSON body with status 200, or an explicit status and body (`undefined` = no body). */
-export type Reply =
+export type ServerReply =
 	| { readonly status: number; readonly body?: unknown }
 	| { readonly json: unknown };
 
 /** Maps `"GET /api/path"` to a reply, or to a function of the request body. */
 export type Routes = Record<
 	string,
-	Reply | ((call: Call) => Reply | Promise<Reply>)
+	ServerReply | ((call: Call) => ServerReply | Promise<ServerReply>)
 >;
 
 /** Call at the top of a component test file. */
@@ -73,7 +73,7 @@ export function serve(routes: Routes): Call[] {
 		init?.signal?.throwIfAborted();
 		const route =
 			routes[`${method} ${call.path}`] ?? routes[`${method} ${url.pathname}`];
-		const reply: Reply =
+		const reply: ServerReply =
 			route === undefined
 				? { status: 404, body: { error: "not_found", message: "no route" } }
 				: typeof route === "function"
