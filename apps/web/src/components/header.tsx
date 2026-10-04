@@ -1,30 +1,32 @@
 import { Link } from "@tanstack/react-router";
 
-import { ModeToggle } from "./mode-toggle";
+const links = [
+	{ to: "/hud", label: "Home" },
+	{ to: "/medicine", label: "Medicine" },
+	{ to: "/family", label: "Family" },
+	{ to: "/chat", label: "Chat" },
+	{ to: "/dashboard", label: "Dashboard" },
+	{ to: "/reports", label: "Reports" },
+	{ to: "/settings", label: "Settings" },
+] as const;
 
+/** The app's taskbar: one raised button per screen; the current screen shows pressed. */
 export default function Header() {
-	const links = [
-		{ to: "/", label: "Home" },
-		{ to: "/hud", label: "HUD" },
-	] as const;
-
 	return (
-		<div>
-			<div className="flex flex-row items-center justify-between px-2 py-1">
-				<nav className="flex gap-4 text-lg">
-					{links.map(({ to, label }) => {
-						return (
-							<Link key={to} to={to}>
-								{label}
-							</Link>
-						);
-					})}
-				</nav>
-				<div className="flex items-center gap-2">
-					<ModeToggle />
-				</div>
-			</div>
-			<hr />
-		</div>
+		<nav
+			aria-label="Screens"
+			className="win95-raised flex gap-1 overflow-x-auto p-1.5"
+		>
+			{links.map(({ to, label }) => (
+				<Link
+					key={to}
+					to={to}
+					className="win95-tab"
+					activeProps={{ "aria-current": "page" }}
+				>
+					{label}
+				</Link>
+			))}
+		</nav>
 	);
 }
