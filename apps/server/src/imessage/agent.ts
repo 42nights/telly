@@ -6,7 +6,7 @@ import { Schema } from "effect";
 
 export const unavailableReply =
 	"Telly cannot answer right now. Please try again later or ask a family member.";
-export const invalidReply = "Please send a short text question.";
+const invalidReply = "Please send a short text question.";
 
 export const runIMessageAgent = async (
 	messages: AsyncIterable<[Space, Message]>,
