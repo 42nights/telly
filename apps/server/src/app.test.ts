@@ -61,7 +61,8 @@ describe("server boundaries", () => {
 	test("each listed CORS origin is allowed, and no other", async () => {
 		const app = createApp(
 			serverConfig({
-				CORS_ORIGIN: "https://saintess.tech,https://telly.example.workers.dev",
+				CORS_ORIGIN:
+					"https://app.saintess.tech,https://telly.example.workers.dev",
 				ELEVENLABS_VOICE_ID: "voice",
 				ELEVENLABS_API_URL: "http://127.0.0.1:1",
 				GEMINI_BASE_URL: "http://127.0.0.1:1",
@@ -71,8 +72,8 @@ describe("server boundaries", () => {
 			(
 				await app.request("/health", { headers: { Origin: origin } })
 			).headers.get("Access-Control-Allow-Origin");
-		expect(await allowed("https://saintess.tech")).toBe(
-			"https://saintess.tech",
+		expect(await allowed("https://app.saintess.tech")).toBe(
+			"https://app.saintess.tech",
 		);
 		expect(await allowed("https://telly.example.workers.dev")).toBe(
 			"https://telly.example.workers.dev",
