@@ -64,8 +64,8 @@ describe.skipIf(dbConfig === undefined)("meal and drink check-ins", () => {
 						maxPrompts: 1,
 						snoozeMinutes: 1,
 					});
-					// At least 30 s ahead, so the database never sees this minute as past.
-					const soon = utcClock(Date.now() + 90_000);
+					// At least 10 s ahead, so the database never sees this minute as past.
+					const soon = utcClock(Date.now() + 70_000);
 					const later = utcClock(Date.now() + 3 * 3_600_000);
 					for (const [kind, title, time] of [
 						["meal", "Synthetic lunch", later],
