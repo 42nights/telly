@@ -1,10 +1,17 @@
 import type { AuthConfig } from "./auth";
+import type { DbConfig } from "./db";
 import type { ElevenLabsConfig } from "./integrations/elevenlabs";
 import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
 import type { R2Config } from "./integrations/r2";
+
+export type NoopConfig = {
+	readonly key: string;
+	readonly familyId: bigint;
+	readonly db: DbConfig;
+};
 
 export type ServerConfig = {
 	readonly corsOrigin: string;
@@ -22,6 +29,7 @@ export type ServerConfig = {
 	readonly gemma?: GemmaConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
+	readonly noop?: NoopConfig | undefined;
 };
 
 type Env = {
@@ -45,6 +53,9 @@ type Env = {
 	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
 	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
 	readonly TELLY_R2_ENDPOINT?: string | undefined;
+	readonly NOOP_INGEST_KEY?: string | undefined;
+	readonly NOOP_FAMILY_ID?: string | undefined;
+	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
 	readonly TELLY_REQUIRED_KEYS?: string | undefined;
 } & Parameters<typeof gemmaConfigFrom>[0];
 
@@ -91,23 +102,66 @@ const r2Config = (env: Env): R2Config | undefined => {
 	return { endpoint, bucket, accessKeyId, secretAccessKey };
 };
 
+const allOrNone = <T>(
+	value: T | undefined,
+	given: readonly (string | undefined)[],
+	names: string,
+): T | undefined => {
+	if (value === undefined && given.some(Boolean))
+		throw new Error(`Set all of ${names}, or none`);
+	return value;
+};
+
+const signIn = (
+	{
+		OIDC_ISSUER: issuer,
+		OIDC_AUDIENCE: audience,
+		OIDC_CLIENT_SECRET: clientSecret,
+	}: Env,
+	db: DbConfig | undefined,
+) =>
+	issuer && audience && db ? { issuer, audience, clientSecret, db } : undefined;
+
+const noopIngest = (
+	{
+		NOOP_INGEST_KEY: key,
+		NOOP_FAMILY_ID: familyId,
+		NOOP_SPACETIMEDB_TOKEN: token,
+	}: Env,
+	db: DbConfig | undefined,
+) =>
+	key && familyId && token && db
+		? { key, familyId: BigInt(familyId), db: { ...db, token } }
+		: undefined;
+
+const SIGN_IN =
+	"OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE";
+
 /**
  * Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. The client
  * secret is optional (Google web clients need it) but means nothing without the four.
  */
 export const serverConfig = (env: Env): ServerConfig => {
 	requireKeys(env);
-	const {
-		OIDC_ISSUER: issuer,
-		OIDC_AUDIENCE: audience,
-		SPACETIMEDB_URI: uri,
-		SPACETIMEDB_DATABASE: database,
-	} = env;
+	const { SPACETIMEDB_URI: uri, SPACETIMEDB_DATABASE: database } = env;
+	const db = uri && database ? { uri, database } : undefined;
+	const auth = allOrNone(
+		signIn(env, db),
+		[env.OIDC_ISSUER, env.OIDC_AUDIENCE, env.OIDC_CLIENT_SECRET],
+		SIGN_IN,
+	);
+	const noop = allOrNone(
+		noopIngest(env, db),
+		[env.NOOP_INGEST_KEY, env.NOOP_FAMILY_ID, env.NOOP_SPACETIMEDB_TOKEN],
+		"NOOP_INGEST_KEY, NOOP_FAMILY_ID, NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
+	);
+	if ((uri || database) && !auth && !noop)
+		throw new Error(`Set all of ${SIGN_IN}, or none`);
 	const finchnode = finchnodeFromEnv(
 		env.FINCHNODE_MODE ?? "off",
 		env.FINCHNODE_API_KEY,
 	);
-	const base = {
+	return {
 		corsOrigin: env.CORS_ORIGIN,
 		voice: {
 			apiKey: env.ELEVENLABS_API_KEY,
@@ -117,26 +171,11 @@ export const serverConfig = (env: Env): ServerConfig => {
 		...(finchnode === undefined ? {} : { finchnode }),
 		fetchAgent: fetchAgentConfig(env),
 		r2: r2Config(env),
+		gemini: env.GEMINI_API_KEY
+			? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
+			: undefined,
+		gemma: gemmaConfigFrom(env),
+		auth,
+		noop,
 	};
-	const gemini = env.GEMINI_API_KEY
-		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
-		: undefined;
-	const gemma = gemmaConfigFrom(env);
-	if (issuer && audience && uri && database)
-		return {
-			...base,
-			gemini,
-			gemma,
-			auth: {
-				issuer,
-				audience,
-				clientSecret: env.OIDC_CLIENT_SECRET,
-				db: { uri, database },
-			},
-		};
-	if (issuer || audience || uri || database || env.OIDC_CLIENT_SECRET)
-		throw new Error(
-			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none (OIDC_CLIENT_SECRET needs all four)",
-		);
-	return { ...base, gemini, gemma, auth: undefined };
 };
