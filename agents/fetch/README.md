@@ -7,8 +7,9 @@ server (callAgentTool) --HTTP--> bridge uAgent --Agentverse mailbox--> worker uA
 ```
 
 - `bridge.py` is the server's own uAgent. The server sends it one `BridgeCall` on its local port. The bridge sends a signed `ToolCall` to the worker and returns the worker's `ToolResult`.
-- `main.py` is the worker. It accepts `ToolCall` messages only from senders in `TELLY_FETCH_GRANTS`, and only for their granted families. It calls the server with its own sign-in token.
+- `main.py` is the worker. It accepts `ToolCall` messages only from senders in `TELLY_FETCH_GRANTS`, and only for their granted families. It calls the server with its own sign-in token. It also speaks the Agent Chat Protocol (see [Chat](#chat-agent-chat-protocol)).
 - `telly_tools.py` holds the message models and the checks. Protocol: `telly-tools` version `0.1.0`.
+- `telly_chat.py` maps one chat text to one tool call and writes the reply text.
 
 Neither agent is an open relay:
 
@@ -27,6 +28,21 @@ Neither agent is an open relay:
 - Check that the signed-in person is a member of the family before the call. The worker grant and the server check limit the call to the families of the worker's identity.
 
 Do not call the tool route or `runTool` directly for agent tool calls. That skips Agentverse.
+
+## Chat (Agent Chat Protocol)
+
+The worker includes `AgentChatProtocol` version `0.3.0` from `uagents_core.contrib.protocols.chat`, the protocol that ASI:One uses. For each `ChatMessage` with text, the worker:
+
+1. Sends a `ChatAcknowledgement` for the message id.
+2. Maps the text to one tool. Text with "alert" runs `alerts`. A metric name ("heart rate", "resting heart rate", "heart rate variability", "hrv", "spo2", "oxygen", "respiratory rate", "breathing", "sleep") runs `health_samples` for that metric. "sample", "health", "vital", "reading", "latest", or "recent" runs `health_samples` for all metrics. Each tool returns at most 5 records. Other text gets a help reply and runs no tool.
+3. Runs the tool through the same grant check, contract checks, and server route as a `ToolCall`. The family is the sender's only granted family, or the family that the text names ("family 12").
+4. Sends one `ChatMessage` with the reply text and `EndSessionContent`.
+
+A sender without a grant gets the acknowledgement and a refusal, and no tool runs. A message without text (for example, only `StartSessionContent`) gets only the acknowledgement.
+
+Chat replies carry synthetic records only: samples with `synthetic: true`, and alerts whose summary starts with `Synthetic: `. The reply gives the number of withheld records, not their values. Grant a chat sender (such as the ASI:One sender address from the worker log) only a synthetic demo family. Do not grant it a family with real health data.
+
+The worker log gives the chat sender, family, tool, and status, and no record values.
 
 ## Set up
 
@@ -48,7 +64,7 @@ Worker (`main.py`):
 | `TELLY_FETCH_AGENT_SEED` | yes, secret | The seed for the worker identity. The same seed gives the same agent address. |
 | `TELLY_SERVER_URL` | yes | The http(s) base URL of the telly server. |
 | `TELLY_FETCH_SERVER_TOKEN` | yes, secret | The worker's OIDC token for the server. Its identity must be a member of each granted family. |
-| `TELLY_FETCH_GRANTS` | yes | A JSON object. Each key is a sender agent address (the bridge). Each value is a list of family ids, for example `{"agent1q...": ["12"]}`. |
+| `TELLY_FETCH_GRANTS` | yes | A JSON object. Each key is a sender agent address (the bridge, or a chat sender). Each value is a list of family ids, for example `{"agent1q...": ["12"]}`. Give a chat sender only a synthetic demo family. |
 | `TELLY_FETCH_PORT` | no, default `8001` | The local HTTP port of the worker. |
 | `TELLY_FETCH_MAILBOX` | no, default `true` | `true` uses an Agentverse mailbox. `false` turns off the mailbox and registration, for local tests only. |
 
@@ -82,6 +98,8 @@ Then do these steps one time for each agent:
 
 In mailbox mode, each agent polls Agentverse for its messages every second. A call takes at least two polls. Agentverse applies its own message and data quotas to mailboxes.
 
+In mailbox mode, the worker also publishes the chat protocol manifest. ASI:One discovery and use also need these steps, which are not done: approval to publish the agent on Agentverse, ASI:One access, and a grant of the synthetic demo family to the ASI:One sender address from the worker log.
+
 ## Run locally without Agentverse
 
 This proves the protocol only. It is not a live Agentverse round trip.
@@ -92,6 +110,8 @@ TELLY_FETCH_MAILBOX=false TELLY_FETCH_WORKER_ENDPOINT=http://127.0.0.1:8001/subm
 ```
 
 Then set `TELLY_FETCH_BRIDGE_URL=http://127.0.0.1:8002` and `TELLY_FETCH_BRIDGE_TOKEN` on the server.
+
+With the mailbox off, the worker cannot look up the address of a chat sender. A local chat test must give the worker's resolver the sender's local `/submit` URL (for example, `uagents.resolver.RulesBasedResolver`).
 
 ## Update the contract
 
