@@ -35,9 +35,9 @@ try {
 			onExcessProperty: "error",
 		},
 	);
-	if (sources.find((s) => s.source === "noop")?.status !== "not_connected") {
-		throw new Error("NOOP must be reported as not_connected");
-	}
+	// Any valid state: the server derives it from stored WHOOP samples (#307), so it is live data.
+	if (!sources.some((s) => s.source === "noop"))
+		throw new Error("NOOP must be reported as a source");
 } finally {
 	server?.kill("SIGTERM");
 }
