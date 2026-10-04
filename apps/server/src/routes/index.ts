@@ -9,6 +9,7 @@ import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
+import { emergencyRoutes } from "./emergency";
 import { exerciseRoutes } from "./exercise";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
@@ -48,6 +49,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())
+		.route("/", emergencyRoutes())
 		.route("/", cueRoutes(config.gemma))
 		.route("/", careProfileRoutes())
 		.route("/", exerciseRoutes());
