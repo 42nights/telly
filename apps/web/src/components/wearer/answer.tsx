@@ -1,6 +1,6 @@
 import type { FamilyAnswer } from "@health/contracts/ask";
 import { Button } from "@health/ui/components/button";
-import { CloudOff, Mic, Volume2 } from "lucide-react";
+import { CloudOff, Mic, RotateCw, Snail, Square, Volume2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { evidenceLine } from "./logic";
@@ -15,6 +15,8 @@ export type Reply = {
 	readonly answer: FamilyAnswer;
 	/** Base64 MP3 that came with a voice answer. */
 	readonly audio: string | null;
+	/** The language heard in a spoken request; the answer is spoken in it. Null for typed text. */
+	readonly languageCode: string | null;
 	/** Why a voice answer came without audio. */
 	readonly voiceNote: string | null;
 };
@@ -28,11 +30,27 @@ function AskAgain({ onDone }: { onDone: () => void }) {
 	);
 }
 
-function Asked({ asked }: { asked: string }) {
+function Asked({
+	asked,
+	languageCode = null,
+}: {
+	asked: string;
+	languageCode?: string | null;
+}) {
 	return (
 		<>
-			<p className="text-[16px] text-muted-foreground">You asked</p>
-			<p className="break-words font-bold text-[22px]">“{asked}”</p>
+			<p className="text-[16px] text-muted-foreground">
+				{languageCode === null
+					? "You asked"
+					: // "Spanish" for `es`; the code itself when the browser has no name for it.
+						`You said (heard in ${new Intl.DisplayNames(undefined, { type: "language" }).of(languageCode) ?? languageCode})`}
+			</p>
+			<p
+				className="break-words font-bold text-[22px]"
+				lang={languageCode ?? undefined}
+			>
+				“{asked}”
+			</p>
 		</>
 	);
 }
@@ -57,7 +75,10 @@ function Sources({ answer }: { answer: FamilyAnswer }) {
 	);
 }
 
-/** Gemini's answer in large text, its sources, and its voice: the MP3 it came with, or speech. */
+/**
+ * Gemini's answer in large text, its sources, and its voice: the MP3 it came with, or speech in the
+ * request's language. It is spoken once on arrival; Stop, Say it again, and Slower control it.
+ */
 export function AnswerPanel({
 	reply,
 	familyId,
@@ -67,22 +88,30 @@ export function AnswerPanel({
 	familyId: string | null;
 	onDone: () => void;
 }) {
-	const { speech, say } = useSpeech(familyId);
-	const speak = () =>
-		void say(reply.id, reply.answer.answer, reply.audio ?? undefined);
-	// A voice answer plays once on arrival; a typed one waits for the button.
+	const { speech, say, stop } = useSpeech(familyId);
+	const speak = (slow = false) =>
+		void say(reply.id, reply.answer.answer, {
+			mp3Base64: reply.audio ?? undefined,
+			languageCode: reply.languageCode ?? undefined,
+			slow,
+		});
 	const played = useRef(false);
 	useEffect(() => {
-		if (played.current || reply.audio === null) return;
+		if (played.current) return;
 		played.current = true;
 		speak();
 	});
 	const said = speech.key === reply.id;
+	const busy = speech.kind === "loading" || speech.kind === "speaking";
+	const control = "h-14 w-full text-[20px] [&_svg]:size-6";
 	return (
 		<div aria-live="polite" className="grid gap-3">
-			<Asked asked={reply.asked} />
+			<Asked asked={reply.asked} languageCode={reply.languageCode} />
 			<div className="win95-inset grid gap-3 bg-white p-4 text-black">
-				<p className="whitespace-pre-wrap break-words text-[24px] leading-snug">
+				<p
+					className="whitespace-pre-wrap break-words text-[24px] leading-snug"
+					lang={reply.languageCode ?? undefined}
+				>
 					{reply.answer.answer}
 				</p>
 				<Sources answer={reply.answer} />
@@ -90,15 +119,27 @@ export function AnswerPanel({
 			{reply.voiceNote !== null && (
 				<p className="text-[16px]">{reply.voiceNote}</p>
 			)}
-			<Button
-				className="h-14 w-full text-[20px] [&_svg]:size-6"
-				disabled={speech.kind === "loading"}
-				onClick={speak}
-				variant="outline"
-			>
-				<Volume2 aria-hidden />
-				{said ? "Say it again" : "Read it aloud"}
-			</Button>
+			{busy ? (
+				<Button className={control} onClick={stop} variant="outline">
+					<Square aria-hidden />
+					Stop
+				</Button>
+			) : (
+				<div className="grid grid-cols-2 gap-2">
+					<Button className={control} onClick={() => speak()} variant="outline">
+						<Volume2 aria-hidden />
+						{said ? "Say it again" : "Read it aloud"}
+					</Button>
+					<Button
+						className={control}
+						onClick={() => speak(true)}
+						variant="outline"
+					>
+						<Snail aria-hidden />
+						Slower
+					</Button>
+				</div>
+			)}
 			{said && <SpeechLine speech={speech} />}
 			<AskAgain onDone={onDone} />
 		</div>
@@ -110,11 +151,14 @@ export function AnswerFailed({
 	asked,
 	title,
 	detail,
+	onRetry,
 	onDone,
 }: {
 	asked: string | null;
 	title: string;
 	detail: string;
+	/** Sends the same request again: the typed text, or the kept recording. */
+	onRetry: () => void;
 	onDone: () => void;
 }) {
 	return (
@@ -133,6 +177,10 @@ export function AnswerFailed({
 					</p>
 				</div>
 			</div>
+			<Button className={`win95-primary ${xl}`} onClick={onRetry}>
+				<RotateCw aria-hidden />
+				Try again
+			</Button>
 			<AskAgain onDone={onDone} />
 		</div>
 	);
