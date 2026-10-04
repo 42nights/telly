@@ -52,7 +52,12 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			}),
 		)
 		.route("/vision", visionRoutes(config.gemini))
-		.route("/", medicineMemoryRoutes())
+		.route(
+			"/",
+			medicineMemoryRoutes(
+				config.r2 === undefined ? undefined : r2Bucket(config.r2),
+			),
+		)
 		.route("/", mealRoutes(config.gemini))
 		.route(
 			"/",
