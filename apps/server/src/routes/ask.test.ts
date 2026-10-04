@@ -5,11 +5,16 @@ import {
 	urgentRequest,
 	VoiceAnswer,
 } from "@health/contracts/ask";
-import { Schema } from "effect";
+import type { CareProfile } from "@health/contracts/care-profile";
+import { Effect, Schema } from "effect";
 import { Hono } from "hono";
+import { Identity } from "spacetimedb";
+import { openFamilyDb } from "../db";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { askRoutes } from "./ask";
+import { careProfileRoutes } from "./care-profile";
+import { dbConfig, familyApp, openFamily, send, withDb } from "./test-family";
 
 // Isolated local protocol servers stand in for Gemini, the Fetch.ai bridge, and ElevenLabs. Test
 // credentials and synthetic records only: local protocol proof, not live-provider proof.
@@ -122,6 +127,11 @@ const geminiConfig = {
 	baseUrl: geminiServer.url.origin,
 };
 const fetchAgent = { bridgeUrl: bridge.url.origin, bridgeToken: "test-bridge" };
+const voice = elevenLabsVoice({
+	apiKey: "test-eleven-key",
+	voiceId: "test-voice",
+	baseUrl: elevenLabs.url.origin,
+});
 const mount = (configured = { gemini: true, fetch: true }) =>
 	new Hono<FamilyEnv>()
 		.use("/api/families/:familyId/*", async (c, next) => {
@@ -133,11 +143,7 @@ const mount = (configured = { gemini: true, fetch: true }) =>
 			askRoutes({
 				gemini: configured.gemini ? geminiConfig : undefined,
 				fetchAgent: configured.fetch ? fetchAgent : undefined,
-				voice: elevenLabsVoice({
-					apiKey: "test-eleven-key",
-					voiceId: "test-voice",
-					baseUrl: elevenLabs.url.origin,
-				}),
+				voice,
 			}),
 		)
 		.onError((error, c) => {
@@ -436,3 +442,81 @@ describe("POST /ask/voice", () => {
 		expect(reply.speech.status).toBe("upstream_error");
 	});
 });
+
+// Needs the local SpacetimeDB that `bun run db:test` starts.
+describe.skipIf(dbConfig === undefined)(
+	"wearer questions with saved facts",
+	() => {
+		const profile: CareProfile = {
+			preferredName: "Synthetic Sam",
+			language: "es",
+			timeZone: null,
+			accessibilityNeeds: null,
+			diagnoses: null,
+			allergies: null,
+			dietaryRestrictions: null,
+			fluidRestrictions: null,
+			activityRestrictions: null,
+			routines: [{ name: "synthetic walk", time: "10:00" }],
+			contacts: [
+				{
+					name: "Synthetic Ana",
+					relationship: "daughter",
+					phone: "+1 555 0100",
+				},
+			],
+			familiarDestinations: null,
+			devices: null,
+			declinedPrompts: [],
+		};
+
+		test("only a health_records holder gives Gemini the profile, and never a phone number", () =>
+			withDb((config) =>
+				Effect.gen(function* () {
+					const { db: owner, familyId } = yield* openFamily(config, "Ask care");
+					const relative = yield* openFamilyDb(config);
+					yield* Effect.promise(() =>
+						owner.connection.reducers.addFamilyMember({
+							familyId: BigInt(familyId),
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const care = familyApp(owner, familyId, careProfileRoutes());
+					for (const scope of [
+						"family_access",
+						"health_records",
+						"care_plan_edit",
+					])
+						yield* send(care, "POST", "/care-access", {
+							identity: owner.identity,
+							scope,
+							granted: true,
+						});
+					expect(
+						(yield* send(care, "PUT", "/care-profile", profile)).status,
+					).toBe(204);
+					const deps = { gemini: geminiConfig, fetchAgent, voice };
+					const prompt = (db: typeof owner) =>
+						Effect.gen(function* () {
+							geminiBodies.length = 0;
+							const app = familyApp(db, familyId, askRoutes(deps));
+							const body = { question: "Who visits me?", asker: "wearer" };
+							expect((yield* send(app, "POST", "/ask", body)).status).toBe(200);
+							return geminiBodies[0]?.system_instruction ?? "";
+						});
+
+					const granted = yield* prompt(owner);
+					expect(granted).toContain("Their preferred name: Synthetic Sam.");
+					expect(granted).toContain("Their preferred language: es.");
+					expect(granted).toContain("Their routines: synthetic walk at 10:00.");
+					expect(granted).toContain("Synthetic Ana (daughter)");
+					expect(granted).not.toContain("555");
+
+					// Membership alone gives no profile fact: the model says it is not saved.
+					const member = yield* prompt(relative);
+					expect(member).toContain("You are an assistant");
+					expect(member).not.toContain("Synthetic");
+				}),
+			));
+	},
+);
