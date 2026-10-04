@@ -1,7 +1,7 @@
 // First: registers Happy DOM before React DOM and the router load.
 import "../test/dom-routed";
 
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type {
 	AlertThreshold,
@@ -9,27 +9,46 @@ import type {
 	Monitoring,
 	ThresholdMonitoring,
 } from "@health/contracts/alerts";
-
 import type { ApiState } from "@/lib/api";
+import * as contacts from "@/lib/contacts";
 
 import {
 	fireEvent,
 	render,
 	renderRouted,
+	serve,
 	setupDom,
+	signIn,
+	waitFor,
 	within,
 } from "../test/dom-routed";
 import type { FamilyData } from "./data";
 import { clock } from "./logic";
-import {
-	AlertSection,
-	FamilyGate,
-	MonitoringBadge,
-	MonitoringList,
-	ReadingsGlance,
-} from "./parts";
+import { AlertSection, FamilyGate, ReadingsGlance } from "./parts";
 
 setupDom();
+const dialed = spyOn(contacts, "dial").mockImplementation(() => {});
+afterEach(() => {
+	dialed.mockClear();
+	localStorage.clear();
+});
+
+const careProfile = {
+	preferredName: null,
+	language: null,
+	timeZone: null,
+	accessibilityNeeds: null,
+	diagnoses: null,
+	allergies: null,
+	dietaryRestrictions: null,
+	fluidRestrictions: null,
+	activityRestrictions: null,
+	routines: null,
+	contacts: null,
+	familiarDestinations: null,
+	devices: null,
+	declinedPrompts: [],
+};
 
 const NOW = Date.parse("2026-01-10T12:00:00Z");
 const ME = "a".repeat(64);
@@ -207,17 +226,17 @@ describe("AlertSection without an alert to show", () => {
 		[
 			"every threshold live",
 			monitoring(row("in_range")),
-			"Every threshold has a fresh validated or WHOOP reading.",
+			"Every threshold has a fresh reading.",
 		],
 		[
 			"some thresholds unavailable",
 			monitoring(row("in_range"), row("unavailable")),
-			"Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed.",
+			"Some thresholds have no fresh reading, so an alert could be missed.",
 		],
 		[
 			"no live threshold",
 			monitoring(),
-			"Monitoring is stopped: no threshold has a fresh validated or WHOOP reading.",
+			"Monitoring is stopped: no threshold has a fresh reading.",
 		],
 	])(
 		"with %s, it says what is watched, never 'all clear'",
@@ -284,7 +303,7 @@ describe("AlertSection with an alert", () => {
 		expect(
 			inCard.getByText(`${clock(minutesAgo(5))} · 5 min ago`),
 		).toBeDefined();
-		expect(inCard.getByText("Heart rate 130 bpm · watch")).toBeDefined();
+		expect(inCard.getByText("Heart rate 130 bpm")).toBeDefined();
 		const delivery = inCard.getByText("Failed after 2 tries (timeout)");
 		expect(delivery.className).toContain("text-destructive");
 		expect(inCard.getByText("Not yet")).toBeDefined();
@@ -293,21 +312,59 @@ describe("AlertSection with an alert", () => {
 		expect(markSeen.mock.calls).toEqual([["a1"]]);
 	});
 
-	test("with no saved numbers, Call Mom is off and Settings is offered", async () => {
+	test("Mom with no number asks for it: a short number is refused; Save & Call saves and dials", async () => {
+		signIn();
+		const calls = serve({
+			"GET /api/families/f1/care-profile": {
+				json: {
+					familyId: "f1",
+					profile: careProfile,
+					editedBy: null,
+					editedAt: null,
+					history: [],
+				},
+			},
+			"PUT /api/families/f1/care-profile": { status: 204 },
+		});
 		const { view } = await card(
 			data({ alerts: ready({ alerts: [alertItem()] }) }),
 		);
-		const callMom = await view.findByRole("button", { name: "Call Mom" });
-		expect((callMom as HTMLButtonElement).disabled).toBe(true);
 		expect(
 			view.getByRole("link", { name: "Call 911" }).getAttribute("href"),
 		).toBe("tel:911");
-		expect(view.getByText(/Call Mom is off: no number saved/)).toBeDefined();
+		expect(view.queryByText(/no number saved/)).toBeNull();
+		fireEvent.click(await view.findByRole("button", { name: "Call Mom" }));
+		const field = view.getByLabelText("Phone number");
+
+		fireEvent.change(field, { target: { value: "5550" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		view.getByText("Enter the full phone number, with the area code.");
+		expect(dialed).not.toHaveBeenCalled();
+
+		await waitFor(() => expect(calls.map((c) => c.method)).toContain("GET"));
+		fireEvent.change(field, { target: { value: "+1 555 010 0300" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		expect(dialed.mock.calls).toEqual([["+1 555 010 0300"]]);
+		// The Mom button now calls the saved number, and the care profile has it for every device.
 		expect(
-			view
-				.getByRole("link", { name: "Add it in Settings" })
-				.getAttribute("href"),
-		).toBe("/settings");
+			(await view.findByRole("link", { name: "Call Mom" })).getAttribute(
+				"href",
+			),
+		).toBe("tel:+15550100300");
+		await waitFor(() =>
+			expect(calls.filter((c) => c.method === "PUT")).toEqual([
+				{
+					method: "PUT",
+					path: "/api/families/f1/care-profile",
+					body: {
+						...careProfile,
+						contacts: [
+							{ name: "Mom", relationship: "Mom", phone: "+1 555 010 0300" },
+						],
+					},
+				},
+			]),
+		);
 	});
 
 	test("saved numbers become call links", async () => {
@@ -323,8 +380,7 @@ describe("AlertSection with an alert", () => {
 		expect(
 			view.getByRole("link", { name: "Call 112" }).getAttribute("href"),
 		).toBe("tel:112");
-		expect(view.getByText(/Calls use the numbers in/)).toBeDefined();
-		expect(view.getByRole("link", { name: "Settings" })).toBeDefined();
+		expect(view.queryByText(/Call Mom is off/)).toBeNull();
 	});
 
 	test("a manual alert with no delivery record says so", async () => {
@@ -381,12 +437,10 @@ describe("ReadingsGlance", () => {
 				now={NOW}
 			/>,
 		);
-		expect(
-			view.getByText("Unavailable: no readings stored for this person."),
-		).toBeDefined();
+		expect(view.getByText("No readings stored for this person.")).toBeDefined();
 	});
 
-	test("shows the newest reading per metric and marks stale, unvalidated, and demo-only ones", () => {
+	test("shows the newest reading per metric, its age only when old, no quality mark, and demo-only ones as unavailable", () => {
 		const view = render(
 			<ReadingsGlance
 				data={data({
@@ -397,7 +451,7 @@ describe("ReadingsGlance", () => {
 							metric: "spo2",
 							value: 97,
 							unit: "%",
-							sourceTime: minutesAgo(30),
+							sourceTime: minutesAgo(130),
 						}),
 						sample({
 							id: "steps",
@@ -408,9 +462,6 @@ describe("ReadingsGlance", () => {
 						}),
 						sample({ id: "hrv", metric: "hrv", synthetic: true }),
 					]),
-					thresholds: ready({
-						thresholds: [threshold({ metric: "spo2", unit: "%" })],
-					}),
 				})}
 				familyId="f1"
 				now={NOW}
@@ -418,114 +469,17 @@ describe("ReadingsGlance", () => {
 		);
 		const items = view.getAllByRole("listitem").map((li) => li.textContent);
 		expect(items).toEqual([
-			"Heart rate72 bpmwatch · 3 min ago",
-			"HrvUnavailableNo real reading stored",
-			"Spo297 %watch · 30 min agoStale",
-			"Steps900 stepswatch · 5 min agoUnvalidated",
+			`Heart rate72 bpmwatch · ${clock(minutesAgo(3))}`,
+			"HRVUnavailable",
+			`SpO297 %2 h agowatch · ${clock(minutesAgo(130))}`,
+			`Steps900watch · ${clock(minutesAgo(5))}`,
 		]);
-	});
-});
-
-describe("MonitoringBadge", () => {
-	test.each([
-		[{ kind: "loading" } as const, "Monitoring: unknown"],
-		[monitoring(row("in_range")), "Monitoring: on"],
-		[
-			monitoring(row("out_of_range"), row("unavailable")),
-			"Monitoring: partial",
-		],
-		[monitoring(row("unavailable")), "Monitoring: stopped"],
-	])("shows the level", (state, text) => {
-		const view = render(<MonitoringBadge state={state} />);
-		expect(view.getByText(text)).toBeDefined();
-	});
-});
-
-describe("MonitoringList", () => {
-	test("a monitoring read in progress says so, and NOOP shows not connected", () => {
-		const view = render(
-			<MonitoringList
-				state={{ kind: "loading" }}
-				records={{ kind: "loading" }}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
-		expect(view.getByRole("status").textContent).toContain(
-			"Loading monitoring…",
-		);
-		expect(view.getByText("NOOP not connected")).toBeDefined();
-	});
-
-	test("no thresholds means nothing is monitored", () => {
-		const view = render(
-			<MonitoringList
-				state={monitoring()}
-				records={records([])}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
+		// The source and time are the card's description, so keyboard and screen readers reach them.
+		const card = view.getByText("72 bpm").parentElement;
+		expect(card?.tabIndex).toBe(0);
 		expect(
-			view.getByText("No thresholds set: nothing is monitored."),
-		).toBeDefined();
-		expect(view.getByText("NOOP not connected")).toBeDefined();
-	});
-
-	test("each threshold shows its state, and a NOOP sample shows WHOOP connected", () => {
-		const view = render(
-			<MonitoringList
-				state={monitoring(
-					row("in_range"),
-					row("out_of_range", {
-						threshold: threshold({
-							id: "t2",
-							direction: "below",
-							limit: 40,
-						}),
-					}),
-					row("unavailable", {
-						threshold: threshold({
-							id: "t3",
-							metric: "spo2",
-							direction: "below",
-							limit: 90,
-							unit: "%",
-						}),
-						reason: "stale",
-					}),
-					row("unavailable", {
-						threshold: threshold({ id: "t4", metric: "steps", unit: "steps" }),
-						reason: "missing",
-					}),
-				)}
-				records={records([
-					sample({
-						metric: "strain",
-						source: "noop:whoop",
-						sourceTime: minutesAgo(5),
-					}),
-					sample({
-						metric: "strain",
-						familyId: "f2",
-						source: "noop:whoop",
-						sourceTime: minutesAgo(1),
-					}),
-				])}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
-		const items = view.getAllByRole("listitem").map((li) => li.textContent);
-		expect(items).toEqual([
-			"Heart rate above 110 bpmIn range",
-			"Heart rate below 40 bpmOut of range",
-			"Spo2 below 90 %Unavailable: reading is stale",
-			"Steps above 110 stepsUnavailable: no validated reading",
-			"WHOOPConnected · 5 min ago · unvalidated",
-		]);
-		expect(view.getByText("Out of range").className).toContain(
-			"text-destructive",
-		);
+			document.getElementById(card?.getAttribute("aria-describedby") ?? "")
+				?.textContent,
+		).toBe(`watch · ${clock(minutesAgo(3))}`);
 	});
 });

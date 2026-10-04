@@ -2,6 +2,8 @@
 // caller may send. Transport states (sent, delivered, answered) never read as handled.
 import type { CareNeed, CareResponse } from "@health/contracts/care";
 import { Button } from "@health/ui/components/button";
+import { Hint } from "@/components/win95";
+import { sourceName } from "@/lib/readings";
 
 import { actionsFor, attemptLabel, kindLabel, needStatusLabel } from "./logic";
 
@@ -50,8 +52,9 @@ export function NeedCard({
 				<ul className="grid gap-1 text-xs">
 					{need.facts.map((fact) => (
 						<li key={`${fact.source}-${fact.observedAt}-${fact.text}`}>
-							{fact.text} · {fact.source} · {time(fact.observedAt)} ·{" "}
-							{fact.uncertainty}
+							<Hint text={sourceName(fact.source)}>
+								{fact.text} · {time(fact.observedAt)}
+							</Hint>
 						</li>
 					))}
 				</ul>

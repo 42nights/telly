@@ -16,7 +16,7 @@ import { useState } from "react";
 import { LadderForm } from "@/components/care/ladder-form";
 import { NeedCard } from "@/components/care/need-card";
 import { Window } from "@/components/hud/window";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
 const POLL_MS = 5_000;
@@ -37,7 +37,7 @@ export function CareWindow({
 		<Window
 			title={part === "needs" ? "Care needs" : "Contact ladder"}
 			icon={part === "needs" ? HeartHandshake : PhoneForwarded}
-			status="Calls are simulated. Only accepting and then confirming help closes a need."
+			status={part === "ladder" ? "Calls are simulated." : undefined}
 		>
 			<div className="grid gap-4 p-2 text-sm">
 				{part === "needs" ? (
@@ -79,7 +79,7 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 	return (
 		<>
 			<section aria-labelledby="needs" className="grid gap-2">
-				<h3 id="needs" className="font-bold">
+				<h3 id="needs" className="sr-only">
 					Care needs
 				</h3>
 				{error !== null && (
@@ -92,21 +92,26 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 				) : needs.value.needs.length === 0 ? (
 					<p>No care needs.</p>
 				) : (
-					needs.value.needs.map((need) => (
-						<NeedCard
-							key={need.id}
-							need={need}
-							me={me}
-							busy={busy === need.id}
-							onRespond={(response) => void respond(need.id, response)}
-						/>
-					))
+					<div className="grid max-h-[35svh] gap-2 overflow-y-auto">
+						{needs.value.needs.map((need) => (
+							<NeedCard
+								key={need.id}
+								need={need}
+								me={me}
+								busy={busy === need.id}
+								onRespond={(response) => void respond(need.id, response)}
+							/>
+						))}
+					</div>
 				)}
 			</section>
 			<section aria-labelledby="ask" className="grid gap-2">
-				<h3 id="ask" className="font-bold">
-					Ask the family
-				</h3>
+				<div className="flex items-center gap-1">
+					<h3 id="ask" className="font-bold">
+						Ask the family
+					</h3>
+					<Tip text="Calls are simulated. Only accepting and then confirming help closes a need." />
+				</div>
 				<NewNeedForm path={`${base}/needs`} />
 			</section>
 		</>
@@ -117,7 +122,7 @@ function LadderSection({ base, me }: { base: string; me: string | null }) {
 	const ladder = useApi(ContactLadderReply, `${base}/ladder`);
 	return (
 		<section aria-labelledby="ladder" className="grid gap-2">
-			<h3 id="ladder" className="font-bold">
+			<h3 id="ladder" className="sr-only">
 				Contact ladder
 			</h3>
 			{ladder.kind !== "ready" ? (
@@ -168,7 +173,7 @@ function NewNeedForm({ path }: { path: string }) {
 	};
 	return (
 		<form
-			className="grid gap-2 sm:grid-cols-[auto_1fr]"
+			className="grid grid-cols-2 gap-2"
 			onSubmit={(event) => {
 				event.preventDefault();
 				void send();
@@ -185,7 +190,7 @@ function NewNeedForm({ path }: { path: string }) {
 					<option value="call_reminder">Call reminder</option>
 				</select>
 			</label>
-			<label className="grid gap-1">
+			<label className="order-first col-span-2 grid gap-1">
 				What is needed
 				<input
 					className={field}
@@ -203,7 +208,7 @@ function NewNeedForm({ path }: { path: string }) {
 					onChange={(e) => setDue(e.target.value)}
 				/>
 			</label>
-			<div className="flex items-end gap-2">
+			<div className="col-span-2 flex items-end gap-2">
 				<Button type="submit" className="h-11" disabled={summary.trim() === ""}>
 					Ask
 				</Button>

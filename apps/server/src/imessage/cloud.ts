@@ -8,23 +8,33 @@ import {
 } from "@spectrum-ts/core";
 import { imessage } from "@spectrum-ts/imessage";
 import type { IMessageConfig } from "../config";
-import { iMessageHandler } from "./agent";
+import { iMessageHandler, type SenderPhone } from "./agent";
+import type { WearerActions } from "./finder";
+
+// The published 12.10.1 types infer iMessage's definition as `never`; the runtime value is a normal platform.
+const provider = imessage as unknown as Platform<AnyPlatformDef>;
 
 export const startCloudIMessage = async (
 	{ projectId, projectSecret, webhookSecret, senders }: IMessageConfig,
 	answer: (familyId: bigint, question: FamilyQuestion) => Promise<FamilyAnswer>,
+	wearer: WearerActions | undefined,
+	memberPhones: (() => Promise<Iterable<SenderPhone>>) | undefined,
 ) => {
 	const app = await Spectrum({
 		projectId,
 		projectSecret,
 		webhookSecret,
-		// The published 12.10.1 types infer iMessage's definition as `never`; the runtime value is a normal platform.
-		providers: [(imessage as unknown as Platform<AnyPlatformDef>).config()],
+		providers: [provider.config()],
 	});
-	const handle = iMessageHandler({ senders, answer });
+	const handle = iMessageHandler({ senders, memberPhones, answer, wearer });
 	return {
 		stop: () => app.stop(),
 		/** Verifies the signature, answers 2xx at once, then replies to the message in the background. */
 		webhook: (request: Request) => app.webhook(request, handle),
+		/** Starts or reuses the 1:1 conversation with `address` (E.164 phone or email) and sends `body`. */
+		text: async (address: string, body: string) => {
+			const space = await provider(app).space.create(address);
+			await space.send(body);
+		},
 	};
 };

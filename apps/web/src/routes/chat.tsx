@@ -1,7 +1,7 @@
 import { Me } from "@health/contracts/families";
 import { Button, buttonVariants } from "@health/ui/components/button";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, CloudOff, MessagesSquare, RotateCw } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { CloudOff, MessagesSquare, RotateCw } from "lucide-react";
 import { type ReactNode, useRef, useState } from "react";
 
 import { Composer } from "@/components/chat/composer";
@@ -78,18 +78,7 @@ function ChatHeader({
 	gemini: GeminiStatus;
 }) {
 	return (
-		<div className="mb-2 flex items-center gap-1">
-			<Link
-				to="/family"
-				className={buttonVariants({
-					variant: "ghost",
-					className: "h-11 text-[13px]",
-				})}
-			>
-				<ArrowLeft aria-hidden />
-				Family
-			</Link>
-			<span className="grow" />
+		<div className="mb-2 flex items-center justify-end gap-1">
 			<span
 				className={`win95-inset px-2 py-1 text-[13px] ${gemini.kind === "unavailable" ? "font-bold text-destructive" : ""}`}
 			>

@@ -9,7 +9,6 @@ import {
 	House,
 	type LucideIcon,
 	MessageCircle,
-	Moon,
 	ScanSearch,
 	Settings,
 	Users,
@@ -34,6 +33,10 @@ export const familyScreens = [
 		icon: Users,
 		tabs: [
 			{ to: "/family", label: "Overview" },
+			{ to: "/family/daily", label: "Daily" },
+			{ to: "/family/reminders", label: "Reminders" },
+			{ to: "/family/exercise", label: "Exercise" },
+			{ to: "/family/cooking", label: "Cooking" },
 			{ to: "/family/alerts", label: "Alerts" },
 			{ to: "/family/trends", label: "Trends" },
 			{ to: "/family/thresholds", label: "Thresholds" },
@@ -48,6 +51,7 @@ export const familyScreens = [
 			{ to: "/care", label: "Needs" },
 			{ to: "/care/contacts", label: "Contacts" },
 			{ to: "/care/plan", label: "Care plan" },
+			{ to: "/care/facts", label: "Profile" },
 			{ to: "/care/sharing", label: "Sharing" },
 		],
 	},
@@ -58,7 +62,6 @@ export const familyScreens = [
 export const wearerScreens = [
 	{ to: "/hud", label: "Home", icon: House },
 	{ to: "/find", label: "Find things", icon: ScanSearch },
-	{ to: "/bedtime", label: "Bedtime", icon: Moon },
 	{ to: "/trip", label: "Going out", icon: DoorOpen },
 ] as const satisfies readonly Screen[];
 
@@ -68,11 +71,13 @@ export const settingsScreen = {
 	icon: Settings,
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
+		{ to: "/settings/text-telly", label: "Text Telly" },
 		{ to: "/settings/speaker", label: "Home speaker" },
 		{ to: "/settings/going-out", label: "Going out" },
 		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
+		{ to: "/settings/demo", label: "Demo data" },
 		{ to: "/settings/family", label: "Family" },
 	],
 } as const satisfies Screen;

@@ -9,9 +9,11 @@ import {
 	type FamilyMembers,
 	type JoinedFamily,
 	type Me,
+	MyPhone,
 	NewFamily,
 	NewFamilyMember,
 	NewHealthSample,
+	type TextTelly,
 } from "@health/contracts/families";
 import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
@@ -45,14 +47,16 @@ const added = <T extends { id: string }>(
 	return row;
 };
 
-/** Signed-in routes outside one family, mounted at `/api`. */
-export const accountRoutes = () =>
+/** Signed-in routes outside one family, mounted at `/api`. `tellyNumber`: the Telly iMessage line. */
+export const accountRoutes = (tellyNumber?: string) =>
 	new Hono<AuthEnv>()
-		// Stores the caller's sign-in name for their family members when it changed. A failed save
-		// is logged and does not fail sign-in; the next `/me` tries again.
+		// Stores the caller's sign-in name (or, without one, the part of their email before the @) for
+		// their family members when it changed. A failed save is logged and does not fail sign-in; the
+		// next `/me` tries again.
 		.get("/me", async (c) => {
 			const { db, identity } = c.var;
-			const name = identity.name?.trim();
+			const name =
+				identity.name?.trim() || identity.email?.split("@")[0]?.trim();
 			const stored = [...db.connection.db.myFamilyPeople.iter()].some(
 				(row) => row.member.toHexString() === db.identity && row.name === name,
 			);
@@ -63,6 +67,20 @@ export const accountRoutes = () =>
 					console.warn("saving my name failed", error),
 				);
 			return c.json({ ...identity, identity: db.identity } satisfies Me);
+		})
+		.get("/text-telly", (c) =>
+			c.json({
+				tellyNumber: tellyNumber ?? null,
+				myPhone: [...c.var.db.connection.db.myPhone.iter()][0]?.phone ?? null,
+			} satisfies TextTelly),
+		)
+		// The module refuses a number that another person saved.
+		.put("/me/phone", async (c) => {
+			const { phone } = await decodeBody(c, MyPhone);
+			await callReducer(c.var.db, (db) =>
+				db.reducers.setMyPhone({ phone: phone ?? undefined }),
+			);
+			return c.body(null, 204);
 		})
 		.get("/families", (c) => {
 			const { families, samples } = readFamilyRecords(c.var.db);

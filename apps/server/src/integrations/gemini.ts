@@ -197,8 +197,8 @@ const Interaction = Schema.Struct({
 
 const invalid = () => new VisionUpstreamError({ reason: "invalid_response" });
 
-/** Decodes the model's JSON. Medicine keeps only a printed name it could read; others keep a name. */
-const parseDetections = (body: unknown) =>
+/** The model's JSON text of a completed interaction, decoded with `schema`. */
+const modelJson = <A>(body: unknown, schema: Schema.Decoder<A>) =>
 	Effect.gen(function* () {
 		const interaction = yield* Schema.decodeUnknownEffect(Interaction)(
 			body,
@@ -210,9 +210,15 @@ const parseDetections = (body: unknown) =>
 			.flatMap((step) => step.content ?? [])
 			.map((part) => part.text ?? "")
 			.join("");
-		const { detections } = yield* Schema.decodeUnknownEffect(
-			Schema.fromJsonString(Detections),
-		)(text).pipe(Effect.mapError(invalid));
+		return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(
+			text,
+		).pipe(Effect.mapError(invalid));
+	});
+
+/** Decodes the model's JSON. Medicine keeps only a printed name it could read; others keep a name. */
+const parseDetections = (body: unknown) =>
+	Effect.gen(function* () {
+		const { detections } = yield* modelJson(body, Detections);
 		const boxes: GeminiBox[] = [];
 		for (const d of detections) {
 			const [ymin, xmin, ymax, xmax] = d.box_2d;
@@ -235,59 +241,122 @@ const parseDetections = (body: unknown) =>
 const primaryShare = 0.4;
 
 /**
- * Gemini object detection through the Interactions API (`POST /v1beta/interactions`). The request
- * sets `store: false`, so Google keeps no copy for server-side state. The key stays on the server,
- * and the effect aborts the HTTP call when interrupted or after `timeout` milliseconds. The primary
- * model gets 40% of `timeout`; when it is slow or overloaded, the fallback gets the rest.
+ * One image question to Gemini through the Interactions API (`POST /v1beta/interactions`), with a
+ * JSON answer that `parse` reads. The request sets `store: false`, so Google keeps no copy for
+ * server-side state. The key stays on the server, and the effect aborts the HTTP call when
+ * interrupted or after `timeout` milliseconds. The primary model gets 40% of `timeout`; when it is
+ * slow or overloaded, the fallback gets the rest.
  */
-export const createGeminiDetector =
-	({ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig): ObjectDetector =>
-	(image) =>
-		Effect.tryPromise({
-			try: (signal) =>
-				postInteraction(
-					{ apiKey, baseUrl },
-					{
-						model: GEMINI_VISION_MODEL,
-						store: false,
-						input: [
-							{ type: "text", text: prompt },
-							{ type: "image", mime_type: image.type, data: image.data },
-						],
-						response_format: {
-							type: "text",
-							mime_type: "application/json",
-							schema: outputSchema,
-						},
-						generation_config: {
-							thinking_level: "low",
-							max_output_tokens: 4096,
-						},
+const askAboutImage = <A>(
+	{ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig,
+	image: { readonly type: string; readonly data: string },
+	question: { readonly prompt: string; readonly schema: object },
+	parse: (body: unknown) => Effect.Effect<A, VisionUpstreamError>,
+) =>
+	Effect.tryPromise({
+		try: (signal) =>
+			postInteraction(
+				{ apiKey, baseUrl },
+				{
+					model: GEMINI_VISION_MODEL,
+					store: false,
+					input: [
+						{ type: "text", text: question.prompt },
+						{ type: "image", mime_type: image.type, data: image.data },
+					],
+					response_format: {
+						type: "text",
+						mime_type: "application/json",
+						schema: question.schema,
 					},
-					signal,
-					{ primaryTimeoutMs: timeout * primaryShare },
-				),
-			catch: () => new VisionUpstreamError({ reason: "network" }),
-		}).pipe(
-			Effect.flatMap(({ response, model }) =>
-				response.ok
-					? Effect.tryPromise({
-							try: () => response.json(),
-							catch: invalid,
-						}).pipe(
-							Effect.flatMap(parseDetections),
-							Effect.map((boxes) => ({ boxes, model })),
-						)
-					: Effect.fail(
-							new VisionUpstreamError({
-								reason: "http",
-								status: response.status,
-							}),
-						),
+					generation_config: {
+						thinking_level: "low",
+						max_output_tokens: 4096,
+					},
+				},
+				signal,
+				{ primaryTimeoutMs: timeout * primaryShare },
 			),
-			Effect.timeoutOrElse({
-				duration: timeout,
-				orElse: () =>
-					Effect.fail(new VisionUpstreamError({ reason: "timeout" })),
-			}),
+		catch: () => new VisionUpstreamError({ reason: "network" }),
+	}).pipe(
+		Effect.flatMap(({ response, model }) =>
+			response.ok
+				? Effect.tryPromise({
+						try: () => response.json(),
+						catch: invalid,
+					}).pipe(
+						Effect.flatMap(parse),
+						Effect.map((value) => ({ value, model })),
+					)
+				: Effect.fail(
+						new VisionUpstreamError({
+							reason: "http",
+							status: response.status,
+						}),
+					),
+		),
+		Effect.timeoutOrElse({
+			duration: timeout,
+			orElse: () => Effect.fail(new VisionUpstreamError({ reason: "timeout" })),
+		}),
+	);
+
+/** Gemini detection of personal objects in one camera frame. */
+export const createGeminiDetector =
+	(config: GeminiConfig): ObjectDetector =>
+	(image) =>
+		askAboutImage(
+			config,
+			image,
+			{ prompt, schema: outputSchema },
+			parseDetections,
+		).pipe(Effect.map(({ value, model }) => ({ boxes: value, model })));
+
+const ItemAnswer = Schema.Struct({
+	item: Schema.String,
+	category: ObjectCategory,
+	place: Schema.String,
+	confidence: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
+});
+
+/** The main personal item in a photo and where it is. Empty strings: not seen. */
+export type PhotoItem = typeof ItemAnswer.Type;
+
+const itemQuestion = {
+	prompt:
+		"A person took this photo to remember where they keep one of their things. Name the one main " +
+		"personal item in it in 1 to 4 plain words, as its owner would say it, such as 'house keys', " +
+		"'reading glasses', 'wallet', 'TV remote', 'hearing aids', or the medicine name printed on a " +
+		"medicine container ('Lisinopril bottle'). Never guess a medicine name you cannot read. " +
+		"Then say where it is, as a room or a landmark that a person knows, in at most 8 words, " +
+		"such as 'hall table, by the front door'. Use an empty item when no personal item is clear, " +
+		"and an empty place when the photo does not show where it is.",
+	schema: {
+		type: "object",
+		properties: {
+			item: { type: "string" },
+			category: { type: "string", enum: [...OBJECT_CATEGORIES] },
+			place: { type: "string" },
+			confidence: {
+				type: "number",
+				description: "0-1 confidence that the item is named correctly.",
+			},
+		},
+		required: ["item", "category", "place", "confidence"],
+	},
+};
+
+/** Gemini names the main item in a photo, its category, and the place it is in. */
+export const createItemReader =
+	(config: GeminiConfig) =>
+	(image: { readonly type: string; readonly data: string }) =>
+		askAboutImage(config, image, itemQuestion, (body) =>
+			Effect.map(
+				modelJson(body, ItemAnswer),
+				(answer): PhotoItem => ({
+					...answer,
+					item: answer.item.trim(),
+					place: answer.place.trim(),
+				}),
+			),
 		);

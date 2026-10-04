@@ -100,7 +100,7 @@ describe("automatic trips", () => {
 		});
 	});
 
-	test("nothing starts with automatic trips off or no home set", () => {
+	test("nothing starts with automatic trips off", () => {
 		h.call(mod.setHome, alice, {
 			familyId: 1n,
 			home: HOME,
@@ -109,15 +109,31 @@ describe("automatic trips", () => {
 		});
 		at(0, 300);
 		at(120, 300);
+		expect(events()).toEqual([]);
+	});
+
+	test("without a home, the first accurate fix becomes home and turns on automatic trips", () => {
 		h.call(mod.setHome, alice, {
 			familyId: 1n,
 			home: undefined,
 			radiusMeters: 200,
-			autoTrip: true,
+			autoTrip: false,
 		});
-		at(0, 300);
+		// Too rough to be home: nothing is saved.
+		at(0, 300, 150);
+		expect(watch()).toMatchObject({ home: undefined, autoTrip: false });
+		at(10, 300);
+		expect(watch()).toMatchObject({
+			home: { latitude: HOME.latitude + 300 * METER },
+			autoTrip: true,
+			distanceMeters: 0,
+		});
+		// That place is now home: staying there is no trip, walking 500 m away is one.
 		at(120, 300);
 		expect(events()).toEqual([]);
+		at(10, 800);
+		at(60, 800);
+		expect(events()).toEqual(["Left"]);
 	});
 
 	test("a manual trip waits for a fix outside before a fix at home ends it", () => {

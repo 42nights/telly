@@ -1,7 +1,8 @@
 // Emergency help, "Call my family", and the suspected-event check-in (issue #34), relative to
-// `/api/families/:familyId`. Explicit help dispatches at once, with no questionnaire and no wait for
-// wearable data. An "ouch" or possible fall gets one short check-in. The family hears through the
-// durable alert path (issue #5). The dispatcher is a simulator: no code here places a real call.
+// `/api/families/:familyId`. No code here places a call: the wearer's phone dials from a `tel:`
+// link. Explicit help alerts the family at once, with no questionnaire and no wait for wearable
+// data. An "ouch" or possible fall gets one short check-in. The family hears through the durable
+// alert path (issue #5).
 import {
 	CheckIn,
 	type EmergencyOutcome,
@@ -9,7 +10,6 @@ import {
 	type FamilyNotice,
 	type Handoff,
 	type LocationReading,
-	type SimulatedCall,
 	type Wearer,
 } from "@health/contracts/emergency";
 import type { Context } from "hono";
@@ -23,11 +23,6 @@ import {
 	type FamilyRoutes,
 } from "../http";
 import { readInstructions, readProfile } from "./care-profile";
-
-/** Places one emergency call with the handoff. Only simulators exist; a live dialer is out of scope. */
-export type Dispatcher = (handoff: Handoff) => Promise<"connected" | "failed">;
-
-const simulatedDispatcher: Dispatcher = async () => "connected";
 
 type Caller = { var: FamilyEnv["Variables"] };
 
@@ -134,7 +129,7 @@ const handoff = (
 	};
 };
 
-/** Raises a family alert (issue #5). A failure is reported; it never holds back the call. */
+/** Raises a family alert (issue #5). A failure is reported; the phone still dials. */
 const tellFamily = async (
 	c: Caller,
 	summary: string,
@@ -171,43 +166,29 @@ const tellFamily = async (
 const quoted = (report: string | null) =>
 	report === null ? "" : ` “${report}”`;
 
-/** The simulated call and the family alert run together, so neither waits for the other. */
-const dispatch = async (
+/** The family alert for a help request, with what to tell the emergency operator. */
+const askForHelp = async (
 	c: Caller,
-	dispatcher: Dispatcher,
 	details: Handoff,
-): Promise<EmergencyOutcome> => {
-	const [outcome, family] = await Promise.all([
-		dispatcher(details).catch(() => "failed" as const),
-		tellFamily(
-			c,
-			`Emergency help requested (simulated call): ${details.event}${quoted(details.report)}. ${
-				details.responsiveness === "responding"
-					? "Responding"
-					: "Not responding"
-			}.`,
-		),
-	]);
-	const call: SimulatedCall = {
-		simulated: true,
-		states: ["connecting", outcome],
-		outcome,
-		recordDelivered: false,
-	};
-	return { action: "dispatch", call, handoff: details, family };
-};
+): Promise<EmergencyOutcome> => ({
+	action: "help",
+	handoff: details,
+	family: await tellFamily(
+		c,
+		`Emergency help requested: ${details.event}${quoted(details.report)}. ${
+			details.responsiveness === "responding" ? "Responding" : "Not responding"
+		}.`,
+	),
+});
 
-export const emergencyRoutes = (
-	dispatcher: Dispatcher = simulatedDispatcher,
-): FamilyRoutes =>
+export const emergencyRoutes = (): FamilyRoutes =>
 	new Hono<FamilyEnv>()
 		.post("/emergency", async (c) => {
 			const request = await decodeBody(c, EmergencyRequest);
 			let outcome: EmergencyOutcome = NOT_AN_EMERGENCY;
 			if (request.kind === "help")
-				outcome = await dispatch(
+				outcome = await askForHelp(
 					c,
-					dispatcher,
 					handoff(
 						c,
 						request.wearer,
@@ -235,7 +216,7 @@ export const emergencyRoutes = (
 					event: { ...request.event, kind: request.event.kind },
 					reason: null,
 				};
-			// A missed reminder or an unheard vibration alone never dispatches.
+			// A missed reminder or an unheard vibration alone never asks for help.
 			return c.json(outcome);
 		})
 		.post("/emergency/check-in", async (c) => {
@@ -243,9 +224,8 @@ export const emergencyRoutes = (
 			const label = eventLabel[event.kind];
 			let outcome: EmergencyOutcome;
 			if (reply.kind === "no_response")
-				outcome = await dispatch(
+				outcome = await askForHelp(
 					c,
-					dispatcher,
 					handoff(c, wearer, label, event.report, "not_responding", location),
 				);
 			else if (reply.speaker === "other")
@@ -258,9 +238,8 @@ export const emergencyRoutes = (
 			else {
 				const intent = checkInIntent(reply.text);
 				if (intent === "help")
-					outcome = await dispatch(
+					outcome = await askForHelp(
 						c,
-						dispatcher,
 						handoff(
 							c,
 							wearer,

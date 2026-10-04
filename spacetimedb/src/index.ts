@@ -1028,6 +1028,41 @@ const familyDeletion = table(
 	},
 );
 
+// Texts for the wearer's phone over iMessage (#308), one row per event. `key` names the event, so
+// an event that happens again adds no second text. The delivery operator sends each pending row and
+// settles it: `sent`, or `skipped` with a `note` (no phone for the family, too old to send).
+const wearerText = table(
+	{ name: "wearer_text" },
+	{
+		key: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		body: t.string(),
+		// The reminder occurrence the text prompts; a reply "done" answers it.
+		occurrenceId: t.option(t.u64()),
+		createdAt: t.timestamp(),
+		// After quiet hours, when the text was made inside them.
+		notBefore: t.timestamp(),
+		status: t.string().index("btree"),
+		note: t.option(t.string()),
+		settledAt: t.option(t.timestamp()),
+	},
+);
+
+// A finder link that the operator sent to the wearer's phone (#308). The link holds a random token;
+// only its SHA-256 is stored. It opens one person's last-seen places once, until `expiresAt`, and
+// `sessionHash` is the page session it opened.
+const finderLink = table(
+	{ name: "finder_link" },
+	{
+		tokenHash: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		personId: t.identity(),
+		expiresAt: t.timestamp(),
+		usedAt: t.option(t.timestamp()),
+		sessionHash: t.option(t.string()),
+	},
+);
+
 // The name each person signed in with (the Google profile name), written by that person
 // (`setMyName`) and shown only to the members of their families (`myFamilyPeople`).
 const memberName = table(
@@ -1035,6 +1070,17 @@ const memberName = table(
 	{
 		member: t.identity().primaryKey(),
 		name: t.string(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+// The phone number each person saved for texting Telly (`setMyPhone`), in E.164 form. At most one
+// person per number, so an iMessage sender maps to one person (`memberPhones`).
+const memberPhone = table(
+	{ name: "member_phone" },
+	{
+		member: t.identity().primaryKey(),
+		phone: t.string().unique(),
 		updatedAt: t.timestamp(),
 	},
 );
@@ -1113,9 +1159,12 @@ const spacetimedb = schema({
 	familyInvite,
 	familyPushToken,
 	familyDeletion,
+	wearerText,
+	finderLink,
 	memberName,
 	demoReplay,
 	demoTimer,
+	memberPhone,
 });
 export default spacetimedb;
 
@@ -1344,6 +1393,7 @@ const openNeed = (ctx: Ctx, fields: NewNeed) => {
 		updatedAt: ctx.timestamp,
 	});
 	contactStep(ctx, need, 0);
+	textHelpAsked(ctx, need);
 };
 
 // A family with a contact ladder gets a care need for each alert. While an alert need is still
@@ -1408,6 +1458,7 @@ const insertAlert = (
 		updatedAt: ctx.timestamp,
 	});
 	alertNeed(ctx, familyId, id, sampleId, summary);
+	textAlert(ctx, familyId, id, sampleId, summary);
 	return id;
 };
 
@@ -1872,7 +1923,7 @@ const tripNotice = (
 	familyId: bigint,
 	clientId: string,
 	body: string,
-) =>
+) => {
 	ctx.db.message.insert({
 		id: 0n,
 		familyId,
@@ -1881,6 +1932,8 @@ const tripNotice = (
 		sentAt: ctx.timestamp,
 		clientId,
 	});
+	textWearer(ctx, familyId, clientId, `Telly told your family: “${body}”`);
+};
 
 type TripRow = Infer<typeof tripEvent.rowType>;
 
@@ -2014,7 +2067,11 @@ const sharesOf = (ctx: Ctx, familyId: bigint) => [
 	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
 ];
 
-/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+/**
+ * Lets one other member of the family see the sender's location. The sender owns that location, so
+ * sharing also grants the viewer the `location` care scope when they lack it; without it the share
+ * would show nothing. Sharing twice changes nothing.
+ */
 export const shareLocation = spacetimedb.reducer(
 	{ familyId: t.u64(), viewer: t.identity() },
 	(ctx, { familyId, viewer }) => {
@@ -2027,6 +2084,20 @@ export const shareLocation = spacetimedb.reducer(
 		]);
 		if (member.next().done)
 			throw new SenderError("viewer is not a member of this family");
+		const scopes = ctx.db.careGrantEvent.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (!holdsCareScope(scopes, "location"))
+			ctx.db.careGrantEvent.insert({
+				id: 0n,
+				familyId,
+				member: viewer,
+				scope: "location",
+				granted: true,
+				changedBy: ctx.sender,
+				changedAt: ctx.timestamp,
+			});
 		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
 		ctx.db.locationShare.insert({
 			id: 0n,
@@ -2146,6 +2217,8 @@ const AWAY_DWELL_MICROS = 60_000_000n;
 const MIN_HOME_RADIUS = 100;
 const MAX_HOME_RADIUS = 5000;
 const EARTH_RADIUS_METERS = 6_371_000;
+// `APPROXIMATE_METERS` of `@health/contracts/location`: a wider fix is too rough to become home.
+const AUTO_HOME_ACCURACY_METERS = 100;
 
 type Point = { latitude: number; longitude: number };
 
@@ -2211,10 +2284,11 @@ const outsideStep = (
 
 /**
  * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
- * A fix is inside when its center is within the radius and its accuracy is no wider than the
- * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
- * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
- * ends only after a fix clearly outside.
+ * Without a home, the first fix accurate to `AUTO_HOME_ACCURACY_METERS` becomes home and turns on
+ * automatic trips; a caregiver corrects it in Settings. A fix is inside when its center is within
+ * the radius and its accuracy is no wider than the radius; it is clearly outside only when even the
+ * near edge of its accuracy circle is beyond the radius, so GPS jitter at home starts no trip. Fixes
+ * in between change nothing. A manual trip ends only after a fix clearly outside.
  */
 const followHome = (
 	ctx: Ctx,
@@ -2222,7 +2296,17 @@ const followHome = (
 	fix: Infer<typeof LocationFix>,
 ) => {
 	const watch = homeWatchOf(ctx, familyId);
-	if (watch?.home === undefined) return;
+	if (watch?.home === undefined) {
+		// ponytail: the first fix, not the overnight place; learn from night fixes if a first fix away
+		// from home turns out common.
+		if (fix.accuracyMeters <= AUTO_HOME_ACCURACY_METERS)
+			upsertHomeWatch(ctx, familyId, {
+				home: { latitude: fix.latitude, longitude: fix.longitude },
+				autoTrip: true,
+				distanceMeters: 0,
+			});
+		return;
+	}
 	const distance = distanceMeters(watch.home, fix);
 	const { autoTrip, radiusMeters: radius } = watch;
 	const step: HomeStep = !autoTrip
@@ -2414,50 +2498,69 @@ const MAX_PAST_PLACES = 19;
 // A 160 px JPEG is about 10 KB of base64; this leaves room and still keeps the rows small.
 const MAX_THUMBNAIL_CHARS = 64 * 1024;
 
+const sightingFields = {
+	familyId: t.u64(),
+	personId: t.identity(),
+	container: t.string(),
+	place: t.string(),
+	seenAt: t.timestamp(),
+	source: t.string(),
+	confidence: t.f64(),
+	labelRead: t.bool(),
+	category: t.string(),
+	thumbnail: t.string(),
+};
+type Sighting = {
+	familyId: bigint;
+	personId: Identity;
+	container: string;
+	place: string;
+	seenAt: Timestamp;
+	source: string;
+	confidence: number;
+	labelRead: boolean;
+	category: string;
+	thumbnail: string;
+};
+
+/** Stores a member's sighting once the caller's access is checked. */
+const storeSighting = (ctx: Ctx, seen: Sighting) => {
+	requireText("container", seen.container);
+	requireText("category", seen.category);
+	if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
+		throw new SenderError("the thumbnail is too large");
+	requireText("place", seen.place);
+	requireText("source", seen.source);
+	if (!(seen.confidence >= 0 && seen.confidence <= 1))
+		throw new SenderError("confidence must be between 0 and 1");
+	const age =
+		ctx.timestamp.microsSinceUnixEpoch - seen.seenAt.microsSinceUnixEpoch;
+	if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
+		throw new SenderError("seenAt must be a current observation");
+	const key = seen.container.trim().toLowerCase();
+	const row = {
+		...seen,
+		savedBy: ctx.sender,
+		notFoundAt: undefined,
+		pastPlaces: [] as string[],
+	};
+	for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
+		if (!old.personId.isEqual(seen.personId)) continue;
+		if (old.container.trim().toLowerCase() !== key) continue;
+		if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
+			throw new SenderError("a newer sighting is already stored");
+		const pastPlaces = [...old.pastPlaces, old.place].slice(-MAX_PAST_PLACES);
+		ctx.db.medicineSighting.id.update({ ...row, id: old.id, pastPlaces });
+		return;
+	}
+	ctx.db.medicineSighting.insert({ ...row, id: 0n });
+};
+
 export const rememberMedicine = spacetimedb.reducer(
-	{
-		familyId: t.u64(),
-		personId: t.identity(),
-		container: t.string(),
-		place: t.string(),
-		seenAt: t.timestamp(),
-		source: t.string(),
-		confidence: t.f64(),
-		labelRead: t.bool(),
-		category: t.string(),
-		thumbnail: t.string(),
-	},
+	sightingFields,
 	(ctx, seen) => {
 		requireMedicineOf(ctx, seen.familyId, seen.personId);
-		requireText("container", seen.container);
-		requireText("category", seen.category);
-		if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
-			throw new SenderError("the thumbnail is too large");
-		requireText("place", seen.place);
-		requireText("source", seen.source);
-		if (!(seen.confidence >= 0 && seen.confidence <= 1))
-			throw new SenderError("confidence must be between 0 and 1");
-		const age =
-			ctx.timestamp.microsSinceUnixEpoch - seen.seenAt.microsSinceUnixEpoch;
-		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
-			throw new SenderError("seenAt must be a current observation");
-		const key = seen.container.trim().toLowerCase();
-		const row = {
-			...seen,
-			savedBy: ctx.sender,
-			notFoundAt: undefined,
-			pastPlaces: [] as string[],
-		};
-		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
-			if (!old.personId.isEqual(seen.personId)) continue;
-			if (old.container.trim().toLowerCase() !== key) continue;
-			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
-				throw new SenderError("a newer sighting is already stored");
-			const pastPlaces = [...old.pastPlaces, old.place].slice(-MAX_PAST_PLACES);
-			ctx.db.medicineSighting.id.update({ ...row, id: old.id, pastPlaces });
-			return;
-		}
-		ctx.db.medicineSighting.insert({ ...row, id: 0n });
+		storeSighting(ctx, seen);
 	},
 );
 
@@ -2685,6 +2788,7 @@ const accept = (ctx: Ctx, need: Need, attempt: Attempt) => {
 		`care-${attempt.key}-accepted`,
 		`${need.steps[need.step]?.name} accepted ${kindLabel[need.kind.tag]}. Telly contacts nobody else unless help is not confirmed in time.`,
 	);
+	textHelpComing(ctx, need, need.steps[need.step]?.name);
 };
 
 const currentAttempt = (ctx: Ctx, need: Need) => {
@@ -3205,6 +3309,7 @@ export const runReminderTimer = spacetimedb.reducer(
 				nextPromptAt: undefined,
 			});
 			mealCheckInNeed(ctx, occurrence, undefined);
+			textMissedDose(ctx, occurrence);
 			return;
 		}
 		const next = promptAfter(ctx, settings, settings.repeatEveryMinutes);
@@ -3215,6 +3320,7 @@ export const runReminderTimer = spacetimedb.reducer(
 			nextPromptAt: next,
 		});
 		scheduleReminderTimer(ctx, occurrence.id, next);
+		if (occurrence.prompts === 0) textReminder(ctx, occurrence);
 	},
 );
 
@@ -4522,6 +4628,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.reportEmail.familyId,
 			db.familyInvite.familyId,
 			db.familyPushToken.familyId,
+			db.wearerText.familyId,
+			db.finderLink.familyId,
 			db.demoReplay.familyId,
 			db.demoTimer.familyId,
 		])
@@ -4534,6 +4642,351 @@ export const deleteFamily = spacetimedb.reducer(
 			deletedAt: ctx.timestamp,
 		});
 	},
+);
+
+// Wearer texts and finder links over iMessage (#308). The wearer reads no screens, so each important
+// event becomes one short text for the family's wearer phone, the family's first member. The server's
+// iMessage agent sends the texts as the delivery operator and answers the wearer's replies. Texts
+// state what happened; they never give a health diagnosis or tell the wearer to take a dose.
+
+const WEARER_TEXT_MAX = 320;
+const FINDER_LINK_MICROS = 15n * 60_000_000n;
+// A "done" reply answers a texted reminder from at most this long ago.
+const DONE_REPLY_MICROS = 12n * 3_600_000_000n;
+
+const requireOperator = (ctx: Ctx) => {
+	if (ctx.db.operator.identity.find(ctx.sender) === null)
+		throw new SenderError("not the delivery operator");
+};
+
+/** Queues one text for the family's wearer, once per `key`. Inside quiet hours it waits for their end. */
+const textWearer = (
+	ctx: Ctx,
+	familyId: bigint,
+	key: string,
+	body: string,
+	occurrenceId?: bigint,
+) => {
+	if (ctx.db.wearerText.key.find(key) !== null) return;
+	const settings = ctx.db.reminderSettings.familyId.find(familyId);
+	const notBefore =
+		settings === null
+			? ctx.timestamp
+			: fromMs(
+					afterQuietHours(
+						toMs(ctx.timestamp),
+						quietHours(settings),
+						settings.timeZone,
+					),
+				);
+	ctx.db.wearerText.insert({
+		key,
+		familyId,
+		body:
+			body.length > WEARER_TEXT_MAX
+				? `${body.slice(0, WEARER_TEXT_MAX - 1)}…`
+				: body,
+		occurrenceId,
+		createdAt: ctx.timestamp,
+		notBefore,
+		status: "pending",
+		note: undefined,
+		settledAt: undefined,
+	});
+};
+
+/** The first prompt of a reminder occurrence. Its prompts already wait for quiet hours. */
+const textReminder = (ctx: Ctx, o: OccurrenceRow) =>
+	textWearer(
+		ctx,
+		o.familyId,
+		`reminder-${o.id}`,
+		o.kind === "medication"
+			? `Time for your medicine: ${o.title}. Reply DONE when you have taken it.`
+			: o.kind === "meal"
+				? `Time to eat: ${o.title}. Reply DONE when you have eaten.`
+				: o.kind === "hydration"
+					? `Time for a drink: ${o.title}. Reply DONE when you have had it.`
+					: o.kind === "charging"
+						? "Bedtime: please plug in your phone so it charges overnight. Reply DONE when it is charging."
+						: `Reminder: ${o.title}. Reply DONE when you have done it.`,
+		o.id,
+	);
+
+/** A medicine reminder that ended with no answer. */
+const textMissedDose = (ctx: Ctx, o: OccurrenceRow) => {
+	if (o.kind !== "medication") return;
+	textWearer(
+		ctx,
+		o.familyId,
+		`missed-${o.id}`,
+		`You may have missed your medicine: ${o.title}. If you are not sure whether you took it, ask your family before you take more.`,
+		o.id,
+	);
+};
+
+/** Every family alert, except one from a synthetic demo sample. */
+const textAlert = (
+	ctx: Ctx,
+	familyId: bigint,
+	alertId: bigint,
+	sampleId: bigint | undefined,
+	summary: string,
+) => {
+	if (
+		sampleId !== undefined &&
+		ctx.db.healthSample.id.find(sampleId)?.synthetic !== false
+	)
+		return;
+	textWearer(
+		ctx,
+		familyId,
+		`alert-${alertId}`,
+		`Telly told your family: ${summary}`,
+	);
+};
+
+/** The wearer asked the family for help. */
+const textHelpAsked = (ctx: Ctx, need: Need) => {
+	if (
+		need.kind.tag !== "Help" ||
+		founderOf(ctx, need.familyId)?.isEqual(need.raisedBy) !== true
+	)
+		return;
+	const first = need.steps[0]?.name;
+	textWearer(
+		ctx,
+		need.familyId,
+		`help-${need.id}`,
+		first === undefined
+			? `Your family can see your request: ${need.summary}. If you need help now, call them.`
+			: `Telly is asking ${first} for help: ${need.summary}`,
+	);
+};
+
+/** A contact accepted a help request or an alert. */
+const textHelpComing = (ctx: Ctx, need: Need, name: string | undefined) => {
+	if (need.kind.tag === "CallReminder" || name === undefined) return;
+	textWearer(
+		ctx,
+		need.familyId,
+		`help-${need.id}-accepted`,
+		`${name} is coming to help.`,
+	);
+};
+
+// The delivery operator's queue of wearer texts across families. Empty for every other identity.
+export const pendingWearerTexts = spacetimedb.view(
+	{ name: "pending_wearer_texts", public: true },
+	t.array(
+		t.object("PendingWearerText", {
+			key: t.string(),
+			familyId: t.u64(),
+			body: t.string(),
+			createdAt: t.timestamp(),
+			notBefore: t.timestamp(),
+		}),
+	),
+	(ctx) =>
+		ctx.db.operator.identity.find(ctx.sender) === null
+			? []
+			: [...ctx.db.wearerText.status.filter("pending")].map(
+					({ key, familyId, body, createdAt, notBefore }) => ({
+						key,
+						familyId,
+						body,
+						createdAt,
+						notBefore,
+					}),
+				),
+);
+
+/**
+ * The operator sent a text (`sent`), or will not send it (`note` says why). A sent reminder text
+ * delivers its prompt, as a device that shows it does. Settling twice changes nothing.
+ */
+export const settleWearerText = spacetimedb.reducer(
+	{ key: t.string(), sent: t.bool(), note: t.option(t.string()) },
+	(ctx, { key, sent, note }) => {
+		requireOperator(ctx);
+		const text = ctx.db.wearerText.key.find(key);
+		if (text === null) throw new SenderError("no such text");
+		if (text.status !== "pending") return;
+		ctx.db.wearerText.key.update({
+			...text,
+			status: sent ? "sent" : "skipped",
+			note: note?.slice(0, 200),
+			settledAt: ctx.timestamp,
+		});
+		if (!sent || text.occurrenceId === undefined) return;
+		const occurrence = ctx.db.reminderOccurrence.id.find(text.occurrenceId);
+		if (occurrence === null || !occurrence.promptDue) return;
+		recordReminderEvent(ctx, occurrence, "delivered", { source: "imessage" });
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "delivered",
+			promptDue: false,
+		});
+	},
+);
+
+/**
+ * The wearer replied "done" (or "ate", "taken"): the newest texted reminder that is still open is
+ * self-reported done, with their words, so the family sees what they said.
+ */
+export const answerTextedReminder = spacetimedb.reducer(
+	{ familyId: t.u64(), wording: t.string() },
+	(ctx, { familyId, wording }) => {
+		requireWording(wording);
+		requireOperator(ctx);
+		let newest: { occurrence: OccurrenceRow; at: bigint } | undefined;
+		for (const text of ctx.db.wearerText.familyId.filter(familyId)) {
+			if (text.status !== "sent" || text.occurrenceId === undefined) continue;
+			const occurrence = ctx.db.reminderOccurrence.id.find(text.occurrenceId);
+			const at = text.createdAt.microsSinceUnixEpoch;
+			if (
+				occurrence === null ||
+				COMPLETE_STATES.includes(occurrence.state) ||
+				ctx.timestamp.microsSinceUnixEpoch - at > DONE_REPLY_MICROS ||
+				(newest !== undefined && newest.at >= at)
+			)
+				continue;
+			newest = { occurrence, at };
+		}
+		if (newest === undefined)
+			throw new SenderError("no texted reminder is open");
+		const { occurrence } = newest;
+		recordReminderEvent(ctx, occurrence, "self_reported_complete", {
+			response: "done",
+			source: "imessage",
+			wording,
+		});
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "self_reported_complete",
+			promptDue: false,
+			nextPromptAt: undefined,
+		});
+	},
+);
+
+const liveFinderLink = (ctx: Ctx, tokenHash: string) => {
+	requireOperator(ctx);
+	const link = ctx.db.finderLink.tokenHash.find(tokenHash);
+	if (
+		link === null ||
+		link.expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch
+	)
+		throw new SenderError("the finder link has expired");
+	return link;
+};
+
+/** A finder link to the family wearer's last-seen places for 15 minutes. Expired links go first. */
+export const createFinderLink = spacetimedb.reducer(
+	{ familyId: t.u64(), tokenHash: t.string() },
+	(ctx, { familyId, tokenHash }) => {
+		requireOperator(ctx);
+		if (!/^[0-9a-f]{64}$/.test(tokenHash))
+			throw new SenderError("tokenHash must be a SHA-256 hex digest");
+		const personId = founderOf(ctx, familyId);
+		if (personId === undefined) throw new SenderError("no such family");
+		const now = ctx.timestamp.microsSinceUnixEpoch;
+		for (const old of [...ctx.db.finderLink.iter()])
+			if (old.expiresAt.microsSinceUnixEpoch <= now)
+				ctx.db.finderLink.tokenHash.delete(old.tokenHash);
+		ctx.db.finderLink.insert({
+			tokenHash,
+			familyId,
+			personId,
+			expiresAt: new Timestamp(now + FINDER_LINK_MICROS),
+			usedAt: undefined,
+			sessionHash: undefined,
+		});
+	},
+);
+
+/** Opens a finder link once: a used or expired link fails, and the page signs in instead. */
+export const openFinderLink = spacetimedb.reducer(
+	{ tokenHash: t.string(), sessionHash: t.string() },
+	(ctx, { tokenHash, sessionHash }) => {
+		const link = liveFinderLink(ctx, tokenHash);
+		if (link.usedAt !== undefined)
+			throw new SenderError("the finder link was used");
+		ctx.db.finderLink.tokenHash.update({
+			...link,
+			usedAt: ctx.timestamp,
+			sessionHash,
+		});
+	},
+);
+
+/** Saves a sighting for the person of a live finder link, by the same rules as `rememberMedicine`. */
+export const rememberByFinderLink = spacetimedb.reducer(
+	{
+		tokenHash: t.string(),
+		container: t.string(),
+		category: t.string(),
+		place: t.string(),
+		seenAt: t.timestamp(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+	},
+	(ctx, { tokenHash, ...seen }) => {
+		const { familyId, personId } = liveFinderLink(ctx, tokenHash);
+		storeSighting(ctx, {
+			...seen,
+			familyId,
+			personId,
+			source: "photo",
+			thumbnail: "",
+		});
+	},
+);
+
+// The operator's finder links, each with its person's last-seen places. Empty for every other
+// identity. A link shows only its own person's sightings.
+export const finderLinks = spacetimedb.view(
+	{ name: "finder_links", public: true },
+	t.array(
+		t.object("FinderLinkPlaces", {
+			tokenHash: t.string(),
+			sessionHash: t.option(t.string()),
+			familyId: t.u64(),
+			personId: t.identity(),
+			expiresAt: t.timestamp(),
+			usedAt: t.option(t.timestamp()),
+			sightings: t.array(
+				t.object("FinderSighting", {
+					id: t.u64(),
+					container: t.string(),
+					category: t.string(),
+					place: t.string(),
+					seenAt: t.timestamp(),
+					confidence: t.f64(),
+					labelRead: t.bool(),
+					notFoundAt: t.option(t.timestamp()),
+				}),
+			),
+		}),
+	),
+	(ctx) =>
+		ctx.db.operator.identity.find(ctx.sender) === null
+			? []
+			: [...ctx.db.finderLink.iter()].map((link) => ({
+					...link,
+					sightings: [...ctx.db.medicineSighting.familyId.filter(link.familyId)]
+						.filter((s) => s.personId.isEqual(link.personId))
+						.map((s) => ({
+							id: s.id,
+							container: s.container,
+							category: s.category,
+							place: s.place,
+							seenAt: s.seenAt,
+							confidence: s.confidence,
+							labelRead: s.labelRead,
+							notFoundAt: s.notFoundAt,
+						})),
+				})),
 );
 
 export const setMyName = spacetimedb.reducer(
@@ -4573,6 +5026,59 @@ export const myFamilyPeople = spacetimedb.view(
 					}));
 			},
 		),
+);
+
+/** Saves the caller's phone number for texting Telly, or deletes it with none. */
+export const setMyPhone = spacetimedb.reducer(
+	{ phone: t.option(t.string()) },
+	(ctx, { phone }) => {
+		if (phone === undefined) {
+			ctx.db.memberPhone.member.delete(ctx.sender);
+			return;
+		}
+		if (!/^\+[1-9][0-9]{6,14}$/.test(phone))
+			throw new SenderError(
+				"Enter a full phone number with its country code, like +1 555 010 0123",
+			);
+		const owner = ctx.db.memberPhone.phone.find(phone)?.member;
+		if (owner !== undefined && !owner.isEqual(ctx.sender))
+			throw new SenderError("Another person already saved this phone number");
+		const row = { member: ctx.sender, phone, updatedAt: ctx.timestamp };
+		if (ctx.db.memberPhone.member.find(ctx.sender) === null)
+			ctx.db.memberPhone.insert(row);
+		else ctx.db.memberPhone.member.update(row);
+	},
+);
+
+// The caller's own saved phone number: one row, or none.
+export const myPhone = spacetimedb.view(
+	{ name: "my_phone", public: true },
+	t.array(memberPhone.rowType),
+	(ctx) => {
+		const row = ctx.db.memberPhone.member.find(ctx.sender);
+		return row === null ? [] : [row];
+	},
+);
+
+// The delivery operator's map of saved phone numbers to each person's families, for the iMessage
+// agent. Empty for every other identity.
+export const memberPhones = spacetimedb.view(
+	{ name: "member_phones", public: true },
+	t.array(
+		t.object("SenderPhone", {
+			phone: t.string(),
+			member: t.identity(),
+			familyId: t.u64(),
+		}),
+	),
+	(ctx) =>
+		ctx.db.operator.identity.find(ctx.sender) === null
+			? []
+			: [...ctx.db.memberPhone.iter()].flatMap(({ phone, member }) =>
+					[...ctx.db.familyMember.member.filter(member)].map(
+						({ familyId }) => ({ phone, member, familyId }),
+					),
+				),
 );
 
 // Demo data (#334). `setDemoData` copies a real WHOOP recording into the family with every time

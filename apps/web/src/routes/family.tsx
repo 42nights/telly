@@ -1,36 +1,17 @@
-// Family › Overview (docs/board.html#wf-phone, #wf-dash): the alert to act on, today's readings,
-// monitoring, messages, and the plans. The other Family tabs are Alerts, Trends, and Thresholds.
-import type { Family } from "@health/contracts";
-import { buttonVariants } from "@health/ui/components/button";
-import { cn } from "@health/ui/lib/utils";
-import { createFileRoute, Link } from "@tanstack/react-router";
+// Family › Overview (docs/board.html#wf-phone, #wf-dash): the alert to act on and today's readings.
+// The other Family tabs: Daily, Exercise, Cooking, Alerts, Trends, and Thresholds.
+import { createFileRoute } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
-import { CookingAbilities } from "@/components/cooking/abilities";
-import { ExerciseSection } from "@/components/exercise/plans";
-import {
-	type FamilyData,
-	familyReads,
-	useFamilyData,
-} from "@/components/family/data";
+import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyPeople } from "@/components/family/invite";
-import {
-	KeyNumbers,
-	RecentMessages,
-	SourceList,
-} from "@/components/family/overview";
 import {
 	AlertSection,
 	FamilyGate,
-	MonitoringBadge,
-	MonitoringList,
 	ReadingsGlance,
 } from "@/components/family/parts";
-import { Window } from "@/components/hud/window";
-import { MealStatusSection } from "@/components/meal-check-in/family-status";
-import { ReminderHistorySection } from "@/components/reminders/history";
+import { Page } from "@/components/hud/window";
 import { UseDemoData } from "@/components/settings/demo-data";
-import { FamilyLocationSection } from "@/components/trip/location";
 import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
@@ -41,104 +22,47 @@ export const Route = createFileRoute("/family")({
 function FamilyOverview() {
 	const data = useFamilyData();
 	return (
-		<main className="p-2 sm:p-4">
-			<Window
-				title={`Family · ${data.family?.name ?? "No person"}`}
-				icon={Users}
-				className="mx-auto w-full max-w-4xl"
-			>
-				<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
-				<FamilyGate data={data} emptyClassName="p-3 text-sm">
-					{(family) => <Overview key={family.id} data={data} family={family} />}
-				</FamilyGate>
-			</Window>
-		</main>
-	);
-}
-
-function Overview({ data, family }: { data: FamilyData; family: Family }) {
-	const now = Date.now();
-	return (
-		<div className="grid grid-cols-[minmax(0,1fr)] gap-4 p-2 text-sm">
-			<header className="flex flex-wrap items-center gap-3">
-				<span
-					aria-hidden
-					className="win95-raised grid size-12 shrink-0 place-items-center bg-primary font-bold text-primary-foreground text-xl"
-				>
-					{family.name.charAt(0).toUpperCase()}
-				</span>
-				<h2 className="min-w-0 flex-[1_1_10rem] break-words font-bold text-2xl">
-					{family.name}
-				</h2>
-				<MonitoringBadge state={data.monitoring} />
-			</header>
-			<FamilyPeople
-				familyId={family.id}
-				familyName={family.name}
-				me={data.me}
-			/>
-
-			<AlertSection data={data} now={now} />
-
-			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
-			<MealStatusSection familyId={family.id} />
-
-			<section aria-labelledby="glance" className="grid gap-2">
-				<h3 id="glance" className="font-bold">
-					Today at a glance
-				</h3>
-				<KeyNumbers data={data} family={family} />
-				<ReadingsGlance data={data} familyId={family.id} now={now} />
-				{data.readings.kind === "ready" &&
-					!data.readings.value.samples.some(
-						(s) => s.familyId === family.id && s.source.startsWith("noop:"),
-					) && <UseDemoData familyId={family.id} />}
-				<SourceList />
-			</section>
-
-			<section aria-labelledby="monitoring" className="grid gap-2">
-				<h3 id="monitoring" className="font-bold">
-					Monitoring
-				</h3>
-				<MonitoringList
-					state={data.monitoring}
-					records={data.readings}
-					familyId={family.id}
-					now={now}
-				/>
-			</section>
-
-			<ReminderHistorySection familyId={family.id} me={data.me} />
-
-			<section aria-labelledby="chat" className="grid gap-2">
-				<h3 id="chat" className="font-bold">
-					Recent messages
-				</h3>
-				<RecentMessages data={data} familyId={family.id} />
-				<Link
-					to="/chat"
-					data-slot="button"
-					className={cn(buttonVariants(), "h-11 justify-self-start")}
-				>
-					Open chat
-				</Link>
-			</section>
-
-			<section aria-labelledby="exercise" className="grid gap-2">
-				<h3 id="exercise" className="font-bold">
-					Guided exercise
-				</h3>
-				<ExerciseSection familyId={family.id} />
-			</section>
-
-			<section aria-labelledby="cooking" className="grid gap-2">
-				<h3 id="cooking" className="font-bold">
-					Cooking abilities
-				</h3>
-				<div className="win95-inset grid gap-2 bg-card p-2">
-					<CookingAbilities familyId={family.id} />
-				</div>
-			</section>
-		</div>
+		<Page
+			title={`Family · ${data.family?.name ?? "No person"}`}
+			icon={Users}
+			className="max-w-4xl"
+		>
+			<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
+			<FamilyGate data={data} emptyClassName="p-3 text-sm">
+				{(family) => (
+					// On a phone, Today at a glance comes first, then the alert, then the members (captain).
+					<div className="flex min-h-0 flex-1 flex-col gap-2 p-2 text-sm">
+						<div className="max-[899px]:order-3">
+							<FamilyPeople
+								familyId={family.id}
+								familyName={family.name}
+								me={data.me}
+							/>
+						</div>
+						<div className="max-[899px]:order-2">
+							<AlertSection data={data} now={Date.now()} />
+						</div>
+						<section
+							aria-labelledby="glance"
+							className="flex min-h-0 flex-1 flex-col gap-1 max-[899px]:order-1 max-[899px]:flex-none"
+						>
+							<h3 id="glance" className="font-bold">
+								Today at a glance
+							</h3>
+							<ReadingsGlance
+								data={data}
+								familyId={family.id}
+								now={Date.now()}
+							/>
+							{data.readings.kind === "ready" &&
+								!data.readings.value.samples.some(
+									(s) =>
+										s.familyId === family.id && s.source.startsWith("noop:"),
+								) && <UseDemoData familyId={family.id} />}
+						</section>
+					</div>
+				)}
+			</FamilyGate>
+		</Page>
 	);
 }

@@ -60,8 +60,12 @@ const views = [
 	"SELECT * FROM my_family_invites",
 	"SELECT * FROM my_push_tokens",
 	"SELECT * FROM my_family_people",
+	"SELECT * FROM my_phone",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
+	"SELECT * FROM pending_wearer_texts",
+	"SELECT * FROM finder_links",
+	"SELECT * FROM member_phones",
 ];
 
 const quality = { Validated: "validated", Unvalidated: "unvalidated" } as const;

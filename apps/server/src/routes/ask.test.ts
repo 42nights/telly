@@ -312,18 +312,34 @@ describe("POST /ask", () => {
 		expect(bridgeCalls).toHaveLength(0);
 	});
 
-	test("a greeting gets one Gemini call without tools, so no Fetch.ai tool runs", async () => {
-		gemini = () => Response.json(answer("Hello! How can I help?"));
-		for (const question of ["Hi", "hello!", "Thank you, Telly.", "Buenos días"])
+	test("a greeting gets one Gemini call without tools or record rules, so no Fetch.ai tool runs", async () => {
+		gemini = () => Response.json(answer("Hello! I am Telly."));
+		const greetings = [
+			"Hi",
+			"hello!",
+			"Thank you, Telly.",
+			"Buenos días",
+			"Who is this",
+			"who's this?",
+		];
+		for (const question of greetings)
 			expect((await ask({ question }, signedIn)).status).toBe(200);
-		expect(geminiBodies.map((body) => body.tools)).toEqual([[], [], [], []]);
+		expect(geminiBodies.map((body) => body.tools)).toEqual(
+			greetings.map(() => []),
+		);
+		// Without tools, the record rules ("say that the data is unavailable") must not reach the
+		// model, or it tells the family that their records are missing.
+		for (const body of geminiBodies) {
+			expect(body.system_instruction).toContain("Telly");
+			expect(body.system_instruction).not.toContain("unavailable");
+		}
 		expect(bridgeCalls).toHaveLength(0);
 		// A greeting with a question in it still gets the tools.
 		answerWith([]);
 		expect((await ask({ question: "Hi, how did Mom sleep?" })).status).toBe(
 			200,
 		);
-		expect(geminiBodies[4]?.tools.length).toBeGreaterThan(0);
+		expect(geminiBodies[greetings.length]?.tools.length).toBeGreaterThan(0);
 		expect(bridgeCalls).toHaveLength(1);
 	});
 
