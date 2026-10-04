@@ -1,4 +1,4 @@
-// Pure state mapping for the family phone and the dashboard. No fetches, no React.
+// Pure state mapping for the family screen. No fetches, no React.
 import type { AlertAcknowledgement, HealthSample } from "@health/contracts";
 import type {
 	AlertDelivery,
