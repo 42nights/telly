@@ -18,7 +18,7 @@ const withAppointment = () => {
 		prep: "list meds",
 		source: "model",
 	});
-	// The founder may grant scopes until anyone holds family_access.
+	// The founder holds every scope (#188), family_access too, so she grants any of them.
 	const grant = (member: typeof alice, scope: string) =>
 		h.call(mod.setCareGrant, alice, {
 			familyId: 1n,
@@ -167,9 +167,12 @@ describe("approveClinicianShare", () => {
 	test("needs the clinician_delivery scope", () => {
 		const h = withAppointment();
 		h.call(mod.reviewAppointmentSummary, alice, { id: "a1", summary: "s" });
+		// Bob is a member without care scopes; the founder holds them all (#188).
 		expect(() =>
-			h.call(mod.approveClinicianShare, alice, share("explicit", "once")),
+			h.call(mod.approveClinicianShare, bob, share("explicit", "once")),
 		).toThrow("no care access: clinician_delivery");
+		h.grant(bob, "clinician_delivery");
+		h.call(mod.approveClinicianShare, bob, share("explicit", "once"));
 	});
 
 	test("needs a reviewed summary", () => {
@@ -310,12 +313,13 @@ describe("revokeClinicianShare", () => {
 describe("saveCookingProfile", () => {
 	test("needs care_plan_edit and non-empty text", () => {
 		const h = withAppointment();
+		// Bob is a member without care scopes; the founder holds them all (#188).
 		expect(() =>
-			h.call(mod.saveCookingProfile, alice, { familyId: 1n, profile: "soft" }),
+			h.call(mod.saveCookingProfile, bob, { familyId: 1n, profile: "soft" }),
 		).toThrow("no care access: care_plan_edit");
-		h.grant(alice, "care_plan_edit");
+		h.grant(bob, "care_plan_edit");
 		expect(() =>
-			h.call(mod.saveCookingProfile, alice, { familyId: 1n, profile: " " }),
+			h.call(mod.saveCookingProfile, bob, { familyId: 1n, profile: " " }),
 		).toThrow("profile must not be empty");
 		expect(h.rows("cookingProfile")).toEqual([]);
 	});
