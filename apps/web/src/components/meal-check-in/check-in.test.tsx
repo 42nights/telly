@@ -179,14 +179,18 @@ describe("MealCheckIn", () => {
 		).toBeDefined();
 	});
 
-	test("notes rejected for the session ask to sign in", async () => {
-		serve({ [HISTORY]: history(occurrence()), [PROFILE]: { status: 401 } });
+	test("notes rejected for the session end it, so check-ins are not available", async () => {
+		const calls = serve({
+			[HISTORY]: history(occurrence()),
+			[PROFILE]: { status: 401 },
+		});
 		const { view } = show();
+		expect((await view.findByRole("status")).textContent).toBe(
+			"Meal and drink check-ins are not available right now.",
+		);
 		expect(
-			await view.findByText(
-				"Your diet and fluid notes cannot be read: sign in first",
-			),
-		).toBeDefined();
+			calls.filter((c) => c.path.endsWith("/reminder-occurrences")).length,
+		).toBe(1);
 	});
 
 	test("I ate records done, shows saving, then reads the history again", async () => {
@@ -236,27 +240,29 @@ describe("MealCheckIn", () => {
 		const later = await view.findByRole("button", { name: "Later" });
 		fireEvent.click(later);
 		expect(await view.findByText("Not saved: Database is down.")).toBeDefined();
-		status = 401;
-		fireEvent.click(later);
-		expect(
-			await view.findByText("Not saved: Sign in to answer."),
-		).toBeDefined();
 		status = 200;
 		fireEvent.click(later);
 		await waitFor(() =>
 			expect(view.queryByText(/Not saved/) === null).toBe(true),
 		);
 		fireEvent.click(view.getByRole("button", { name: "Not this time" }));
-		await waitFor(() => expect(answers(calls).length).toBe(4));
+		await waitFor(() => expect(answers(calls).length).toBe(3));
 		const ids = answers(calls).map((a) => a.clientId);
-		expect(new Set(ids.slice(0, 3)).size).toBe(1);
-		expect(ids[3]).not.toBe(ids[0]);
+		expect(ids[1]).toBe(ids[0]);
+		expect(ids[2]).not.toBe(ids[0]);
 		expect(said(calls).map((a) => a.response)).toEqual([
-			"later",
 			"later",
 			"later",
 			"stop",
 		]);
+		status = 401;
+		fireEvent.click(await view.findByRole("button", { name: "Later" }));
+		expect(
+			await view.findByText(
+				"Meal and drink check-ins are not available right now.",
+			),
+		).toBeDefined();
+		expect(answers(calls).length).toBe(4);
 	});
 
 	test("the wearer's typed words go with a direct answer", async () => {

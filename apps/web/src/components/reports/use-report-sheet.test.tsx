@@ -203,17 +203,31 @@ describe("useReportSheet", () => {
 	});
 
 	test("review posts without a body and clears an earlier failure", async () => {
-		let reply: { status: number } = { status: 401 };
+		let reply: ServerReply = {
+			status: 500,
+			body: { error: "internal", message: "Database down." },
+		};
 		const calls = serve({ [`${BASE}/review`]: () => reply });
 		const { hook, onChanged } = sheetOf(report());
 		await act(() => hook.result.current.review());
-		expect(hook.result.current.status).toBe("Sign in again.");
+		expect(hook.result.current.status).toBe("Database down.");
 		expect(onChanged).not.toHaveBeenCalled();
 		reply = { status: 204 };
 		await act(() => hook.result.current.review());
 		expect(onChanged).toHaveBeenCalledTimes(1);
 		expect(hook.result.current.status).toBe("Draft · not sent");
 		expect(calls.map((call) => call.body)).toEqual([undefined, undefined]);
+	});
+
+	test("a 401 to review ends the session, so a later review is not sent", async () => {
+		const calls = serve({ [`${BASE}/review`]: { status: 401 } });
+		const { hook, onChanged } = sheetOf(report());
+		await act(() => hook.result.current.review());
+		expect(hook.result.current.status).toBe("Sign in again.");
+		await act(() => hook.result.current.review());
+		expect(hook.result.current.status).toBe("Sign in again.");
+		expect(calls).toHaveLength(1);
+		expect(onChanged).not.toHaveBeenCalled();
 	});
 
 	test("a success reply to submit is still not a delivery receipt", async () => {

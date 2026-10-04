@@ -168,6 +168,17 @@ const show = () => {
 	return render(<RouterProvider router={router} />);
 };
 
+/** After a 401 the session ends: the panel shows its sign-in notice instead of the prompt. */
+const expectSignedOut = async (view: ReturnType<typeof show>) => {
+	expect(
+		(await view.findByRole("link", { name: "Go to Sign in" })).getAttribute(
+			"href",
+		),
+	).toBe("/sign-in");
+	expect(view.getByText("Sign-in required")).toBeDefined();
+	expect(view.queryByRole("button", { name: "I took it" }) === null).toBe(true);
+};
+
 const PROMPT =
 	"It's time for Synthetic Med A. Your saved instruction says: “1 tablet by mouth with breakfast”. Source: demo pharmacy label, from 2026-01-01.";
 const answersOf = (calls: Call[]) =>
@@ -261,7 +272,6 @@ describe("MedicationReminders", () => {
 				},
 				"I can't read your medication plan: No care access",
 			],
-			[{ status: 401 }, "Sign in to read your medication plan."],
 		] as const) {
 			server(() => [occurrence()], { [PLAN]: reply });
 			const view = show();
@@ -277,6 +287,11 @@ describe("MedicationReminders", () => {
 			expect(view.getByText(/^I have no verified instruction/)).toBeDefined();
 			view.unmount();
 		}
+	});
+
+	test("a 401 on the plan ends the session; the panel asks to sign in", async () => {
+		server(() => [occurrence()], { [PLAN]: { status: 401 } });
+		await expectSignedOut(show());
 	});
 
 	test("Why do I take it? reads the saved reason; Back returns to the prompt", async () => {
@@ -352,7 +367,6 @@ describe("MedicationReminders", () => {
 				{ status: 503, body: { error: "unavailable", message: "Try later" } },
 				"Your answer was not saved: Try later",
 			],
-			[{ status: 401 }, "Sign in to record your answer."],
 		] as const) {
 			server(() => [occurrence()], { [ANSWERS]: reply });
 			const view = show();
@@ -362,6 +376,14 @@ describe("MedicationReminders", () => {
 			expect(view.getByRole("button", { name: "I took it" })).toBeDefined();
 			view.unmount();
 		}
+	});
+
+	test("a 401 on an answer ends the session and sends nothing more", async () => {
+		const calls = server(() => [occurrence()], { [ANSWERS]: { status: 401 } });
+		const view = show();
+		fireEvent.click(await view.findByRole("button", { name: "I took it" }));
+		await expectSignedOut(view);
+		expect(answersOf(calls)).toHaveLength(1);
 	});
 
 	test("not sure: reads every recorded step and container sighting, then asks the family", async () => {
@@ -451,7 +473,6 @@ describe("MedicationReminders", () => {
 				{ status: 503, body: { error: "unavailable", message: "Try later" } },
 				"Your family was not asked: Try later",
 			],
-			[{ status: 401 }, "Sign in to ask your family."],
 		] as const) {
 			server(() => [occurrence()], {
 				[ANSWERS]: detail(occurrence({ state: "unresolved" })),
@@ -466,5 +487,17 @@ describe("MedicationReminders", () => {
 			expect(view.getByRole("button", { name: "Ask my family" })).toBeDefined();
 			view.unmount();
 		}
+	});
+
+	test("a 401 when asking the family ends the session", async () => {
+		const calls = server(() => [occurrence()], {
+			[ANSWERS]: detail(occurrence({ state: "unresolved" })),
+			[NEEDS]: { status: 401 },
+		});
+		const view = show();
+		fireEvent.click(await view.findByRole("button", { name: "I need help" }));
+		fireEvent.click(await view.findByRole("button", { name: "Ask my family" }));
+		await expectSignedOut(view);
+		expect(calls.filter((c) => c.path.endsWith("/care/needs"))).toHaveLength(1);
 	});
 });

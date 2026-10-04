@@ -137,7 +137,7 @@ describe("MedicineMemorySettings", () => {
 			status: 500,
 			body: { error: "internal", message: "Disk full" },
 		};
-		const { view } = show({
+		const { view, calls, frame } = show({
 			[`GET ${PATH}`]: { json: ON },
 			[`PUT ${PATH}`]: () => reply,
 		});
@@ -146,12 +146,16 @@ describe("MedicineMemorySettings", () => {
 		await waitFor(() =>
 			expect(view.getByRole("alert").textContent).toBe("Not saved: Disk full"),
 		);
+		// A 401 ends the session: the family list re-reads as signed out, so no
+		// family is chosen and the form gives way to the waiting notice.
 		reply = { status: 401 };
 		fireEvent.submit(form);
 		await waitFor(() =>
-			expect(view.getByRole("alert").textContent).toBe(
-				"Not saved: sign in first.",
-			),
+			expect(within(frame).queryByRole("form") === null).toBe(true),
 		);
+		expect(within(frame).getByRole("status").textContent).toContain(
+			"Loading medicine places…",
+		);
+		expect(puts(calls)).toHaveLength(2);
 	});
 });

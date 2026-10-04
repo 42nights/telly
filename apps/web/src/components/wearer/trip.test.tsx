@@ -3,6 +3,13 @@ import "../test/setup";
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Trip } from "@health/contracts/trips";
 import {
+	createMemoryHistory,
+	createRootRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import {
 	fireEvent,
 	installDom,
 	render,
@@ -200,7 +207,9 @@ describe("TripCheckInCard", () => {
 			expect(
 				await view.findByRole("button", { name: "I'm going out" }),
 			).toBeDefined();
-			expect(view.getByRole("alert").textContent).toBe("HTTP 500");
+			expect(view.getByRole("alert").textContent).toBe(
+				"The server is busy or had a problem (HTTP 500). Try again in a minute.",
+			);
 			expect(calls.find((c) => c.path.endsWith("/answer"))?.body).toEqual({
 				answer: "leaving",
 				purpose: "groceries",
@@ -280,23 +289,33 @@ describe("TripCheckInCard", () => {
 		).toEqual([{ answer: "cancel" }, { answer: "cancel" }]);
 	});
 
-	test("a signed-out save asks to sign in", async () => {
-		// The re-read after the send stays pending, so the alert is the last change.
-		const later = Promise.withResolvers<ServerReply>();
+	test("a signed-out save ends the session and asks to sign in", async () => {
 		const calls = serve({
-			[CURRENT]: () =>
-				calls.length === 1 ? { json: { trip: null } } : later.promise,
+			[CURRENT]: { json: { trip: null } },
 			"POST /api/families/1/trips/check-in": { status: 401 },
 		});
-		const view = render(<TripCheckInCard familyId="1" />);
+		const view = inRouter(<TripCheckInCard familyId="1" />);
 		fireEvent.click(await view.findByRole("button", { name: "I'm going out" }));
-		expect((await view.findByRole("alert")).textContent).toBe(
-			"Sign in to save your trip.",
+		expect(
+			(await view.findByRole("link", { name: "Go to Sign in" })).getAttribute(
+				"href",
+			),
+		).toBe("/sign-in");
+		expect(view.getByRole("status").textContent).toContain(
+			"Sign in to see your trip.",
 		);
+		// Without a token the re-read is not sent.
 		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
 			CURRENT,
 			"POST /api/families/1/trips/check-in",
-			CURRENT,
 		]);
 	});
 });
+
+function inRouter(ui: ReactNode) {
+	const router = createRouter({
+		routeTree: createRootRoute({ component: () => ui }),
+		history: createMemoryHistory(),
+	});
+	return render(<RouterProvider router={router} />);
+}

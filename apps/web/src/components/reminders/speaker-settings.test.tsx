@@ -5,6 +5,12 @@ import type {
 	SavedSpeakerSettings,
 	SpeakerStatus,
 } from "@health/contracts/speaker";
+import {
+	createMemoryHistory,
+	createRootRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
 import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
@@ -52,11 +58,18 @@ const show = (routes: Routes) => {
 		[`GET ${FAMILY}/speaker`]: { json: QUIET },
 		...routes,
 	});
-	const view = render(
-		<FamilyProvider>
-			<SpeakerSettingsWindow />
-		</FamilyProvider>,
-	);
+	// A 401 ends the session and the signed-out notice links to Sign in, so it needs a router.
+	const router = createRouter({
+		routeTree: createRootRoute({
+			component: () => (
+				<FamilyProvider>
+					<SpeakerSettingsWindow />
+				</FamilyProvider>
+			),
+		}),
+		history: createMemoryHistory(),
+	});
+	const view = render(<RouterProvider router={router} />);
 	return { calls, view };
 };
 
@@ -168,11 +181,9 @@ describe("SpeakerSettingsWindow", () => {
 		);
 		reply = { status: 401 };
 		fireEvent.submit(form);
-		await waitFor(() =>
-			expect(within(form).getByRole("status").textContent).toBe(
-				"Sign in to save.",
-			),
-		);
+		// The session ends, so the family list re-reads signed out and no person is chosen.
+		expect(await view.findByText("No person is paired yet.")).toBeDefined();
+		expect(view.queryByRole("form") === null).toBe(true);
 	});
 
 	test("lists what the simulator said and changes its state", async () => {

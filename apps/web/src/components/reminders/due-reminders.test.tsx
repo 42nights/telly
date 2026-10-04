@@ -7,6 +7,13 @@ import type {
 	ReminderOccurrenceDetail,
 } from "@health/contracts/reminders";
 import {
+	createMemoryHistory,
+	createRootRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import {
 	act,
 	fireEvent,
 	installDom,
@@ -19,6 +26,15 @@ import {
 import { DueReminders } from "./due-reminders";
 
 installDom();
+
+/** A 401 ends the session and `ApiNotice` links to Sign in, so it needs a router. */
+const inRouter = (ui: ReactNode) => {
+	const router = createRouter({
+		routeTree: createRootRoute({ component: () => ui }),
+		history: createMemoryHistory(),
+	});
+	return render(<RouterProvider router={router} />);
+};
 
 const BASE = "/api/families/7/reminder-occurrences";
 const LIST = `GET ${BASE}`;
@@ -254,14 +270,14 @@ describe("DueReminders", () => {
 		);
 	});
 
-	test("says why an answer was not saved", async () => {
+	test("says why an answer was not saved, and a 401 ends the session", async () => {
 		const shown = detail({ state: "delivered", promptDue: false });
 		let reply = failure(500, "Conflict");
-		serve({
+		const calls = serve({
 			[LIST]: list(shown),
 			[`POST ${BASE}/3/answers`]: () => reply,
 		});
-		const view = render(<DueReminders familyId="7" />);
+		const view = inRouter(<DueReminders familyId="7" />);
 		fireEvent.click(await view.findByRole("button", { name: "Later" }));
 		await waitFor(() =>
 			expect(view.getByRole("listitem").textContent).toContain(
@@ -270,10 +286,9 @@ describe("DueReminders", () => {
 		);
 		reply = { status: 401 };
 		fireEvent.click(view.getByRole("button", { name: "Okay" }));
-		await waitFor(() =>
-			expect(view.getByRole("listitem").textContent).toContain(
-				"Shown · Sign in to answer.",
-			),
-		);
+		expect(
+			await view.findByRole("link", { name: "Go to Sign in" }),
+		).toBeDefined();
+		expect(calls.filter((c) => c.method === "POST").length).toBe(2);
 	});
 });

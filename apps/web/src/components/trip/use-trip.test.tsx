@@ -220,14 +220,16 @@ describe("useLocationReporter", () => {
 	});
 
 	test.each([
-		[{ status: 401 }, "Not sent: sign in again."],
+		// A 401 ends the session, so the next position has no token to send with.
+		[{ status: 401 }, "Not sent: sign in again.", 1],
 		[
 			{ status: 403, body: { error: "forbidden", message: "Share first." } },
 			"Not sent: Share first.",
+			2,
 		],
 	])(
 		"a refused report says why and the next position tries again at once",
-		async (reply, text) => {
+		async (reply, text, sent) => {
 			const calls = serve({ "POST /api/families/1/location": reply });
 			const { watchers } = fakeGeolocation();
 			const view = render(<ReporterProbe active familyId="1" />);
@@ -238,7 +240,10 @@ describe("useLocationReporter", () => {
 				expect(view.getByTestId("state").textContent).toBe(text),
 			);
 			await act(async () => watcher.success(position(1)));
-			await waitFor(() => expect(calls).toHaveLength(2));
+			await waitFor(() => expect(calls).toHaveLength(sent));
+			await waitFor(() =>
+				expect(view.getByTestId("state").textContent).toBe(text),
+			);
 		},
 	);
 

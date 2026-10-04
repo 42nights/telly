@@ -2,6 +2,12 @@ import "../test/setup";
 
 import { describe, expect, test } from "bun:test";
 import type { Report } from "@health/contracts/reports";
+import {
+	createMemoryHistory,
+	createRootRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
 import { FamilyProvider } from "@/lib/family";
 import {
 	fireEvent,
@@ -52,11 +58,16 @@ const report = (over: Partial<Report> = {}): Report => ({
 
 const screen = (routes: Routes) => {
 	const calls = serve({ "GET /api/families": FAMILIES, ...routes });
-	const view = render(
+	const ui = (
 		<FamilyProvider>
 			<ReportScreen />
-		</FamilyProvider>,
+		</FamilyProvider>
 	);
+	const router = createRouter({
+		routeTree: createRootRoute({ component: () => ui }),
+		history: createMemoryHistory(),
+	});
+	const view = render(<RouterProvider router={router} />);
 	return { calls, view };
 };
 
@@ -64,11 +75,11 @@ const reportReads = (calls: readonly { method: string; path: string }[]) =>
 	calls.filter((call) => `${call.method} ${call.path}` === REPORTS).length;
 
 describe("ReportScreen before a report", () => {
-	test("waits for the family list", () => {
+	test("waits for the family list", async () => {
 		const { view } = screen({
 			"GET /api/families": () => Promise.withResolvers<ServerReply>().promise,
 		});
-		view.getByText("Waiting for the server.");
+		await view.findByText("Waiting for the server.");
 		view.getByText("No report");
 	});
 
@@ -123,16 +134,17 @@ describe("ReportScreen before a report", () => {
 		view.getByText("Draft · not sent");
 	});
 
-	test("shows why the first report was not created", async () => {
-		const { view } = screen({
+	test("a 401 to a new report ends the session and shows the sign-in notice", async () => {
+		const { calls, view } = screen({
 			[REPORTS]: { json: { reports: [] } },
 			"POST /api/families/1/reports": { status: 401 },
 		});
 		fireEvent.click(
 			await waitFor(() => view.getByRole("button", { name: "New report" })),
 		);
-		await waitFor(() => view.getByText("Sign in again."));
-		view.getByRole("button", { name: "New report" });
+		await view.findByRole("link", { name: "Go to Sign in" });
+		view.getByText("No report");
+		expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
 	});
 });
 
