@@ -147,7 +147,7 @@ export const reportPdf = (report: Report, madeAt: Date): Uint8Array => {
 			const correction = fields.corrections.find((c) => c.metric === metric);
 			return [
 				{
-					text: `${label(metric)}: ${sample.value} ${sample.unit}. Source ${sample.source}, measured ${sample.sourceTime}, ${sample.quality === "validated" ? "validated" : "not validated"}.${sample.synthetic ? " DEMO VALUE, NOT MEASURED." : ""}`,
+					text: `${label(metric)}: ${sample.value} ${sample.unit}. Source ${sample.source}, measured ${sample.sourceTime}.${sample.synthetic ? " DEMO VALUE, NOT MEASURED." : ""}`,
 				},
 				...(correction === undefined
 					? []

@@ -293,7 +293,11 @@ export const explainTrend = (input: TrendInput): TrendExplanation => {
 	const now = input.now.getTime();
 	const nowIso = input.now.toISOString();
 	const windowStart = now - input.days * DAY_MS;
-	const unknown = ["WHOOP data through NOOP: not connected."];
+	const unknown = input.samples.some(
+		(s) => !s.synthetic && s.source.startsWith("noop:"),
+	)
+		? []
+		: ["WHOOP: no readings."];
 	const samples = sampleObservations(input.samples, windowStart, now, unknown);
 	if (samples.length === 0)
 		unknown.push(

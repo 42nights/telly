@@ -49,13 +49,15 @@ describe("SettingsForm", () => {
 		const { view, text, field, save } = show();
 		const person = view.getByRole("group", { name: "Person" });
 		await within(person).findByText("rose");
-		expect(within(person).getByText("R")).toBeDefined();
 		expect(field("Mom's phone number").value).toBe("");
-		expect(field("Mom's phone number").getAttribute("aria-describedby")).toBe(
-			"settings-mom-note",
+		// What stays off is the hint in the empty box, not another line of text.
+		expect(field("Mom's phone number").placeholder).toBe(
+			"Call Mom is off until you add one",
 		);
-		expect(text()).toContain("Call Mom stays off until you add a number.");
-		expect(text()).toContain("Call family stays off until you add a number.");
+		expect(field("Family phone number").placeholder).toBe(
+			"Call family is off until you add one",
+		);
+		expect(text()).not.toContain("Paired manually");
 		expect(field("Emergency number").value).toBe("911");
 		expect(
 			field("Emergency number").getAttribute("aria-describedby") === null,
@@ -121,13 +123,15 @@ describe("SettingsForm", () => {
 				savedAt: 1,
 			}),
 		);
-		const { text, field, save } = show();
+		const { field, save } = show();
 		await waitFor(() =>
 			expect(field("Mom's phone number").value).toBe("555-010-0123"),
 		);
 		expect(field("Emergency number").value).toBe("999");
 		fireEvent.change(field("Mom's phone number"), { target: { value: "" } });
-		expect(text()).toContain("Call Mom stays off until you add a number.");
+		expect(field("Mom's phone number").placeholder).toBe(
+			"Call Mom is off until you add one",
+		);
 		fireEvent.click(save());
 		expect(stored()).toMatchObject({
 			momPhone: null,
@@ -139,7 +143,6 @@ describe("SettingsForm", () => {
 	test("says why there is no person", async () => {
 		const loading = show(() => new Promise<ServerReply>(() => {}));
 		expect(loading.view.getByText("Loading…")).toBeDefined();
-		expect(loading.view.getByText("?")).toBeDefined();
 		loading.view.unmount();
 
 		const signedOut = show({ status: 401 });

@@ -91,8 +91,8 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 		},
 	});
 
-	// `/care-profile` redirects to the Care › Care plan tab (#254).
-	const view = renderRoute("/care-profile");
+	// `/care-profile` redirects to the Care › Care plan tab (#254); the profile is the Profile tab.
+	const carePlan = renderRoute("/care-profile");
 
 	const hears = await screen.findByRole("region", {
 		name: "What the wearer hears",
@@ -106,10 +106,12 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 		screen.getByText("No instructions saved. Medicines are unknown."),
 	).toBeTruthy();
 	expect(screen.getByRole("form", { name: "Add an instruction" })).toBeTruthy();
+	carePlan.unmount();
+
+	const view = renderRoute("/care/facts");
 	expect(
 		await screen.findByText("Not saved yet: every fact is unknown."),
 	).toBeTruthy();
-
 	fireEvent.change(screen.getByLabelText("Preferred name"), {
 		target: { value: "Rosie" },
 	});
@@ -147,8 +149,14 @@ test("a member who may only read sees the plan without edit controls", async () 
 	signIn();
 	serve(plan(["health_records"]));
 
-	renderRoute("/care/plan");
+	const carePlan = renderRoute("/care/plan");
+	expect(
+		await screen.findByText("No instructions saved. Medicines are unknown."),
+	).toBeTruthy();
+	expect(screen.queryByRole("form", { name: "Add an instruction" })).toBeNull();
+	carePlan.unmount();
 
+	renderRoute("/care/facts");
 	expect(
 		await screen.findByText(
 			"Your access does not include editing the care plan.",
@@ -159,7 +167,6 @@ test("a member who may only read sees the plan without edit controls", async () 
 		true,
 	);
 	expect(screen.queryByRole("button", { name: "Save profile" })).toBeNull();
-	expect(screen.queryByRole("form", { name: "Add an instruction" })).toBeNull();
 });
 
 test("each part without a grant says which access is missing", async () => {
@@ -179,12 +186,21 @@ test("each part without a grant says which access is missing", async () => {
 		expect(
 			screen.getAllByRole("alert").map((alert) => alert.textContent),
 		).toEqual([
-			"No access to the wearer's prompt: No grant. Ask the person who manages sharing.",
 			"No access to care instructions: No grant. Ask the person who manages sharing.",
-			"No access to the care profile: No grant. Ask the person who manages sharing.",
+			"No access to the wearer's prompt: No grant. Ask the person who manages sharing.",
 		]),
 	);
 	carePlan.unmount();
+
+	const profile = renderRoute("/care/facts");
+	await waitFor(() =>
+		expect(
+			screen.getAllByRole("alert").map((alert) => alert.textContent),
+		).toEqual([
+			"No access to the care profile: No grant. Ask the person who manages sharing.",
+		]),
+	);
+	profile.unmount();
 
 	renderRoute("/care/sharing");
 	await waitFor(() =>
@@ -227,8 +243,11 @@ test("other failures and slow parts show their own notice", async () => {
 			/^The server is not reachable: TypeError: Failed to fetch/,
 		),
 	).toBeTruthy();
-	expect(screen.getByText("Loading the care profile…")).toBeTruthy();
 	carePlan.unmount();
+
+	const profile = renderRoute("/care/facts");
+	expect(await screen.findByText("Loading the care profile…")).toBeTruthy();
+	profile.unmount();
 
 	renderRoute("/care/sharing");
 	expect(await screen.findByText("Could not load sharing")).toBeTruthy();
