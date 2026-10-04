@@ -19,8 +19,8 @@ import {
 } from "../test/dom";
 
 import { RememberPlace, SavedThings } from "./last-seen";
-import type { PictureCheck } from "./medicine-check";
 import { whenSeen } from "./logic";
+import type { PictureCheck } from "./medicine-check";
 
 installDom();
 
@@ -299,7 +299,9 @@ describe("SavedThings", () => {
 				})}
 			/>,
 		);
-		view.getByText("It was not there 2 minutes ago. This place is out of date.");
+		view.getByText(
+			"It was not there 2 minutes ago. This place is out of date.",
+		);
 		expect(view.queryByRole("button", { name: "It's not there" })).toBeNull();
 		view.getByText("Other places to look:");
 		expect(

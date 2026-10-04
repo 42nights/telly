@@ -225,8 +225,8 @@ function Sighting({
 				<>
 					<p className="flex items-start gap-2 font-semibold">
 						<MapPinOff aria-hidden className="mt-1 size-5 shrink-0" />
-					It was not there {whenSeen(sighting.notFoundAt, now)}. This
-						place is out of date.
+						It was not there {whenSeen(sighting.notFoundAt, now)}. This place is
+						out of date.
 					</p>
 					<Moved
 						familyId={familyId}
