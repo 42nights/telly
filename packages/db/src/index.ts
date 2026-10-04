@@ -59,7 +59,9 @@ import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RecordTripEventReducer from "./record_trip_event_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import ReportLocationReducer from "./report_location_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
+import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
@@ -67,6 +69,7 @@ import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
+import ShareLocationReducer from "./share_location_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
 import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
@@ -90,6 +93,8 @@ import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyLocationSharesRow from "./my_location_shares_table";
+import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
 import MyMessagesRow from "./my_messages_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
@@ -217,6 +222,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myLocationShares: __table({
+    name: 'my_location_shares',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationSharesRow),
+  myLocations: __table({
+    name: 'my_locations',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationsRow),
   myMealFacts: __table({
     name: 'my_meal_facts',
     indexes: [
@@ -316,7 +335,9 @@ const reducersSchema = __reducers(
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("record_trip_event", RecordTripEventReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("report_location", ReportLocationReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
+  __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
@@ -324,6 +345,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
+  __reducerSchema("share_location", ShareLocationReducer),
   __reducerSchema("update_report", UpdateReportReducer),
   __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
   __reducerSchema("verify_exercise_plan", VerifyExercisePlanReducer),

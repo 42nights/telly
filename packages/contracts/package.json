@@ -25,7 +25,8 @@
 		"./speaker": "./src/speaker.ts",
 		"./trips": "./src/trips.ts",
 		"./delivery": "./src/delivery.ts",
-		"./healthkit": "./src/healthkit.ts"
+		"./healthkit": "./src/healthkit.ts",
+		"./location": "./src/location.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

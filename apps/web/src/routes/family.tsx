@@ -15,6 +15,7 @@ import {
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
 import { ReminderHistorySection } from "@/components/reminders/history";
+import { FamilyLocationSection } from "@/components/trip/location";
 import { ApiNotice } from "@/components/win95";
 import { senderLabel } from "@/lib/members";
 
@@ -57,6 +58,8 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 			</header>
 
 			<AlertSection data={data} now={now} />
+
+			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
 
 			<section aria-labelledby="glance" className="grid gap-2">
 				<h3 id="glance" className="font-bold">
