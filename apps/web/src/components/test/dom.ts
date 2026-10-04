@@ -1,14 +1,20 @@
 // Test helpers for rendering components in a happy-dom document. `bun test` runs every package's
 // tests in one process, so the DOM globals (which also replace `fetch`, `Response`, and others)
 // exist only while a component test file runs: `installDom()` installs them before the file's
-// tests and removes them after. A component test starts with `import "../test/env";`.
-import "./env";
+// tests and removes them after. A component test starts with `import "../test/setup";` and takes
+// `render`, `fireEvent`, and the other Testing Library exports from this module.
 
 import { afterAll, afterEach, beforeAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { cleanup } from "@testing-library/react";
-
 import { setSessionToken } from "@/lib/session";
+import { registerDom } from "./setup";
+
+// Bun evaluates CommonJS packages such as React DOM when it links the static imports, before
+// `./setup` runs. React DOM decides at load whether it runs in a browser (for example, whether text
+// inputs fire `onChange`), so it must load after the DOM globals exist: a dynamic import here.
+const testingLibrary = await import("@testing-library/react");
+export const { act, cleanup, fireEvent, render, renderHook, waitFor, within } =
+	testingLibrary;
 
 export type Call = {
 	readonly method: string;
@@ -29,17 +35,16 @@ export type Routes = Record<
 
 /** Call at the top of a component test file. */
 export function installDom() {
-	beforeAll(() => {
-		if (!GlobalRegistrator.isRegistered)
-			GlobalRegistrator.register({ url: "http://localhost/" });
-		Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-	});
+	beforeAll(registerDom);
 	afterEach(() => {
 		cleanup();
 		setSessionToken(null);
 		localStorage.clear();
 	});
 	afterAll(async () => {
+		// React's scheduler runs work queued by the last test (such as effects after an update) on
+		// the next macrotasks, and that work reads `window`. Let it finish before `window` goes.
+		await Bun.sleep(50);
 		await GlobalRegistrator.unregister();
 	});
 }

@@ -68,6 +68,12 @@ export function useReportSheet(
 	const [draft, setDraft] = useState<FieldDraft>(() => draftOf(report.fields));
 	const [busy, setBusy] = useState<string | null>(null);
 	const [failure, setFailure] = useState<ApiFailure | null>(createFailure);
+	// A "New report" that fails while this sheet is open keeps the sheet, so show the failure here.
+	const [seenCreateFailure, setSeenCreateFailure] = useState(createFailure);
+	if (createFailure !== seenCreateFailure) {
+		setSeenCreateFailure(createFailure);
+		setFailure(createFailure);
+	}
 	const [confirmed, setConfirmed] = useState(false);
 	const [sendFailure, setSendFailure] = useState<ApiFailure | null>(null);
 	const [savedAt, setSavedAt] = useState<number | null>(null);
