@@ -1,0 +1,164 @@
+// Runs against a real local SpacetimeDB with the module published (`bun run db:test`) and a local
+// protocol server in place of the Gemini Interactions API. All records and images are synthetic.
+import { afterAll, describe, expect, test } from "bun:test";
+import { Meal, MealEstimate, Meals } from "@health/contracts/meals";
+import { Effect, Schema } from "effect";
+import { mealRoutes } from "./meals";
+import {
+	dbConfig,
+	failure,
+	familyApp,
+	openFamily,
+	send,
+	withDb,
+} from "./test-family";
+
+// A PNG header is all the route reads before it forwards the photo; this one says 4×3 pixels.
+const photo = {
+	type: "image/png",
+	data: Buffer.concat([
+		Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
+		Buffer.from([0, 0, 0, 4, 0, 0, 0, 3]),
+	]).toString("base64"),
+};
+
+let estimates = 0;
+const gemini = Bun.serve({
+	port: 0,
+	fetch: () => {
+		estimates++;
+		return Response.json({
+			status: "completed",
+			steps: [
+				{
+					type: "model_output",
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify({
+								items: [
+									{
+										name: "Rice",
+										preparation: "boiled",
+										portion: "about 1 cup",
+										energy_kcal: [260, 180],
+										protein_g: [3, 5],
+										carbohydrate_g: [40, 55],
+										fat_g: [0, 1],
+									},
+								],
+							}),
+						},
+					],
+				},
+			],
+		});
+	},
+});
+afterAll(() => gemini.stop(true));
+const config = { apiKey: "test-key-not-a-secret", baseUrl: gemini.url.href };
+
+describe.skipIf(dbConfig === undefined)("meals", () => {
+	test("a photo and its estimate never report intake; only an intake report does", () =>
+		withDb((db) =>
+			Effect.gen(function* () {
+				const family = yield* openFamily(db, "Meal family");
+				const app = familyApp(family.db, family.familyId, mealRoutes(config));
+
+				const estimated = yield* send(app, "POST", "/meals/lunch-1/estimates", {
+					source: "photo",
+					capturedAt: "2026-10-04T12:00:00.000Z",
+					image: photo,
+				});
+				expect(estimated.status).toBe(200);
+				const estimate = Schema.decodeUnknownSync(MealEstimate)(estimated.json);
+				expect(estimate.items[0]?.energyKcal).toEqual({ low: 180, high: 260 });
+
+				// The wearer corrects the food; the identity is theirs, the ranges are Gemini's.
+				const corrected = yield* send(app, "POST", "/meals/lunch-1/estimates", {
+					source: "correction",
+					items: [
+						{ name: "Brown rice", preparation: null, portion: "half a cup" },
+					],
+				});
+				expect(
+					Schema.decodeUnknownSync(MealEstimate)(corrected.json).items[0]?.name,
+				).toBe("Brown rice");
+
+				const listed = Schema.decodeUnknownSync(Meals)(
+					(yield* send(app, "GET", "/meals")).json,
+				);
+				expect(listed.meals[0]?.intake).toBe("not_reported");
+				expect(listed.meals[0]?.facts.map(({ fact }) => fact.kind)).toEqual([
+					"photo_taken",
+					"food_estimate",
+					"food_estimate",
+				]);
+
+				const help = yield* send(app, "POST", "/meals/lunch-1/intake", {
+					kind: "caregiver_assistance",
+					help: "Cut the food",
+				});
+				expect(Schema.decodeUnknownSync(Meal)(help.json).intake).toBe(
+					"not_reported",
+				);
+				const reported = yield* send(app, "POST", "/meals/lunch-1/intake", {
+					kind: "intake_reported",
+					portion: "about_half",
+					words: "I ate about half",
+					reporter: "wearer",
+					via: "voice",
+				});
+				expect(Schema.decodeUnknownSync(Meal)(reported.json).intake).toBe(
+					"reported",
+				);
+				const unknown = yield* send(app, "POST", "/meals/lunch-1/intake", {
+					kind: "intake_unknown",
+				});
+				expect(Schema.decodeUnknownSync(Meal)(unknown.json).intake).toBe(
+					"unknown",
+				);
+			}),
+		));
+
+	test("without Gemini the photo is still recorded, and a report needs a portion or words", () =>
+		withDb((db) =>
+			Effect.gen(function* () {
+				const family = yield* openFamily(db, "No camera family");
+				const app = familyApp(
+					family.db,
+					family.familyId,
+					mealRoutes(undefined),
+				);
+				const before = estimates;
+
+				const estimated = yield* send(
+					app,
+					"POST",
+					"/meals/dinner-1/estimates",
+					{
+						source: "photo",
+						capturedAt: "2026-10-04T18:00:00.000Z",
+						image: photo,
+					},
+				);
+				expect(failure(estimated)).toEqual([503, "unavailable"]);
+				const empty = yield* send(app, "POST", "/meals/dinner-1/intake", {
+					kind: "intake_reported",
+					portion: null,
+					words: null,
+					reporter: "wearer",
+					via: "text",
+				});
+				expect(failure(empty)).toEqual([400, "invalid_request"]);
+
+				const meals = Schema.decodeUnknownSync(Meals)(
+					(yield* send(app, "GET", "/meals")).json,
+				).meals;
+				expect(meals.map((m) => [m.intake, m.facts.length])).toEqual([
+					["not_reported", 1],
+				]);
+				expect(estimates).toBe(before);
+			}),
+		));
+});
