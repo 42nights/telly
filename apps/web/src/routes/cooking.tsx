@@ -108,7 +108,7 @@ function Suggestions({
  * care profile and the agreed kitchen abilities on the server; every unknown is shown first.
  */
 function CookingComponent() {
-	const { family } = useFamily();
+	const { state, family } = useFamily();
 	const familyId = family?.id ?? null;
 	const [have, setHave] = useState("");
 	const [avoid, setAvoid] = useState("");
@@ -118,8 +118,18 @@ function CookingComponent() {
 	const [meal, setMeal] = useState<MealSuggestion | null>(null);
 
 	const find = async () => {
+		// Without a family, say why: none paired, the list still loading, or the list's own failure.
 		if (familyId === null)
-			return setResult({ kind: "error", message: "No person is paired yet." });
+			return setResult(
+				state.kind === "ready"
+					? { kind: "error", message: "No person is paired yet." }
+					: state.kind === "loading"
+						? {
+								kind: "error",
+								message: "Your family is still loading. Try again in a moment.",
+							}
+						: state,
+			);
 		setResult("loading");
 		setResult(
 			await apiRequest(

@@ -55,7 +55,7 @@ const day = (iso: string) =>
 	});
 
 function Trends() {
-	const { family } = useFamily();
+	const { state, family } = useFamily();
 	return (
 		<main className="win95-desktop min-h-0 overflow-y-auto p-2 sm:p-4">
 			<Window
@@ -68,13 +68,15 @@ function Trends() {
 						<h2 className="font-bold text-xl">{family?.name ?? "No person"}</h2>
 						<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
 					</header>
-					{family === null ? (
+					{family !== null ? (
+						<TrendForm key={family.id} familyId={family.id} />
+					) : state.kind === "ready" ? (
 						<p className="win95-inset bg-card p-3">
 							No person is paired with this account yet. People are paired
 							manually.
 						</p>
 					) : (
-						<TrendForm key={family.id} familyId={family.id} />
+						<ApiNotice state={state} what="health trends" />
 					)}
 				</div>
 			</Window>
