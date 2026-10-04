@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
-import { newestUnseen } from "./logic";
+import { demoSampleSummary, newestUnseen } from "./logic";
 
 const POLL_MS = 15_000;
 
@@ -50,6 +50,12 @@ export function useFamilyData(): FamilyData {
 	);
 	const records = useApi(FamilyRecords, path(""), options);
 	const me = useApi(Me, "/api/me");
+	const demo =
+		records.kind === "ready" ? demoSampleSummary(records.value.samples) : null;
+	useEffect(() => {
+		if (demo !== null)
+			console.error(`Family records contain ${demo}. They are not shown.`);
+	}, [demo]);
 
 	const markSeen = async (alertId: string) => {
 		const alertsPath = path(

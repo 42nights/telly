@@ -150,7 +150,7 @@ function KeyNumbers({
 	const hrv =
 		records.kind === "ready" &&
 		records.value.samples.some(
-			(s) => s.familyId === family.id && s.metric === "hrv",
+			(s) => s.familyId === family.id && s.metric === "hrv" && !s.synthetic,
 		);
 	return (
 		<section aria-labelledby="numbers" className="grid gap-2">
