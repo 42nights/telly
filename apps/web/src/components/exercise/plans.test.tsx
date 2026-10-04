@@ -203,21 +203,22 @@ test("a refused confirmation shows the server's reason", async () => {
 	);
 });
 
-test("a confirmation refused for the session asks to sign in", async () => {
+test("a confirmation refused for the session ends it and asks to sign in", async () => {
 	signIn();
 	serve({
 		[RECORDS]: records({ plans: [makePlan()], sessions: [] }),
 		[VERIFY]: { status: 401 },
 	});
-	const view = render(<ExerciseSection familyId="f1" />);
+	const { view } = await renderRouted(<ExerciseSection familyId="f1" />);
 	fireEvent.click(
 		await view.findByRole("button", {
 			name: "Not offered yet: confirm it matches the source",
 		}),
 	);
-	expect((await view.findByRole("alert")).textContent).toBe(
-		"Sign in to confirm the activity.",
-	);
+	expect(
+		await view.findByText("Sign in to see exercise.", { exact: false }),
+	).toBeDefined();
+	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 });
 
 test("saving a plan posts the trimmed form, closes it, and reads the list again", async () => {
@@ -328,16 +329,17 @@ test("a refused save keeps the form, sends no video when blank, and shows why", 
 	);
 });
 
-test("a save refused for the session asks to sign in", async () => {
+test("a save refused for the session ends it and asks to sign in", async () => {
 	signIn();
 	serve({ [RECORDS]: EMPTY, [PLANS]: { status: 401 } });
-	const view = render(<ExerciseSection familyId="f1" />);
+	const { view } = await renderRouted(<ExerciseSection familyId="f1" />);
 	fireEvent.click(
 		await view.findByRole("button", { name: "Add an agreed activity" }),
 	);
 	fillForm(view, "Sit tall.");
 	fireEvent.submit(view.getByRole("button", { name: "Save activity" }));
-	expect((await view.findByRole("alert")).textContent).toBe(
-		"Sign in to save the activity.",
-	);
+	expect(
+		await view.findByText("Sign in to see exercise.", { exact: false }),
+	).toBeDefined();
+	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 });

@@ -274,7 +274,7 @@ test("an answer that leaves the prompt open says it will ask again", async () =>
 	});
 });
 
-test("a refused answer shows why it was not saved; a lost session asks to sign in", async () => {
+test("a refused answer shows why it was not saved; a lost session ends and asks to sign in", async () => {
 	signIn();
 	const shown = occurrence("3", { state: "delivered", prompts: 1 });
 	let reply: Reply = {
@@ -286,11 +286,13 @@ test("a refused answer shows why it was not saved; a lost session asks to sign i
 		[SETTINGS]: noSettings,
 		[`POST ${BASE}/reminder-occurrences/3/answers`]: () => reply,
 	});
-	const view = render(<OvernightReminders familyId="7" onPrompt={noop} />);
+	const { view } = await renderRouted(
+		<OvernightReminders familyId="7" onPrompt={noop} />,
+	);
 	fireEvent.click(await view.findByRole("button", { name: "I need help" }));
 	expect(await view.findByText("Not saved: Prompts have ended")).toBeDefined();
 	reply = { status: 401, json: { error: "unauthorized", message: "expired" } };
 	fireEvent.click(view.getByRole("button", { name: "Okay, I see it" }));
-	expect(await view.findByText("Sign in again to answer.")).toBeDefined();
-	expect(view.queryByRole("status")).toBeNull();
+	expect(await view.findByText("Sign in to see reminders.")).toBeDefined();
+	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 });

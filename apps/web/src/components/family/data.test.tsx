@@ -221,7 +221,7 @@ describe("useFamilyData", () => {
 		expect((button as HTMLButtonElement).disabled).toBe(false);
 	});
 
-	test("a rejected session asks to sign in", async () => {
+	test("a rejected session ends it and asks to sign in", async () => {
 		signIn();
 		serve({
 			...baseRoutes([person("f1", "Mom")]),
@@ -230,9 +230,10 @@ describe("useFamilyData", () => {
 		});
 		const { view } = await show();
 		fireEvent.click(await view.findByRole("button", { name: "Mark as seen" }));
-		expect((await view.findByRole("alert")).textContent).toBe(
-			"Sign in to mark this alert as seen.",
-		);
+		expect(
+			await view.findByText("Sign in to see your family.", { exact: false }),
+		).toBeDefined();
+		expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 	});
 
 	test("choosing another person clears the last person's failure", async () => {

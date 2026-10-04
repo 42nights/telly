@@ -228,7 +228,7 @@ describe("ago", () => {
 	const now = Date.parse("2026-01-10T12:00:00Z");
 	const before = (ms: number) => new Date(now - ms).toISOString();
 	test("rounds to the largest useful unit", () => {
-		expect(ago(before(20_000), now)).toBe("just now");
+		expect(ago(before(20_000), now)).toBe("20 s ago");
 		expect(ago(before(5 * 60_000), now)).toBe("5 min ago");
 		expect(ago(before(59 * 60_000), now)).toBe("59 min ago");
 		expect(ago(before(3 * 3_600_000), now)).toBe("3 h ago");
@@ -269,4 +269,14 @@ test("metricLabel turns a metric id into words", () => {
 	expect(metricLabel("heart_rate")).toBe("Heart rate");
 	expect(metricLabel("resting_heart_rate")).toBe("Resting heart rate");
 	expect(metricLabel("")).toBe("");
+});
+
+test("a reading's age counts seconds under a minute", () => {
+	const now = Date.parse("2026-01-01T12:00:00Z");
+	const at = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+	expect(ago(at(2), now)).toBe("just now");
+	expect(ago(at(12), now)).toBe("12 s ago");
+	expect(ago(at(59), now)).toBe("59 s ago");
+	expect(ago(at(90), now)).toBe("2 min ago");
+	expect(ago(at(3 * 3600), now)).toBe("3 h ago");
 });

@@ -29,11 +29,19 @@ jq -j .password "$tmp/registry.json" |
 	crane auth login registry.cloudflare.com -u "$(jq -r .username "$tmp/registry.json")" --password-stdin
 tar -cf "$tmp/layer.tar" --sort=name --mtime=@0 --owner=1000 --group=1000 \
 	--transform 's,^server,app,' -C "$tmp" server
-# The layer digest names the image: the same artifact and entrypoint give the same image, so a
-# rollback redeploys the image it built, and a changed entrypoint never reuses an old tag.
-image="registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/telly-api:$(sha256sum "$tmp/layer.tar" | cut -c1-16)"
-crane append --platform linux/amd64 -b node:24-slim -f "$tmp/layer.tar" -t "$image"
-crane mutate --entrypoint /bin/sh,/app/entrypoint.sh --workdir /app --user node -t "$image" "$image"
+# The layer and base digests name the image: the same artifact, entrypoint, and base give the same
+# image, so a rollback redeploys the image it built.
+repo="registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/telly-api"
+base="node:24-slim@$(crane digest --platform linux/amd64 node:24-slim)"
+hash=$({ sha256sum "$tmp/layer.tar"; echo "$base"; } | sha256sum | cut -c1-16)
+image="$repo:$hash"
+# The final tag is written once, with the entrypoint already set. Writing the unmutated image to it
+# first let instances start plain `node`, which exits 0 at once (a crash loop, #210).
+crane append --platform linux/amd64 -b "$base" -f "$tmp/layer.tar" -t "$repo:build-$hash"
+crane mutate --entrypoint /bin/sh,/app/entrypoint.sh --workdir /app --user node -t "$image" \
+	"$repo:build-$hash"
+[ "$(crane config "$image" | jq -c .config.Entrypoint)" = '["/bin/sh","/app/entrypoint.sh"]' ] ||
+	{ echo "deploy: $image does not start /app/entrypoint.sh; not deployed" >&2; exit 1; }
 
 # TELLY_DEPLOY_ID changes on every deploy, so the Worker starts a new container with new settings.
 # max_instances 2: the new deploy's container starts while the previous one is still stopping.
@@ -61,3 +69,21 @@ jq -n '{TELLY_SECRETS_PULL_TOKEN: env.TELLY_SECRETS_PULL_TOKEN}' >"$tmp/secrets.
 $wrangler deploy --config "$tmp/wrangler.json" --secrets-file "$tmp/secrets.json" \
 	--containers-rollout immediate
 echo "deployed $image"
+
+# Deploy success only starts the container rollout, and until it finishes the old instances still
+# answer. Wait for it, then require /health 200 within 2 minutes; otherwise fail, so the caller rolls
+# back (deploy/cloudflare/autodeploy.sh) or the CI job goes red.
+api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/containers/applications"
+cf() { curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$1"; }
+app=$(cf "$api" | jq -r '.result[] | select(.name == "telly-api") | .id')
+deadline=$(($(date +%s) + 600))
+until [ "$(cf "$api/$app/rollouts" | jq -r '.result[0].status')" = completed ]; do
+	[ "$(date +%s)" -lt "$deadline" ] || { echo "deploy: container rollout did not finish in 10 min" >&2; exit 1; }
+	sleep 10
+done
+deadline=$(($(date +%s) + 120))
+until [ "$(curl -s -m 70 -o /dev/null -w '%{http_code}' "$HEALTH_SERVER_URL/health")" = 200 ]; do
+	[ "$(date +%s)" -lt "$deadline" ] || { echo "deploy: $HEALTH_SERVER_URL/health is not 200 within 2 min" >&2; exit 1; }
+	sleep 5
+done
+echo "healthy $HEALTH_SERVER_URL"

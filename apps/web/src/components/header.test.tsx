@@ -8,22 +8,21 @@ import { act, renderRouted, setupDom, signIn } from "./test/dom";
 
 setupDom();
 
-test("signed out, the taskbar offers Sign in and marks the current screen pressed", async () => {
+test("the taskbar marks the current screen pressed and offers no Sign in", async () => {
+	signIn();
 	const { view } = await renderRouted(<Header />, "/family");
 	const family = await view.findByRole("link", { name: "Family" });
 	expect(family.getAttribute("aria-current")).toBe("page");
 	expect(
 		view.getByRole("link", { name: "Home" }).getAttribute("aria-current"),
 	).toBeNull();
-	expect(view.getByRole("link", { name: "Sign in" })).toBeDefined();
-	expect(view.queryByRole("button", { name: "Sign out" })).toBeNull();
+	expect(view.queryByRole("link", { name: "Sign in" })).toBeNull();
 });
 
-test("signed in, Sign out clears the session and the taskbar follows", async () => {
+test("Sign out ends the session", async () => {
 	signIn();
 	const { view } = await renderRouted(<Header />, "/hud");
 	const signOut = await view.findByRole("button", { name: "Sign out" });
 	act(() => signOut.click());
 	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
-	expect(await view.findByRole("link", { name: "Sign in" })).toBeDefined();
 });

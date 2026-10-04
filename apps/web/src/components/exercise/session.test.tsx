@@ -247,7 +247,7 @@ test("a control that fails to save leaves the session as it was", async () => {
 	fail = true;
 	fireEvent.click(view.getByRole("button", { name: "Pause" }));
 	expect((await view.findByRole("alert")).textContent).toContain(
-		"This was not saved. HTTP 500",
+		"This was not saved. The server is busy or had a problem (HTTP 500).",
 	);
 	expect(view.getByText("Step 1 of 2")).toBeDefined();
 	fireEvent.click(view.getByRole("button", { name: "Repeat" }));
@@ -276,12 +276,14 @@ test("a safety stop shows the help note even when saving the stop fails", async 
 	);
 });
 
-test("a save refused for the session asks the wearer to sign in again", async () => {
+test("a save refused for the session ends it, and the invitation goes away", async () => {
 	const { view } = start(makePlan(), () => ({ status: 401 }));
 	fireEvent.click(await view.findByRole("button", { name: "Not now" }));
-	expect((await view.findByRole("alert")).textContent).toContain(
-		"Sign in again to save this.",
-	);
+	await waitFor(() => {
+		if (view.queryByRole("heading", { name: "Chair march" }) !== null)
+			throw new Error("still invited");
+	});
+	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 });
 
 test("with a video, Pause, Resume, Repeat, Slower, and Stop drive the video", async () => {

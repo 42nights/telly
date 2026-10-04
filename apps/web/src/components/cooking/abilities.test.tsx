@@ -119,7 +119,7 @@ test("a recorded profile shows its choices and dislikes; a refused save says why
 	expect(select(view, "Oven").value).toBe("alone");
 });
 
-test("a save the server refuses as signed out asks to sign in", async () => {
+test("a save the server refuses as signed out ends the session and asks to sign in", async () => {
 	signIn();
 	const calls = serve({
 		[`GET ${PATH}`]: { json: recorded },
@@ -128,12 +128,13 @@ test("a save the server refuses as signed out asks to sign in", async () => {
 			json: { error: "unauthorized", message: "Session expired." },
 		},
 	});
-	const view = render(<CookingAbilities familyId="f1" />);
+	const { view } = await renderRouted(<CookingAbilities familyId="f1" />);
 	await view.findByText(/Last changed/);
 	fireEvent.click(view.getByRole("button", { name: "Save cooking abilities" }));
-	await waitFor(() =>
-		expect(view.getByRole("status").textContent).toBe("Sign in to save."),
-	);
+	expect(
+		await view.findByText("Sign in to see cooking abilities."),
+	).toBeDefined();
+	expect(sessionStorage.getItem("telly.session.token")).toBeNull();
 	expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
 });
 

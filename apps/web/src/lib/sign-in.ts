@@ -21,6 +21,7 @@ const Pending = Schema.Struct({
 	verifier: Schema.String,
 	state: Schema.String,
 	nonce: Schema.String,
+	returnTo: Schema.String,
 });
 
 export type SignInConfig = {
@@ -45,8 +46,8 @@ const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 
 const redirectUri = () => `${location.origin}/sign-in`;
 
-/** Sends the browser to the issuer's sign-in page. */
-export const startSignIn = async (config: SignInConfig) => {
+/** Sends the browser to the issuer's sign-in page; `finishSignIn` gives back `returnTo`. */
+export const startSignIn = async (config: SignInConfig, returnTo: string) => {
 	const response = await fetch(
 		`${config.issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
 	);
@@ -55,7 +56,12 @@ export const startSignIn = async (config: SignInConfig) => {
 	const { authorization_endpoint } = Schema.decodeUnknownSync(Discovery)(
 		await response.json(),
 	);
-	const pending = { verifier: random(), state: random(), nonce: random() };
+	const pending = {
+		verifier: random(),
+		state: random(),
+		nonce: random(),
+		returnTo,
+	};
 	sessionStorage.setItem(PENDING, JSON.stringify(pending));
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
@@ -83,7 +89,10 @@ const takePending = () => {
 	}
 };
 
-/** Completes the issuer's `?code=&state=` return through the server and stores the ID token. */
+/**
+ * Completes the issuer's `?code=&state=` return through the server, stores the ID token, and
+ * returns the `returnTo` that `startSignIn` got.
+ */
 export const finishSignIn = async (
 	config: SignInConfig,
 	reply: { readonly code: string; readonly state: string },
@@ -99,4 +108,5 @@ export const finishSignIn = async (
 	if (!tokenMatches(idToken, config.issuer, pending.nonce))
 		throw new Error("The sign-in server sent a token for another sign-in.");
 	setSessionToken(idToken);
+	return pending.returnTo;
 };
