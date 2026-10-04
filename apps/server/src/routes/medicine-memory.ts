@@ -2,7 +2,8 @@
 // `/api/families/:familyId`. Each member has their own (#291): `?person=<identity>` names the member,
 // and the caller is the default. The module's reducers check membership, the member rule, the
 // permission, and sighting freshness again; the member check here only turns an empty view into an
-// honest `403`. Nothing here records or changes a dose.
+// honest `403`. Nothing here records or changes a dose. Turning the memory off also deletes AR pins
+// (`./medicine-ar-pin`) and their maps.
 import { IdentityHex } from "@health/contracts/families";
 import {
 	type MedicineMemory,
@@ -21,7 +22,9 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
 import { readAccess } from "./care-profile";
+import { deleteFamilyArPins, medicineArPinRoutes } from "./medicine-ar-pin";
 
 type Ctx = Context<FamilyEnv>;
 
@@ -93,8 +96,9 @@ const readMemory = (c: Ctx): MedicineMemory => {
 	};
 };
 
-export const medicineMemoryRoutes = (): FamilyRoutes =>
+export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 	new Hono<FamilyEnv>()
+		.route("/", medicineArPinRoutes(storage))
 		.get("/medicine-memory", (c) => c.json(readMemory(c)))
 		.put("/medicine-memory", async (c) => {
 			const { enabled, places } = await decodeBody(c, SetMedicineMemory);
@@ -108,6 +112,8 @@ export const medicineMemoryRoutes = (): FamilyRoutes =>
 					places: places.map((place) => place.trim()),
 				}),
 			);
+			// After the module's membership check; the module has deleted the pin rows.
+			if (!enabled) await deleteFamilyArPins(storage, familyId);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {

@@ -407,6 +407,23 @@ const medicineSighting = table(
 	},
 );
 
+// Where a remembered container sits in the room, pinned with ARKit on the person's iPhone (contract
+// telly-ar-pin). The world map itself is in R2 at `ar-pins/<familyId>/<containerId>.worldmap`; this
+// row only says that it exists. One pin per sighting; turning medicine memory off deletes them.
+const medicineArPin = table(
+	{ name: "medicine_ar_pin" },
+	{
+		// The `medicine_sighting` id of the pinned container.
+		containerId: t.u64().primaryKey(),
+		familyId: t.u64().index("btree"),
+		anchorId: t.string(),
+		mapBytes: t.u32(),
+		savedBy: t.identity(),
+		createdAt: t.timestamp(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
 // the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
 const NeedKind = t.enum("NeedKind", {
@@ -952,6 +969,7 @@ const spacetimedb = schema({
 	medicineMemory,
 	medicinePlaces,
 	medicineSighting,
+	medicineArPin,
 	contactLadder,
 	careNeed,
 	contactAttempt,
@@ -2044,8 +2062,10 @@ export const setMedicineMemory = spacetimedb.reducer(
 			for (const sighting of [
 				...ctx.db.medicineSighting.familyId.filter(familyId),
 			])
-				if (sighting.personId.isEqual(personId))
+				if (sighting.personId.isEqual(personId)) {
 					ctx.db.medicineSighting.id.delete(sighting.id);
+					ctx.db.medicineArPin.containerId.delete(sighting.id);
+				}
 			return;
 		}
 		for (const place of places) requireText("place", place);
@@ -2135,6 +2155,53 @@ export const markMedicineNotFound = spacetimedb.reducer(
 		if (found === null) throw new SenderError("not a member of this family");
 		requireMedicineOf(ctx, found.familyId, found.personId);
 		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
+// The largest world map a pin keeps; the server refuses a larger one before it stores anything.
+const MAX_WORLD_MAP_BYTES = 16 * 1024 * 1024;
+
+// Stores or replaces the AR pin of a remembered container. The server has already stored the world
+// map in R2; the row records its anchor and size. The same member rule as the sighting (#291).
+export const saveMedicineArPin = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		containerId: t.u64(),
+		anchorId: t.string(),
+		mapBytes: t.u32(),
+	},
+	(ctx, pin) => {
+		const sighting = ctx.db.medicineSighting.id.find(pin.containerId);
+		if (sighting?.familyId !== pin.familyId)
+			throw new SenderError("no such sighting in this family");
+		requireMedicineOf(ctx, pin.familyId, sighting.personId);
+		if (placesOf(ctx, pin.familyId, sighting.personId) === undefined)
+			throw new SenderError("medicine memory is off for this member");
+		requireText("anchorId", pin.anchorId);
+		if (pin.mapBytes === 0 || pin.mapBytes > MAX_WORLD_MAP_BYTES)
+			throw new SenderError("the world map must be 1 byte to 16 MB");
+		const old = ctx.db.medicineArPin.containerId.find(pin.containerId);
+		const row = {
+			...pin,
+			savedBy: ctx.sender,
+			createdAt: old?.createdAt ?? ctx.timestamp,
+			updatedAt: ctx.timestamp,
+		};
+		if (old === null) ctx.db.medicineArPin.insert(row);
+		else ctx.db.medicineArPin.containerId.update(row);
+	},
+);
+
+// Deletes one container's AR pin; a missing pin is already deleted. The server deletes the map.
+export const deleteMedicineArPin = spacetimedb.reducer(
+	{ familyId: t.u64(), containerId: t.u64() },
+	(ctx, { familyId, containerId }) => {
+		requireMember(ctx, familyId);
+		const pin = ctx.db.medicineArPin.containerId.find(containerId);
+		if (pin?.familyId !== familyId) return;
+		const sighting = ctx.db.medicineSighting.id.find(containerId);
+		if (sighting !== null) requireMedicineOf(ctx, familyId, sighting.personId);
+		ctx.db.medicineArPin.containerId.delete(containerId);
 	},
 );
 
@@ -3528,6 +3595,19 @@ export const myFamilyMembers = spacetimedb.view(
 		]),
 );
 
+// The pins of the sightings the caller may read (`medicineReader`, #291): a pin follows its sighting.
+export const myMedicineArPins = spacetimedb.view(
+	{ name: "my_medicine_ar_pins", public: true },
+	t.array(medicineArPin.rowType),
+	(ctx) =>
+		medicineReader(ctx, (familyId) =>
+			ctx.db.medicineSighting.familyId.filter(familyId),
+		).flatMap((sighting) => {
+			const pin = ctx.db.medicineArPin.containerId.find(sighting.id);
+			return pin === null ? [] : [pin];
+		}),
+);
+
 export const myContactLadders = spacetimedb.view(
 	{ name: "my_contact_ladders", public: true },
 	t.array(contactLadder.rowType),
@@ -4032,6 +4112,7 @@ export const deleteFamily = spacetimedb.reducer(
 			db.medicineMemory.familyId,
 			db.medicinePlaces.familyId,
 			db.medicineSighting.familyId,
+			db.medicineArPin.familyId,
 			db.contactLadder.familyId,
 			db.careNeed.familyId,
 			db.contactAttempt.familyId,
