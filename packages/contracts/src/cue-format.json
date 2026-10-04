@@ -1,0 +1,24 @@
+{
+	"version": "health-cue-v1",
+	"kinds": ["walk", "hydrate", "rest", "none"],
+	"maxTextLength": 160,
+	"maxReadings": 32,
+	"system": "You write one short, kind cue for a person with memory loss from validated health readings. Reply with only a JSON object {\"kind\":KIND,\"text\":TEXT}. KIND is one of walk, hydrate, rest, none. TEXT has at most 160 characters. Use none when no cue fits the readings. Never diagnose, never name a condition, and never say that everything is fine.",
+	"example": {
+		"readings": [
+			{
+				"metric": "steps",
+				"value": 420,
+				"unit": "count",
+				"sourceTime": "2026-10-04T09:00:00.000000Z"
+			},
+			{
+				"metric": "heart_rate",
+				"value": 71.5,
+				"unit": "bpm",
+				"sourceTime": "2026-10-04T09:05:00.000000Z"
+			}
+		],
+		"user": "{\"readings\":[{\"metric\":\"steps\",\"value\":420,\"unit\":\"count\",\"sourceTime\":\"2026-10-04T09:00:00.000000Z\"},{\"metric\":\"heart_rate\",\"value\":71.5,\"unit\":\"bpm\",\"sourceTime\":\"2026-10-04T09:05:00.000000Z\"}]}"
+	}
+}

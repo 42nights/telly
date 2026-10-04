@@ -12,29 +12,15 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
-import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
-import { alertRoutes } from "./routes/alerts";
-import { chatRoutes } from "./routes/chat";
-import { accountRoutes, familyRoutes } from "./routes/families";
-import { finchnodeRoutes } from "./routes/finchnode";
-import { reportRoutes } from "./routes/reports";
-import { toolRoutes } from "./routes/tools";
-import { visionRoutes } from "./routes/vision";
-import { voiceRoutes } from "./routes/voice";
+import { accountRoutes } from "./routes/families";
+import { familyDomainRoutes } from "./routes/index";
 
 export const createApp = (config: ServerConfig) => {
-	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
+	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes())
-		.route("/", alertRoutes())
-		.route("/", voiceRoutes(elevenLabsVoice(config.voice)))
-		.route("/vision", visionRoutes(config.gemini))
-		.route("/", reportRoutes())
-		.route("/", finchnodeRoutes(config.finchnode))
-		.route("/", toolRoutes())
-		.route("/", chatRoutes());
+		.route("/", familyDomainRoutes(config));
 
 	const app = new Hono()
 		.use(logger())

@@ -3,6 +3,7 @@ import type { ElevenLabsConfig } from "./integrations/elevenlabs";
 import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
+import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
 
 export type ServerConfig = {
 	readonly corsOrigin: string;
@@ -16,6 +17,8 @@ export type ServerConfig = {
 	readonly finchnode?: Finchnode;
 	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
 	readonly fetchAgent?: FetchAgentConfig | undefined;
+	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
+	readonly gemma?: GemmaConfig | undefined;
 };
 
 type Env = {
@@ -33,7 +36,7 @@ type Env = {
 	readonly FINCHNODE_API_KEY?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_URL?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_TOKEN?: string | undefined;
-};
+} & Parameters<typeof gemmaConfigFrom>[0];
 
 /** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
 const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
@@ -74,15 +77,17 @@ export const serverConfig = (env: Env): ServerConfig => {
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 		: undefined;
+	const gemma = gemmaConfigFrom(env);
 	if (issuer && audience && uri && database)
 		return {
 			...base,
 			gemini,
+			gemma,
 			auth: { issuer, audience, db: { uri, database } },
 		};
 	if (issuer || audience || uri || database)
 		throw new Error(
 			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none",
 		);
-	return { ...base, gemini, auth: undefined };
+	return { ...base, gemini, gemma, auth: undefined };
 };
