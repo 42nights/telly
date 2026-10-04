@@ -13,6 +13,7 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { OnboardingRedirect } from "@/components/onboarding/redirect";
 import { Shell } from "@/components/shell";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AutoTripProvider } from "@/components/trip/auto-trip";
 import { FamilyProvider } from "@/lib/family";
 import { requireSession } from "@/lib/session";
 
@@ -103,8 +104,10 @@ function RootComponent() {
 					</div>
 				) : (
 					<FamilyProvider person={{ picked: person ?? null, pick }}>
-						<OnboardingRedirect />
-						<Shell />
+						<AutoTripProvider>
+							<OnboardingRedirect />
+							<Shell />
+						</AutoTripProvider>
 					</FamilyProvider>
 				)}
 				<Toaster richColors />

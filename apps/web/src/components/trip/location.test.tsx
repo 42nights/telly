@@ -1,17 +1,14 @@
 import "../test/setup";
 
 import { describe, expect, test } from "bun:test";
-import type { FamilyRecords } from "@health/contracts";
 import type {
 	FamilyLocations,
 	LocationShare,
 	SharedLocation,
 } from "@health/contracts/location";
 import { clock } from "@/components/family/logic";
-import type { ApiState } from "@/lib/api";
 import {
 	act,
-	fireEvent,
 	installDom,
 	render,
 	type ServerReply,
@@ -20,11 +17,7 @@ import {
 	within,
 } from "../test/dom";
 
-import {
-	FamilyLocationSection,
-	LocationCard,
-	SharingControls,
-} from "./location";
+import { FamilyLocationSection, LocationCard, WhoSeesMe } from "./location";
 
 installDom();
 
@@ -34,7 +27,6 @@ const at = (minutesAgo: number) =>
 const me = "a".repeat(64);
 const sister = "b".repeat(64);
 const brother = "c".repeat(64);
-const cousin = "d".repeat(64);
 
 const location = (over: Partial<SharedLocation>): SharedLocation => ({
 	familyId: "1",
@@ -59,6 +51,7 @@ const locations = (shares: LocationShare[]): FamilyLocations => ({
 	locations: [],
 	shares,
 	seesShared: true,
+	events: [],
 });
 
 describe("LocationCard", () => {
@@ -111,218 +104,105 @@ describe("LocationCard", () => {
 	});
 });
 
-const records = (
-	senders: string[],
-	members: string[],
-): ApiState<FamilyRecords> => ({
-	kind: "ready",
-	at: now,
-	value: {
-		families: [],
-		samples: [],
-		alerts: [],
-		messages: senders.map((sender, index) => ({
-			id: `m${index}`,
-			familyId: "1",
-			sender,
-			body: "hi",
-			sentAt: at(5),
-			clientId: `c${index}`,
-		})),
-		acknowledgements: members.map((member, index) => ({
-			id: `a${index}`,
-			alertId: "1",
-			familyId: "1",
-			member,
-			acknowledgedAt: at(5),
-		})),
-	},
-});
 const sharesPath = (viewer: string) =>
 	`/api/families/1/location/shares/${viewer}`;
 const ok: ServerReply = { json: locations([]) };
-
-describe("SharingControls", () => {
-	test("with no shares it says nothing is sent, and offers no members while records load", () => {
-		serve({});
-		const view = render(
-			<SharingControls
-				familyId="1"
-				locations={locations([])}
-				me={me}
-				records={{ kind: "loading" }}
-			/>,
-		);
-		expect(view.container.textContent).toContain(
-			"Nobody. Telly sends no location until you share it with someone.",
-		);
-		expect(
-			view.getAllByRole("button").map((button) => button.textContent),
-		).toEqual(["Share"]);
-	});
-
-	test("lists each of my shares and stops one on request", async () => {
-		const calls = serve({ [`DELETE ${sharesPath(sister)}`]: ok });
-		const view = render(
-			<SharingControls
-				familyId="1"
-				locations={{
-					locations: [],
-					shares: [share(sister), { ...share(me), sharer: brother }],
-					seesShared: true,
-				}}
-				me={me}
-				records={{ kind: "loading" }}
-			/>,
-		);
-		const items = view.getAllByRole("listitem");
-		expect(items).toHaveLength(1);
-		expect(items[0]?.textContent).toContain(
-			`Member bbbbbb · since ${clock(at(60))}`,
-		);
-		await act(async () =>
-			view
-				.getByRole("button", { name: "Stop sharing with Member bbbbbb" })
-				.click(),
-		);
-		expect(calls).toEqual([
-			{ method: "DELETE", path: sharesPath(sister), body: undefined },
-		]);
-	});
-
-	test("offers members seen in the records, except me and those already shared with", async () => {
-		const calls = serve({ [`PUT ${sharesPath(cousin)}`]: ok });
-		const view = render(
-			<SharingControls
-				familyId="1"
-				locations={locations([share(sister)])}
-				me={me}
-				records={records([me, sister, cousin, cousin], [brother, cousin])}
-			/>,
-		);
-		expect(
-			view
-				.getAllByRole("button")
-				.map((button) => button.textContent)
-				.filter((text) => text?.startsWith("Share with")),
-		).toEqual(["Share with Member dddddd", "Share with Member cccccc"]);
-		await act(async () =>
-			view.getByRole("button", { name: "Share with Member dddddd" }).click(),
-		);
-		expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
-			`PUT ${sharesPath(cousin)}`,
-		]);
-	});
-
-	test("shares by a typed sharing ID only when it is a valid identity, then clears the field", async () => {
-		const calls = serve({ [`PUT ${sharesPath(cousin)}`]: ok });
-		const view = render(
-			<SharingControls
-				familyId="1"
-				locations={locations([])}
-				me={me}
-				records={{ kind: "loading" }}
-			/>,
-		);
-		const field = view.getByLabelText(
-			"Share with a family member by their sharing ID",
-		);
-		const submit = view.getByRole("button", { name: "Share" });
-		expect(field.getAttribute("aria-invalid")).toBe("false");
-		expect(submit.hasAttribute("disabled")).toBe(true);
-
-		fireEvent.change(field, { target: { value: "not-an-id" } });
-		expect(field.getAttribute("aria-invalid")).toBe("true");
-		expect(submit.hasAttribute("disabled")).toBe(true);
-		fireEvent.submit(field.closest("form") ?? field);
-		expect(calls).toEqual([]);
-
-		fireEvent.change(field, { target: { value: `  ${cousin} ` } });
-		expect(field.getAttribute("aria-invalid")).toBe("false");
-		expect(submit.hasAttribute("disabled")).toBe(false);
-		await act(async () => submit.click());
-		expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
-			`PUT ${sharesPath(cousin)}`,
-		]);
-		expect(field).toHaveProperty("value", "");
-	});
-
-	test("buttons are off while a change is in flight", async () => {
-		const reply = Promise.withResolvers<ServerReply>();
-		serve({ [`DELETE ${sharesPath(sister)}`]: () => reply.promise });
-		const view = render(
-			<SharingControls
-				familyId="1"
-				locations={locations([share(sister)])}
-				me={me}
-				records={records([cousin], [])}
-			/>,
-		);
-		const stop = view.getByRole("button", {
-			name: "Stop sharing with Member bbbbbb",
-		});
-		await act(async () => stop.click());
-		expect(stop.hasAttribute("disabled")).toBe(true);
-		expect(
-			view
-				.getByRole("button", { name: "Share with Member dddddd" })
-				.hasAttribute("disabled"),
-		).toBe(true);
-		await act(async () => reply.resolve(ok));
-		expect(stop.hasAttribute("disabled")).toBe(false);
-	});
-
-	test.each([
-		[{ status: 401 }, "Sign in again to change sharing."],
-		[
-			{ status: 403, body: { error: "forbidden", message: "Not a member." } },
-			"Not a member.",
+const MEMBERS = "GET /api/families/1/members";
+const members: ServerReply = {
+	json: {
+		members: [
+			{ identity: me, name: "Ana" },
+			{ identity: sister, name: "Rosa Rivera" },
+			{ identity: brother, name: null },
 		],
-		[
+	},
+};
+// Rosa holds Location access; nobody else does.
+const access: ServerReply = {
+	json: {
+		mine: [],
+		grants: [
 			{
-				status: 503,
-				body: { error: "unavailable", message: "Database down." },
+				identity: sister,
+				scope: "location",
+				granted: true,
+				changedBy: me,
+				changedAt: at(10),
 			},
-			"Database down.",
 		],
-	])("a refused change shows why and changes nothing", async (reply, text) => {
-		serve({ [`DELETE ${sharesPath(sister)}`]: reply });
+		history: [],
+	},
+};
+
+describe("WhoSeesMe", () => {
+	test("lists every other member by name with an on/off box, never by identity", async () => {
+		const calls = serve({
+			[MEMBERS]: members,
+			"GET /api/families/1/care-access": access,
+			[`DELETE ${sharesPath(sister)}`]: ok,
+		});
 		const view = render(
-			<SharingControls
+			<WhoSeesMe
 				familyId="1"
-				locations={locations([share(sister)])}
+				locations={locations([share(sister), share(brother)])}
 				me={me}
-				records={{ kind: "loading" }}
 			/>,
 		);
-		await act(async () =>
-			view
-				.getByRole("button", { name: "Stop sharing with Member bbbbbb" })
-				.click(),
+		await waitFor(() =>
+			expect(view.container.textContent).toContain("Cannot see it yet"),
 		);
-		expect(view.getByRole("alert").textContent).toBe(text);
+		const boxes = view.getAllByRole("checkbox");
+		expect(
+			boxes.map((b) => [
+				b.closest("label")?.textContent,
+				b instanceof HTMLInputElement && b.checked,
+			]),
+		).toEqual([
+			["Rosa Rivera", true],
+			[
+				"Family memberCannot see it yet: turn on Location for them in Care › Sharing.",
+				true,
+			],
+		]);
+		expect(view.container.textContent).not.toContain(sister.slice(0, 6));
+		await act(async () => boxes[0]?.click());
+		expect(calls.map((c) => `${c.method} ${c.path}`)).toContain(
+			`DELETE ${sharesPath(sister)}`,
+		);
+	});
+
+	test("a refused change shows why and changes nothing", async () => {
+		serve({
+			[MEMBERS]: members,
+			"GET /api/families/1/care-access": access,
+			[`PUT ${sharesPath(sister)}`]: {
+				status: 403,
+				body: { error: "forbidden", message: "Not a member." },
+			},
+		});
+		const view = render(
+			<WhoSeesMe familyId="1" locations={locations([])} me={me} />,
+		);
+		const [rosa] = await view.findAllByRole("checkbox");
+		await act(async () => rosa?.click());
+		expect((await view.findByRole("alert")).textContent).toBe(
+			"Not changed: Not a member.",
+		);
 	});
 });
 
 describe("FamilyLocationSection", () => {
 	const path = "GET /api/families/1/location";
 
-	test("shows the locations shared with me, not my own, and copies my sharing ID without showing it", async () => {
+	test("shows the locations shared with me by name, not my own", async () => {
 		serve({
+			[MEMBERS]: members,
 			[path]: {
 				json: {
 					locations: [location({ sharer: me }), location({})],
 					shares: [],
 					seesShared: true,
-				},
-			},
-		});
-		const copied: string[] = [];
-		Object.defineProperty(navigator, "clipboard", {
-			configurable: true,
-			value: {
-				writeText: async (text: string) => {
-					copied.push(text);
+					events: [],
 				},
 			},
 		});
@@ -331,23 +211,68 @@ describe("FamilyLocationSection", () => {
 		);
 		const section = view.getByRole("region", { name: "Location" });
 		await waitFor(() =>
-			expect(within(section).getAllByRole("article")).toHaveLength(1),
+			expect(
+				within(section).getByRole("heading", { level: 4 }).textContent,
+			).toBe("Rosa Rivera"),
 		);
-		expect(within(section).getByRole("heading", { level: 4 }).textContent).toBe(
-			"Member bbbbbb",
-		);
+		expect(within(section).getAllByRole("article")).toHaveLength(1);
 		expect(section.textContent).not.toContain(me);
-		fireEvent.click(
-			within(section).getByRole("button", { name: "Copy my sharing ID" }),
-		);
-		await waitFor(() => expect(copied).toEqual([me]));
-		await waitFor(() => expect(section.textContent).toContain("Copied."));
 	});
 
-	test("says when nobody shares a location, and shows no ID before I am known", async () => {
+	test("lists trip notices of people who share with me, not my own, with a map link", async () => {
+		const event = (id: string, over: Record<string, unknown>) => ({
+			id,
+			familyId: "1",
+			sharer: sister,
+			kind: "left",
+			manual: false,
+			fix: null,
+			at: at(5),
+			...over,
+		});
+		serve({
+			[MEMBERS]: members,
+			[path]: {
+				json: {
+					locations: [location({})],
+					shares: [],
+					seesShared: true,
+					events: [
+						event("3", { kind: "back", fix: location({}).fix }),
+						event("2", { manual: true }),
+						event("1", { sharer: me }),
+					],
+				},
+			},
+		});
+		const view = render(
+			<FamilyLocationSection familyId="1" me={me} now={now} />,
+		);
+		const list = await view.findByRole("list", { name: "Going out" });
+		await waitFor(() => expect(list.textContent).toContain("Rosa Rivera"));
+		const items = within(list).getAllByRole("listitem");
+		expect(items.map((i) => i.textContent?.split(" at ")[0])).toEqual([
+			"Rosa Rivera is back home",
+			"Rosa Rivera left home",
+		]);
+		// A manual start has no fix of its own; the link opens the person's latest position.
+		for (const item of items)
+			expect(
+				within(item)
+					.getByRole("link", { name: "Open on a map" })
+					.getAttribute("href"),
+			).toContain("mlat=51.500123456");
+	});
+
+	test("says when nobody shares a location", async () => {
 		serve({
 			[path]: {
-				json: { locations: [location({})], shares: [], seesShared: true },
+				json: {
+					locations: [location({})],
+					shares: [],
+					seesShared: true,
+					events: [],
+				},
 			},
 		});
 		const view = render(
@@ -358,17 +283,17 @@ describe("FamilyLocationSection", () => {
 				"Nobody shares a location with you.",
 			),
 		);
-		view.rerender(<FamilyLocationSection familyId="1" me={null} now={now} />);
-		expect(view.queryByRole("button", { name: "Copy my sharing ID" })).toBe(
-			null,
-		);
-		expect(view.getAllByRole("article")).toHaveLength(1);
 	});
 
 	test("says when location sharing is off for me", async () => {
 		serve({
 			[path]: {
-				json: { locations: [location({})], shares: [], seesShared: false },
+				json: {
+					locations: [location({})],
+					shares: [],
+					seesShared: false,
+					events: [],
+				},
 			},
 		});
 		const view = render(

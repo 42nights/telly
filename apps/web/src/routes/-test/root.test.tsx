@@ -31,6 +31,7 @@ const PATHS = [
 	"/care/plan",
 	"/care/sharing",
 	"/settings/device",
+	"/settings/going-out",
 	"/settings/things",
 	"/settings/reports",
 	"/settings/speaker",

@@ -329,6 +329,70 @@ const locationShare = table(
 	},
 );
 
+const HomePoint = t.object("HomePoint", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+});
+
+// One person's home for automatic trips (#302), in one family. Only that person reads it. Their
+// location reports start a trip after `AWAY_DWELL_MICROS` clearly outside `radiusMeters`, and end
+// it at the first report inside.
+const homeWatch = table(
+	{
+		name: "home_watch",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+		// The first report clearly outside the radius since the last one inside.
+		outsideSince: t.option(t.timestamp()),
+		// When the current trip started; unset at home.
+		awaySince: t.option(t.timestamp()),
+		// How far the latest reported fix was from home, for the person's own status.
+		distanceMeters: t.option(t.f64()),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const AwayKind = t.enum("AwayKind", { Left: t.unit(), Back: t.unit() });
+
+// A trip start or end. The people the sharer shares location with see it (`my_away_events`).
+// Rows are never changed; the last revoked share deletes them with the location.
+// ponytail: two rows per trip are kept until then; prune by age if the list grows large.
+const awayEvent = table(
+	{
+		name: "away_event",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		kind: AwayKind,
+		// The person pressed "I'm going out" or "I'm home"; otherwise the location decided.
+		manual: t.bool(),
+		fix: t.option(LocationFix),
+		at: t.timestamp(),
+	},
+);
+
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -1010,6 +1074,32 @@ const memberName = table(
 	},
 );
 
+// Demo data (#334): the captain's exception to "real data only", for the demo video. While a family
+// has a `demoReplay` row, the database replays a real WHOOP recording as live (`setDemoData`).
+const demoReplay = table(
+	{ name: "demo_replay" },
+	{
+		familyId: t.u64().primaryKey(),
+		// The family whose WHOOP recording is replayed: this one, or `DEMO_RECORDING_FAMILY`.
+		recordingFamilyId: t.u64(),
+		// The index of the next heart rate of the recording to record.
+		next: t.u32(),
+		lastAlertAt: t.option(t.timestamp()),
+		startedBy: t.identity(),
+		startedAt: t.timestamp(),
+	},
+);
+
+// One repeating timer per replaying family; each run records the next heart rate.
+const demoTimer = table(
+	{ name: "demo_timer" },
+	{
+		scheduledId: t.u64().primaryKey().autoInc(),
+		scheduledAt: t.scheduleAt(),
+		familyId: t.u64().index("btree"),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -1025,6 +1115,8 @@ const spacetimedb = schema({
 	finchnodeLink,
 	location,
 	locationShare,
+	homeWatch,
+	awayEvent,
 	medicineMemory,
 	medicinePlaces,
 	medicineSighting,
@@ -1059,6 +1151,8 @@ const spacetimedb = schema({
 	wearerText,
 	finderLink,
 	memberName,
+	demoReplay,
+	demoTimer,
 });
 export default spacetimedb;
 
@@ -2037,6 +2131,11 @@ export const revokeLocationShare = spacetimedb.reducer(
 			ctx.sender,
 		]))
 			ctx.db.location.id.delete(row.id);
+		for (const row of ctx.db.awayEvent.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.awayEvent.id.delete(row.id);
 	},
 );
 
@@ -2078,6 +2177,185 @@ export const reportLocation = spacetimedb.reducer(
 		};
 		if (existing === undefined) ctx.db.location.insert(row);
 		else ctx.db.location.id.update(row);
+		if (fix !== undefined) followHome(ctx, familyId, fix);
+	},
+);
+
+/** A trip starts after this long clearly outside the home radius, so a short walk past it is none. */
+const AWAY_DWELL_MICROS = 60_000_000n;
+// The `HOME_RADIUS` bounds of `@health/contracts/location`.
+const MIN_HOME_RADIUS = 100;
+const MAX_HOME_RADIUS = 5000;
+const EARTH_RADIUS_METERS = 6_371_000;
+
+type Point = { latitude: number; longitude: number };
+
+/** Great-circle (haversine) distance in meters. */
+const distanceMeters = (a: Point, b: Point) => {
+	const rad = Math.PI / 180;
+	const h =
+		Math.sin(((b.latitude - a.latitude) * rad) / 2) ** 2 +
+		Math.cos(a.latitude * rad) *
+			Math.cos(b.latitude * rad) *
+			Math.sin(((b.longitude - a.longitude) * rad) / 2) ** 2;
+	return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h));
+};
+
+const homeWatchOf = (ctx: Ctx, familyId: bigint) =>
+	ctx.db.homeWatch.byFamilySharer.filter([familyId, ctx.sender]).next().value;
+
+const recordAway = (
+	ctx: Ctx,
+	familyId: bigint,
+	kind: "Left" | "Back",
+	manual: boolean,
+	fix: Infer<typeof LocationFix> | undefined,
+) =>
+	ctx.db.awayEvent.insert({
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		kind: { tag: kind },
+		manual,
+		fix,
+		at: ctx.timestamp,
+	});
+
+type HomeWatchRow = Infer<typeof homeWatch.rowType>;
+type HomeStep = {
+	readonly change: Partial<HomeWatchRow>;
+	readonly event?: "Left" | "Back";
+};
+
+/** A fix inside forgets a pending departure, and ends a trip that has been outside. */
+const insideStep = ({ outsideSince, awaySince }: HomeWatchRow): HomeStep =>
+	outsideSince === undefined
+		? { change: {} }
+		: {
+				change: { outsideSince: undefined, awaySince: undefined },
+				...(awaySince === undefined ? {} : { event: "Back" }),
+			};
+
+/** A fix clearly outside starts the dwell; one after the dwell starts the trip. */
+const outsideStep = (
+	{ outsideSince, awaySince }: HomeWatchRow,
+	now: Ctx["timestamp"],
+): HomeStep => {
+	if (outsideSince === undefined) return { change: { outsideSince: now } };
+	const dwelt =
+		now.microsSinceUnixEpoch - outsideSince.microsSinceUnixEpoch >=
+		AWAY_DWELL_MICROS;
+	return awaySince === undefined && dwelt
+		? { change: { awaySince: outsideSince }, event: "Left" }
+		: { change: {} };
+};
+
+/**
+ * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
+ * A fix is inside when its center is within the radius and its accuracy is no wider than the
+ * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
+ * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
+ * ends only after a fix clearly outside.
+ */
+const followHome = (
+	ctx: Ctx,
+	familyId: bigint,
+	fix: Infer<typeof LocationFix>,
+) => {
+	const watch = homeWatchOf(ctx, familyId);
+	if (watch?.home === undefined) return;
+	const distance = distanceMeters(watch.home, fix);
+	const { autoTrip, radiusMeters: radius } = watch;
+	const step: HomeStep = !autoTrip
+		? { change: {} }
+		: distance <= radius && fix.accuracyMeters <= radius
+			? insideStep(watch)
+			: distance - fix.accuracyMeters > radius
+				? outsideStep(watch, ctx.timestamp)
+				: { change: {} };
+	ctx.db.homeWatch.id.update({
+		...watch,
+		...step.change,
+		distanceMeters: distance,
+		updatedAt: ctx.timestamp,
+	});
+	if (step.event !== undefined)
+		recordAway(ctx, familyId, step.event, false, fix);
+};
+
+const upsertHomeWatch = (
+	ctx: Ctx,
+	familyId: bigint,
+	change: Partial<Infer<typeof homeWatch.rowType>>,
+) => {
+	const existing = homeWatchOf(ctx, familyId);
+	const row = {
+		id: 0n,
+		familyId,
+		sharer: ctx.sender,
+		home: undefined,
+		radiusMeters: 200,
+		autoTrip: false,
+		outsideSince: undefined,
+		awaySince: undefined,
+		distanceMeters: undefined,
+		...existing,
+		...change,
+		updatedAt: ctx.timestamp,
+	};
+	if (existing === undefined) ctx.db.homeWatch.insert(row);
+	else ctx.db.homeWatch.id.update(row);
+};
+
+/**
+ * Sets the sender's home, the radius that counts as home, and whether their location reports start
+ * and end trips. Moving home forgets a pending departure; an open trip stays open.
+ */
+export const setHome = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		home: t.option(HomePoint),
+		radiusMeters: t.u32(),
+		autoTrip: t.bool(),
+	},
+	(ctx, { familyId, home, radiusMeters, autoTrip }) => {
+		requireMember(ctx, familyId);
+		if (radiusMeters < MIN_HOME_RADIUS || radiusMeters > MAX_HOME_RADIUS)
+			throw new SenderError(
+				`radiusMeters must be ${MIN_HOME_RADIUS} to ${MAX_HOME_RADIUS}`,
+			);
+		if (
+			home !== undefined &&
+			!(Math.abs(home.latitude) <= 90 && Math.abs(home.longitude) <= 180)
+		)
+			throw new SenderError("coordinates out of range");
+		// A pending departure and the last distance were measured from the old home; an open trip
+		// keeps its evidence.
+		const existing = homeWatchOf(ctx, familyId);
+		const moved =
+			existing?.home?.latitude !== home?.latitude ||
+			existing?.home?.longitude !== home?.longitude;
+		upsertHomeWatch(ctx, familyId, {
+			home,
+			radiusMeters,
+			autoTrip,
+			...(existing?.awaySince === undefined ? { outsideSince: undefined } : {}),
+			...(moved ? { distanceMeters: undefined } : {}),
+		});
+	},
+);
+
+/** "I'm going out" (`away`) or "I'm home". Pressing it again changes nothing. */
+export const setAway = spacetimedb.reducer(
+	{ familyId: t.u64(), away: t.bool() },
+	(ctx, { familyId, away }) => {
+		requireMember(ctx, familyId);
+		if ((homeWatchOf(ctx, familyId)?.awaySince !== undefined) === away) return;
+		upsertHomeWatch(ctx, familyId, {
+			outsideSince: undefined,
+			awaySince: away ? ctx.timestamp : undefined,
+		});
+		recordAway(ctx, familyId, away ? "Left" : "Back", true, undefined);
 	},
 );
 
@@ -3545,10 +3823,21 @@ export const myHealthSamples = spacetimedb.view(
 	{ name: "my_health_samples", public: true },
 	t.array(healthSample.rowType),
 	(ctx) =>
-		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones.
+		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones. While
+		// demo data replays, its copies stand in for the recording they copy (#334), for everyone but
+		// the family's push-token ingest identity.
+		// ponytail: the legacy NOOP_INGEST_KEY identity is not exempt; a push to a replaying legacy family
+		// may store a reading twice.
 		healthReader(
 			ctx,
-			(familyId) => ctx.db.healthSample.familyId.filter(familyId),
+			(familyId) => {
+				const rows = ctx.db.healthSample.familyId.filter(familyId);
+				const ingest = ctx.db.familyPushToken.familyId.find(familyId)?.ingest;
+				return ctx.db.demoReplay.familyId.find(familyId) === null ||
+					ingest?.isEqual(ctx.sender) === true
+					? rows
+					: [...rows].filter((s) => !isRecorded(s));
+			},
 			(s) => s.recordedBy.isEqual(ctx.sender),
 		),
 );
@@ -3794,30 +4083,25 @@ export const myReminderEvents = spacetimedb.view(
 		),
 );
 
-// The caller's own locations, and those of people who share theirs with the caller. Another
-// person's location also needs the caller's `location` care scope (#26) in that family. A revoked
-// share or scope drops the row at once.
+// Shares to the caller that let the caller see the sharer's location now: the caller also holds
+// the `location` care scope (#26) in that family. A revoked share or scope drops out at once.
+const visibleShares = (ctx: ViewCtx<InferSchema<typeof spacetimedb>>) =>
+	[...ctx.db.locationShare.viewer.filter(ctx.sender)].filter((share) =>
+		holdsCareScope(
+			ctx.db.careGrantEvent.byFamilyMember.filter([share.familyId, ctx.sender]),
+			"location",
+		),
+	);
+
+// The caller's own locations, and those of people who share theirs with the caller.
 export const myLocations = spacetimedb.view(
 	{ name: "my_locations", public: true },
 	t.array(location.rowType),
 	(ctx) => [
 		...ctx.db.location.sharer.filter(ctx.sender),
-		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) =>
-			holdsCareScope(
-				ctx.db.careGrantEvent.byFamilyMember.filter([
-					share.familyId,
-					ctx.sender,
-				]),
-				"location",
-			)
-				? [
-						...ctx.db.location.byFamilySharer.filter([
-							share.familyId,
-							share.sharer,
-						]),
-					]
-				: [],
-		),
+		...visibleShares(ctx).flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
 	],
 );
 
@@ -3828,6 +4112,34 @@ export const myLocationShares = spacetimedb.view(
 	(ctx) => [
 		...ctx.db.locationShare.sharer.filter(ctx.sender),
 		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
+);
+
+// The caller's own home settings. Nobody else reads a home position.
+export const myHomeWatch = spacetimedb.view(
+	{ name: "my_home_watch", public: true },
+	t.array(homeWatch.rowType),
+	(ctx) => [...ctx.db.homeWatch.sharer.filter(ctx.sender)],
+);
+
+// Trip starts and ends: the caller's own, and those of people who share their location with the
+// caller, under the rule of `my_locations`. A share shows no event from before it began.
+export const myAwayEvents = spacetimedb.view(
+	{ name: "my_away_events", public: true },
+	t.array(awayEvent.rowType),
+	(ctx) => [
+		...ctx.db.awayEvent.sharer.filter(ctx.sender),
+		...visibleShares(ctx).flatMap((share) =>
+			[
+				...ctx.db.awayEvent.byFamilySharer.filter([
+					share.familyId,
+					share.sharer,
+				]),
+			].filter(
+				(event) =>
+					event.at.microsSinceUnixEpoch >= share.sharedAt.microsSinceUnixEpoch,
+			),
+		),
 	],
 );
 
@@ -4245,6 +4557,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.tripEvent.familyId,
 			db.location.familyId,
 			db.locationShare.familyId,
+			db.homeWatch.familyId,
+			db.awayEvent.familyId,
 			db.mealFact.familyId,
 			db.medicineMemory.familyId,
 			db.medicinePlaces.familyId,
@@ -4273,6 +4587,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.familyPushToken.familyId,
 			db.wearerText.familyId,
 			db.finderLink.familyId,
+			db.demoReplay.familyId,
+			db.demoTimer.familyId,
 		])
 			index.delete(familyId);
 		db.family.id.delete(familyId);
@@ -4667,4 +4983,174 @@ export const myFamilyPeople = spacetimedb.view(
 					}));
 			},
 		),
+);
+
+// Demo data (#334). `setDemoData` copies a real WHOOP recording into the family with every time
+// moved so its newest sample is now, then `runDemoTimer` records the recording's next heart rate
+// every `DEMO_TICK_MICROS`, as if the strap were live. Every copy has the source `DEMO_SOURCE`, so
+// turning demo data off deletes exactly the copies. Any member may: the captain wants every login,
+// including a judge's new family, to see it.
+const DEMO_SOURCE = "noop:demo";
+// Telly's Family, which holds the WHOOP recording in data/whoop/. A family with no recording of its
+// own replays this one (captain's call).
+const DEMO_RECORDING_FAMILY = 3n;
+const DEMO_TICK_MICROS = 15_000_000n;
+const DEMO_ALERT_GAP_MICROS = 60_000_000n;
+// How far above the family's heart-rate threshold the demo alert's spike goes.
+const DEMO_SPIKE_BPM = 15;
+
+type Sample = Infer<typeof healthSample.rowType>;
+
+/** A real WHOOP reading pushed through NOOP: never synthetic, never a demo copy. */
+const isRecorded = (s: Sample) =>
+	!s.synthetic && s.source.startsWith("noop:") && s.source !== DEMO_SOURCE;
+
+const recordingOf = (ctx: Ctx, familyId: bigint) =>
+	[...ctx.db.healthSample.familyId.filter(familyId)].filter(isRecorded);
+
+const insertDemoSample = (
+	ctx: Ctx,
+	familyId: bigint,
+	{
+		metric,
+		value,
+		unit,
+		quality,
+	}: Pick<Sample, "metric" | "value" | "unit" | "quality">,
+	sourceTime: Timestamp,
+) =>
+	ctx.db.healthSample.insert({
+		id: 0n,
+		familyId,
+		metric,
+		value,
+		unit,
+		sourceTime,
+		receivedAt: ctx.timestamp,
+		source: DEMO_SOURCE,
+		synthetic: false,
+		quality,
+		recordedBy: ctx.databaseIdentity,
+	});
+
+export const setDemoData = spacetimedb.reducer(
+	{ familyId: t.u64(), on: t.bool() },
+	(ctx, { familyId, on }) => {
+		requireMember(ctx, familyId);
+		if (!on) {
+			ctx.db.demoReplay.familyId.delete(familyId);
+			ctx.db.demoTimer.familyId.delete(familyId);
+			for (const s of [...ctx.db.healthSample.familyId.filter(familyId)])
+				if (s.source === DEMO_SOURCE) ctx.db.healthSample.id.delete(s.id);
+			return;
+		}
+		if (ctx.db.demoReplay.familyId.find(familyId) !== null) return;
+		let recordingFamilyId = familyId;
+		let recording = recordingOf(ctx, familyId);
+		if (recording.length === 0) {
+			recordingFamilyId = DEMO_RECORDING_FAMILY;
+			recording = recordingOf(ctx, DEMO_RECORDING_FAMILY);
+		}
+		if (!recording.some((s) => s.metric === "heart_rate"))
+			throw new SenderError("there is no WHOOP recording to replay");
+		let newest = 0n;
+		for (const s of recording)
+			if (s.sourceTime.microsSinceUnixEpoch > newest)
+				newest = s.sourceTime.microsSinceUnixEpoch;
+		const shift = ctx.timestamp.microsSinceUnixEpoch - newest;
+		for (const s of recording)
+			insertDemoSample(
+				ctx,
+				familyId,
+				s,
+				new Timestamp(s.sourceTime.microsSinceUnixEpoch + shift),
+			);
+		ctx.db.demoReplay.insert({
+			familyId,
+			recordingFamilyId,
+			next: 0,
+			lastAlertAt: undefined,
+			startedBy: ctx.sender,
+			startedAt: ctx.timestamp,
+		});
+		ctx.db.demoTimer.insert({
+			scheduledId: 0n,
+			scheduledAt: ScheduleAt.interval(DEMO_TICK_MICROS),
+			familyId,
+		});
+	},
+);
+
+export const runDemoTimer = spacetimedb.reducer(
+	{ onSchedule: demoTimer },
+	{ timer: demoTimer.rowType },
+	(ctx, { timer }) => {
+		if (!ctx.sender.isEqual(ctx.databaseIdentity))
+			throw new SenderError("only the database runs demo timers");
+		const replay = ctx.db.demoReplay.familyId.find(timer.familyId);
+		if (replay === null) {
+			ctx.db.demoTimer.scheduledId.delete(timer.scheduledId);
+			return;
+		}
+		const rates = recordingOf(ctx, replay.recordingFamilyId)
+			.filter((s) => s.metric === "heart_rate")
+			.sort((a, b) =>
+				a.sourceTime.microsSinceUnixEpoch < b.sourceTime.microsSinceUnixEpoch
+					? -1
+					: 1,
+			);
+		const next = rates[replay.next % Math.max(rates.length, 1)];
+		if (next === undefined) return;
+		ctx.db.demoReplay.familyId.update({
+			...replay,
+			next: (replay.next + 1) % rates.length,
+		});
+		raiseThresholdAlerts(
+			ctx,
+			insertDemoSample(ctx, timer.familyId, next, ctx.timestamp),
+		);
+	},
+);
+
+// One heart-rate spike above the family's threshold, through the alert path a real reading takes,
+// so the video shows the alert and its family delivery. At most one a minute.
+export const showDemoAlert = spacetimedb.reducer(
+	{ familyId: t.u64() },
+	(ctx, { familyId }) => {
+		requireMember(ctx, familyId);
+		const replay = ctx.db.demoReplay.familyId.find(familyId);
+		if (replay === null) throw new SenderError("demo data is off");
+		if (
+			replay.lastAlertAt !== undefined &&
+			ctx.timestamp.microsSinceUnixEpoch -
+				replay.lastAlertAt.microsSinceUnixEpoch <
+				DEMO_ALERT_GAP_MICROS
+		)
+			throw new SenderError("one demo alert a minute: try again shortly");
+		const rule = [
+			...ctx.db.alertThreshold.byFamilyMetric.filter([familyId, "heart_rate"]),
+		].find((r) => r.direction.tag === "Above" && r.unit === "bpm");
+		if (rule === undefined)
+			throw new SenderError(
+				"set a heart rate threshold (above, in bpm) to show an alert",
+			);
+		ctx.db.demoReplay.familyId.update({
+			...replay,
+			lastAlertAt: ctx.timestamp,
+		});
+		raiseThresholdAlerts(
+			ctx,
+			insertDemoSample(
+				ctx,
+				familyId,
+				{
+					metric: "heart_rate",
+					value: Math.floor(rule.limit) + DEMO_SPIKE_BPM,
+					unit: "bpm",
+					quality: { tag: "Unvalidated" },
+				},
+				ctx.timestamp,
+			),
+		);
+	},
 );
