@@ -57,6 +57,7 @@ const routes: Record<string, unknown> = {
 const paths = [
 	"/family",
 	"/family/daily",
+	"/family/reminders",
 	"/family/exercise",
 	"/family/cooking",
 	"/family/alerts",
