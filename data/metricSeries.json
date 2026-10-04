@@ -1,0 +1,9 @@
+[{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"sleep_performance","value":86.46999999999999887},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"hrv_rr_overcount","value":0.0},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session","value":52.64007141440190197},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session_valid_samples","value":25205.0},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session_duration_s","value":25205.0},
+{"deviceId":"my-whoop-noop","day":"2026-09-26","key":"vitality","value":47.5},
+{"deviceId":"my-whoop-noop","day":"2026-09-26","key":"body_age","value":20.0},
+{"deviceId":"my-whoop","day":"2026-09-29","key":"sleep_mark","value":1.0},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"day_cycle_onset_ts","value":1790677045.0}]

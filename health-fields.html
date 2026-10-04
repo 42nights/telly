@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WHOOP Capabilities</title>
+<style>
+  :root { --bg: #fafaf9; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4; --card: #fff; --empty: #a8a29e; --accent: #b45309; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0c0a09; --fg: #f5f5f4; --muted: #a8a29e; --line: #292524; --card: #1c1917; --empty: #57534e; --accent: #f59e0b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 40px 0 8px; }
+  p.lede, p.note { color: var(--muted); margin: 0 0 8px; }
+  .wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  td.v { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  td.v.none { color: var(--empty); font-weight: 400; }
+  code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>WHOOP capabilities</h1>
+<p class="lede">Every field NOOP collects from a WHOOP 5.0 / MG strap, where it lives in NOOP's on-device SQLite database, and what kind of value it holds. Values are placeholders: <code>{int}</code> and <code>{float}</code> give the type, followed by the unit. Rows marked "not populated" exist in the schema but had no data on our strap. Real sample rows for every table are in <code>data/&lt;table&gt;.json</code>.</p>
+
+<h2>Real time (about 1–2 s while connected)</h2>
+<p class="note">Streamed live over Bluetooth while a phone or computer is connected to the strap.</p>
+<div class="wrap"><table>
+<tr><th>Signal</th><th>Rate</th><th>How to get it</th><th>NOOP stores</th><th>Status</th></tr>
+<tr><td>Heart rate (bpm)</td><td class="v">~1 Hz</td><td>Subscribe to the standard heart-rate characteristic <code>0x2A37</code>, no pairing needed</td><td><code>hrSample.bpm</code></td><td>Confirmed</td></tr>
+<tr><td>R-R intervals (ms)</td><td class="v">every beat</td><td>Same <code>0x2A37</code> subscription; 5.0 / MG sends milliseconds</td><td><code>rrInterval.rrMs</code></td><td>Confirmed</td></tr>
+<tr><td>Skin contact flag</td><td class="v">per update</td><td><code>0x2A37</code> flags</td><td><code>event</code>, on change</td><td>Meaning not validated on 5.0 / MG</td></tr>
+<tr><td>Motion: accelerometer (g) + gyroscope (°/s)</td><td class="v">100 Hz, sent in 1 s buffers</td><td>Command 81 <code>[01]</code>, then 106 <code>[01 01]</code>. Stop: 82 <code>[01]</code>, then 106 <code>[01 00]</code></td><td><code>.imus</code> capture files, not SQLite</td><td>Confirmed; NOOP only allows it during a Raw Data Collector session</td></tr>
+<tr><td>ECG waveform (MG only)</td><td class="v">~100 Hz, unresolved</td><td>Commands 139 → 125 → 124</td><td>Not stored</td><td>Experimental, seen on one device</td></tr>
+<tr><td>Battery (%)</td><td class="v">every 60 s, 30 s when charging</td><td>Poll the standard battery characteristic <code>0x2A19</code></td><td>In memory only</td><td>Confirmed</td></tr>
+<tr><td>Heart rate in Bluetooth advertising</td><td class="v">—</td><td>"Broadcast HR" setting (command 119), readable by bike computers</td><td>—</td><td>Confirmed with a Garmin</td></tr>
+</table></div>
+
+<h2>Events (instant, when they happen)</h2>
+<p class="note">Sent the moment something happens. Each event also starts a history sync, at most once every 90 s.</p>
+<div class="wrap"><table>
+<tr><th>Event</th><th>Code</th><th>Use</th></tr>
+<tr><td>Double tap</td><td><code>14</code></td><td>Input gesture; NOOP uses it for Automations</td></tr>
+<tr><td>Wrist on / off</td><td><code>9</code> / <code>10</code></td><td>Arrives about 2 s after the strap comes off</td></tr>
+<tr><td>Battery level: %, mV, charging</td><td><code>3</code></td><td>About every 8 min</td></tr>
+<tr><td>Charging on / off, battery pack on / off, pack info</td><td><code>7</code>/<code>8</code>, <code>21</code>/<code>22</code>, <code>109</code></td><td></td></tr>
+<tr><td>Alarm and haptics fired / finished</td><td><code>56</code>–<code>60</code>, <code>100</code></td><td>Confirms a buzz was attempted, not that the motor moved</td></tr>
+<tr><td>Accelerometer saturated</td><td><code>42</code></td><td>Might fire on a hard impact. Untested on 5.0 / MG; NOOP ignores it</td></tr>
+<tr><td>Clock lost, boot, clock set</td><td><code>13</code>, <code>15</code>, <code>16</code></td><td></td></tr>
+</table></div>
+
+<h2>Every second, delivered on sync (every ~15 min)</h2>
+<p class="note">The strap records these once per second and stores them. NOOP pulls them every 15 min while connected, or as soon as 90 s after an event. On low battery or "Low refresh" it slows to every 45–60 min. None of these can be streamed live. Faster options: "Sync now" skips the limits. The strap's own high-frequency sync mode asks for a sync every 61 s or more for up to 8 hours, but NOOP deliberately stopped using it. Back-to-back syncs from a custom app might get the delay down to seconds, but that's untested. The strap stores history in 4 KB flash pages, so the newest seconds may not be readable until a page is written.</p>
+<div class="wrap"><table>
+<tr><th>Signal</th><th>Unit</th><th>NOOP stores</th><th>Status</th></tr>
+<tr><td>Heart rate; up to 4 R-R intervals per second</td><td>bpm, ms</td><td><code>hrSample</code>, <code>rrInterval</code></td><td>Confirmed</td></tr>
+<tr><td>Gravity / wrist orientation x, y, z</td><td>g</td><td><code>gravitySample.x/y/z</code></td><td>Confirmed. Smallest step 0.0000024 g (about 0.0001°). In our data, the second-to-second change while asleep was 0.04° typically and 0.6° at the 99th percentile, so anything over about half a degree is real movement. Smoothed and only once per second, so it misses fast impacts</td></tr>
+<tr><td>Movement (acceleration minus gravity)</td><td>g, 0–8</td><td><code>gravitySample.dynAccel</code></td><td>Captured, meaning not pinned</td></tr>
+<tr><td>Step counter; activity class (0 still, 1 walk, 2 run); cadence byte</td><td>count, class</td><td><code>stepSample</code>, <code>v18AuxSample</code></td><td>Approximate</td></tr>
+<tr><td>Skin temperature</td><td>°C = raw ÷ 100</td><td><code>skinTempSample.raw</code></td><td>Confirmed</td></tr>
+<tr><td>Two auxiliary temperatures</td><td>°C = value ÷ 10</td><td><code>skinTempSample.aux1Raw/aux2Raw</code></td><td>Captured, meaning not pinned</td></tr>
+<tr><td>Band state (awake, still, asleep, up) + on-wrist bits</td><td>code</td><td><code>sleepStateSample</code></td><td>Partly inferred</td></tr>
+<tr><td>Possible SpO₂ byte</td><td>?</td><td><code>v18AuxSample</code></td><td>Unconfirmed, research only</td></tr>
+<tr><td>Optical baseline and amplitude A/B</td><td>raw</td><td><code>v18AuxSample</code></td><td>Captured, meaning not pinned</td></tr>
+<tr><td>Raw PPG window (1 value + 24 deltas per record)</td><td>raw</td><td><code>ppgWaveformSample</code></td><td>Confirmed as PPG</td></tr>
+<tr><td>Optical HR + confidence (computed from the PPG window)</td><td>bpm, 0–1</td><td><code>ppgHrSample</code></td><td>Our data: 10–40 s bursts about every 20 min</td></tr>
+<tr><td>Optical blocks (5 × 2 channels)</td><td>raw</td><td>Decoded, not stored</td><td>Wavelengths unknown</td></tr>
+<tr><td>100 Hz motion history</td><td>g, °/s</td><td>Only while a capture session runs</td><td>Confirmed</td></tr>
+<tr><td>Hardware step counter, software-override flag</td><td>count, flag</td><td>Not decoded</td><td>Documented only</td></tr>
+</table></div>
+
+<h2>Hourly (computed)</h2>
+<div class="wrap"><table>
+<tr><th>Metric</th><th>From</th><th>NOOP stores</th></tr>
+<tr><td>Hourly stress, 0–3</td><td>Hourly mean HR + RMSSD</td><td>Computed on read, not stored</td></tr>
+<tr><td>Hourly steps</td><td>iPhone via Apple Health, not the strap</td><td><code>appleStepHour</code></td></tr>
+<tr><td>Anything else per hour</td><td>Any of the per-second streams above can be bucketed by hour</td><td>Not built yet</td></tr>
+</table></div>
+
+<h2>Daily or per sleep (computed)</h2>
+<div class="wrap"><table>
+<tr><th>Metric</th><th>From</th><th>NOOP stores</th></tr>
+<tr><td>Steps, active calories</td><td>Step counter + activity class</td><td><code>dailyMetric.steps/activeKcalEst</code></td></tr>
+<tr><td>Resting HR, HRV (RMSSD, SDNN), recovery, strain</td><td>HR + R-R</td><td><code>dailyMetric</code></td></tr>
+<tr><td>Sleep start/end, stages, efficiency, disturbances, sleep performance</td><td>Gravity + HR</td><td><code>sleepSession</code>, <code>dailyMetric</code>, <code>metricSeries</code></td></tr>
+<tr><td>Respiratory rate</td><td>Estimated from R-R; the strap has no breathing sensor</td><td><code>dailyMetric.respRateBpm</code></td></tr>
+<tr><td>Skin temperature, deviation from baseline</td><td>Skin temperature</td><td><code>dailyMetric.skinTempC/skinTempDevC</code></td></tr>
+<tr><td>Vitality, body age</td><td>Combined scores</td><td><code>metricSeries</code></td></tr>
+<tr><td>SpO₂ %</td><td>Not available: the strap sends no blood-oxygen value</td><td>Always empty</td></tr>
+</table></div>
+
+<h2>Fall detection</h2>
+<div class="wrap"><table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Fastest motion data</td><td>The live 100 Hz accelerometer + gyroscope stream (commands 81 then 106 above). It arrives in 1-second buffers, so expect roughly 1–2 s from a fall to your code. No end-to-end latency has been measured.</td></tr>
+<tr><td>Range</td><td>Accelerometer 1/4096 g per count, about ±8 g (worked out from the scale, not stated). Gyroscope ±2000 °/s.</td></tr>
+<tr><td>Can the 1 Hz gravity data work?</td><td>No. It only arrives on sync, 90 s to 15 min late.</td></tr>
+<tr><td>Built-in fall detection on the strap?</td><td>Not that anyone has found. The accelerometer-saturated event (42) might fire on a hard impact, but it's untested on 5.0 / MG.</td></tr>
+<tr><td>Catches</td><td>The phone must stay connected. NOOP only turns the stream on during a user-started capture session. The battery cost of streaming continuously is unknown.</td></tr>
+<tr><td>Typical recipe to tune</td><td>Free fall (total acceleration below ~0.3 g for ~0.3 s), then impact (above ~2.5–3 g), then stillness for ~10 s. Confirm with live heart rate, then buzz and alert. Thresholds are common starting points and need tuning on real data.</td></tr>
+</table></div>
+
+<h2>Vibration motor</h2>
+<div class="wrap"><table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Chip</td><td>Texas Instruments DRV2625 haptic driver</td></tr>
+<tr><td>How to buzz</td><td>Command 19 (<code>0x13</code>) with a 12-byte body: <code>[01] [8 effect bytes] [loop control, 2 bytes] [repeat]</code>. NOOP sends <code>[01, 47, 152, 0, 0, 0, 0, 0, 0, 00 00, N−1]</code> for N pulses.</td></tr>
+<tr><td>Beat patterns</td><td>Yes. Up to 8 effects per command and a repeat of 0–7, so 1–8 pulses. Longer rhythms come from timed separate commands; NOOP's time-telling buzz does this (long = 2 pulses, short = 1).</td></tr>
+<tr><td>Strength</td><td>No confirmed control. Only effect IDs 47 and 152 have been tried; each effect byte can be up to 251. Unverified guess from the DRV2625 layout: each effect ID is a different stored waveform, so other IDs may feel stronger or softer, and bytes of 128 and up may be pauses of (value − 128) × 10 ms, which would make 152 a 240 ms gap. That needs testing on the strap. Alarms have a staged "crescendo" ramp flag that NOOP doesn't use.</td></tr>
+<tr><td>Delay</td><td>Double tap to buzz usually takes under 1 s, or 1–2.8 s when a history sync is already running.</td></tr>
+<tr><td>Stop</td><td>Command 122 <code>[01]</code> on 5.0 / MG. NOOP sends <code>[00]</code>, which does nothing on this strap.</td></tr>
+<tr><td>Known bug</td><td>NOOP's "Buzz strap" button also sends RUN_ALARM, which clears stored alarm slot 1, so it can delete a scheduled wake alarm.</td></tr>
+</table></div>
+
+<h2>Device</h2>
+<div class="wrap"><table>
+<tr><th>Field</th><th>Source</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Model</td><td><code>pairedDevice.model</code></td><td class="v">{text}</td><td>Ours: WHOOP 5.0 / MG. Capabilities: hr, hrv, skinTemp, sleep, strainLoad</td></tr>
+<tr><td>Battery</td><td><code>battery.soc</code></td><td class="v">{float} %</td><td>Also a charging flag</td></tr>
+<tr><td>Battery voltage</td><td><code>battery.mv</code></td><td class="v none">not populated</td><td>Not reported by the 5.0 / MG</td></tr>
+</table></div>
+
+<h2>Daily scores</h2>
+<p class="note">One row per day in <code>dailyMetric</code>, unless the source says <code>metricSeries</code> (rows of day, key, value).</p>
+<div class="wrap"><table>
+<tr><th>Field</th><th>Source</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Total sleep</td><td><code>totalSleepMin</code></td><td class="v">{float} min</td><td></td></tr>
+<tr><td>Sleep efficiency</td><td><code>efficiency</code></td><td class="v">{float} 0–1</td><td>Fraction of time in bed spent asleep</td></tr>
+<tr><td>Deep sleep</td><td><code>deepMin</code></td><td class="v">{float} min</td><td></td></tr>
+<tr><td>REM sleep</td><td><code>remMin</code></td><td class="v">{float} min</td><td></td></tr>
+<tr><td>Light sleep</td><td><code>lightMin</code></td><td class="v">{float} min</td><td></td></tr>
+<tr><td>Disturbances</td><td><code>disturbances</code></td><td class="v">{int}</td><td></td></tr>
+<tr><td>Sleep performance</td><td><code>metricSeries: sleep_performance</code></td><td class="v">{float} %</td><td></td></tr>
+<tr><td>Resting heart rate</td><td><code>restingHr</code></td><td class="v">{int} bpm</td><td>Mean over the main sleep is <code>metricSeries: rhr_primary_session</code></td></tr>
+<tr><td>HRV (RMSSD)</td><td><code>avgHrv</code></td><td class="v">{float} ms</td><td></td></tr>
+<tr><td>HRV (SDNN)</td><td><code>avgSdnn</code></td><td class="v">{float} ms</td><td></td></tr>
+<tr><td>Respiratory rate</td><td><code>respRateBpm</code></td><td class="v">{float} /min</td><td></td></tr>
+<tr><td>Skin temperature</td><td><code>skinTempC</code></td><td class="v">{float} °C</td><td></td></tr>
+<tr><td>Strain</td><td><code>strain</code></td><td class="v">{float}</td><td>NOOP's scale is 0–21, but we've seen values above 21, so check how it's calculated before using it</td></tr>
+<tr><td>Steps</td><td><code>steps</code></td><td class="v">{int}</td><td></td></tr>
+<tr><td>Active calories</td><td><code>activeKcalEst</code></td><td class="v">{float} kcal</td><td>Estimate</td></tr>
+<tr><td>Workouts</td><td><code>exerciseCount</code></td><td class="v">{int}</td><td></td></tr>
+<tr><td>Vitality</td><td><code>metricSeries: vitality</code></td><td class="v">{float}</td><td></td></tr>
+<tr><td>Body age</td><td><code>metricSeries: body_age</code></td><td class="v">{float} years</td><td></td></tr>
+<tr><td>Recovery</td><td><code>recovery</code></td><td class="v none">not populated</td><td>Needs several nights of HRV/RHR baseline</td></tr>
+<tr><td>Skin temp deviation</td><td><code>skinTempDevC</code></td><td class="v none">not populated</td><td>Needs a skin-temperature baseline</td></tr>
+<tr><td>Blood oxygen</td><td><code>spo2Pct</code>, <code>spo2Red</code>, <code>spo2Ir</code></td><td class="v none">not populated</td><td>No SpO₂ samples in our data</td></tr>
+</table></div>
+
+<h2>Sleep session</h2>
+<div class="wrap"><table>
+<tr><th>Field</th><th>Source</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Start / end</td><td><code>sleepSession.startTs</code>, <code>endTs</code></td><td class="v">{int} unix s</td><td></td></tr>
+<tr><td>Stage timeline</td><td><code>stagesJSON</code></td><td class="v">JSON list</td><td>Segments of <code>{start, end, stage}</code>, stage is wake / light / deep / rem</td></tr>
+<tr><td>Motion per epoch</td><td><code>motionJSON</code></td><td class="v">JSON list of {float}</td><td>Movement intensity across the night</td></tr>
+<tr><td>Strap sleep state</td><td><code>sleepStateJSON</code></td><td class="v">JSON list</td><td>The strap's own sleep classifier</td></tr>
+</table></div>
+
+<h2>Raw sample streams</h2>
+<p class="note">Time series keyed by <code>(deviceId, ts)</code>, mostly one sample per second. This is what you'd build new features on.</p>
+<div class="wrap"><table>
+<tr><th>Field</th><th>Source</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Heart rate</td><td><code>hrSample.bpm</code></td><td class="v">{int} bpm</td><td>~1 Hz</td></tr>
+<tr><td>Beat-to-beat (R-R) intervals</td><td><code>rrInterval.rrMs</code></td><td class="v">{float} ms</td><td>One row per beat. What HRV is calculated from</td></tr>
+<tr><td>Optical HR + confidence</td><td><code>ppgHrSample.bpm</code>, <code>conf</code></td><td class="v">{float} bpm · {float} 0–1</td><td></td></tr>
+<tr><td>Raw PPG waveform</td><td><code>ppgWaveformSample.samples</code></td><td class="v">48-byte blob</td><td>Bursts of raw optical signal</td></tr>
+<tr><td>Skin temperature (raw)</td><td><code>skinTempSample.raw</code></td><td class="v">{int} ADC</td><td>Raw sensor reading, not °C. Plus two auxiliary channels</td></tr>
+<tr><td>Wrist orientation (gravity)</td><td><code>gravitySample.x/y/z</code></td><td class="v">{float} g ×3</td><td>~1 Hz</td></tr>
+<tr><td>Movement</td><td><code>gravitySample.dynAccel</code></td><td class="v">{float} g</td><td>Acceleration with gravity removed</td></tr>
+<tr><td>Step counter</td><td><code>stepSample.counter</code>, <code>activityClass</code></td><td class="v">{int} · class 0–2</td><td>Running total from the strap</td></tr>
+<tr><td>Strap sleep state</td><td><code>sleepStateSample.state</code></td><td class="v">{int} 0–3</td><td></td></tr>
+<tr><td>Unknown extra sensor channel</td><td><code>v18AuxSample.fields</code></td><td class="v">blob</td><td>The bytes haven't been decoded yet</td></tr>
+<tr><td>Respiration (raw)</td><td><code>respSample.raw</code></td><td class="v none">not populated</td><td>Table exists, no rows from the 5.0 / MG</td></tr>
+<tr><td>SpO₂ (raw red/IR)</td><td><code>spo2Sample.red</code>, <code>ir</code></td><td class="v none">not populated</td><td>Table exists, no rows from the 5.0 / MG</td></tr>
+</table></div>
+
+<h2>Strap events</h2>
+<p class="note">Rows in <code>event</code> with a timestamp, a <code>kind</code> and a JSON payload.</p>
+<div class="wrap"><table>
+<tr><th>Event</th><th>Kind</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Double tap</td><td><code>DOUBLE_TAP</code></td><td class="v">{int} unix s</td><td>Possible input gesture for features</td></tr>
+<tr><td>Wrist on / off</td><td><code>WRIST_ON</code>, <code>WRIST_OFF</code></td><td class="v">{int} unix s</td><td>Whether the strap is being worn</td></tr>
+<tr><td>Charging on / off</td><td><code>CHARGING_ON</code>, <code>CHARGING_OFF</code></td><td class="v">{int} unix s</td><td></td></tr>
+<tr><td>Battery pack on / off</td><td><code>BATTERY_PACK_CONNECTED</code>, <code>_REMOVED</code></td><td class="v">{int} unix s</td><td></td></tr>
+<tr><td>Strap condition</td><td><code>STRAP_CONDITION_REPORT</code></td><td class="v">{int} unix s</td><td></td></tr>
+<tr><td>Live HR on / off</td><td><code>BLE_REALTIME_HR_ON</code>, <code>_OFF</code></td><td class="v">{int} unix s</td><td></td></tr>
+<tr><td>Unlabeled event codes</td><td><code>0x6E</code>, <code>0x7B</code>, <code>0x78</code>, …</td><td class="v">{int} unix s</td><td>Not decoded yet</td></tr>
+</table></div>
+
+<h2>Live HR zone sessions</h2>
+<div class="wrap"><table>
+<tr><th>Field</th><th>Source</th><th>Value</th><th>Notes</th></tr>
+<tr><td>Target zone</td><td><code>liveSession.floorBpm</code>, <code>ceilingBpm</code></td><td class="v">{float} bpm ×2</td><td></td></tr>
+<tr><td>Time in / below / above zone</td><td><code>inBandSec</code>, <code>belowSec</code>, <code>aboveSec</code></td><td class="v">{float} s</td><td>Also counts of push/ease nudges</td></tr>
+</table></div>
+</main>
+</body>
+</html>
