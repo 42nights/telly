@@ -12,6 +12,32 @@ const isTimeZone = Schema.makeFilter((zone: string) => {
 	}
 });
 
+// Effect's `isBase64` regex overflows the V8 stack on strings of a few MiB; this one is linear.
+const isBase64 = Schema.makeFilter(
+	(text: string) =>
+		text.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(text),
+);
+
+/** Largest attached file, decoded. */
+export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+/** Largest total of the attached files in one question, decoded. */
+export const ATTACHMENTS_MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+
+/** A file the asker attaches to one question. It goes to Gemini with the question and is not stored. */
+export const QuestionAttachment = Schema.Struct({
+	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
+	mimeType: Schema.Literals([
+		"image/png",
+		"image/jpeg",
+		"image/webp",
+		"application/pdf",
+		"text/plain",
+	]),
+	/** Base64 file bytes. The server accepts at most 5 MiB per file and 8 MiB in total, decoded. */
+	data: Schema.String.check(Schema.isMinLength(1), isBase64),
+});
+export type QuestionAttachment = typeof QuestionAttachment.Type;
+
 /** `POST /ask` body: a family member's question about the family's records. The wearer is a member too. */
 export const FamilyQuestion = Schema.Struct({
 	question: Schema.String.check(
@@ -20,6 +46,10 @@ export const FamilyQuestion = Schema.Struct({
 	),
 	/** IANA time zone for times in the answer, such as `Europe/Berlin`. Default UTC. */
 	timeZone: Schema.optionalKey(Schema.String.check(isTimeZone)),
+	/** At most 4 files. Gemini reads them with the question; the server does not store them. */
+	attachments: Schema.optionalKey(
+		Schema.Array(QuestionAttachment).check(Schema.isMaxLength(4)),
+	),
 });
 export type FamilyQuestion = typeof FamilyQuestion.Type;
 
@@ -33,6 +63,8 @@ export const FamilyAnswer = Schema.Struct({
 	/** The Gemini model that answered. */
 	model: Schema.String,
 	answeredAt: Schema.String,
+	/** 0 to 3 short questions that Gemini made from this answer. Empty when Gemini gave none. */
+	followUps: Schema.Array(Schema.String),
 });
 export type FamilyAnswer = typeof FamilyAnswer.Type;
 

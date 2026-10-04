@@ -289,7 +289,19 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 		);
 	return (
 		<ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-			{glance.map(({ sample, stale }) => {
+			{glance.map(({ metric, sample, stale }) => {
+				if (sample === null)
+					return (
+						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-2">
+							<span className="text-sm">{metricLabel(metric)}</span>
+							<b className="text-2xl text-muted-foreground leading-tight">
+								Unavailable
+							</b>
+							<span className="text-muted-foreground text-xs">
+								No real reading stored
+							</span>
+						</li>
+					);
 				const flag =
 					sample.quality === "unvalidated"
 						? "Unvalidated"
@@ -298,13 +310,13 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 							: null;
 				return (
 					<li
-						key={sample.metric}
+						key={metric}
 						className={cn(
 							"win95-inset grid gap-0.5 p-2",
 							flag === null ? "bg-card" : "bg-[#ffffe1]",
 						)}
 					>
-						<span className="text-sm">{metricLabel(sample.metric)}</span>
+						<span className="text-sm">{metricLabel(metric)}</span>
 						<b className="text-2xl leading-tight">
 							{sample.value}{" "}
 							<span className="font-normal text-sm">{sample.unit}</span>

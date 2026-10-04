@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { FinchnodeLab } from "@health/contracts/reports";
 
 import {
+	demoText,
 	draftOf,
 	fieldErrors,
 	fieldsOf,
@@ -82,4 +83,17 @@ describe("lab display", () => {
 			"12.0-15.5 (range from epic)",
 		);
 	});
+});
+
+test("demoText says demo for synthetic, in the same case", () => {
+	expect(demoText("Northstar Health System (Synthetic)")).toBe(
+		"Northstar Health System (Demo)",
+	);
+	expect(demoText("synthetic reference: SYNTHETIC")).toBe(
+		"demo reference: DEMO",
+	);
+	expect(demoText("synthetic_data")).toBe(
+		"Demo records, not real patient data",
+	);
+	expect(demoText("4.5 mmol/L")).toBe("4.5 mmol/L");
 });

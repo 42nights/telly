@@ -1,6 +1,8 @@
 // Family questions, relative to `/api/families/:familyId` behind sign-in and the membership check.
 // Gemini answers; its data tools run through Fetch.ai Agentverse; voice questions use ElevenLabs.
 import {
+	ATTACHMENT_MAX_BYTES,
+	ATTACHMENTS_MAX_TOTAL_BYTES,
 	type FamilyAnswer,
 	FamilyQuestion,
 	type SpokenAnswer,
@@ -50,8 +52,31 @@ const run = async <A>(
 // 499: the client disconnected, so nobody reads this response.
 const gone = () => new Response(null, { status: 499 });
 
+// Base64 grows 4/3 (rounded up per file, at most 4 files); the rest is the question and file names.
+const maxQuestionBodyBytes =
+	Math.ceil(ATTACHMENTS_MAX_TOTAL_BYTES / 3) * 4 + 4 * 4 + 64 * 1024;
+
+/** Checks the decoded file sizes. Messages name the file by its position, never by its content. */
+const checkAttachments = ({ attachments = [] }: FamilyQuestion) => {
+	let total = 0;
+	for (const [index, { data }] of attachments.entries()) {
+		const bytes = Buffer.byteLength(data, "base64");
+		if (bytes > ATTACHMENT_MAX_BYTES)
+			throw new ApiFailure(
+				"invalid_request",
+				`File ${index + 1} is larger than 5 MiB`,
+			);
+		total += bytes;
+	}
+	if (total > ATTACHMENTS_MAX_TOTAL_BYTES)
+		throw new ApiFailure(
+			"invalid_request",
+			"The files are larger than 8 MiB in total",
+		);
+};
+
 export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
-	const ask = (familyId: bigint, { question, timeZone }: FamilyQuestion) => {
+	const ask = (familyId: bigint, question: FamilyQuestion) => {
 		// Checked first, so Gemini never runs a question whose tools cannot read records.
 		if (fetchAgent === undefined)
 			throw new ApiFailure(
@@ -59,26 +84,43 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 				"Fetch.ai tool routing is not configured",
 			);
 		const now = new Date();
-		const family = familyTools(fetchAgent, familyId, now, timeZone);
+		const family = familyTools(fetchAgent, familyId, now, question.timeZone);
 		return askGemini(gemini, question, family).pipe(
 			Effect.map(
-				({ text, model }): FamilyAnswer => ({
+				({ text, model, followUps }): FamilyAnswer => ({
 					answer: text,
 					...family.cited(),
 					model,
 					answeredAt: now.toISOString(),
+					followUps,
 				}),
 			),
 		);
 	};
 	return new Hono<FamilyEnv>()
-		.post("/ask", async (c) => {
-			const question = await decodeBody(c, FamilyQuestion);
-			const answer = await run(c.req.raw.signal, ask(c.var.familyId, question));
-			if (answer === undefined) return gone();
-			c.header("cache-control", "no-store");
-			return c.json(answer satisfies FamilyAnswer);
-		})
+		.post(
+			"/ask",
+			bodyLimit({
+				maxSize: maxQuestionBodyBytes,
+				onError: () => {
+					throw new ApiFailure(
+						"invalid_request",
+						"The question and its files are too large (8 MiB of files at most)",
+					);
+				},
+			}),
+			async (c) => {
+				const question = await decodeBody(c, FamilyQuestion);
+				checkAttachments(question);
+				const answer = await run(
+					c.req.raw.signal,
+					ask(c.var.familyId, question),
+				);
+				if (answer === undefined) return gone();
+				c.header("cache-control", "no-store");
+				return c.json(answer satisfies FamilyAnswer);
+			},
+		)
 		.post(
 			"/ask/voice",
 			bodyLimit({

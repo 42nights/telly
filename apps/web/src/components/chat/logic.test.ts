@@ -2,12 +2,14 @@ import { expect, test } from "bun:test";
 
 import {
 	type Ask,
-	acceptFiles,
+	attachFiles,
 	evidenceLine,
 	formatSize,
 	mergeMessages,
 	nextGeminiStatus,
+	outboxFor,
 	timeline,
+	toAttachment,
 } from "./logic";
 
 const msg = (id: string, body = id) => ({
@@ -28,12 +30,60 @@ test("mergeMessages dedupes by id and orders numerically", () => {
 	expect(merged.filter((m) => m.id === "10")).toHaveLength(1);
 });
 
-test("acceptFiles keeps only files with data", () => {
-	const good = new File(["abc"], "a.pdf");
-	const empty = new File([], "empty.txt");
-	const { accepted, rejected } = acceptFiles([good, empty, "a.pdf", null]);
-	expect(accepted).toEqual([good]);
-	expect(rejected).toEqual([empty, "a.pdf", null]);
+test("attachFiles keeps every file and marks the ones over the limits", () => {
+	const MiB = 1024 * 1024;
+	const file = (name: string, size: number, type = "application/pdf") =>
+		new File([new Uint8Array(size)], name, { type });
+	const tray = attachFiles(
+		[],
+		[
+			file("a.exe", 10, "application/x-msdownload"),
+			file("empty.pdf", 0),
+			file("big.pdf", 5 * MiB + 1),
+			file("1.pdf", 4 * MiB),
+			file("2.pdf", 4 * MiB),
+			file("3.pdf", 1),
+		],
+	);
+	expect(tray.map((entry) => [entry.file.name, entry.error])).toEqual([
+		["a.exe", "Type not supported"],
+		["empty.pdf", "Empty file"],
+		["big.pdf", "Over 5 MB"],
+		["1.pdf", null],
+		["2.pdf", null],
+		["3.pdf", "Over 8 MB in total"],
+	]);
+	const txt = (n: number) => file(`${n}.txt`, 1, "text/plain");
+	const full = attachFiles(
+		attachFiles([], [1, 2, 3].map(txt)),
+		[4, 5].map(txt),
+	);
+	expect(full.map((entry) => entry.error)).toEqual([
+		null,
+		null,
+		null,
+		null,
+		"Over 4 files",
+	]);
+});
+
+test("toAttachment sends the file bytes as base64", async () => {
+	const attachment = await toAttachment(
+		new File(["hello"], "note.txt", { type: "text/plain" }),
+	);
+	expect(attachment).toEqual({
+		name: "note.txt",
+		mimeType: "text/plain",
+		data: btoa("hello"),
+	});
+});
+
+test("outboxFor reuses the clientId only for a resend of the same text", () => {
+	const first = outboxFor(null, "hi");
+	expect(outboxFor(first, "hi")).toBe(first);
+	const edited = outboxFor(first, "hi there");
+	expect(edited.clientId).not.toBe(first.clientId);
+	expect(edited.clientId).toMatch(/^[A-Za-z0-9_-]+$/);
 });
 
 test("formatSize", () => {
@@ -84,6 +134,7 @@ test("timeline interleaves messages and asks by time", () => {
 	const ask: Ask = {
 		id: "a",
 		question: "q",
+		files: [],
 		askedAt: "2026-10-04T00:00:30.000Z",
 		state: { kind: "pending" },
 	};
