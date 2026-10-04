@@ -1,7 +1,9 @@
 // Wearer wording for a scheduled medication time and for "did I take it?" (#31,
-// docs/board.html#wf-family). Every sentence comes from the saved plan (#26) or the recorded
-// reminder events (#28). Nothing here suggests a dose, a missed-dose rule, or a change to treatment.
+// docs/board.html#wf-family). Every sentence comes from the saved plan (#26), the recorded
+// reminder events (#28), or medicine sightings (#29). Nothing here suggests a dose, a missed-dose
+// rule, or a change to treatment.
 import type { CareInstruction } from "@health/contracts/care-profile";
+import type { MedicineSighting } from "@health/contracts/medicine-memory";
 import type {
 	ReminderEvent,
 	ReminderOccurrence,
@@ -76,22 +78,32 @@ const STATE_TEXT: Record<ReminderState, string> = {
 
 /**
  * The answer when the wearer cannot remember whether they took a dose: every recorded step for
- * this dose time, oldest first, then an offer of human help. It never advises another dose or a
+ * this dose time and every container sighting (#29) since it, oldest first, then an offer of human
+ * help. A sighting is "container found" only, never a dose. It never advises another dose or a
  * skipped one. `who` names an event's actor; `time` formats an instant.
  */
 export const uncertaintyAnswer = (
 	occurrence: ReminderOccurrence,
 	events: readonly ReminderEvent[],
+	sightings: readonly MedicineSighting[],
 	who: (actor: string) => string,
 	time: (iso: string) => string,
 ): readonly string[] => [
 	`Here is what is recorded for ${occurrence.title} at ${time(occurrence.scheduledFor)}:`,
-	...events
+	...[
+		...events.map((e) => ({
+			at: e.at,
+			text: `${time(e.at)}, ${who(e.actor)}: ${STATE_TEXT[e.state]}${e.wording === null ? "" : `, in the words “${e.wording}”`}.`,
+		})),
+		...sightings
+			.filter((s) => s.seenAt >= occurrence.scheduledFor)
+			.map((s) => ({
+				at: s.seenAt,
+				text: `${time(s.seenAt)}, ${who(s.savedBy)}: container found, “${s.container}” at ${s.place}; this does not say the dose was taken.`,
+			})),
+	]
 		.toSorted((a, b) => a.at.localeCompare(b.at))
-		.map(
-			(e) =>
-				`${time(e.at)}, ${who(e.actor)}: ${STATE_TEXT[e.state]}${e.wording === null ? "" : `, in the words “${e.wording}”`}.`,
-		),
+		.map((line) => line.text),
 	"I can't tell you whether to take it now. Don't take another dose because of me.",
 	"I can ask your family to help.",
 ];

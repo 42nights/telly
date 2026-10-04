@@ -9,6 +9,7 @@ import {
 } from "@health/contracts/exercise";
 import { Effect, Schema } from "effect";
 import { openFamilyDb } from "../db";
+import { careProfileRoutes } from "./care-profile";
 import { exerciseRoutes } from "./exercise";
 import {
 	dbConfig,
@@ -46,6 +47,23 @@ const event = (
 	reason,
 });
 
+const profile = (activityRestrictions: string[] | null) => ({
+	preferredName: null,
+	language: null,
+	timeZone: null,
+	accessibilityNeeds: null,
+	diagnoses: null,
+	allergies: null,
+	dietaryRestrictions: null,
+	fluidRestrictions: null,
+	activityRestrictions,
+	routines: null,
+	contacts: null,
+	familiarDestinations: null,
+	devices: null,
+	declinedPrompts: [],
+});
+
 describe.skipIf(dbConfig === undefined)("guided exercise", () => {
 	test("only a verified, compatible plan runs, and only a recorded finish completes it", () =>
 		withDb((config) =>
@@ -80,11 +98,39 @@ describe.skipIf(dbConfig === undefined)("guided exercise", () => {
 				);
 				expect(direct).toBe("SenderError: the exercise plan is not verified");
 
-				const verified = yield* send(
-					app,
-					"POST",
-					`/exercise/plans/${planId}/verify`,
+				const verify = (id: string) =>
+					send(app, "POST", `/exercise/plans/${id}/verify`);
+				// Verifying reads the care profile (#26): it needs health_records access, and the
+				// profile must record the activity restrictions.
+				expect(failure(yield* verify(planId))).toEqual([403, "forbidden"]);
+				const care = familyApp(db, familyId, careProfileRoutes());
+				for (const scope of [
+					"family_access",
+					"health_records",
+					"care_plan_edit",
+				])
+					yield* send(care, "POST", "/care-access", {
+						identity: db.identity,
+						scope,
+						granted: true,
+					});
+				yield* send(care, "PUT", "/care-profile", profile(null));
+				expect(failure(yield* verify(planId))).toEqual([409, "conflict"]);
+				yield* send(
+					care,
+					"PUT",
+					"/care-profile",
+					profile(["No overhead reaching after shoulder surgery"]),
 				);
+				// A plan whose demand the profile restricts cannot be verified.
+				const reach = yield* send(app, "POST", "/exercise/plans", {
+					...plan,
+					demands: ["overhead_arms"],
+				});
+				const reachId = Schema.decodeUnknownSync(ExercisePlan)(reach.json).id;
+				expect(failure(yield* verify(reachId))).toEqual([409, "conflict"]);
+
+				const verified = yield* verify(planId);
 				expect(
 					Schema.decodeUnknownSync(ExercisePlan)(verified.json).verification
 						?.verifiedBy,

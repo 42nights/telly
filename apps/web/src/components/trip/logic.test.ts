@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { NewCareNeed } from "@health/contracts/care";
 import {
 	describeLocation,
 	type SharedLocation,
 } from "@health/contracts/location";
+import { Schema } from "effect";
 
 import { helpMessage, tripReminder } from "./logic";
 
@@ -90,5 +92,21 @@ describe("trip wording", () => {
 		);
 		expect(text).not.toMatch(/\d+\.\d+/);
 		expect(helpMessage(null, false)).toContain("I have not shared my location");
+	});
+
+	test("the help message fits a care need summary at the longest trip fields", () => {
+		const long = "x".repeat(150);
+		const summary = helpMessage(
+			{ ...trip, destination: long, purpose: long },
+			true,
+		);
+		const need = {
+			clientId: "a",
+			kind: "help",
+			summary,
+			sampleIds: [],
+			dueAt: null,
+		};
+		expect(Schema.decodeUnknownSync(NewCareNeed)(need).summary).toBe(summary);
 	});
 });

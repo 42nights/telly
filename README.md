@@ -48,7 +48,7 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Finchnode laboratory results | Tested against the keyless public demo with fictional patients. The web app labels these results as demo data. No sandbox or live key is configured |
 | Gemini medicine detection | The route, frame mapping, and errors are tested against a local protocol server. The web medicine screen draws the box and the arrow on the camera frame. No live Gemini call is verified yet ([#15](https://github.com/ayaangazali/telly/issues/15)) |
 | Fetch.ai agent tools: server caller, bridge and worker uAgents (`agents/fetch/`), the signed-in route `POST /api/families/:familyId/tools`, and Agent Chat Protocol chat on the worker (synthetic records only) | Tested end to end on a local database with local agents and a local test sign-in issuer. The worker is published on Agentverse as `telly-fetch` (`agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6`). A live ASI:One round trip is verified for a synthetic demo family; the agent answers only while its worker runs ([#170](https://github.com/ayaangazali/telly/issues/170)) |
-| Gemma health cues (server only): `POST /api/families/:familyId/cues` and the River training entry point (`training/`) | The route is tested on a local database against a local protocol server. River access, Gemma on River, a trained model, and a deployment are not confirmed ([#10](https://github.com/ayaangazali/telly/issues/10), [#9](https://github.com/ayaangazali/telly/issues/9)) |
+| Qwen health cues (server only): `POST /api/families/:familyId/cues` and the River training, data, and serving code (`training/qwen/`) | The route is tested on a local database against a local protocol server. A `Qwen/Qwen3.5-9B` LoRA is trained on River (version `health-cue-qwen35-9b-v1-2026-10-04`), and the server adapter gets valid cues from it through `training/qwen/serve.py`. River has no approved dedicated deployment for this base model yet, and no hosted instance runs the bridge ([#10](https://github.com/ayaangazali/telly/issues/10), [#9](https://github.com/ayaangazali/telly/issues/9)) |
 | Family questions: Gemini chat with Fetch.ai tools, `POST /api/families/:familyId/ask` and `/ask/voice`, with follow-ups and attached files | Tested on the real server with a local database and local Gemini, ElevenLabs, and bridge servers. No live Gemini or ElevenLabs call is verified yet ([#86](https://github.com/ayaangazali/telly/issues/86), [docs/ask.md](docs/ask.md)) |
 | Voice: ElevenLabs transcription and speech (`/voice/transcriptions`, `/voice/speech`) | Routes and errors are tested against a local protocol server. No live ElevenLabs call is verified yet, and the web HUD shows voice as unavailable without a key ([#16](https://github.com/ayaangazali/telly/issues/16), [docs/voice.md](docs/voice.md)) |
 | Deployment | Planned. No hosted instance exists |
@@ -115,7 +115,7 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `POST /api/families/:familyId/ask`, `POST …/ask/voice` | Ask a question about the family's records, as text with optional attached files or as a recording. Gemini answers with Fetch.ai data tools ([docs/ask.md](docs/ask.md)) |
 | `POST /api/families/:familyId/voice/transcriptions`, `POST …/voice/speech` | Turn a recording into text, or text into speech, with ElevenLabs ([docs/voice.md](docs/voice.md)) |
 | `POST /api/families/:familyId/tools` | Run one family data tool. The Fetch.ai worker is the caller |
-| `POST /api/families/:familyId/cues` | A Gemma health cue from validated samples. Advice only: it never changes thresholds or alerts |
+| `POST /api/families/:familyId/cues` | A Qwen health cue from validated samples. Advice only: it never changes thresholds or alerts |
 | `GET`, `PUT /api/families/:familyId/care/ladder` | Read or set the family's contact order |
 | `GET`, `POST …/care/needs`, `GET …/care/needs/:needId` | List care needs, raise one, or read one with its contact attempts |
 | `POST …/care/needs/:needId/responses` | The current contact sends `seen`, `answer`, `accept`, or `decline`; the member who accepted sends `help_confirmed` |
@@ -229,12 +229,12 @@ flowchart TB
     noop["NOOP WHOOP app<br/>separate project"]
 
     subgraph services ["Cloud services"]
-        ai["Cloud inference<br/>Gemini vision · Gemma cues · ElevenLabs voice"]
+        ai["Cloud inference<br/>Gemini vision · Qwen cues · ElevenLabs voice"]
         agents["Gemini family agents<br/>tools via Fetch.ai Agentverse"]
         db[("SpacetimeDB<br/>health data · alerts · messages")]
         rules["Threshold rules<br/>per metric and direction"]
         reports["Lab report generator"]
-        river["Gemma training<br/>River AI"]
+        river["Qwen training<br/>River AI"]
     end
 
     finch["Finchnode handoff"]
@@ -262,7 +262,7 @@ flowchart TB
 | Server | Node, Hono for HTTP, Effect 4 for service logic |
 | Contracts | Effect Schema in `@health/contracts` |
 | Data | SpacetimeDB (TypeScript module in `spacetimedb/`, generated bindings in `@health/db`) |
-| Providers (see [Status](#status) for what is verified) | Gemini vision and family chat, ElevenLabs voice, Fetch.ai Agentverse tool routing, Finchnode lab results, Gemma on River AI |
+| Providers (see [Status](#status) for what is verified) | Gemini vision and family chat, ElevenLabs voice, Fetch.ai Agentverse tool routing, Finchnode lab results, Qwen (`Qwen/Qwen3.5-9B`) on River AI |
 
 ```text
 apps/
@@ -276,7 +276,7 @@ packages/
   db/           Generated SpacetimeDB bindings, server-only (bun run db:generate)
 spacetimedb/    SpacetimeDB module: family-scoped tables, reducers, and views
 agents/fetch/   Python uAgents bridge and worker for Fetch.ai Agentverse (outside the Bun workspace)
-training/       Gemma training on River AI (training/README.md)
+training/       Qwen training on River AI (training/qwen/README.md)
 docs/           Approved planning board, plan summary, and API notes (chat, ask, voice)
 noop/           NOOP, a separate project
 ```

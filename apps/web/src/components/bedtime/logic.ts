@@ -5,6 +5,7 @@ import type {
 	ReminderSettings,
 	ReminderState,
 } from "@health/contracts/reminders";
+import type { SimulatedSpeakerMode } from "@health/contracts/speaker";
 
 /** What the Battery Status API reported, or null when this browser does not report it. */
 export type Battery = { readonly level: number; readonly charging: boolean };
@@ -29,6 +30,32 @@ export const connectionLine = (online: boolean, serverLive: boolean): Line => {
 	return serverLive
 		? { ok: true, text: "Connected to the server." }
 		: { ok: false, text: "Network on, but the server does not answer." };
+};
+
+/** The home speaker (#46) as an overnight channel. `null` means not loaded: never shown as ready. */
+export const speakerLine = (
+	enabled: boolean | null,
+	mode: SimulatedSpeakerMode | null,
+): Line => {
+	if (enabled === null)
+		return {
+			ok: false,
+			text: "Home speaker unknown · prompts show on this phone.",
+		};
+	if (!enabled)
+		return {
+			ok: false,
+			text: "Home speaker off · prompts show on this phone only.",
+		};
+	return mode === "online"
+		? {
+				ok: true,
+				text: "Home speaker on (simulated, no real speaker yet: issue #46) · it says a due prompt, and this phone shows it.",
+			}
+		: {
+				ok: false,
+				text: `Home speaker ${mode ?? "unknown"} · prompts show on this phone.`,
+			};
 };
 
 /** Sleep-timer choices in minutes; null plays until stopped. */

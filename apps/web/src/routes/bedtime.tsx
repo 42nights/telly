@@ -1,4 +1,5 @@
 import { Health } from "@health/contracts";
+import { SavedSpeakerSettings, SpeakerStatus } from "@health/contracts/speaker";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { Moon, Pause, Play } from "lucide-react";
@@ -15,6 +16,7 @@ import {
 	connectionLine,
 	type Line,
 	SLEEP_TIMERS,
+	speakerLine,
 	timerLeft,
 } from "@/components/bedtime/logic";
 import { OvernightReminders } from "@/components/bedtime/reminders";
@@ -23,6 +25,7 @@ import { Window } from "@/components/hud/window";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
 import { useNow } from "@/components/wearer/use-now";
+import { familyPath, useApi } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/bedtime")({
@@ -30,9 +33,11 @@ export const Route = createFileRoute("/bedtime")({
 });
 
 function OvernightCheck({
+	familyId,
 	now,
 	soundAllowed,
 }: {
+	familyId: string | null;
 	now: number;
 	soundAllowed: boolean;
 }) {
@@ -41,6 +46,15 @@ function OvernightCheck({
 	const health = usePolled(Health, "/health");
 	const serverLive =
 		health.latest?.kind === "ready" && now - (health.okAt ?? 0) <= STALE_MS;
+	const path = familyId === null ? null : familyPath(familyId, "");
+	const speaker = useApi(
+		SavedSpeakerSettings,
+		path === null ? null : `${path}/speaker-settings`,
+	);
+	const simulator = useApi(
+		SpeakerStatus,
+		path === null ? null : `${path}/speaker`,
+	);
 	// What the app can and cannot do tonight. Missing pieces stay visible, never "all set".
 	const lines: readonly Line[] = [
 		soundAllowed
@@ -55,7 +69,10 @@ function OvernightCheck({
 			ok: true,
 			text: "Glasses not needed. Taking them off changes nothing here.",
 		},
-		{ ok: false, text: "No supported speaker yet (issue #46)." },
+		speakerLine(
+			speaker.kind === "ready" ? speaker.value.settings.enabled : null,
+			simulator.kind === "ready" ? simulator.value.mode : null,
+		),
 		{
 			ok: false,
 			text: "WHOOP buzz off · not verified on the strap (issue #38).",
@@ -103,7 +120,11 @@ function Bedtime() {
 						<OvernightReminders familyId={familyId} onPrompt={onPrompt} />
 					</fieldset>
 
-					<OvernightCheck now={now} soundAllowed={allowed} />
+					<OvernightCheck
+						familyId={familyId}
+						now={now}
+						soundAllowed={allowed}
+					/>
 
 					<fieldset className="grid gap-3 border border-border p-2 text-[18px]">
 						<legend className="px-1 font-bold">Sleep sound · optional</legend>

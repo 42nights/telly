@@ -64,7 +64,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())
 		.route("/", emergencyRoutes())
-		.route("/", cueRoutes(config.gemma))
+		.route("/", cueRoutes(config.qwen))
 		.route("/", careProfileRoutes())
 		.route("/", tripRoutes())
 		.route("/", exerciseRoutes())

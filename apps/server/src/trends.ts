@@ -1,7 +1,7 @@
 // Trend explanations from dated records, without a model (docs/board.html#db-hrv). The server relates
 // wearable history, dated labs, and the asker's own report. It never diagnoses and never writes, so
-// no record (synthetic or real) can start an alert or a nudge here. Until a verified care plan exists
-// (issue #26) it offers only a check-in or a review.
+// no record (synthetic or real) can start an alert or a nudge here. It offers a check-in, a review,
+// and the routines and verified care instructions already agreed in the saved care plan (#26).
 import type { HealthSample } from "@health/contracts";
 import type { FinchnodeSubjectLabs } from "@health/contracts/reports";
 import type {
@@ -9,6 +9,52 @@ import type {
 	TrendExplanation,
 	TrendObservation,
 } from "@health/contracts/trends";
+import type { CareFacts } from "./cooking/suggest";
+
+const ASK = "not verified, ask your caregiver.";
+
+/** Already-agreed routines and verified `care` instructions; never medication, never unverified. */
+const carePlanOf = (care: CareFacts | null): TrendExplanation["carePlan"] => {
+	if (care === null)
+		return {
+			status: "not_shared",
+			routines: [],
+			instructions: [],
+			notes: [
+				"The care plan is not shared with you, so no agreed routine is offered.",
+			],
+		};
+	const { routines, timeZone } = care.profile;
+	const caring = care.instructions.filter((i) => i.kind === "care");
+	return {
+		status: "shared",
+		routines: (routines ?? []).map((r) => ({ ...r, timeZone })),
+		instructions: caring
+			.filter((i) => i.verification === "verified")
+			.map(({ name, instruction, times, timeZone, source, effectiveDate }) => ({
+				name,
+				instruction,
+				times,
+				timeZone,
+				source,
+				effectiveDate,
+			})),
+		notes: [
+			...(routines === null
+				? ["Routines unknown."]
+				: routines.length === 0
+					? ["No routines saved."]
+					: []),
+			...caring
+				.filter((i) => i.verification !== "verified")
+				.map(
+					(i) =>
+						`${i.name} (${i.verification}, ${i.source}, ${i.effectiveDate}): ${ASK}`,
+				),
+			"Medication instructions are never offered from a trend.",
+		],
+	};
+};
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // ponytail: one freshness window for every metric, as in family-tools.ts.
@@ -238,6 +284,8 @@ export type TrendInput = {
 	readonly labs: readonly FinchnodeSubjectLabs[] | string;
 	/** The asker's database identity. */
 	readonly asker: string;
+	/** The saved care plan, or `null` when the asker has no `health_records` access. */
+	readonly care: CareFacts | null;
 };
 
 /** Relates the dated records to the question. Deterministic: the same records give the same reply. */
@@ -279,11 +327,7 @@ export const explainTrend = (input: TrendInput): TrendExplanation => {
 		observations: [reported, ...measured],
 		unknown,
 		conflicts: conflictsOf(measured),
-		carePlan: {
-			status: "unavailable",
-			message:
-				"No saved, verified care plan exists yet, so no agreed routine is offered.",
-		},
+		carePlan: carePlanOf(input.care),
 		nextSteps: [
 			{
 				kind: "check_in",

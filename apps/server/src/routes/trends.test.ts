@@ -1,10 +1,14 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`). All records
 // are synthetic.
 import { describe, expect, test } from "bun:test";
+import { CareInstructions } from "@health/contracts/care-profile";
 import { TrendExplanation } from "@health/contracts/trends";
 import { Effect, Schema } from "effect";
+import { Hono } from "hono";
 import { Timestamp } from "spacetimedb";
 import { readFamilyRecords } from "../db";
+import type { FamilyEnv } from "../http";
+import { careProfileRoutes } from "./care-profile";
 import {
 	dbConfig,
 	failure,
@@ -66,6 +70,92 @@ describe.skipIf(dbConfig === undefined)("trend explanations", () => {
 					days: 0,
 				});
 				expect(failure(bad)).toEqual([400, "invalid_request"]);
+			}),
+		));
+
+	test("offer only agreed routines and verified care instructions, if shared", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Care trend");
+				const app = familyApp(
+					db,
+					familyId,
+					new Hono<FamilyEnv>()
+						.route("/", careProfileRoutes())
+						.route("/", trendRoutes(undefined)),
+				);
+				const ask = () =>
+					send(app, "POST", "/trends", { question: "Why is HRV down?" }).pipe(
+						Effect.map(
+							(r) =>
+								Schema.decodeUnknownSync(TrendExplanation)(r.json).carePlan,
+						),
+					);
+
+				// No `health_records` grant: nothing is read and nothing leaks.
+				expect((yield* ask()).status).toBe("not_shared");
+
+				for (const scope of ["health_records", "care_plan_edit"])
+					yield* send(app, "POST", "/care-access", {
+						identity: db.identity,
+						scope,
+						granted: true,
+					});
+				yield* send(app, "PUT", "/care-profile", {
+					preferredName: null,
+					language: null,
+					timeZone: "Europe/London",
+					accessibilityNeeds: null,
+					diagnoses: null,
+					allergies: null,
+					dietaryRestrictions: null,
+					fluidRestrictions: null,
+					activityRestrictions: null,
+					routines: [{ name: "Evening walk", time: "18:00" }],
+					contacts: null,
+					familiarDestinations: null,
+					devices: null,
+					declinedPrompts: [],
+				});
+				const add = (kind: string, name: string) =>
+					send(app, "POST", "/care-instructions", {
+						kind,
+						name,
+						instruction: `Synthetic ${name}`,
+						times: ["08:00"],
+						reason: null,
+						source: "discharge sheet",
+						effectiveDate: "2026-09-01",
+					});
+				yield* add("care", "Breathing exercise");
+				yield* add("care", "Leg check");
+				yield* add("medication", "Synthetic tablet");
+				const { instructions } = Schema.decodeUnknownSync(CareInstructions)(
+					(yield* send(app, "GET", "/care-instructions")).json,
+				);
+				for (const i of instructions)
+					if (i.name !== "Leg check")
+						yield* send(app, "POST", `/care-instructions/${i.id}/verify`);
+
+				const plan = yield* ask();
+				expect(plan.status).toBe("shared");
+				expect(plan.routines).toEqual([
+					{ name: "Evening walk", time: "18:00", timeZone: "Europe/London" },
+				]);
+				expect(plan.instructions).toEqual([
+					{
+						name: "Breathing exercise",
+						instruction: "Synthetic Breathing exercise",
+						times: ["08:00"],
+						timeZone: "Europe/London",
+						source: "discharge sheet",
+						effectiveDate: "2026-09-01",
+					},
+				]);
+				expect(plan.notes).toContain(
+					"Leg check (unverified, discharge sheet, 2026-09-01): not verified, ask your caregiver.",
+				);
+				expect(JSON.stringify(plan)).not.toContain("tablet");
 			}),
 		));
 });
