@@ -134,7 +134,13 @@ describe("server boundaries", () => {
 			[
 				7n,
 				[
-					sample("heart_rate", 61, "bpm", minute * 1000, "noop:my-whoop"),
+					sample(
+						"heart_rate",
+						64,
+						"bpm",
+						(minute + 30) * 1000,
+						"noop:my-whoop",
+					),
 					sample(
 						"heart_rate",
 						70,
