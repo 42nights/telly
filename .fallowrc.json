@@ -3,7 +3,8 @@
 	"entry": [
 		"packages/db/src/**/*.ts",
 		"spacetimedb/src/**/*.test.ts",
-		"deploy/cloudflare/worker.js"
+		"deploy/cloudflare/worker.js",
+		"deploy/cloudflare/landing/style.css"
 	],
 	"duplicates": { "ignore": ["packages/db/src/**"] },
 	"ignoreDependencies": [
