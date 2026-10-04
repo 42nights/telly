@@ -169,7 +169,7 @@ export function ConnectScreen({ family }: { family: Family }) {
 			{error !== null && <p role="alert">{error}</p>}
 			<Button
 				type="button"
-				className={`${open === null ? "win95-primary " : ""}h-11 w-full`}
+				className={`${open === null ? "win95-primary" : ""}h-11 w-full`}
 				onClick={() => void navigate({ to: "/hud" })}
 			>
 				Finish

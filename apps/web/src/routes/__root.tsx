@@ -3,6 +3,7 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
+	useLocation,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
@@ -10,12 +11,15 @@ import Header from "@/components/header";
 import { OnboardingRedirect } from "@/components/onboarding/redirect";
 import { ThemeProvider } from "@/components/theme-provider";
 import { FamilyProvider } from "@/lib/family";
+import { requireSession } from "@/lib/session";
 
 import "../index.css";
 
 type RouterAppContext = Record<string, never>;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
+	// No app page, nav tab, or family data shows before sign-in.
+	beforeLoad: requireSession,
 	component: RootComponent,
 	head: () => ({
 		meta: [
@@ -37,6 +41,9 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+	const signingIn = useLocation({
+		select: (location) => location.pathname === "/sign-in",
+	});
 	return (
 		<>
 			<HeadContent />
@@ -46,15 +53,21 @@ function RootComponent() {
 				disableTransitionOnChange
 				storageKey="vite-ui-theme"
 			>
-				<FamilyProvider>
-					<OnboardingRedirect />
-					<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
-						<Header />
-						<div className="min-h-0 overflow-y-auto">
-							<Outlet />
-						</div>
+				{signingIn ? (
+					<div className="win95-desktop h-svh overflow-y-auto">
+						<Outlet />
 					</div>
-				</FamilyProvider>
+				) : (
+					<FamilyProvider>
+						<OnboardingRedirect />
+						<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
+							<Header />
+							<div className="min-h-0 overflow-y-auto">
+								<Outlet />
+							</div>
+						</div>
+					</FamilyProvider>
+				)}
 				<Toaster richColors />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />

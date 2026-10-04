@@ -5,31 +5,20 @@ import { useFamily } from "@/lib/family";
 
 import { onboardingTarget } from "./logic";
 
-/** The invite code a signed-out person opened, kept until they sign in and see the join screen. */
-export const PENDING_JOIN = "telly.join";
-
 /**
- * Sends a signed-in person with no family to onboarding, or to the invite they opened before
- * signing in. `pathname` null turns it off (such as before sign-in finishes).
+ * Sends a signed-in person with no family to onboarding, on every screen except onboarding itself
+ * and the join screen. Sign-in has its own landing rule and renders outside FamilyProvider.
  */
-export function useOnboardingRedirect(pathname: string | null) {
+export function OnboardingRedirect() {
 	const { state } = useFamily();
 	const navigate = useNavigate();
+	const pathname = useRouterState({ select: (s) => s.location.pathname });
 	const target =
-		pathname !== null && state.kind === "ready"
-			? onboardingTarget(
-					pathname,
-					state.value.families.length === 0,
-					localStorage.getItem(PENDING_JOIN),
-				)
+		state.kind === "ready"
+			? onboardingTarget(pathname, state.value.families.length === 0)
 			: null;
 	useEffect(() => {
 		if (target !== null) void navigate({ href: target, replace: true });
 	}, [target, navigate]);
-}
-
-/** The app-wide redirect, for every screen except sign-in and the join screen. */
-export function OnboardingRedirect() {
-	useOnboardingRedirect(useRouterState({ select: (s) => s.location.pathname }));
 	return null;
 }

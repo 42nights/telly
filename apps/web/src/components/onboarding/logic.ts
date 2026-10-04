@@ -13,13 +13,13 @@ export const failureText = (failure: ApiFailure) =>
 export const onboardingTarget = (
 	pathname: string,
 	familiesEmpty: boolean,
-	pendingJoin: string | null,
-): string | null => {
-	if (pathname.startsWith("/sign-in") || pathname.startsWith("/join/"))
-		return null;
-	if (pendingJoin !== null) return `/join/${encodeURIComponent(pendingJoin)}`;
-	return familiesEmpty && pathname !== "/welcome" ? "/welcome" : null;
-};
+): string | null =>
+	familiesEmpty &&
+	pathname !== "/welcome" &&
+	!pathname.startsWith("/sign-in") &&
+	!pathname.startsWith("/join/")
+		? "/welcome"
+		: null;
 
 /** The invite code from a pasted join link (`…/join/<code>`) or a bare code; null when empty. */
 export const inviteCode = (pasted: string): string | null => {

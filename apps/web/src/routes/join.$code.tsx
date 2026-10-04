@@ -2,13 +2,11 @@ import { JoinedFamily } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Window } from "@/components/hud/window";
-import { PENDING_JOIN } from "@/components/onboarding/redirect";
 import { apiRequest } from "@/lib/api";
 import { useFamily } from "@/lib/family";
-import { getSessionToken } from "@/lib/session";
 
 export const Route = createFileRoute("/join/$code")({
 	component: Join,
@@ -24,15 +22,6 @@ function Join() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Signed out: keep the code and sign in first; sign-in comes back here. Signed in: the code is
-	// in the address, so it is no longer pending.
-	useEffect(() => {
-		if (getSessionToken() === null) {
-			localStorage.setItem(PENDING_JOIN, code);
-			void navigate({ to: "/sign-in" });
-		} else localStorage.removeItem(PENDING_JOIN);
-	}, [code, navigate]);
-
 	const join = async () => {
 		setBusy(true);
 		const result = await apiRequest(
@@ -46,10 +35,8 @@ function Join() {
 			reload();
 			return navigate({ to: "/hud" });
 		}
-		if (result.kind === "signed_out") {
-			localStorage.setItem(PENDING_JOIN, code);
-			return navigate({ to: "/sign-in" });
-		}
+		// A 401 ends the session; the sign-in gate then returns the person to this link.
+		if (result.kind === "signed_out") return;
 		setError(
 			result.kind === "unavailable" ||
 				(result.kind === "error" && result.unreachable)

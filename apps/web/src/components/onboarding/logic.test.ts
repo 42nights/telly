@@ -49,14 +49,12 @@ test("a daily value says last night, today with its time, or its date", () => {
 	);
 });
 
-test("a signed-in person without a family goes to onboarding or their pending invite", () => {
-	expect(onboardingTarget("/hud", true, null)).toBe("/welcome");
-	expect(onboardingTarget("/welcome", true, null)).toBeNull();
-	expect(onboardingTarget("/sign-in", true, null)).toBeNull();
-	expect(onboardingTarget("/join/abc", true, null)).toBeNull();
-	expect(onboardingTarget("/hud", false, null)).toBeNull();
-	expect(onboardingTarget("/hud", false, "a b")).toBe("/join/a%20b");
-	expect(onboardingTarget("/welcome", true, "abc")).toBe("/join/abc");
+test("a signed-in person without a family goes to onboarding, except to join by invite", () => {
+	expect(onboardingTarget("/hud", true)).toBe("/welcome");
+	expect(onboardingTarget("/welcome", true)).toBeNull();
+	expect(onboardingTarget("/sign-in", true)).toBeNull();
+	expect(onboardingTarget("/join/abc", true)).toBeNull();
+	expect(onboardingTarget("/hud", false)).toBeNull();
 });
 
 test("an invite code comes from a pasted link or a bare code", () => {
