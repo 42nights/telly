@@ -14,12 +14,23 @@ import {
 	familyPath,
 } from "@/lib/api";
 
+import {
+	type ClearedReason,
+	clearedReason,
+	difference,
+	MARKER_MIN_CONFIDENCE,
+	MOTION_EVERY_MS,
+	sample,
+} from "./stale-marker";
+
 export type CheckResult =
 	| { readonly kind: "looking" }
 	| {
 			readonly kind: "done";
 			readonly detections: readonly MedicineDetection[];
 	  }
+	/** The markers were taken away because the camera moved or the picture got old. */
+	| { readonly kind: "cleared"; readonly reason: ClearedReason }
 	| ApiFailure;
 
 export type PictureCheck = {
@@ -36,6 +47,8 @@ type Frame = {
 	readonly data: string;
 	readonly width: number;
 	readonly height: number;
+	/** The encoded pixels, so motion is measured against exactly what was sent. */
+	readonly canvas: HTMLCanvasElement;
 };
 
 /** Encodes the video's current frame as JPEG, scaled down until it fits the vision limit. */
@@ -53,7 +66,7 @@ export const capture = (video: HTMLVideoElement): Frame | null => {
 		const picture = canvas.toDataURL("image/jpeg", 0.85);
 		const data = picture.slice(picture.indexOf(",") + 1);
 		if ((data.length * 3) / 4 <= MAX_VISION_IMAGE_BYTES)
-			return { picture, data, width, height };
+			return { picture, data, width, height, canvas };
 		scale *= 0.7;
 	}
 };
@@ -87,7 +100,13 @@ const resultFor = (
 	if (result.kind !== "ready") return result;
 	if (result.value.frame.id !== id)
 		return { kind: "error", message: "The reply was for another picture." };
-	return { kind: "done", detections: result.value.detections };
+	// A detection this unsure gets no marker: it would point the wearer at a guess.
+	return {
+		kind: "done",
+		detections: result.value.detections.filter(
+			(d) => d.confidence >= MARKER_MIN_CONFIDENCE,
+		),
+	};
 };
 
 /** The most confident detection, which the arrow points to. */
@@ -99,7 +118,8 @@ export const bestDetection = (detections: readonly MedicineDetection[]) =>
 
 /**
  * Captures the video frame and asks `POST /vision/medicine-detections` about it. A new look or
- * `stop` aborts the pending one, and a reply for another frame is never shown.
+ * `stop` aborts the pending one, and a reply for another frame is never shown. Shown markers are
+ * cleared once the live video moves away from the checked frame or the frame gets old.
  */
 export function usePictureCheck(
 	familyId: string | null,
@@ -108,6 +128,33 @@ export function usePictureCheck(
 	const [check, setCheck] = useState<PictureCheck | null>(null);
 	const pending = useRef<AbortController | null>(null);
 	useEffect(() => () => pending.current?.abort(), []);
+	const sent = useRef<{
+		readonly id: string;
+		readonly capturedAt: number;
+		readonly video: HTMLVideoElement | null;
+		readonly signature: Float32Array | null;
+	} | null>(null);
+
+	const doneId = check?.result.kind === "done" ? check.id : null;
+	useEffect(() => {
+		const shown = sent.current;
+		if (doneId === null || shown?.id !== doneId) return;
+		const tick = () => {
+			const live = sample(shown.video);
+			const change =
+				live === null || shown.signature === null
+					? null
+					: difference(shown.signature, live);
+			const reason = clearedReason(shown.capturedAt, Date.now(), change);
+			if (reason !== null)
+				setCheck((c) =>
+					c?.id === doneId ? { ...c, result: { kind: "cleared", reason } } : c,
+				);
+		};
+		tick();
+		const timer = setInterval(tick, MOTION_EVERY_MS);
+		return () => clearInterval(timer);
+	}, [doneId]);
 
 	const stop = () => {
 		pending.current?.abort();
@@ -121,6 +168,7 @@ export function usePictureCheck(
 		if (frame === null) return setCheck(null);
 		const id = crypto.randomUUID();
 		const capturedAt = Date.now();
+		sent.current = { id, capturedAt, video, signature: sample(frame.canvas) };
 		const base = {
 			id,
 			picture: frame.picture,

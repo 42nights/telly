@@ -4,6 +4,7 @@ import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
+import type { R2Config } from "./integrations/r2";
 
 export type ServerConfig = {
 	readonly corsOrigin: string;
@@ -19,6 +20,8 @@ export type ServerConfig = {
 	readonly fetchAgent?: FetchAgentConfig | undefined;
 	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
 	readonly gemma?: GemmaConfig | undefined;
+	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
+	readonly r2?: R2Config | undefined;
 };
 
 type Env = {
@@ -37,6 +40,11 @@ type Env = {
 	readonly FINCHNODE_API_KEY?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_URL?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_TOKEN?: string | undefined;
+	readonly TELLY_R2_ACCOUNT_ID?: string | undefined;
+	readonly TELLY_R2_BUCKET?: string | undefined;
+	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
+	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
+	readonly TELLY_R2_ENDPOINT?: string | undefined;
 } & Parameters<typeof gemmaConfigFrom>[0];
 
 /** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
@@ -51,6 +59,20 @@ const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
 			"Set both TELLY_FETCH_BRIDGE_URL and TELLY_FETCH_BRIDGE_TOKEN, or neither",
 		);
 	return undefined;
+};
+
+/** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */
+const r2Config = (env: Env): R2Config | undefined => {
+	const {
+		TELLY_R2_ACCOUNT_ID: account,
+		TELLY_R2_BUCKET: bucket,
+		TELLY_R2_ACCESS_KEY_ID: accessKeyId,
+		TELLY_R2_SECRET_ACCESS_KEY: secretAccessKey,
+	} = env;
+	if (!(account && bucket && accessKeyId && secretAccessKey)) return undefined;
+	const endpoint =
+		env.TELLY_R2_ENDPOINT || `https://${account}.r2.cloudflarestorage.com`;
+	return { endpoint, bucket, accessKeyId, secretAccessKey };
 };
 
 /**
@@ -77,6 +99,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		},
 		...(finchnode === undefined ? {} : { finchnode }),
 		fetchAgent: fetchAgentConfig(env),
+		r2: r2Config(env),
 	};
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }

@@ -1,11 +1,18 @@
-import type { Report, ReportReview } from "@health/contracts/reports";
+import {
+	type Report,
+	ReportFields,
+	type ReportReview,
+} from "@health/contracts/reports";
+import { Schema } from "effect";
 import { useState } from "react";
 
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
 import {
+	draftChanged,
 	draftOf,
 	type FieldDraft,
+	type FieldName,
 	fieldErrors,
 	fieldsOf,
 	formatTime,
@@ -36,7 +43,7 @@ export type ReportSheetState = {
 	readonly reviewed: boolean;
 	readonly draft: FieldDraft;
 	readonly setDraft: (draft: FieldDraft) => void;
-	readonly errors: Partial<Record<keyof FieldDraft, string>>;
+	readonly errors: Partial<Record<FieldName, string>>;
 	readonly valid: boolean;
 	/** The form differs from the saved fields. */
 	readonly dirty: boolean;
@@ -66,10 +73,7 @@ export function useReportSheet(
 	const [savedAt, setSavedAt] = useState<number | null>(null);
 
 	const errors = fieldErrors(draft);
-	const saved = draftOf(report.fields);
-	const dirty = (Object.keys(draft) as (keyof FieldDraft)[]).some(
-		(name) => draft[name].trim() !== saved[name],
-	);
+	const dirty = draftChanged(draft, draftOf(report.fields));
 	const base = familyPath(
 		familyId,
 		`/reports/${encodeURIComponent(report.id)}`,
@@ -121,7 +125,8 @@ export function useReportSheet(
 		draft,
 		setDraft,
 		errors,
-		valid: Object.keys(errors).length === 0,
+		// The field messages explain the usual failure; the shared schema decides.
+		valid: Schema.is(ReportFields)(fieldsOf(draft)),
 		dirty,
 		busy,
 		confirmed,
