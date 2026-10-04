@@ -1,11 +1,13 @@
 // Answers family questions sent over iMessage. Provider-independent: it handles one Spectrum message
-// and replies in the same space. Only allowlisted senders get answers; message text and addresses
-// never reach the logs. For the wearer (#308), "where are my keys?" gets the last place and a finder
-// link, "done" answers the texted reminder, and a photo saves where an item is.
+// and replies in the same space. Only allowlisted senders and members' saved phone numbers get
+// answers; message text and addresses never reach the logs. For the wearer (#308), "where are my
+// keys?" gets the last place and a finder link, "done" answers the texted reminder, and a photo
+// saves where an item is.
 import { type FamilyAnswer, FamilyQuestion } from "@health/contracts/ask";
 import type { FinderImage } from "@health/contracts/finder-link";
 import type { Message, Space } from "@spectrum-ts/core";
 import { Schema } from "effect";
+import type { Identity } from "spacetimedb";
 import { isDoneReply, itemAsk, type WearerActions } from "./finder";
 
 export const unavailableReply =
@@ -22,8 +24,32 @@ const photoTypes: Record<string, FinderImage["type"]> = {
 };
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
+/** A member's saved phone number in one of their families (the `member_phones` view). */
+export type SenderPhone = {
+	readonly phone: string;
+	readonly member: Identity;
+	readonly familyId: bigint;
+};
+
+/**
+ * The member who saved `sender` as their phone, in their oldest family (lowest id), or undefined.
+ * The module keeps each number to one member, so only the family can be ambiguous.
+ */
+export const senderMember = (phones: Iterable<SenderPhone>, sender: string) => {
+	let found: SenderPhone | undefined;
+	for (const row of phones)
+		if (
+			row.phone === sender &&
+			(found === undefined || row.familyId < found.familyId)
+		)
+			found = row;
+	return found;
+};
+
 type Deps = {
 	readonly senders: ReadonlyMap<string, bigint>;
+	/** Saved member phones, read when a sender is not allowlisted; undefined without the operator. */
+	readonly memberPhones?: (() => Promise<Iterable<SenderPhone>>) | undefined;
 	readonly answer: (
 		familyId: bigint,
 		question: FamilyQuestion,
@@ -98,7 +124,19 @@ export const iMessageHandler = (deps: Deps) => {
 	return async (space: Space, message: Message) => {
 		if (!isNew(message.id) || !answerable(message)) return;
 		const { content } = message;
-		const familyId = deps.senders.get(message.sender?.id.trim() ?? "");
+		const sender = message.sender?.id.trim() ?? "";
+		// A failed read of the saved phones leaves the sender unknown, so it gets no reply.
+		const familyId =
+			deps.senders.get(sender) ??
+			(deps.memberPhones === undefined
+				? undefined
+				: senderMember(
+						await deps.memberPhones().catch((error: unknown) => {
+							console.error("imessage: reading member phones failed", error);
+							return [];
+						}),
+						sender,
+					)?.familyId);
 		if (familyId === undefined) {
 			ignored += 1;
 			console.warn(

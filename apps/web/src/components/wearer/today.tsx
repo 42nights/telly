@@ -9,6 +9,7 @@ import {
 import { BellRing, TriangleAlert } from "lucide-react";
 
 import { ago } from "@/components/family/logic";
+import { TextTellyButton } from "@/components/text-telly";
 import { ApiNotice } from "@/components/win95";
 import { type ApiState, familyPath, useApi } from "@/lib/api";
 
@@ -117,14 +118,17 @@ export function Today({
 			aria-labelledby="today"
 			className="win95-inset grid min-h-0 grid-cols-1 content-start gap-1 overflow-y-auto bg-card p-2 text-[18px] md:p-3"
 		>
-			<h2 className="font-bold text-[20px]" id="today">
-				Today ·{" "}
-				{new Date(now).toLocaleDateString([], {
-					weekday: "long",
-					day: "numeric",
-					month: "long",
-				})}
-			</h2>
+			<div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+				<h2 className="font-bold text-[20px]" id="today">
+					Today ·{" "}
+					{new Date(now).toLocaleDateString([], {
+						weekday: "long",
+						day: "numeric",
+						month: "long",
+					})}
+				</h2>
+				<TextTellyButton className="text-[16px]" />
+			</div>
 			{familyId !== null && <NextReminder familyId={familyId} now={now} />}
 			{familyId !== null && records?.kind === "ready" && (
 				<Alerts familyId={familyId} now={now} records={records.value} />

@@ -273,3 +273,30 @@ describe("finder links", () => {
 		).toEqual(alice);
 	});
 });
+
+describe("member phones", () => {
+	test("one person per number; only the operator maps numbers to families", () => {
+		const h = setup();
+		h.call(mod.createFamily, bob, { name: "Bob's" });
+		h.call(mod.setMyPhone, bob, { phone: "+15550002222" });
+		expect(() =>
+			h.call(mod.setMyPhone, alice, { phone: "+15550002222" }),
+		).toThrow("Another person already saved this phone number");
+		expect(() => h.call(mod.setMyPhone, alice, { phone: "555-0100" })).toThrow(
+			"Enter a full phone number",
+		);
+		expect(h.view(mod.myPhone, bob)).toMatchObject([{ phone: "+15550002222" }]);
+		expect(h.view(mod.myPhone, alice)).toEqual([]);
+		expect(h.view(mod.memberPhones, bob)).toEqual([]);
+		expect(h.view(mod.memberPhones, op)).toEqual([
+			{ phone: "+15550002222", member: bob, familyId: 1n },
+			{ phone: "+15550002222", member: bob, familyId: 2n },
+		]);
+		// Deleting frees the number for another person.
+		h.call(mod.setMyPhone, bob, { phone: undefined });
+		h.call(mod.setMyPhone, alice, { phone: "+15550002222" });
+		expect(h.view(mod.memberPhones, op)).toEqual([
+			{ phone: "+15550002222", member: alice, familyId: 1n },
+		]);
+	});
+});

@@ -70,7 +70,7 @@ export const createApp = (
 		.route("/api/finder-link", finderLinkRoutes(operator, config.gemini))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
-		.route("/api", accountRoutes())
+		.route("/api", accountRoutes(config.imessage?.address))
 		// Before the membership check: a delegated Fetch.ai tool call comes from a non-member.
 		.route("/api/families/:familyId", toolRoutes())
 		.route("/api/families/:familyId", family);

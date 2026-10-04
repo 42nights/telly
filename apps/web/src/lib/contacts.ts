@@ -31,6 +31,23 @@ export const isFullPhoneNumber = (value: string): boolean => {
 export const telHref = (value: string): string =>
 	`tel:${value.trim().startsWith("+") ? "+" : ""}${value.replace(/\D/g, "")}`;
 
+/**
+ * `value` in E.164 form (`+15550100123`), or null when it is no full number. A number without a
+ * country code is taken as a US number: 10 digits, or 11 that start with 1.
+ */
+export const toE164 = (value: string): string | null => {
+	if (!/^\+?[0-9()\s.-]+$/.test(value.trim())) return null;
+	const digits = value.replace(/\D/g, "");
+	const full = value.trim().startsWith("+")
+		? digits
+		: digits.length === 10
+			? `1${digits}`
+			: digits.length === 11 && digits.startsWith("1")
+				? digits
+				: "";
+	return /^[1-9][0-9]{6,14}$/.test(full) ? `+${full}` : null;
+};
+
 /** Opens the phone's dialer with `number`, for a call that starts after a form submit, not a link. */
 export const dial = (number: string): void => {
 	window.location.href = telHref(number);

@@ -75,6 +75,7 @@ const paths = [
 	"/meal",
 	"/cooking",
 	"/settings",
+	"/settings/text-telly",
 	"/settings/speaker",
 	"/settings/going-out",
 	"/settings/things",

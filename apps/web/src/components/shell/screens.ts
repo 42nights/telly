@@ -70,6 +70,7 @@ export const settingsScreen = {
 	icon: Settings,
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
+		{ to: "/settings/text-telly", label: "Text Telly" },
 		{ to: "/settings/speaker", label: "Home speaker" },
 		{ to: "/settings/going-out", label: "Going out" },
 		{ to: "/settings/things", label: "Saved things" },

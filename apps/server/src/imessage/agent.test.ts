@@ -1,7 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
 import type { FamilyAnswer } from "@health/contracts/ask";
 import type { Message, Space } from "@spectrum-ts/core";
-import { iMessageHandler, unavailableReply } from "./agent";
+import { Identity } from "spacetimedb";
+import { iMessageHandler, senderMember, unavailableReply } from "./agent";
 import type { WearerActions } from "./finder";
 
 const sent: string[] = [];
@@ -79,6 +80,58 @@ test("answers allowlisted text once and skips everything else", async () => {
 			"typing off",
 		]),
 	);
+});
+
+test("a member's saved phone maps to that member and their oldest family", async () => {
+	const ana = new Identity(1n);
+	const ben = new Identity(2n);
+	const phones = [
+		{ phone: "+15550002222", member: ana, familyId: 9n },
+		{ phone: "+15550002222", member: ana, familyId: 4n },
+		{ phone: "+15550003333", member: ben, familyId: 5n },
+	];
+	expect(senderMember(phones, "+15550002222")).toEqual({
+		phone: "+15550002222",
+		member: ana,
+		familyId: 4n,
+	});
+	expect(senderMember(phones, "+15550003333")?.member).toBe(ben);
+	expect(senderMember(phones, "+15550004444")).toBeUndefined();
+
+	// The allowlist wins; a saved phone answers in its family; an unknown sender gets nothing.
+	sent.length = 0;
+	const asked: [bigint, string][] = [];
+	const handle = iMessageHandler({
+		senders: new Map([["+15550003333", 7n]]),
+		memberPhones: async () => phones,
+		answer: async (familyId, { question }) => {
+			asked.push([familyId, question]);
+			return { answer: "ok" } as FamilyAnswer;
+		},
+		wearer: undefined,
+	});
+	await handle(space, message("allowlisted?", "+15550003333"));
+	await handle(space, message("saved?", " +15550002222 "));
+	await handle(space, message("stranger?", "+15550004444"));
+	expect(asked).toEqual([
+		[7n, "allowlisted?"],
+		[4n, "saved?"],
+	]);
+
+	// A failed read of the saved phones answers nobody outside the allowlist.
+	const down = iMessageHandler({
+		senders: new Map(),
+		memberPhones: async () => {
+			throw new Error("db down");
+		},
+		answer: async () => ({ answer: "ok" }) as FamilyAnswer,
+		wearer: undefined,
+	});
+	sent.length = 0;
+	const quiet = spyOn(console, "error").mockImplementation(() => {});
+	await down(space, message("saved?", "+15550002222"));
+	quiet.mockRestore();
+	expect(sent).toEqual([]);
 });
 
 test("item questions, done replies, and photos go to the wearer actions", async () => {

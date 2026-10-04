@@ -69,6 +69,7 @@ import SetFamilyPushTokenReducer from "../set_family_push_token_reducer";
 import SetHomeReducer from "../set_home_reducer";
 import SetMedicineMemoryReducer from "../set_medicine_memory_reducer";
 import SetMyNameReducer from "../set_my_name_reducer";
+import SetMyPhoneReducer from "../set_my_phone_reducer";
 import SetReminderSettingsReducer from "../set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "../set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "../set_speaker_settings_reducer";
@@ -145,6 +146,7 @@ export type SetFamilyPushTokenParams = __Infer<typeof SetFamilyPushTokenReducer>
 export type SetHomeParams = __Infer<typeof SetHomeReducer>;
 export type SetMedicineMemoryParams = __Infer<typeof SetMedicineMemoryReducer>;
 export type SetMyNameParams = __Infer<typeof SetMyNameReducer>;
+export type SetMyPhoneParams = __Infer<typeof SetMyPhoneReducer>;
 export type SetReminderSettingsParams = __Infer<typeof SetReminderSettingsReducer>;
 export type SetReportEmailSettingsParams = __Infer<typeof SetReportEmailSettingsReducer>;
 export type SetSpeakerSettingsParams = __Infer<typeof SetSpeakerSettingsReducer>;

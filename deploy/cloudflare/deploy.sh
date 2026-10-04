@@ -83,7 +83,7 @@ ship() {
 			"CORS_ORIGIN", "LANDING_HOST", "TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
 			"SPACETIMEDB_DATABASE", "FINCHNODE_MODE", "TELLY_R2_ACCOUNT_ID", "TELLY_R2_BUCKET",
 			"TELLY_R2_ACCESS_KEY_ID", "SPECTRUM_PROJECT_ID", "QWEN_BASE_URL", "QWEN_BASE_MODEL", "QWEN_CHECKPOINT",
-			"TELLY_FETCH_BRIDGE_URL")))),
+			"TELLY_FETCH_BRIDGE_URL", "TELLY_IMESSAGE_ADDRESS")))),
 	}' >"$tmp/wrangler.json" || return 1
 	# `set -e` is off inside a function called with `||`, so each step returns on failure.
 	$wrangler deploy --config "$tmp/wrangler.json" --secrets-file "$tmp/secrets.json" \
