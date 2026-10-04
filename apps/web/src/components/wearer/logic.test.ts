@@ -3,6 +3,7 @@ import type { HealthSample } from "@health/contracts";
 
 import {
 	currentHeartRate,
+	emergencyIntent,
 	evidenceLine,
 	HEART_RATE_FRESH_MS,
 	isMedicineRequest,
@@ -81,6 +82,14 @@ test("evidence reads as a short line with source and age, and marks old samples"
 	expect(
 		evidenceLine({ ...sample("e", 3), stale: true, synthetic: true }, now),
 	).toBe("Heart rate 72 bpm · from phone · 3 min ago (demo, not real)");
+});
+
+test("an urgent request dispatches; an ouch alone gets a check-in", () => {
+	expect(emergencyIntent("Ouch, I fell and can't get up")).toBe("help");
+	expect(emergencyIntent("Help!")).toBe("help");
+	expect(emergencyIntent("ouch")).toBe("ouch");
+	expect(emergencyIntent("I need help finding my pills")).toBeNull();
+	expect(emergencyIntent("How is my heart rate?")).toBeNull();
 });
 
 describe("marker", () => {

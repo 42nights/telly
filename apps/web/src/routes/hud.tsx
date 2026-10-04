@@ -15,6 +15,7 @@ import { ExerciseInvite } from "@/components/exercise/session";
 import { Alerts } from "@/components/hud/alerts";
 import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
+import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
@@ -210,6 +211,7 @@ function useWearerRecords() {
 function HudComponent() {
 	const now = useNow();
 	const { familyId, familiesKind, records, retry } = useWearerRecords();
+	const emergency = useEmergency(familyId);
 	const clock = new Date(now).toLocaleTimeString([], {
 		hour: "numeric",
 		minute: "2-digit",
@@ -242,7 +244,11 @@ function HudComponent() {
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
-							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
+							<Request
+								familyId={familyId}
+								onEmergency={emergency.start}
+								talkNote={talkNote[familiesKind]}
+							/>
 						)}
 						<Link
 							className={buttonVariants({
@@ -258,6 +264,7 @@ function HudComponent() {
 						{familyId !== null && (
 							<ExerciseInvite familyId={familyId} now={now} />
 						)}
+						<Emergency emergency={emergency} familyId={familyId} />
 					</div>
 
 					<section
