@@ -1,7 +1,12 @@
 // Where a medicine container was last seen (issue #29; docs/board.html#hud-marker). A sighting is a
 // past observation, never the container's current place: a current place comes only from a new
 // camera check (`./vision`). Remembering or finding a container never records a dose.
+//
+// Each member has their own medicines and places (#291). Every route takes `?person=<identity>`,
+// the member whose medicine it reads or changes; without it, the caller's own. A member opens their
+// own; a member with `family_access` or `care_plan_edit` opens every member's; anyone else gets 403.
 import { Schema } from "effect";
+import { IdentityHex } from "./families";
 import { MedicineDetection, UtcTime } from "./vision";
 
 const Text = Schema.String.check(
@@ -10,8 +15,8 @@ const Text = Schema.String.check(
 );
 
 /**
- * `PUT /medicine-memory`: turn remembering on, with the agreed familiar places to search when a
- * container moved, or off. Turning it off deletes every stored sighting of the family.
+ * `PUT /medicine-memory`: turn remembering on for the member, with their agreed familiar places to
+ * search when a container moved, or off. Turning it off deletes every stored sighting of the member.
  */
 export const SetMedicineMemory = Schema.Struct({
 	enabled: Schema.Boolean,
@@ -43,15 +48,21 @@ export const MedicineSighting = Schema.Struct({
 	...RememberMedicine.fields,
 	id: Schema.String,
 	familyId: Schema.String,
+	/** The member whose medicine this is. */
+	personId: IdentityHex,
 	savedBy: Schema.String,
 	/** When the person looked at `place` and the container was not there: the place is outdated. */
 	notFoundAt: Schema.NullOr(Schema.String),
 });
 export type MedicineSighting = typeof MedicineSighting.Type;
 
-/** `GET /medicine-memory`, and the reply of every change to it. */
+/** `GET /medicine-memory`, and the reply of every change to it: one member's memory. */
 export const MedicineMemory = Schema.Struct({
-	/** `null`: remembering is off, and no sighting is stored. */
+	/** The member whose medicine this is. */
+	personId: IdentityHex,
+	/** The members whose medicine the caller may open: the caller first, then the others. */
+	people: Schema.Array(IdentityHex),
+	/** `null`: remembering is off for the member, and no sighting of theirs is stored. */
 	permission: Schema.NullOr(
 		Schema.Struct({
 			places: Schema.Array(Schema.String),

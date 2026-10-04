@@ -9,13 +9,16 @@ import type { ApiResult } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 import {
 	type MedicineMemoryChange,
-	useMedicineMemory,
+	useChosenMedicineMemory,
+	WhoseMedicinesPicker,
 } from "@/lib/medicine-memory";
 
-/** The permission to remember where medicine was last seen, and the agreed places to search. */
+/** One member's permission to remember where their medicine was last seen, and their places. */
 export function MedicineMemorySettings() {
 	const { family } = useFamily();
-	const { memory, change } = useMedicineMemory(family?.id ?? null);
+	const { memory, change, choose } = useChosenMedicineMemory(
+		family?.id ?? null,
+	);
 	return (
 		<Window
 			icon={History}
@@ -28,6 +31,11 @@ export function MedicineMemorySettings() {
 			}
 			title="Settings · Medicine places"
 		>
+			<WhoseMedicinesPicker
+				choose={choose}
+				className="p-2 [&_select]:min-w-0 [&_select]:flex-1"
+				memory={memory}
+			/>
 			{memory.kind === "ready" ? (
 				<MemoryForm change={change} key={memory.at} memory={memory.value} />
 			) : (
@@ -77,7 +85,8 @@ function MemoryForm({
 			</label>
 			<p>
 				After a camera check finds a medicine container, you can save the room
-				or landmark where it is. Only this person's family can see it.
+				or landmark where it is. Only this member, family admins, and caregivers
+				can see it.
 			</p>
 			{enabled ? (
 				<label className="grid gap-1">
@@ -91,7 +100,7 @@ function MemoryForm({
 			) : (
 				on && (
 					<p className="font-bold">
-						Turning this off deletes every saved place.
+						Turning this off deletes every saved place of this member.
 					</p>
 				)
 			)}

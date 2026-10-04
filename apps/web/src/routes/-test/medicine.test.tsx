@@ -73,6 +73,8 @@ test("looks for the asked medicine once the video shows, marks it, and looks aga
 	const calls = serve({
 		"GET /api/families": { families: [FAMILY] },
 		"GET /api/families/fam-1/medicine-memory": {
+			personId: "a".repeat(64),
+			people: ["a".repeat(64)],
 			permission: {
 				places: ["Kitchen"],
 				setBy: "user-1",
