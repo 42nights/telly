@@ -322,6 +322,10 @@ struct StrandiOSApp: App {
                     if url.host == "import-health" {
                         model.handleHealthImportURL(url)
                     }
+                    if url.host == "telly-push" {
+                        UserDefaults.standard.set(URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                            .queryItems?.first { $0.name == "url" }?.value, forKey: TellyPush.urlKey)
+                    }
                 }
                 .alert("Import Apple Health data?", isPresented: healthImportAlertPresented) {
                     healthImportAlertButtons

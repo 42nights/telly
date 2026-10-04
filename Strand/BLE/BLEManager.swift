@@ -1480,6 +1480,7 @@ public final class BLEManager: NSObject, ObservableObject {
                               onBanked: { [weak self] c in
                                   // Live path: hr/rr are all the realtime decoder yields.
                                   self?.liveHr += c.hr; self?.liveRr += c.rr
+                                  TellyPush.shared.kick(store)
                               })
         // The per-sample host-received readout belongs to the modes that exist for it; without one, the log
         // carries the summary instead (`LivePersistTrace.StandardHRHostReceivedTrace`).
