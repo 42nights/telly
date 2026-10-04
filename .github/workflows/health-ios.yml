@@ -9,8 +9,12 @@ on:
       - ".github/workflows/health-ios.yml"
 
 jobs:
+  # Xcode needs macOS. The job runs only when the repository variable HEALTH_IOS_RUNNER names a
+  # macOS runner (`macos-26`, or a self-hosted Mac's label); otherwise it is skipped. HEALTH_RUNNER
+  # is a Linux runner, so it is not used here. This check is not part of the `required` gate.
   ios:
-    runs-on: macos-26
+    if: vars.HEALTH_IOS_RUNNER != ''
+    runs-on: ${{ vars.HEALTH_IOS_RUNNER }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
