@@ -113,7 +113,9 @@ function ConfirmDialog({
 						cannot be undone.
 					</p>
 					<label className="grid gap-1">
-						Type <b>{name}</b> to confirm
+						<span>
+							Type <b>{name}</b> to confirm
+						</span>
 						<input
 							autoComplete="off"
 							className="win95-inset h-11 bg-card px-2"
