@@ -19,7 +19,7 @@ type LabResult = LabReport["results"][number];
 const problem = (reviewer: string, otherwise: string) =>
 	Schema.is(ReviewerName)(reviewer.trim())
 		? otherwise
-		: "Enter your name above first.";
+		: "Enter your name above first (up to 80 characters).";
 
 const field = "h-11 text-base md:text-base";
 

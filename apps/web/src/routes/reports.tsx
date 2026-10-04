@@ -122,16 +122,21 @@ function Toolbar({
 			</p>
 			<div className="flex flex-wrap items-center gap-2">
 				{reviewed === undefined ? (
-					<Button
-						type="button"
-						disabled={!Schema.is(ReviewerName)(reviewer.trim())}
-						onClick={() =>
-							onReview({ by: reviewer.trim(), at: new Date().toISOString() })
-						}
-						className="px-4 text-base"
-					>
-						Mark reviewed
-					</Button>
+					<>
+						<Button
+							type="button"
+							disabled={!Schema.is(ReviewerName)(reviewer.trim())}
+							onClick={() =>
+								onReview({ by: reviewer.trim(), at: new Date().toISOString() })
+							}
+							className="px-4 text-base"
+						>
+							Mark reviewed
+						</Button>
+						{!Schema.is(ReviewerName)(reviewer.trim()) && (
+							<p>Enter your name above to mark the report reviewed.</p>
+						)}
+					</>
 				) : (
 					<p role="status" tabIndex={-1} ref={status} className="font-bold">
 						Reviewed. Ready for the Finchnode handoff. Not sent.
@@ -243,6 +248,7 @@ function Corrections({
 										<Button
 											type="button"
 											onClick={() => onRemove(result.id)}
+											aria-label={`Remove correction to ${shortName(result.name)}, ${formatDate(result.collectedAt)}`}
 											className="ml-2 px-4 text-base print:hidden"
 										>
 											Remove
@@ -290,11 +296,9 @@ function Report({ report }: { report: LabReport }) {
 				aria-labelledby={headingId}
 				className="mx-auto max-w-5xl bg-card p-4 text-card-foreground text-lg md:p-8 print:max-w-none print:p-0 print:text-[11pt]"
 			>
-				{report.synthetic && (
-					<p className="border-2 border-black border-solid p-2 font-bold">
-						Synthetic demo data · Not a real person · Not from a laboratory
-					</p>
-				)}
+				<p className="border-2 border-black border-solid p-2 font-bold">
+					Synthetic demo data · Not a real person · Not from a laboratory
+				</p>
 				<h1 id={headingId} className="mt-4 font-bold text-3xl">
 					Lab results summary
 				</h1>

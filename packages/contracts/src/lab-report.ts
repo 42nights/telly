@@ -3,6 +3,8 @@ import { UtcTime } from "./families";
 
 // Lab report (#17, docs/board.html#wf-lab). Results are evidence and never change; a reviewer's
 // corrections and notes sit beside them. Ranges are the source record's own, never generic ones.
+// Separate from `./reports` (#64) until the server maps FinchnodeLab to LabReport; follow-up:
+// prefer the source's own interpretation when present, and persist reviews through #64's routes.
 
 /** A range exactly as the source record gave it. Bounds are inclusive; at least one is set. */
 export const ReferenceRange = Schema.Struct({
@@ -50,8 +52,8 @@ const LabResult = Schema.Struct({
 /** Layout version 1. A newer version fails decoding instead of rendering wrongly. */
 export const LabReport = Schema.Struct({
 	layoutVersion: Schema.Literal(1),
-	/** Synthetic demo data: never a real person or a laboratory. */
-	synthetic: Schema.Boolean,
+	/** Layout v1 renders synthetic demo data only: a real record fails decoding instead of being mislabelled. */
+	synthetic: Schema.Literal(true),
 	source: Schema.Struct({
 		name: Schema.NonEmptyString,
 		url: Schema.NonEmptyString,

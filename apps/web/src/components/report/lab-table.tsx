@@ -38,7 +38,7 @@ function Flag({ value, range }: { value: number; range: ReferenceRange }) {
 	return (
 		<>
 			{" "}
-			<span className="font-bold text-destructive">
+			<span className="whitespace-nowrap font-bold text-destructive">
 				<span aria-hidden>{FLAGS[flag].glyph}</span> {flag}
 			</span>
 			<span className="sr-only"> {FLAGS[flag].words}</span>
@@ -105,7 +105,11 @@ export function LabTable({
 								Test
 							</th>
 							{dates.map((date) => (
-								<th key={date} scope="col" className={cell}>
+								<th
+									key={date}
+									scope="col"
+									className={`${cell} whitespace-nowrap`}
+								>
 									<time dateTime={date}>{formatDate(date)}</time>
 								</th>
 							))}
