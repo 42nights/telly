@@ -150,22 +150,26 @@ describe("sample selection", () => {
 		value: 71.5,
 		unit: "bpm",
 	});
-	const samples = [
-		steps,
-		pulse,
-		sample({ id: "3", quality: "unvalidated" }),
-		sample({ id: "4", familyId: "8" }),
-	];
+	const whoop = sample({
+		id: "3",
+		quality: "unvalidated",
+		source: "noop:my-whoop",
+		synthetic: false,
+	});
+	const samples = [steps, pulse, whoop, sample({ id: "4", familyId: "8" })];
 
-	test("keeps the family's validated samples in request order", () => {
-		expect(pickSamples(samples, "7", ["2", "1"])).toEqual([pulse, steps]);
+	test("keeps the family's samples in request order, unvalidated too", () => {
+		expect(pickSamples(samples, "7", ["2", "3", "1"])).toEqual([
+			pulse,
+			whoop,
+			steps,
+		]);
 	});
 
-	test("rejects another family's sample and an unvalidated sample", () => {
+	test("rejects another family's sample", () => {
 		expect(() => pickSamples(samples, "7", ["1", "4"])).toThrow(
 			new ApiFailure("invalid_request", "Sample 4 is not in this family"),
 		);
-		expect(() => pickSamples(samples, "7", ["3"])).toThrow(/unvalidated/);
 	});
 });
 
@@ -254,8 +258,16 @@ describe("cue route", () => {
 		demo,
 		watch,
 		watchLater,
-		sample({ id: "4", quality: "unvalidated" }),
 		sample({ id: "5", familyId: "8" }),
+		sample({
+			id: "6",
+			metric: "heart_rate",
+			value: 68,
+			unit: "bpm",
+			source: "noop:my-whoop",
+			synthetic: false,
+			quality: "unvalidated",
+		}),
 	]);
 	const cueFor = (sampleIds: ReadonlyArray<string>) =>
 		post(qwen, JSON.stringify({ sampleIds }), familyDb);
@@ -309,7 +321,9 @@ describe("cue route", () => {
 				sampleIds: ["2", "3", "1"],
 				sources: ["apple-health", "synthetic-demo"],
 				synthetic: true,
+				validated: true,
 			},
+			notice: null,
 			generatedAt: cue.generatedAt,
 		});
 		expect(Date.parse(cue.generatedAt)).toBeGreaterThanOrEqual(before);
@@ -333,15 +347,29 @@ describe("cue route", () => {
 			sampleIds: ["2"],
 			sources: ["apple-health"],
 			synthetic: false,
+			validated: true,
 		});
 	});
 
-	test.each([
-		["another family's sample", ["1", "5"]],
-		["an unvalidated sample", ["4"]],
-	])("rejects %s without calling the provider", async (_, sampleIds) => {
+	test("answers a cue from an unvalidated WHOOP sample with a notice that says so", async () => {
+		answers = [completion('{"kind":"none","text":"No cue right now."}')];
+		const response = await cueFor(["6"]);
+		expect(response.status).toBe(200);
+		const cue = Schema.decodeUnknownSync(HealthCue)(await response.json());
+		expect(cue.input).toEqual({
+			sampleIds: ["6"],
+			sources: ["noop:my-whoop"],
+			synthetic: false,
+			validated: false,
+		});
+		expect(cue.notice).toBe(
+			"Based on unvalidated readings from noop:my-whoop. Advice only; it never raises an alert.",
+		);
+	});
+
+	test("rejects another family's sample without calling the provider", async () => {
 		seen = undefined;
-		const response = await cueFor(sampleIds);
+		const response = await cueFor(["1", "5"]);
 		expect(response.status).toBe(400);
 		expect(
 			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
