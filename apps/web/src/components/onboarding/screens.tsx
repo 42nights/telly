@@ -10,7 +10,6 @@ import { type ReactNode, useState } from "react";
 import { apiRequest, familyPath } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
-import { checklistKey } from "./checklist";
 import { failureText, inviteCode } from "./logic";
 
 export type Mode = "seeded" | "hand";
@@ -304,7 +303,6 @@ export function WhoScreen({
 			if (result.kind !== "ready") return failureText(result);
 			made = result.value;
 			setCreated(made);
-			localStorage.setItem(checklistKey(made.id), new Date().toISOString());
 			select(made.id);
 			reload();
 		}

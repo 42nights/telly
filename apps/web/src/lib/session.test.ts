@@ -103,6 +103,7 @@ describe("sign-in gate", () => {
 		const location = {
 			href,
 			pathname: new URL(href, "http://app.test").pathname,
+			searchStr: new URL(href, "http://app.test").search,
 		} as ParsedLocation;
 		try {
 			requireSession({ location });
@@ -128,6 +129,14 @@ describe("sign-in gate", () => {
 		expect(open("/")).toMatchObject(toSignIn("/"));
 		// The sign-in screen and the issuer's return to it stay open.
 		expect(open("/sign-in?code=c&state=s")).toBe("page");
+	});
+
+	test("signed out, a finder link opens the medicine page; other pages still need sign-in", () => {
+		expect(open("/medicine?person=7&link=t")).toBe("page");
+		expect(open("/medicine?person=7")).toMatchObject(
+			toSignIn("/medicine?person=7"),
+		);
+		expect(open("/family?link=t")).toMatchObject(toSignIn("/family?link=t"));
 	});
 
 	test("signed in, the page opens", () => {

@@ -58,6 +58,8 @@ const views = [
 	"SELECT * FROM my_push_tokens",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
+	"SELECT * FROM pending_wearer_texts",
+	"SELECT * FROM finder_links",
 ];
 
 const quality = { Validated: "validated", Unvalidated: "unvalidated" } as const;

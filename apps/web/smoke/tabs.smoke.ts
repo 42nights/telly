@@ -152,7 +152,6 @@ const tabs = [
 	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
 	{ name: "Home", path: "/hud", heading: /^Home · / },
 	{ name: "Medicine", path: "/medicine", heading: "Find medicine" },
-	{ name: "Bedtime", path: "/bedtime", heading: "Bedtime" },
 	{ name: "Going out", path: "/trip", heading: "Going out" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },
 ] as const;

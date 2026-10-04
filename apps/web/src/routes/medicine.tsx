@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Window } from "@/components/hud/window";
 import { LastSeen, RememberPlace } from "@/components/wearer/last-seen";
+import { LinkedFinder } from "@/components/wearer/linked-finder";
 import { itemFromRequest } from "@/components/wearer/logic";
 import { MedicineAnswer } from "@/components/wearer/medicine-answer";
 import {
@@ -20,14 +21,34 @@ import {
 	WhoseMedicinesPicker,
 } from "@/lib/medicine-memory";
 
+type Search = {
+	q?: string;
+	/** A finder link token from the iMessage agent (#308): the page opens without sign-in. */
+	link?: string;
+	/** The finder link opens on "Add a place". */
+	add?: true;
+};
+
 export const Route = createFileRoute("/medicine")({
-	validateSearch: (search: Record<string, unknown>): { q?: string } =>
-		typeof search.q === "string" ? { q: search.q } : {},
+	validateSearch: ({ q, link, add }: Record<string, unknown>): Search => ({
+		...(typeof q === "string" ? { q } : {}),
+		...(typeof link === "string" ? { link } : {}),
+		// The router parses `add=1` as the number 1.
+		...(add === 1 || add === "1" || add === true ? { add: true } : {}),
+	}),
 	component: MedicineComponent,
 });
 
 function MedicineComponent() {
-	const { q = "" } = Route.useSearch();
+	const { q = "", link, add, person } = Route.useSearch();
+	return link === undefined ? (
+		<MedicinePage q={q} />
+	) : (
+		<LinkedFinder add={add === true} person={person} q={q} token={link} />
+	);
+}
+
+function MedicinePage({ q }: { q: string }) {
 	const { state: families, family } = useFamily();
 	const familyId = family?.id ?? null;
 	const camera = useCamera(true);

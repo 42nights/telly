@@ -46,6 +46,7 @@ describe("startup configuration", () => {
 				["+15550001111", 7n],
 				["ana@example.com", 12n],
 			]),
+			appUrl: "http://localhost:3001",
 		});
 	});
 

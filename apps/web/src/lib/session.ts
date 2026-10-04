@@ -2,7 +2,7 @@
 // the sign-in screen (issue #4) stores with `setSessionToken`. The ID token lasts one hour;
 // `freshSessionToken` renews it through the server before each request (issue #222). Without a
 // token, or after its `exp` with no refresh token, every app page shows the sign-in screen instead
-// (`requireSession`).
+// (`requireSession`), except a finder link.
 import {
 	refreshSignIn,
 	SESSION_KEYS,
@@ -107,9 +107,22 @@ export const returnPath = (path: string | undefined): string =>
 		? path
 		: "/";
 
-/** Root `beforeLoad`: with no session, every page except sign-in goes to sign-in, which returns here. */
+/** A finder link (#308): `/medicine?link=<token>` opens without sign-in, and the server checks the token. */
+const isFinderLink = (location: ParsedLocation) =>
+	location.pathname === "/medicine" &&
+	new URLSearchParams(location.searchStr).has("link");
+
+/**
+ * Root `beforeLoad`: with no session, every page except sign-in and a finder link goes to sign-in,
+ * which returns here.
+ */
 export const requireSession = ({ location }: { location: ParsedLocation }) => {
-	if (location.pathname === SIGN_IN || getSessionToken() !== null) return;
+	if (
+		location.pathname === SIGN_IN ||
+		getSessionToken() !== null ||
+		isFinderLink(location)
+	)
+		return;
 	throw redirect({
 		to: SIGN_IN,
 		search: { redirect: location.href },

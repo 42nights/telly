@@ -1,18 +1,10 @@
-import { Button, buttonVariants } from "@health/ui/components/button";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChefHat, CloudOff, Home, RotateCw, Utensils } from "lucide-react";
+import { Button } from "@health/ui/components/button";
+import { createFileRoute } from "@tanstack/react-router";
+import { CloudOff, Home, RotateCw } from "lucide-react";
 
-import { ExerciseInvite } from "@/components/exercise/session";
-import { StatusFooter } from "@/components/hud/status-footer";
 import { Window } from "@/components/hud/window";
-import { MealCheckIn } from "@/components/meal-check-in/check-in";
-import { SetupChecklist } from "@/components/onboarding/checklist";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
-import { HeartReading } from "@/components/wearer/heart";
-import { WearerInbox } from "@/components/wearer/inbox";
-import { MedicationReminders } from "@/components/wearer/medication-reminder";
 import { Request } from "@/components/wearer/request";
-import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
 import { useWearerRecords } from "@/components/wearer/use-wearer-records";
 
@@ -36,8 +28,7 @@ function OfflineBanner({
 			<div className="grid gap-2">
 				<p className="font-semibold text-[22px]">I can't connect right now.</p>
 				<p className="text-[18px]">
-					Questions and new messages are paused. Your family is not told that
-					you are fine.
+					Questions are paused. Your family is not told that you are fine.
 				</p>
 				<p className="break-words text-[15px] text-muted-foreground">
 					{message}
@@ -74,79 +65,37 @@ function HudComponent() {
 	});
 
 	return (
-		<main className="mx-auto grid w-full max-w-6xl gap-2 p-2 md:p-4">
-			<SetupChecklist />
+		<main className="mx-auto grid w-full max-w-3xl gap-2 p-2 md:p-4">
 			<Window icon={Home} title={`Home · ${clock}`}>
-				<div className="grid gap-5 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
-					<div className="flex items-end justify-between gap-2 md:col-span-2">
-						<div>
-							<time
-								className="block font-semibold text-[34px] leading-none tracking-tight sm:text-[40px]"
-								dateTime={new Date(now).toISOString()}
-							>
-								{clock}
-							</time>
-							<p className="mt-1.5 text-[18px] text-muted-foreground">
-								{new Date(now).toLocaleDateString([], {
-									weekday: "long",
-									day: "numeric",
-									month: "long",
-								})}
-							</p>
-						</div>
-						<HeartReading familyId={familyId} now={now} records={records} />
-					</div>
-
-					<div className="grid min-w-0 content-start gap-3">
-						{familyId !== null && <MedicationReminders familyId={familyId} />}
-						{records?.kind === "unavailable" || records?.kind === "error" ? (
-							<OfflineBanner message={records.message} onRetry={retry} />
-						) : (
-							<Request
-								familyId={familyId}
-								onEmergency={emergency.start}
-								talkNote={talkNote[familiesKind]}
-							/>
-						)}
-						<TripCheckInCard familyId={familyId} />
-						{familyId !== null && (
-							<MealCheckIn
-								familyId={familyId}
-								now={now}
-								onUrgent={(words) => emergency.start("help", words)}
-							/>
-						)}
-						<Link
-							className={buttonVariants({
-								variant: "outline",
-								className: "h-14 w-full text-[20px] [&_svg]:size-6",
-							})}
-							data-slot="button"
-							to="/meal"
+				<div className="grid gap-5 p-2 md:p-5">
+					<div>
+						<time
+							className="block font-semibold text-[34px] leading-none tracking-tight sm:text-[40px]"
+							dateTime={new Date(now).toISOString()}
 						>
-							<Utensils aria-hidden />
-							Meal
-						</Link>
-						<Link
-							className={buttonVariants({
-								variant: "outline",
-								className: "h-14 w-full text-[20px] [&_svg]:size-6",
+							{clock}
+						</time>
+						<p className="mt-1.5 text-[18px] text-muted-foreground">
+							{new Date(now).toLocaleDateString([], {
+								weekday: "long",
+								day: "numeric",
+								month: "long",
 							})}
-							data-slot="button"
-							to="/cooking"
-						>
-							<ChefHat aria-hidden />
-							Cook
-						</Link>
-						{familyId !== null && (
-							<ExerciseInvite familyId={familyId} now={now} />
-						)}
-						<Emergency emergency={emergency} familyId={familyId} />
+						</p>
 					</div>
-
-					<WearerInbox familyId={familyId} now={now} records={records} />
-
-					<StatusFooter now={now} records={records} />
+					<p className="text-[20px]">
+						Reminders and alerts come to your phone as texts.
+					</p>
+					{records?.kind === "unavailable" || records?.kind === "error" ? (
+						<OfflineBanner message={records.message} onRetry={retry} />
+					) : (
+						<Request
+							familyId={familyId}
+							onEmergency={emergency.start}
+							talkNote={talkNote[familiesKind]}
+						/>
+					)}
+					<Emergency emergency={emergency} familyId={familyId} />
 				</div>
 			</Window>
 		</main>

@@ -30,7 +30,8 @@
 		"./healthkit": "./src/healthkit.ts",
 		"./whoop-catalog": "./src/whoop-catalog.ts",
 		"./location": "./src/location.ts",
-		"./cooking": "./src/cooking.ts"
+		"./cooking": "./src/cooking.ts",
+		"./finder-link": "./src/finder-link.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

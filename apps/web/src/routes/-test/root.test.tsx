@@ -13,7 +13,6 @@ const PATHS = [
 	"/",
 	"/hud",
 	"/medicine",
-	"/bedtime",
 	"/trip",
 	"/family",
 	"/care-profile",

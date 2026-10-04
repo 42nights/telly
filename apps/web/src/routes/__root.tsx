@@ -62,6 +62,13 @@ function RootComponent() {
 	// switching the layout early remounts the page that is still showing.
 	const signingIn =
 		useMatch({ from: "/sign-in", shouldThrow: false }) !== undefined;
+	// A finder link (#308) has no session, so it gets the bare layout too.
+	const finderLink =
+		useMatch({
+			from: "/medicine",
+			shouldThrow: false,
+			select: (match) => match.search.link !== undefined,
+		}) === true;
 	const { person } = Route.useSearch();
 	const navigate = useNavigate();
 	const pick = (familyId: string) =>
@@ -79,7 +86,7 @@ function RootComponent() {
 				disableTransitionOnChange
 				storageKey="vite-ui-theme"
 			>
-				{signingIn ? (
+				{signingIn || finderLink ? (
 					<div className="win95-desktop h-[calc(100svh-var(--win95-top-band))] overflow-y-auto">
 						<Outlet />
 					</div>
