@@ -70,11 +70,18 @@ export function FamilyPeople({
 	};
 	return (
 		<div className="grid gap-2">
-			<div className="flex flex-wrap items-center gap-2">
+			{/* One line: the chips scroll sideways when there are many (captain: chips on one line). */}
+			<div className="flex items-center gap-2">
 				{members.kind === "ready" ? (
-					<ul aria-label="Family members" className="flex flex-wrap gap-1">
+					<ul
+						aria-label="Family members"
+						className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+					>
 						{members.value.members.map(({ identity, name }) => (
-							<li key={identity} className="win95-inset bg-card px-2 py-1">
+							<li
+								key={identity}
+								className="win95-inset shrink-0 whitespace-nowrap bg-card px-2 py-1"
+							>
 								{name === null
 									? memberLabel(identity, me)
 									: identity === me
@@ -88,7 +95,7 @@ export function FamilyPeople({
 				)}
 				<Button
 					type="button"
-					className="h-11 px-3"
+					className="h-11 shrink-0 px-3"
 					disabled={busy}
 					onClick={() => void send()}
 				>

@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@health/ui/components/button";
 import { useEffect, useState } from "react";
 
 import { ApiNotice, Tip } from "@/components/win95";
+import { ENV } from "@/env";
 import {
 	type ApiFailure,
 	type ApiResult,
@@ -53,6 +54,8 @@ export function PdfActions({
 				: `PDF not saved: ${failureText(saved)}`,
 		);
 	};
+	const made = reports.find((r) => r.id === reportId)?.createdAt.slice(0, 10);
+	const filename = `Telly lab report ${made ?? reportId.slice(0, 8)}.pdf`;
 
 	return (
 		<>
@@ -93,6 +96,7 @@ export function PdfActions({
 				<PreviewDialog
 					familyId={familyId}
 					reportId={reportId}
+					filename={filename}
 					onClose={() => setPreviewing(false)}
 				/>
 			)}
@@ -103,24 +107,29 @@ export function PdfActions({
 /**
  * The PDF that an email of the report attaches, fetched with the caller's sign-in and shown from
  * memory. Phones have no inline PDF viewer that shows every page, so they get only the buttons.
+ * The iOS app's WebView can neither open nor save a `blob:` URL (#364), so there the buttons ask
+ * for a one-use link and leave the page for it; the shell hands it to the system PDF viewer.
  */
 function PreviewDialog({
 	familyId,
 	reportId,
+	filename,
 	onClose,
 }: {
 	familyId: string;
 	reportId: string;
+	filename: string;
 	onClose: () => void;
 }) {
 	const [pdf, setPdf] = useState<ApiResult<string> | null>(null);
+	const [failure, setFailure] = useState<ApiFailure | null>(null);
+	const reportPath = `/reports/${encodeURIComponent(reportId)}`;
 	useEffect(() => {
 		let url: string | undefined;
 		let live = true;
-		void apiBlob(
-			familyPath(familyId, `/reports/${encodeURIComponent(reportId)}/pdf`),
-			{ method: "GET" },
-		).then((result) => {
+		void apiBlob(familyPath(familyId, `${reportPath}/pdf`), {
+			method: "GET",
+		}).then((result) => {
 			if (!live) return;
 			if (result.kind !== "ready") return setPdf(result);
 			url = URL.createObjectURL(result.value);
@@ -130,8 +139,20 @@ function PreviewDialog({
 			live = false;
 			if (url !== undefined) URL.revokeObjectURL(url);
 		};
-	}, [familyId, reportId]);
+	}, [familyId, reportPath]);
 	const link = `${buttonVariants()} h-11 px-4 text-sm`;
+	const openLink = async (download: boolean) => {
+		const made = await apiRequest(
+			ReportPdfLink,
+			familyPath(familyId, `${reportPath}/pdf-link`),
+			{ method: "POST" },
+		);
+		if (made.kind !== "ready") return setFailure(made);
+		setFailure(null);
+		window.location.assign(
+			`${ENV.VITE_SERVER_URL}${made.value.url}${download ? "?download" : ""}`,
+		);
+	};
 
 	return (
 		<div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-3">
@@ -160,26 +181,43 @@ function PreviewDialog({
 							className="hidden h-[70dvh] w-full border border-border bg-white md:block"
 						/>
 					)}
+					{failure !== null && (
+						<p role="alert">Not opened: {failureText(failure)}</p>
+					)}
 					<div className="flex flex-wrap justify-end gap-2">
-						{pdf?.kind === "ready" && (
-							<>
-								<a
-									href={pdf.value}
-									target="_blank"
-									rel="noopener"
-									className={link}
-								>
-									Open in new tab
-								</a>
-								<a
-									href={pdf.value}
-									download={`lab-report-${reportId.slice(0, 8)}.pdf`}
-									className={link}
-								>
-									Download
-								</a>
-							</>
-						)}
+						{pdf?.kind === "ready" &&
+							(globalThis.ReactNativeWebView === undefined ? (
+								<>
+									<a
+										href={pdf.value}
+										target="_blank"
+										rel="noopener"
+										className={link}
+									>
+										Open in new tab
+									</a>
+									<a href={pdf.value} download={filename} className={link}>
+										Download
+									</a>
+								</>
+							) : (
+								<>
+									<Button
+										type="button"
+										className="h-11 px-4 text-sm"
+										onClick={() => void openLink(false)}
+									>
+										Open
+									</Button>
+									<Button
+										type="button"
+										className="h-11 px-4 text-sm"
+										onClick={() => void openLink(true)}
+									>
+										Download
+									</Button>
+								</>
+							))}
 						<Button
 							type="button"
 							className="h-11 px-4 text-sm"

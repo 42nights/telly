@@ -4,6 +4,7 @@ import { Share2 } from "lucide-react";
 import { useState } from "react";
 
 import { Window } from "@/components/hud/window";
+import { Tip } from "@/components/win95";
 import { memberLabel } from "@/lib/members";
 
 import type { CareData } from "./data";
@@ -97,9 +98,9 @@ export function SharingWindow({
 			}
 		>
 			<div className="grid gap-2 p-2 text-sm">
-				<p>
-					Being family grants no access. Each person sees and does only what is
-					granted here. A revoke stops their next read.
+				<p className="flex items-center gap-1 font-bold">
+					Who has access
+					<Tip text="Being family grants no access. Each person sees and does only what is granted here. A revoke stops their next read." />
 				</p>
 				{members.length === 0 ? (
 					<SetUp access={access} care={care} onMessage={setMessage} />

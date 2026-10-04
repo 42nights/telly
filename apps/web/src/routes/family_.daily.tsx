@@ -1,11 +1,11 @@
-// Family › Daily: where the person is, their meal and drink check-ins, and their reminders today.
+// Family › Daily: where the person is, and their reminders today. Each part shows only when it has
+// something; with nothing at all, one line says so.
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarCheck } from "lucide-react";
 
 import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyGate } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
-import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
 import { loadFamilyReads } from "@/lib/family";
@@ -25,15 +25,19 @@ function FamilyDaily() {
 		>
 			<FamilyGate data={data} emptyClassName="p-3 text-sm">
 				{(family) => (
-					<div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2 text-sm">
-						<FamilyLocationSection
-							familyId={family.id}
-							me={data.me}
-							now={Date.now()}
-						/>
-						<MealStatusSection familyId={family.id} />
-						<ReminderHistorySection familyId={family.id} me={data.me} />
-					</div>
+					<>
+						<div className="peer grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-2 text-sm empty:hidden">
+							<FamilyLocationSection
+								familyId={family.id}
+								me={data.me}
+								now={Date.now()}
+							/>
+							<ReminderHistorySection familyId={family.id} me={data.me} />
+						</div>
+						<p className="hidden p-2 text-sm peer-empty:block">
+							Nothing to show for today yet.
+						</p>
+					</>
 				)}
 			</FamilyGate>
 		</Page>

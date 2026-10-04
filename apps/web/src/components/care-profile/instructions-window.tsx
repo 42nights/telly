@@ -9,6 +9,7 @@ import { Pill } from "lucide-react";
 import { useState } from "react";
 
 import { Window } from "@/components/hud/window";
+import { Tip } from "@/components/win95";
 import { memberLabel } from "@/lib/members";
 
 import type { CareData } from "./data";
@@ -185,16 +186,17 @@ export function InstructionsWindow({
 	};
 	return (
 		<Window
+			group
 			title="Medicines and care instructions"
 			icon={Pill}
-			status={
-				message ??
-				"Only verified instructions are read to the wearer. A change waits for verification."
-			}
+			status={message ?? undefined}
 		>
 			<div className="grid gap-2 p-2 text-sm">
 				{instructions.length === 0 ? (
-					<p>No instructions saved. Medicines are unknown.</p>
+					<p className="flex items-center gap-1">
+						No instructions saved. Medicines are unknown.
+						<Tip text="Only verified instructions are read to the wearer. A change waits for verification." />
+					</p>
 				) : (
 					<ul className="grid gap-2">
 						{instructions.map((item) => (

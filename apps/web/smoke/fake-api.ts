@@ -145,6 +145,7 @@ export const replies: Record<string, unknown> = {
 	},
 	"/api/families/1/reports": { reports: [] },
 	"/api/families/1/report-pdfs": { pdfs: [] },
+	"/api/families/1/report-email": { enabled: false, recipient: null },
 	"/api/families/1/appointments": { appointments: [] },
 };
 
