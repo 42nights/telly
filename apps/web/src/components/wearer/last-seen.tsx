@@ -29,7 +29,7 @@ import {
 import { arCapabilities } from "@/lib/ar-bridge";
 import type { MedicineMemoryChange as Change } from "@/lib/medicine-memory";
 import { type ArMember, type ArOutcome, pinInAr, showInAr } from "./ar-pin";
-import { ago, objectName, sightingState } from "./logic";
+import { objectName, sightingState, whenSeen } from "./logic";
 import { type PictureCheck, thumbnail } from "./medicine-check";
 import { useNow } from "./use-now";
 
@@ -214,7 +214,7 @@ function Sighting({
 	return (
 		<div className="grid gap-2">
 			<p>
-				<b>Last seen {ago(now - Date.parse(sighting.seenAt))}</b> at{" "}
+				<b>Last seen {whenSeen(sighting.seenAt, now)}</b> at{" "}
 				<b className="break-words">{sighting.place}</b>.
 			</p>
 			{sighting.usualPlace !== null && (
@@ -230,8 +230,8 @@ function Sighting({
 				<>
 					<p className="flex items-start gap-2 font-semibold">
 						<MapPinOff aria-hidden className="mt-1 size-5 shrink-0" />
-						It was not there {ago(now - Date.parse(sighting.notFoundAt))}. This
-						place is out of date.
+						It was not there {whenSeen(sighting.notFoundAt, now)}. This place is
+						out of date.
 					</p>
 					<Moved
 						familyId={familyId}
@@ -355,7 +355,7 @@ export function SavedThings({
 									{objectName(sighting.category, sighting.container)}
 								</b>
 								<span className="text-[15px] text-muted-foreground">
-									{sighting.place} · {ago(now - Date.parse(sighting.seenAt))}
+									{sighting.place} · {whenSeen(sighting.seenAt, now)}
 								</span>
 							</span>
 						</Button>

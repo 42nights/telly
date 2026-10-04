@@ -10,6 +10,29 @@ export const ago = (ms: number): string => {
 	if (s < 3600) return `${Math.round(s / 60)} min ago`;
 	return `${Math.round(s / 3600)} h ago`;
 };
+/**
+ * When the person last saw a thing, in the words of their own day: "just now", "12 minutes
+ * ago", "this morning", "yesterday evening", "Tuesday afternoon", then the date. The person
+ * reads a day they are having, not clock arithmetic; the family screens keep `ago`, which is
+ * for a dashboard.
+ */
+export const whenSeen = (iso: string, now: number): string => {
+	const seen = new Date(iso);
+	const ms = now - seen.getTime();
+	if (ms < 120_000) return "just now";
+	if (ms < 3_600_000) return `${Math.round(ms / 60_000)} minutes ago`;
+	const part = (d: Date) =>
+		d.getHours() < 12 ? "morning" : d.getHours() < 17 ? "afternoon" : "evening";
+	const day = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+	const today = new Date(now);
+	const yesterday = new Date(now);
+	yesterday.setDate(yesterday.getDate() - 1);
+	if (day(seen) === day(today)) return `this ${part(seen)}`;
+	if (day(seen) === day(yesterday)) return `yesterday ${part(seen)}`;
+	if (ms < 6 * 86_400_000)
+		return `${seen.toLocaleDateString([], { weekday: "long" })} ${part(seen)}`;
+	return seen.toLocaleDateString([], { month: "long", day: "numeric" });
+};
 
 /** One answer source in wearer words: "Heart rate 72 bpm · from WHOOP · 3 min ago". */
 export const evidenceLine = (
