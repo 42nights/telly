@@ -34,6 +34,7 @@ export const familyScreens = [
 		tabs: [
 			{ to: "/family", label: "Overview" },
 			{ to: "/family/daily", label: "Daily" },
+			{ to: "/family/reminders", label: "Reminders" },
 			{ to: "/family/exercise", label: "Exercise" },
 			{ to: "/family/cooking", label: "Cooking" },
 			{ to: "/family/alerts", label: "Alerts" },
@@ -70,6 +71,7 @@ export const settingsScreen = {
 	icon: Settings,
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
+		{ to: "/settings/text-telly", label: "Text Telly" },
 		{ to: "/settings/speaker", label: "Home speaker" },
 		{ to: "/settings/going-out", label: "Going out" },
 		{ to: "/settings/things", label: "Saved things" },

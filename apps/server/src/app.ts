@@ -12,6 +12,7 @@ import {
 	type FamilyRoutes,
 } from "./http";
 import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
+import { reportPdfLinkRoutes } from "./report-pdf-links";
 import { accountRoutes } from "./routes/families";
 import { finderLinkRoutes } from "./routes/finder-link";
 import { familyDomainRoutes } from "./routes/index";
@@ -68,9 +69,11 @@ export const createApp = (
 		.route("/api/sign-in", signInRoutes(config.auth))
 		// A finder link texted to the wearer is its own credential (#308).
 		.route("/api/finder-link", finderLinkRoutes(operator, config.gemini))
+		// A one-use lab report PDF link is its own credential (#364).
+		.route("/api/report-pdf-links", reportPdfLinkRoutes())
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
-		.route("/api", accountRoutes())
+		.route("/api", accountRoutes(config.imessage?.address))
 		// Before the membership check: a delegated Fetch.ai tool call comes from a non-member.
 		.route("/api/families/:familyId", toolRoutes())
 		.route("/api/families/:familyId", family);

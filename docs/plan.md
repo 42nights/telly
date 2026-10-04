@@ -34,7 +34,7 @@ A 3D home map is not required.
 | Vision | Gemini | Object detection for medicine boxes |
 | Messaging | SpacetimeDB | Stores family messages (Muse is not used) |
 | Reports | Finchnode | Reads lab results for reports (read only; no delivery API) |
-| iMessage | Photon Spectrum Cloud (Free plan) | Answers allowlisted senders (`TELLY_IMESSAGE_SENDERS`); texts the family's wearer phone reminders, alerts, and finder links (#308) |
+| iMessage | Photon Spectrum Cloud (Free plan) | Answers allowlisted senders (`TELLY_IMESSAGE_SENDERS`) and members' saved phone numbers (#370); texts the family's wearer phone reminders, alerts, and finder links (#308) |
 | WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
 
 ### NOOP boundary

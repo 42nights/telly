@@ -1,7 +1,6 @@
 // Shared location display, trip notices (#302), and per-person sharing (issue #40). A location
 // always shows its label, accuracy, fix time, and report time; nothing here says the person is safe.
-// People show by name (`useMemberNames`), never by identity.
-import { CareAccess } from "@health/contracts/care-profile";
+// People show by name (`useMemberNames`).
 import {
 	describeLocation,
 	FamilyLocations,
@@ -10,7 +9,7 @@ import {
 import { useState } from "react";
 
 import { clock } from "@/components/family/logic";
-import { ApiNotice, Tip } from "@/components/win95";
+import { ApiNotice } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 import { useMemberNames } from "@/lib/members";
 
@@ -64,8 +63,7 @@ export function LocationCard({
 
 /**
  * "Who sees where I am": every other member of the family with an on/off box. On shares the
- * caller's location with that person (#40); they see it only while they also hold Location access
- * (#26), and the row says so when they do not.
+ * caller's location with that person (#40) and grants them Location access (#26) in the same step.
  */
 export function WhoSeesMe({
 	familyId,
@@ -77,7 +75,6 @@ export function WhoSeesMe({
 	locations: FamilyLocations;
 }) {
 	const { state, members, nameOf } = useMemberNames(familyId);
-	const access = useApi(CareAccess, familyPath(familyId, "/care-access"));
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const shared = new Set(
@@ -115,12 +112,6 @@ export function WhoSeesMe({
 			) : (
 				others.map(({ identity }) => {
 					const on = shared.has(identity);
-					const blocked =
-						on &&
-						access.kind === "ready" &&
-						!access.value.grants.some(
-							(g) => g.identity === identity && g.scope === "location",
-						);
 					return (
 						<label key={identity} className="flex min-h-11 items-center gap-3">
 							<input
@@ -132,15 +123,7 @@ export function WhoSeesMe({
 								}
 								type="checkbox"
 							/>
-							<span className="min-w-0">
-								{nameOf(identity)}
-								{blocked && (
-									<span className="block text-[14px]">
-										Cannot see it yet: turn on Location for them in Care ›
-										Sharing.
-									</span>
-								)}
-							</span>
+							<span className="min-w-0">{nameOf(identity)}</span>
 						</label>
 					);
 				})
@@ -221,6 +204,13 @@ export function FamilyLocationSection({
 		state.kind === "ready"
 			? state.value.locations.filter((l) => l.sharer !== me)
 			: [];
+	// Nothing shared with me, or no Location access: the section is hidden, not an empty line.
+	if (
+		state.kind === "ready" &&
+		(!state.value.seesShared ||
+			(shared.length === 0 && !state.value.events.some((e) => e.sharer !== me)))
+	)
+		return null;
 	return (
 		<section aria-labelledby="location" className="grid gap-2">
 			<h3 id="location" className="font-bold">
@@ -228,13 +218,6 @@ export function FamilyLocationSection({
 			</h3>
 			{state.kind !== "ready" ? (
 				<ApiNotice state={state} what="location" />
-			) : !state.value.seesShared ? (
-				<p role="status" className="flex items-center gap-1">
-					Location sharing is off for you.
-					<Tip text="Someone with family access can turn on Location for you in Sharing." />
-				</p>
-			) : shared.length === 0 ? (
-				<p>Nobody shares a location with you.</p>
 			) : (
 				shared.map((location) => (
 					<LocationCard
@@ -245,7 +228,7 @@ export function FamilyLocationSection({
 					/>
 				))
 			)}
-			{state.kind === "ready" && state.value.seesShared && (
+			{state.kind === "ready" && (
 				<AwayNotices locations={state.value} me={me} nameOf={nameOf} />
 			)}
 		</section>

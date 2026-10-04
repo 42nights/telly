@@ -69,11 +69,11 @@ test("a signed-in user opens every tab without a page error", async ({
 	}
 });
 
-// #308: the wearer reads Home and the finder link without scrolling the page, on a desktop and a phone.
+// #308: the wearer reads Home and the finder link without scrolling the page on a desktop. On a
+// phone a taller screen scrolls instead of hiding its end (captain: "i cant scroll down here").
 const viewports = [
 	{ width: 1280, height: 800 },
 	{ width: 1440, height: 900 },
-	{ width: 390, height: 844 },
 ] as const;
 const wearerPages = [
 	{ name: "home", path: "/hud", heading: /^Home · /, signedIn: true },

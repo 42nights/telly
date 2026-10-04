@@ -192,7 +192,7 @@ function AskForm({
 
 /**
  * The wearer's request: Talk or a typed question. An urgent request opens the help panel first,
- * before any model, and starts the simulated emergency dispatch; an "ouch" starts the emergency
+ * before any model, and alerts the family through the emergency flow; an "ouch" starts the emergency
  * check-in. A medicine request, or one to find a known object, opens the finder; any other
  * question goes to Gemini with the calm-support rules (`POST /ask`, or `POST /ask/voice` for
  * Talk). A failure shows as a failure, never as an answer, and keeps the request for Try again.
@@ -214,7 +214,10 @@ export function Request({
 	useEffect(() => () => release.current(), []);
 	const done = () => setStep({ kind: "ready" });
 	const support = (
-		<SupportActions onHelp={() => setStep({ kind: "help", asked: null })} />
+		<SupportActions
+			familyId={familyId}
+			onHelp={() => setStep({ kind: "help", asked: null })}
+		/>
 	);
 	const openFinder = (q: string) =>
 		void navigate({ to: "/find", search: { q } });
@@ -348,7 +351,7 @@ export function Request({
 		case "thinking":
 			return <Listening action={step.cancel} thinking />;
 		case "help":
-			return <HelpPanel asked={step.asked} onDone={done} />;
+			return <HelpPanel asked={step.asked} familyId={familyId} onDone={done} />;
 		case "answer":
 			return (
 				<AnswerPanel

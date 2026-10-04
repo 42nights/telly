@@ -26,8 +26,8 @@ const timeOf = (iso: string) =>
 	new Date(iso).toLocaleTimeString([], { timeStyle: "short" });
 
 /**
- * The wearer's status during a trip, under the "You are out" heading: "1.2 km from home · left 10
- * min ago". Without a known distance from home (`meters`), the distance is left out, never guessed.
+ * The wearer's status line during a trip: "Out · 1.2 km from home · 10 min". Without a known
+ * distance from home (`meters`), the distance is left out, never guessed.
  */
 const outStatus = (awaySince: string, meters: number | null, now: number) => {
 	const minutes = Math.max(
@@ -35,32 +35,26 @@ const outStatus = (awaySince: string, meters: number | null, now: number) => {
 		Math.round((now - Date.parse(awaySince)) / 60_000),
 	);
 	return [
+		"Out",
 		meters === null
 			? null
 			: meters < 1000
 				? `${Math.round(meters / 10) * 10} m from home`
 				: `${(meters / 1000).toFixed(1)} km from home`,
-		minutes < 1
-			? "left just now"
-			: minutes < 120
-				? `left ${minutes} min ago`
-				: `left at ${timeOf(awaySince)}`,
+		minutes < 120 ? `${minutes} min` : `since ${timeOf(awaySince)}`,
 	]
 		.filter((part) => part !== null)
 		.join(" · ");
 };
 
-/** The wearer's status line on Going out at `now` (ms): out, at home, or what is still missing. */
+/** The wearer's one status line on Going out at `now` (ms): out, at home, or why neither is known. */
 export const tripStatus = (watch: HomeWatch, now: number) => {
 	if (watch.awaySince !== null)
 		return outStatus(watch.awaySince, watch.distanceMeters, now);
-	if (watch.home === null)
-		return "Telly can notice when you go out, so you do not have to tell it.";
-	if (!watch.autoTrip)
-		return "Telly does not watch for trips. You can turn it on in Settings.";
-	return watch.sharing
-		? "You are at home. Telly tells the people you chose when you go out."
-		: "Share your location with someone below. Then Telly tells them when you go out and come back.";
+	if (!watch.sharing) return "Location not shared";
+	if (watch.home === null) return "Finding home…";
+	if (!watch.autoTrip) return "Trip watch off";
+	return "At home";
 };
 
 /**

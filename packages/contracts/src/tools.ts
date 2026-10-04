@@ -1,6 +1,13 @@
 import { Schema, Struct } from "effect";
 import { Alert, AlertAcknowledgement, HealthSample } from "./index";
 import { MedicineSighting } from "./medicine-memory";
+import { whoopCatalog } from "./whoop-catalog";
+
+// The metric names the WHOOP band stores. A model that does not know them guesses ("sleep"), gets
+// no records, and keeps guessing until the answer fails (Gemini "still called tools").
+const metrics = [
+	...new Set(whoopCatalog.flatMap((field) => field.metric ?? [])),
+];
 
 // Agent tools: `POST /api/families/:familyId/tools`. The caller's identity must be a member of
 // the family; every result holds only that family's records. A tool not listed here is rejected.
@@ -14,7 +21,7 @@ const HealthSamplesTool = Schema.Struct({
 	input: Schema.Struct({
 		metric: Schema.optionalKey(
 			Schema.NonEmptyString.annotate({
-				description: "Only samples of this metric, such as heart_rate.",
+				description: `Only samples of this metric. Use one of: ${metrics.join(", ")}. sleep_duration is in minutes. Without a metric, the newest samples are mostly heart_rate.`,
 			}),
 		),
 		limit: Schema.optionalKey(Limit),

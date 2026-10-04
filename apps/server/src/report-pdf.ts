@@ -298,7 +298,7 @@ const sections = (sheet: Sheet, report: Report) => {
 export const reportPdf = async (
 	report: Report,
 	madeAt: Date,
-): Promise<Uint8Array> => {
+): Promise<Uint8Array<ArrayBuffer>> => {
 	const { fields } = report;
 	const doc = await PDFDocument.create();
 	doc.setTitle(`Lab report ${report.id}`);
@@ -354,5 +354,6 @@ export const reportPdf = async (
 			font: regular,
 		});
 	});
-	return doc.save();
+	// Hono's body and the one-use link take an ArrayBuffer-backed array; pdf-lib types its own loosely.
+	return new Uint8Array(await doc.save());
 };

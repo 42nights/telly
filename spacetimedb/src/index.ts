@@ -1074,6 +1074,17 @@ const memberName = table(
 	},
 );
 
+// The phone number each person saved for texting Telly (`setMyPhone`), in E.164 form. At most one
+// person per number, so an iMessage sender maps to one person (`memberPhones`).
+const memberPhone = table(
+	{ name: "member_phone" },
+	{
+		member: t.identity().primaryKey(),
+		phone: t.string().unique(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // Demo data (#334): the captain's exception to "real data only", for the demo video. While a family
 // has a `demoReplay` row, the database replays a real WHOOP recording as live (`setDemoData`).
 const demoReplay = table(
@@ -1153,6 +1164,7 @@ const spacetimedb = schema({
 	memberName,
 	demoReplay,
 	demoTimer,
+	memberPhone,
 });
 export default spacetimedb;
 
@@ -2055,7 +2067,11 @@ const sharesOf = (ctx: Ctx, familyId: bigint) => [
 	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
 ];
 
-/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+/**
+ * Lets one other member of the family see the sender's location. The sender owns that location, so
+ * sharing also grants the viewer the `location` care scope when they lack it; without it the share
+ * would show nothing. Sharing twice changes nothing.
+ */
 export const shareLocation = spacetimedb.reducer(
 	{ familyId: t.u64(), viewer: t.identity() },
 	(ctx, { familyId, viewer }) => {
@@ -2068,6 +2084,20 @@ export const shareLocation = spacetimedb.reducer(
 		]);
 		if (member.next().done)
 			throw new SenderError("viewer is not a member of this family");
+		const scopes = ctx.db.careGrantEvent.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (!holdsCareScope(scopes, "location"))
+			ctx.db.careGrantEvent.insert({
+				id: 0n,
+				familyId,
+				member: viewer,
+				scope: "location",
+				granted: true,
+				changedBy: ctx.sender,
+				changedAt: ctx.timestamp,
+			});
 		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
 		ctx.db.locationShare.insert({
 			id: 0n,
@@ -2187,6 +2217,8 @@ const AWAY_DWELL_MICROS = 60_000_000n;
 const MIN_HOME_RADIUS = 100;
 const MAX_HOME_RADIUS = 5000;
 const EARTH_RADIUS_METERS = 6_371_000;
+// `APPROXIMATE_METERS` of `@health/contracts/location`: a wider fix is too rough to become home.
+const AUTO_HOME_ACCURACY_METERS = 100;
 
 type Point = { latitude: number; longitude: number };
 
@@ -2252,10 +2284,11 @@ const outsideStep = (
 
 /**
  * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
- * A fix is inside when its center is within the radius and its accuracy is no wider than the
- * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
- * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
- * ends only after a fix clearly outside.
+ * Without a home, the first fix accurate to `AUTO_HOME_ACCURACY_METERS` becomes home and turns on
+ * automatic trips; a caregiver corrects it in Settings. A fix is inside when its center is within
+ * the radius and its accuracy is no wider than the radius; it is clearly outside only when even the
+ * near edge of its accuracy circle is beyond the radius, so GPS jitter at home starts no trip. Fixes
+ * in between change nothing. A manual trip ends only after a fix clearly outside.
  */
 const followHome = (
 	ctx: Ctx,
@@ -2263,7 +2296,17 @@ const followHome = (
 	fix: Infer<typeof LocationFix>,
 ) => {
 	const watch = homeWatchOf(ctx, familyId);
-	if (watch?.home === undefined) return;
+	if (watch?.home === undefined) {
+		// ponytail: the first fix, not the overnight place; learn from night fixes if a first fix away
+		// from home turns out common.
+		if (fix.accuracyMeters <= AUTO_HOME_ACCURACY_METERS)
+			upsertHomeWatch(ctx, familyId, {
+				home: { latitude: fix.latitude, longitude: fix.longitude },
+				autoTrip: true,
+				distanceMeters: 0,
+			});
+		return;
+	}
 	const distance = distanceMeters(watch.home, fix);
 	const { autoTrip, radiusMeters: radius } = watch;
 	const step: HomeStep = !autoTrip
@@ -4983,6 +5026,59 @@ export const myFamilyPeople = spacetimedb.view(
 					}));
 			},
 		),
+);
+
+/** Saves the caller's phone number for texting Telly, or deletes it with none. */
+export const setMyPhone = spacetimedb.reducer(
+	{ phone: t.option(t.string()) },
+	(ctx, { phone }) => {
+		if (phone === undefined) {
+			ctx.db.memberPhone.member.delete(ctx.sender);
+			return;
+		}
+		if (!/^\+[1-9][0-9]{6,14}$/.test(phone))
+			throw new SenderError(
+				"Enter a full phone number with its country code, like +1 555 010 0123",
+			);
+		const owner = ctx.db.memberPhone.phone.find(phone)?.member;
+		if (owner !== undefined && !owner.isEqual(ctx.sender))
+			throw new SenderError("Another person already saved this phone number");
+		const row = { member: ctx.sender, phone, updatedAt: ctx.timestamp };
+		if (ctx.db.memberPhone.member.find(ctx.sender) === null)
+			ctx.db.memberPhone.insert(row);
+		else ctx.db.memberPhone.member.update(row);
+	},
+);
+
+// The caller's own saved phone number: one row, or none.
+export const myPhone = spacetimedb.view(
+	{ name: "my_phone", public: true },
+	t.array(memberPhone.rowType),
+	(ctx) => {
+		const row = ctx.db.memberPhone.member.find(ctx.sender);
+		return row === null ? [] : [row];
+	},
+);
+
+// The delivery operator's map of saved phone numbers to each person's families, for the iMessage
+// agent. Empty for every other identity.
+export const memberPhones = spacetimedb.view(
+	{ name: "member_phones", public: true },
+	t.array(
+		t.object("SenderPhone", {
+			phone: t.string(),
+			member: t.identity(),
+			familyId: t.u64(),
+		}),
+	),
+	(ctx) =>
+		ctx.db.operator.identity.find(ctx.sender) === null
+			? []
+			: [...ctx.db.memberPhone.iter()].flatMap(({ phone, member }) =>
+					[...ctx.db.familyMember.member.filter(member)].map(
+						({ familyId }) => ({ phone, member, familyId }),
+					),
+				),
 );
 
 // Demo data (#334). `setDemoData` copies a real WHOOP recording into the family with every time

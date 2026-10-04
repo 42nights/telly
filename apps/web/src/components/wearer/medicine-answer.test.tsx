@@ -96,24 +96,9 @@ describe("ObjectAnswer", () => {
 		expect(stop).toHaveBeenCalledTimes(1);
 	});
 
-	test.each([
-		["moved", "The camera moved, so I took the marker away."],
-		[
-			"old",
-			"That picture is more than a minute old, so I took the marker away.",
-		],
-	] as const)("says why a %s marker was taken away", async (reason, text) => {
-		const { view, look } = await show({
-			check: check({ kind: "cleared", reason }),
-		});
-		expect(view.getByText(text)).toBeDefined();
-		fireEvent.click(view.getByRole("button", { name: "Look again" }));
-		expect(look).toHaveBeenCalledTimes(1);
-	});
-
 	test("with the camera off, Look again waits and Turn on camera starts it", async () => {
 		const { view, look, startCamera } = await show({
-			check: check({ kind: "cleared", reason: "moved" }),
+			check: check({ kind: "done", detections: [] }),
 			live: false,
 		});
 		const again = view.getByRole("button", { name: "Look again" });
@@ -159,7 +144,6 @@ describe("ObjectAnswer", () => {
 		expect(
 			view.getByText("I could not see anything to save. Try again."),
 		).toBeDefined();
-		expect(view.queryByText(/camera moved/)).toBeNull();
 		fireEvent.click(view.getByRole("button", { name: "Look again" }));
 		expect(look).toHaveBeenCalledTimes(1);
 	});

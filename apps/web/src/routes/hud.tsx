@@ -72,7 +72,9 @@ function HudComponent() {
 	return (
 		<main className="mx-auto flex h-full w-full max-w-[720px] flex-col p-2">
 			<Window className="min-h-0 flex-1" icon={Home} title={`Home · ${clock}`}>
-				<div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_auto_1fr] gap-2 p-1 md:gap-3 md:p-3">
+				{/* A phone has no room for all three: the body scrolls, and Today keeps at least 12rem so
+				    its own list can still be scrolled with a finger. */}
+				<div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_auto_minmax(12rem,1fr)] gap-2 overflow-y-auto p-1 md:gap-3 md:p-3">
 					{records?.kind === "unavailable" || records?.kind === "error" ? (
 						<OfflineBanner message={records.message} onRetry={retry} />
 					) : (

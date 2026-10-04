@@ -5,7 +5,7 @@ setupDom();
 
 // Dynamic: these modules read `document`, which `@/lib/test/dom` sets up first.
 const { act, renderHook } = await import("@testing-library/react");
-const { FAMILY_PHONE, isFullPhoneNumber, telHref, useContacts } = await import(
+const { isFullPhoneNumber, telHref, toE164, useContacts } = await import(
 	"@/lib/contacts"
 );
 
@@ -38,11 +38,26 @@ test("a tel: link keeps only a leading plus and the digits", () => {
 	expect(telHref("911")).toBe("tel:911");
 });
 
-test("with nothing saved, family calls go to the fixed number and the emergency number is 911", () => {
+test("a saved Telly phone is E.164; a number without a country code is a US number", () => {
+	expect(toE164("(415) 595-1440")).toBe("+14155951440");
+	expect(toE164("1 415 595 1440")).toBe("+14155951440");
+	expect(toE164("+44 20 7946 0123")).toBe("+442079460123");
+	for (const bad of [
+		"595-1440",
+		"911",
+		"+0 123 4567",
+		"call me",
+		"",
+		"2 415 595 1440",
+	])
+		expect(toE164(bad)).toBeNull();
+});
+
+test("with nothing saved, there are no family numbers and the emergency number is 911", () => {
 	const { result } = renderHook(() => useContacts());
 	expect(result.current[0]).toEqual({
 		momPhone: null,
-		familyPhone: FAMILY_PHONE,
+		familyPhone: null,
 		emergency: "911",
 		savedAt: null,
 	});
@@ -54,7 +69,7 @@ test("saved data that is corrupt, not an object, or holds bad numbers falls back
 		const { result, unmount } = renderHook(() => useContacts());
 		expect(result.current[0]).toEqual({
 			momPhone: null,
-			familyPhone: FAMILY_PHONE,
+			familyPhone: null,
 			emergency: "911",
 			savedAt: null,
 		});
@@ -73,7 +88,7 @@ test("saved data that is corrupt, not an object, or holds bad numbers falls back
 	const { result } = renderHook(() => useContacts());
 	expect(result.current[0]).toEqual({
 		momPhone: "555-0100",
-		familyPhone: FAMILY_PHONE,
+		familyPhone: null,
 		emergency: "911",
 		savedAt: null,
 	});
@@ -96,7 +111,7 @@ test("a save is stored with its time and updates every screen that shows the num
 
 	const saved = {
 		momPhone: "+1 555 010 0199",
-		familyPhone: FAMILY_PHONE,
+		familyPhone: "555-0123",
 		emergency: "112",
 		savedAt: Date.parse("2026-10-04T12:00:00.000Z"),
 	};

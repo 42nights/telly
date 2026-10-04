@@ -9,21 +9,13 @@ import { useEffect, useRef, useState } from "react";
 
 import {
 	type ApiFailure,
-	type ApiResult,
 	type ApiState,
 	apiRequest,
 	familyPath,
 } from "@/lib/api";
 
-import {
-	type ClearedReason,
-	clearedReason,
-	difference,
-	MARKER_MIN_CONFIDENCE,
-	MOTION_EVERY_MS,
-	MOVED_ABOVE,
-	sample,
-} from "./stale-marker";
+/** Below this model confidence no marker is drawn. The server asks for a label check below 0.7. */
+const MARKER_MIN_CONFIDENCE = 0.4;
 
 export type CheckResult =
 	| { readonly kind: "looking" }
@@ -31,8 +23,6 @@ export type CheckResult =
 			readonly kind: "done";
 			readonly detections: readonly ObjectDetection[];
 	  }
-	/** The markers were taken away because the camera moved or the picture got old. */
-	| { readonly kind: "cleared"; readonly reason: ClearedReason }
 	| ApiFailure;
 
 export type PictureCheck = {
@@ -44,7 +34,7 @@ export type PictureCheck = {
 	readonly result: CheckResult;
 };
 
-type Frame = {
+export type Frame = {
 	readonly picture: string;
 	readonly data: string;
 	readonly width: number;
@@ -81,7 +71,11 @@ const withoutFamily = (families: ApiState<FamilyList>): CheckResult => {
 };
 
 /** The full frame, unrotated: the server maps boxes back into these pixels. */
-const detectionRequest = (id: string, capturedAt: number, frame: Frame) => ({
+export const detectionRequest = (
+	id: string,
+	capturedAt: number,
+	frame: Frame,
+) => ({
 	frame: {
 		id,
 		capturedAt: new Date(capturedAt).toISOString(),
@@ -93,10 +87,23 @@ const detectionRequest = (id: string, capturedAt: number, frame: Frame) => ({
 	image: { type: "image/jpeg", data: frame.data },
 });
 
-const resultFor = (
-	result: ApiResult<ObjectDetections>,
-	id: string,
-): CheckResult => {
+/** Asks the vision route about one captured frame; the reply must name that frame's `id`. */
+export const detect = async (
+	familyId: string,
+	frame: Frame,
+	signal: AbortSignal,
+	id: string = crypto.randomUUID(),
+	capturedAt = Date.now(),
+): Promise<CheckResult> => {
+	const result = await apiRequest(
+		ObjectDetections,
+		familyPath(familyId, "/vision/object-detections"),
+		{
+			method: "POST",
+			signal,
+			body: detectionRequest(id, capturedAt, frame),
+		},
+	);
 	if (result.kind !== "ready") return result;
 	if (result.value.frame.id !== id)
 		return { kind: "error", message: "The reply was for another picture." };
@@ -203,9 +210,8 @@ export const thumbnail = async (
 
 /**
  * Captures the video frame and asks `POST /vision/object-detections` about it. A new look or
- * `stop` aborts the pending one, and a reply for another frame is never shown. Shown markers are
- * cleared once the live video keeps moving away from how it looked when the answer arrived, or the
- * frame gets old. Motion while the answer is pending does not count.
+ * `stop` aborts the pending one, and a reply for another frame is never shown. The answer stays
+ * until the next look; the finder's lock-on follows the object in the live video from there.
  */
 export function usePictureCheck(
 	familyId: string | null,
@@ -214,41 +220,6 @@ export function usePictureCheck(
 	const [check, setCheck] = useState<PictureCheck | null>(null);
 	const pending = useRef<AbortController | null>(null);
 	useEffect(() => () => pending.current?.abort(), []);
-	const sent = useRef<{
-		readonly id: string;
-		readonly capturedAt: number;
-		readonly video: HTMLVideoElement | null;
-	} | null>(null);
-
-	// Only markers are taken away: a check that found nothing keeps its answer (#342).
-	const doneId =
-		check?.result.kind === "done" && check.result.detections.length > 0
-			? check.id
-			: null;
-	useEffect(() => {
-		const shown = sent.current;
-		if (doneId === null || shown?.id !== doneId) return;
-		// The reference is the live frame at answer time, drawn the same way as every check.
-		let reference: Float32Array | null = null;
-		let movedChecks = 0;
-		const tick = () => {
-			const live = sample(shown.video);
-			reference ??= live;
-			const moved =
-				live !== null &&
-				reference !== null &&
-				difference(reference, live) > MOVED_ABOVE;
-			movedChecks = moved ? movedChecks + 1 : 0;
-			const reason = clearedReason(shown.capturedAt, Date.now(), movedChecks);
-			if (reason !== null)
-				setCheck((c) =>
-					c?.id === doneId ? { ...c, result: { kind: "cleared", reason } } : c,
-				);
-		};
-		tick();
-		const timer = setInterval(tick, MOTION_EVERY_MS);
-		return () => clearInterval(timer);
-	}, [doneId]);
 
 	const stop = () => {
 		pending.current?.abort();
@@ -260,33 +231,28 @@ export function usePictureCheck(
 		pending.current?.abort();
 		const frame = video === null ? null : capture(video);
 		if (frame === null) return setCheck(null);
-		const id = crypto.randomUUID();
-		const capturedAt = Date.now();
-		sent.current = { id, capturedAt, video };
 		const base = {
-			id,
+			id: crypto.randomUUID(),
 			picture: frame.picture,
 			frame: { width: frame.width, height: frame.height },
-			capturedAt,
+			capturedAt: Date.now(),
 		};
 		if (familyId === null)
 			return setCheck({ ...base, result: withoutFamily(families) });
 		setCheck({ ...base, result: { kind: "looking" } });
 		const controller = new AbortController();
 		pending.current = controller;
-		const result = await apiRequest(
-			ObjectDetections,
-			familyPath(familyId, "/vision/object-detections"),
-			{
-				method: "POST",
-				signal: controller.signal,
-				body: detectionRequest(id, capturedAt, frame),
-			},
+		const result = await detect(
+			familyId,
+			frame,
+			controller.signal,
+			base.id,
+			base.capturedAt,
 		).catch(() => null);
 		// Drop a reply for an older picture, or one the wearer stopped.
 		if (result === null || controller.signal.aborted) return;
 		pending.current = null;
-		setCheck({ ...base, result: resultFor(result, id) });
+		setCheck({ ...base, result });
 	};
 
 	return { check, look, stop };

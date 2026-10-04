@@ -37,6 +37,7 @@ describe("startup configuration", () => {
 				SPECTRUM_PROJECT_SECRET: "secret",
 				SPECTRUM_WEBHOOK_SECRET: "hook",
 				TELLY_IMESSAGE_SENDERS: " +15550001111 = 7 ,ana@example.com=12",
+				TELLY_IMESSAGE_ADDRESS: " +15550009999 ",
 			}).imessage,
 		).toEqual({
 			projectId: "project",
@@ -47,6 +48,7 @@ describe("startup configuration", () => {
 				["ana@example.com", 12n],
 			]),
 			appUrl: "http://localhost:3001",
+			address: "+15550009999",
 		});
 	});
 

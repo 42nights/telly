@@ -189,7 +189,7 @@ test("asks only once a question has text, and sends the question and period", as
 	const { router } = renderRoute("/trends");
 
 	expect(
-		await screen.findByRole("heading", { name: "Grandma Rose" }),
+		await screen.findByRole("region", { name: "Health trends" }),
 	).toBeTruthy();
 	expect(router.state.location.pathname).toBe("/family/trends");
 	const button = await screen.findByRole("button", {

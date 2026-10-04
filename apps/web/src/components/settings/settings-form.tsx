@@ -7,12 +7,7 @@ import { useState } from "react";
 import { Window } from "@/components/hud/window";
 import { SUPPORT_MAILTO, Tip } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
-import {
-	type Contacts,
-	FAMILY_PHONE,
-	isFullPhoneNumber,
-	useContacts,
-} from "@/lib/contacts";
+import { type Contacts, isFullPhoneNumber, useContacts } from "@/lib/contacts";
 import { useFamily } from "@/lib/family";
 
 const INVALID = "Enter a full phone number, like (555) 010-0123";
@@ -91,9 +86,13 @@ function NumbersForm({
 	save: (next: Contacts) => void;
 }) {
 	const mom = useNumber(contacts.momPhone, "Call Mom is off until you add one");
+	const family = useNumber(
+		contacts.familyPhone,
+		"Call family is off until you add one",
+	);
 	const emergency = useNumber(contacts.emergency);
-	const changed = mom.changed || emergency.changed;
-	const valid = mom.valid && emergency.valid;
+	const changed = mom.changed || family.changed || emergency.changed;
+	const valid = mom.valid && family.valid && emergency.valid;
 
 	const status = numbersStatus(valid, changed, contacts.savedAt);
 
@@ -107,7 +106,7 @@ function NumbersForm({
 					if (changed && valid)
 						save({
 							momPhone: mom.next,
-							familyPhone: FAMILY_PHONE,
+							familyPhone: family.next,
 							emergency: emergency.next ?? contacts.emergency,
 							savedAt: contacts.savedAt,
 						});
@@ -125,7 +124,12 @@ function NumbersForm({
 						label="Mom's phone number"
 						{...mom.field}
 					/>
-					<p>Call family and Call my family always call {FAMILY_PHONE}.</p>
+					<NumberField
+						id="settings-family"
+						label="Family phone number"
+						tip="The person's Home screen calls this number with Call family."
+						{...family.field}
+					/>
 					<NumberField
 						id="settings-emergency"
 						label="Emergency number"

@@ -592,6 +592,16 @@ export const MemberName = __t.object("MemberName", {
 });
 export type MemberName = __Infer<typeof MemberName>;
 
+export const MemberPhone = __t.object("MemberPhone", {
+  member: __t.identity(),
+  phone: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type MemberPhone = __Infer<typeof MemberPhone>;
+
+export const MemberPhones = __t.object("MemberPhones", {});
+export type MemberPhones = __Infer<typeof MemberPhones>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -694,6 +704,9 @@ export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
+
+export const MyPhone = __t.object("MyPhone", {});
+export type MyPhone = __Infer<typeof MyPhone>;
 
 export const MyPushTokens = __t.object("MyPushTokens", {});
 export type MyPushTokens = __Infer<typeof MyPushTokens>;
@@ -922,6 +935,13 @@ export const SampleQuality = __t.enum("SampleQuality", {
   Unvalidated: __t.unit(),
 });
 export type SampleQuality = __Infer<typeof SampleQuality>;
+
+export const SenderPhone = __t.object("SenderPhone", {
+  phone: __t.string(),
+  member: __t.identity(),
+  familyId: __t.u64(),
+});
+export type SenderPhone = __Infer<typeof SenderPhone>;
 
 export const SpeakerSettings = __t.object("SpeakerSettings", {
   familyId: __t.u64(),

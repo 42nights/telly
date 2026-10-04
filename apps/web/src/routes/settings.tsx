@@ -7,7 +7,7 @@ import { SettingsForm } from "@/components/settings/settings-form";
 import { SignOutDialog } from "@/components/shell";
 import { setView, useView } from "@/lib/view";
 
-// Settings › Phone numbers. The other tabs: Home speaker, Going out, Saved things, Report email,
+// Settings › Phone numbers. The other tabs: Text Telly, Home speaker, Going out, Saved things, Report email,
 // This device, Demo data, Family. In the wearer view, the view switch and Sign out are here, not
 // in the menu.
 export const Route = createFileRoute("/settings")({

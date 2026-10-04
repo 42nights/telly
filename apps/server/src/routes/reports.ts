@@ -22,6 +22,7 @@ import type { R2Bucket } from "../integrations/r2";
 import type { Mail, Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
+import { issuePdfLink } from "../report-pdf-links";
 import { readAccess, requireHealthRecords } from "./care-profile";
 import { readMeals } from "./meal-facts";
 
@@ -175,11 +176,18 @@ const needMailer = (mailer: Mailer | undefined) => {
 
 const HOSPITAL_EMAIL = "ayaan.gazly@gmail.com";
 
+/**
+ * The PDF that an email of `report` attaches. Only a reviewed report is emailed, and review freezes
+ * it, so the PDF is made as of the review: every send and every preview has the same bytes. A draft
+ * shows as it stands now.
+ */
+const emailedPdf = (report: Report) =>
+	reportPdf(report, new Date(report.review?.reviewedAt ?? Date.now()));
+
 const reportMail = async (
 	report: Report,
 	to: string,
 	idempotencyKey: string,
-	madeAt: Date,
 ): Promise<Mail> => ({
 	to,
 	subject: "Reviewed lab report from Telly",
@@ -190,7 +198,7 @@ const reportMail = async (
 	].join("\n\n"),
 	attachment: {
 		filename: `lab-report-${report.id.slice(0, 8)}.pdf`,
-		content: await reportPdf(report, madeAt),
+		content: await emailedPdf(report),
 	},
 	idempotencyKey,
 });
@@ -218,12 +226,7 @@ const emailReport = async (
 	else
 		try {
 			await mailer(
-				await reportMail(
-					report,
-					report.email?.recipient ?? "",
-					sendId,
-					new Date(),
-				),
+				await reportMail(report, report.email?.recipient ?? "", sendId),
 			);
 		} catch (error) {
 			failure = error instanceof Error ? error.message : "The email failed";
@@ -296,6 +299,25 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 			return c.json(findReport(c, id) satisfies Report, 201);
 		})
 		.get("/reports/:reportId", (c) => c.json(findReport(c) satisfies Report))
+		// The PDF an email attaches, streamed to the caller only; it is never stored or linked.
+		.get("/reports/:reportId/pdf", async (c) => {
+			const report = findReport(c);
+			return c.body(await emailedPdf(report), 200, {
+				"Content-Type": "application/pdf",
+				"Content-Disposition": `inline; filename="lab-report-${report.id.slice(0, 8)}.pdf"`,
+				"Cache-Control": "private, no-store",
+			});
+		})
+		// A one-use link to the same PDF, for the iOS app's system viewer (#364).
+		.post("/reports/:reportId/pdf-link", async (c) => {
+			const report = findReport(c);
+			return c.json(
+				issuePdfLink(
+					await emailedPdf(report),
+					`Telly lab report ${report.createdAt.slice(0, 10)}.pdf`,
+				) satisfies ReportPdfLink,
+			);
+		})
 		.post("/reports/:reportId/fields", async (c) => {
 			const fields = await decodeBody(c, ReportFields);
 			const report = findReport(c);
@@ -347,7 +369,6 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 				report,
 				HOSPITAL_EMAIL,
 				`submit-${report.id}`,
-				new Date(report.review.reviewedAt),
 			);
 			await deliver(mail).catch((error: unknown) => {
 				throw new ApiFailure(

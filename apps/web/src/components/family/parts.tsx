@@ -6,8 +6,9 @@ import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Check, Phone, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
+import { SaveAndCall, useSaveAndCall } from "@/components/hud/save-and-call";
 import { ApiNotice, Hint, Tip } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
 import { telHref, useContacts } from "@/lib/contacts";
@@ -103,8 +104,9 @@ const signal = (sample: HealthSample | null) =>
 		: `${metricLabel(sample.metric)} ${readingValue(sample)}`;
 
 /**
- * One alert with "Mark as seen", "Call Mom", and "Call 911". Seen and unseen use the same rows and
- * buttons, so the card keeps its size when someone marks it.
+ * One alert as one compact row: the summary, how long ago, whether it is seen, and "Mark as seen",
+ * "Call Mom", and "Call 911" (captain: one row, details behind a tap). Seen and unseen use the same
+ * row and buttons, so the card keeps its size when someone marks it.
  */
 function AlertCard({
 	item,
@@ -122,123 +124,150 @@ function AlertCard({
 	onSeen: () => void;
 }) {
 	const seen = seenText(item.acknowledgements, me);
+	const [askMom, setAskMom] = useState(false);
 	const failed =
 		item.delivery?.status === "failed" ||
 		item.delivery?.status === "unavailable";
 	return (
 		<article
 			aria-label={`Alert: ${item.alert.summary}`}
-			className="win95-raised grid gap-3 border-l-4 border-l-destructive p-3"
+			className="win95-raised grid gap-1 border-l-4 border-l-destructive p-2"
 		>
-			<header className="flex items-start gap-2">
+			<div className="flex items-center gap-2">
 				<TriangleAlert
 					aria-hidden
-					className="mt-0.5 size-5 shrink-0 text-destructive"
+					className="size-5 shrink-0 text-destructive"
 				/>
-				<h3 className="min-w-0 flex-1 break-words font-bold text-lg leading-tight">
-					{item.alert.summary}
-				</h3>
-				<span
-					className={cn(
-						"win95-inset w-28 shrink-0 bg-card px-1 py-0.5 text-center font-bold text-sm",
-						seen === null && "text-destructive",
-					)}
-				>
-					{seen === null ? "Not seen yet" : "Seen"}
-				</span>
-			</header>
-			<dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-sm">
-				<dt className="text-muted-foreground">When</dt>
-				<dd>
-					{clock(item.alert.createdAt)} · {ago(item.alert.createdAt, now)}
-				</dd>
-				<dt className="text-muted-foreground">Signal</dt>
-				<dd className="break-words">{signal(item.sample)}</dd>
-				<dt className="text-muted-foreground">Delivery</dt>
-				<dd
-					className={cn("break-words", failed && "font-bold text-destructive")}
-				>
-					{deliveryText(item.delivery)}
-					{item.delivery?.lastError ? ` (${item.delivery.lastError})` : ""}
-				</dd>
-				<dt className="flex items-center gap-1 text-muted-foreground">
-					Seen
-					<Tip text="Seen means a family member opened and marked this alert. It is separate from delivery." />
-				</dt>
-				<dd>{seen ?? "Not yet"}</dd>
-			</dl>
-			<AlertActions
-				seen={seen !== null}
-				busy={busy}
-				error={error}
-				onSeen={onSeen}
-			/>
+				<div className="min-w-0 flex-1">
+					<h3 className="break-words font-bold leading-tight">
+						{item.alert.summary}
+					</h3>
+					<p className="text-xs">
+						{ago(item.alert.createdAt, now)} ·{" "}
+						<span className={cn(seen === null && "font-bold text-destructive")}>
+							{seen === null ? "Not seen yet" : "Seen"}
+						</span>
+						{failed && (
+							<span className="font-bold text-destructive">
+								{" "}
+								· Not delivered
+							</span>
+						)}
+					</p>
+				</div>
+				<AlertActions
+					seen={seen !== null}
+					busy={busy}
+					onSeen={onSeen}
+					askingMom={askMom}
+					onAskMom={() => setAskMom(!askMom)}
+				/>
+			</div>
+			{error !== null && (
+				<p className="text-sm" role="alert">
+					{error}
+				</p>
+			)}
+			{askMom && <MomNumber familyId={item.alert.familyId} />}
+			<details className="text-sm">
+				<summary className="cursor-pointer">Details</summary>
+				<dl className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 pt-1">
+					<dt className="text-muted-foreground">When</dt>
+					<dd>
+						{clock(item.alert.createdAt)} · {ago(item.alert.createdAt, now)}
+					</dd>
+					<dt className="text-muted-foreground">Signal</dt>
+					<dd className="break-words">{signal(item.sample)}</dd>
+					<dt className="text-muted-foreground">Delivery</dt>
+					<dd
+						className={cn(
+							"break-words",
+							failed && "font-bold text-destructive",
+						)}
+					>
+						{deliveryText(item.delivery)}
+						{item.delivery?.lastError ? ` (${item.delivery.lastError})` : ""}
+					</dd>
+					<dt className="flex items-center gap-1 text-muted-foreground">
+						Seen
+						<Tip text="Seen means a family member opened and marked this alert. It is separate from delivery." />
+					</dt>
+					<dd>{seen ?? "Not yet"}</dd>
+				</dl>
+			</details>
 		</article>
 	);
 }
 
-/** "Mark as seen", "Call Mom", and "Call 911", with one line under them for an error or the numbers. */
+/** "Mark as seen", "Call Mom", and "Call 911" as small buttons at the end of the alert row. */
 function AlertActions({
 	seen,
 	busy,
-	error,
 	onSeen,
+	askingMom,
+	onAskMom,
 }: {
 	seen: boolean;
 	busy: boolean;
-	error: string | null;
 	onSeen: () => void;
+	askingMom: boolean;
+	/** Mom with no number saved: opens or closes the number field. */
+	onAskMom: () => void;
 }) {
 	const [contacts] = useContacts();
-	const settings = (
-		<Link to="/settings" className="font-bold text-primary underline">
-			{contacts.momPhone === null ? "Add it in Settings" : "Settings"}
-		</Link>
-	);
+	const button = "h-11 shrink-0 px-2";
 	return (
-		<>
-			<div className="grid grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+		<div className="flex shrink-0 gap-1">
+			<Button
+				className={cn(button, "win95-primary w-11")}
+				aria-label={seen ? "Seen" : "Mark as seen"}
+				title={seen ? "Seen" : "Mark as seen"}
+				disabled={seen || busy}
+				onClick={onSeen}
+			>
+				<Check aria-hidden className="size-5" />
+			</Button>
+			{contacts.momPhone === null ? (
 				<Button
-					className="win95-primary h-14"
-					aria-label={seen ? "Seen" : "Mark as seen"}
-					title={seen ? "Seen" : "Mark as seen"}
-					disabled={seen || busy}
-					onClick={onSeen}
+					className={button}
+					aria-label="Call Mom"
+					aria-expanded={askingMom}
+					onClick={onAskMom}
 				>
-					<Check aria-hidden className="size-6" />
+					<Phone aria-hidden /> Mom
 				</Button>
-				{contacts.momPhone === null ? (
-					<Button className="h-14" disabled>
-						<Phone aria-hidden /> Call Mom
-					</Button>
-				) : (
-					<a
-						data-slot="button"
-						className={cn(buttonVariants(), "h-14")}
-						href={telHref(contacts.momPhone)}
-					>
-						<Phone aria-hidden /> Call Mom
-					</a>
-				)}
+			) : (
 				<a
 					data-slot="button"
-					className={cn(buttonVariants(), "h-14 font-bold text-destructive!")}
-					href={telHref(contacts.emergency)}
+					aria-label="Call Mom"
+					className={cn(buttonVariants(), button)}
+					href={telHref(contacts.momPhone)}
 				>
-					<Phone aria-hidden /> Call {contacts.emergency}
+					<Phone aria-hidden /> Mom
 				</a>
-			</div>
-			<p
-				className="min-h-5 text-sm"
-				role={error === null ? undefined : "alert"}
+			)}
+			<a
+				data-slot="button"
+				aria-label={`Call ${contacts.emergency}`}
+				className={cn(buttonVariants(), button, "font-bold text-destructive!")}
+				href={telHref(contacts.emergency)}
 			>
-				{error ??
-					(contacts.momPhone === null && (
-						<>Call Mom is off: no number saved. {settings}.</>
-					))}
-			</p>
-		</>
+				<Phone aria-hidden /> {contacts.emergency}
+			</a>
+		</div>
 	);
+}
+
+/**
+ * Call Mom with no number saved (the Call my family pattern, #360): one field saves the number on
+ * this device and in the care profile contacts, then opens the dialer.
+ */
+function MomNumber({ familyId }: { familyId: string }) {
+	const { contacts, note, call } = useSaveAndCall(familyId, "momPhone", "Mom");
+	// Saved: the Mom button calls now; only a "this phone only" note stays.
+	if (contacts.momPhone !== null)
+		return note === null ? null : <p className="text-sm">{note}</p>;
+	return <SaveAndCall label="Phone number" onCall={call} />;
 }
 
 /** Shown when there is no alert to act on. Never "all clear": it says what is being watched. */
