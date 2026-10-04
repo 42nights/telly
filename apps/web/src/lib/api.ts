@@ -16,8 +16,12 @@ export type ApiFailure =
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
-	/** The server could not be reached, or it replied with something else. */
-	| { readonly kind: "error"; readonly message: string };
+	/** The server could not be reached (`unreachable`), or it replied with something else. */
+	| {
+			readonly kind: "error";
+			readonly message: string;
+			readonly unreachable?: true;
+	  };
 
 export type ApiResult<T> =
 	| { readonly kind: "ready"; readonly value: T }
@@ -82,7 +86,11 @@ export const apiRequest = async <T>(
 		});
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 	if (!response.ok)
 		return failureFor(
@@ -128,14 +136,19 @@ export const apiBlob = async (
 		return { kind: "ready", value: await response.blob() };
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
-		return { kind: "error", message: `The server is not reachable: ${error}` };
+		return {
+			kind: "error",
+			message: `The server is not reachable: ${error}`,
+			unreachable: true,
+		};
 	}
 };
 
 /**
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
- * its failure visible: the last good value is not shown as current.
+ * its failure visible: the last good value is not shown as current. A new `path` (such as another
+ * selected person) shows loading until its own reply: one person's data never shows as another's.
  *
  * On a phone the screen can come back from the background, or lose its network, with an old value
  * still on it. So a lost network shows a failure at once, a polled read that takes longer than
@@ -147,18 +160,21 @@ export function useApi<T>(
 	path: string | null,
 	options: { readonly pollMs?: number; readonly refreshKey?: unknown } = {},
 ): ApiState<T> {
-	const [state, setState] = useState<ApiState<T>>({ kind: "loading" });
+	const [read, setRead] = useState<{
+		readonly path: string;
+		readonly state: ApiState<T>;
+	} | null>(null);
 	const { pollMs, refreshKey } = options;
 	useEffect(() => {
 		void refreshKey;
-		if (path === null) {
-			setState({ kind: "loading" });
-			return;
-		}
+		if (path === null) return;
 		let controller = new AbortController();
 		// A poll waits for the read in flight, so a slow read can finish and a hung one can time out.
 		let pending = false;
-		const read = () => {
+		// Both local failures (no network, no answer in time) mean the server was not reached.
+		const fail = (message: string) =>
+			setRead({ path, state: { kind: "error", message, unreachable: true } });
+		const load = () => {
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
@@ -171,64 +187,65 @@ export function useApi<T>(
 			})
 				.then((result) => {
 					if (signal.aborted) return;
-					setState(
-						result.kind === "ready" ? { ...result, at: Date.now() } : result,
-					);
+					setRead({
+						path,
+						state:
+							result.kind === "ready" ? { ...result, at: Date.now() } : result,
+					});
 				})
 				.catch(() => {
 					// Only the timeout gets here without this read being replaced or unmounted.
 					if (signal.aborted) return;
-					setState({
-						kind: "error",
-						message: "The server did not answer in time.",
-					});
+					fail("The server did not answer in time.");
 				})
 				.finally(() => {
 					if (!signal.aborted) pending = false;
 				});
 		};
 		const offline = () =>
-			setState({
-				kind: "error",
-				message:
-					"This phone has no network connection, so the last values may not be current.",
-			});
+			fail(
+				"This phone has no network connection, so the last values may not be current.",
+			);
 		const resume = () => {
 			if (document.visibilityState !== "visible") return;
-			setState((current) =>
-				current.kind === "ready" &&
+			setRead((current) =>
+				current !== null &&
+				current.state.kind === "ready" &&
 				pollMs !== undefined &&
-				Date.now() - current.at > 2 * pollMs
+				Date.now() - current.state.at > 2 * pollMs
 					? {
-							kind: "error",
-							message:
-								"The app was in the background. Checking for current values.",
+							path,
+							state: {
+								kind: "error",
+								message:
+									"The app was in the background. Checking for current values.",
+							},
 						}
 					: current,
 			);
-			read();
+			load();
 		};
-		read();
-		const stop = onSessionChange(read);
+		load();
+		const stop = onSessionChange(load);
 		const timer =
 			pollMs === undefined
 				? undefined
 				: setInterval(() => {
-						if (!pending) read();
+						if (!pending) load();
 					}, pollMs);
 		window.addEventListener("offline", offline);
-		window.addEventListener("online", read);
+		window.addEventListener("online", load);
 		document.addEventListener("visibilitychange", resume);
 		return () => {
 			stop();
 			clearInterval(timer);
 			window.removeEventListener("offline", offline);
-			window.removeEventListener("online", read);
+			window.removeEventListener("online", load);
 			document.removeEventListener("visibilitychange", resume);
 			controller.abort();
 		};
 	}, [schema, path, pollMs, refreshKey]);
-	return state;
+	return read !== null && read.path === path ? read.state : { kind: "loading" };
 }
 
 /** A path inside one family: `familyPath("123", "/alerts")` is `/api/families/123/alerts`. */

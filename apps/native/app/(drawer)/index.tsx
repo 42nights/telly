@@ -1,11 +1,18 @@
 import { type Loaded, loadDecoded, Sources } from "@health/contracts";
-import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { FamilyList } from "@health/contracts/families";
+import { Link, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { NAV_THEME } from "@/lib/constants";
+import { readSessionToken, writeSessionToken } from "@/lib/session";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { ENV } from "@/src/env";
+
+// `signed_out`: no stored token, so no protected read is sent.
+type Families = Loaded<FamilyList> | { readonly kind: "signed_out" };
+type Theme = (typeof NAV_THEME)["light"];
 
 export default function Home() {
 	const { colorScheme } = useColorScheme();
@@ -27,8 +34,10 @@ export default function Home() {
 		<Container>
 			<ScrollView
 				style={styles.scrollView}
+				contentContainerStyle={styles.content}
 				contentInsetAdjustmentBehavior="never"
 			>
+				<FamilyCard theme={theme} />
 				<View
 					style={[
 						styles.card,
@@ -60,11 +69,92 @@ export default function Home() {
 	);
 }
 
+/** The signed-in caller's families, read with the SecureStore token. */
+function FamilyCard({ theme }: { readonly theme: Theme }) {
+	const text = { color: theme.text };
+	const [families, setFamilies] = useState<Families>();
+
+	// Reload on focus, so returning from the sign-in screen shows the new session.
+	useFocusEffect(
+		useCallback(() => {
+			let cancel = () => {};
+			let stopped = false;
+			void readSessionToken().then((token) => {
+				if (stopped) return;
+				if (token === null) setFamilies({ kind: "signed_out" });
+				else
+					cancel = loadDecoded(
+						FamilyList,
+						`${ENV.EXPO_PUBLIC_SERVER_URL}/api/families`,
+						setFamilies,
+						{ Authorization: `Bearer ${token}` },
+					);
+			});
+			return () => {
+				stopped = true;
+				cancel();
+			};
+		}, []),
+	);
+
+	const signOut = () =>
+		void writeSessionToken(null).then(() =>
+			setFamilies({ kind: "signed_out" }),
+		);
+
+	return (
+		<View
+			style={[
+				styles.card,
+				{ backgroundColor: theme.card, borderColor: theme.border },
+			]}
+		>
+			<Text style={[styles.title, text]}>Family</Text>
+			{families === undefined && <Text style={text}>Loading…</Text>}
+			{families?.kind === "signed_out" && (
+				<Link
+					href="/sign-in"
+					style={[styles.button, text, { borderColor: theme.text }]}
+				>
+					Sign in to see your family
+				</Link>
+			)}
+			{families?.kind === "error" && (
+				<Text accessibilityRole="alert" style={text}>
+					Family data unavailable: {families.message}
+				</Text>
+			)}
+			{families?.kind === "ready" &&
+				(families.value.families.length === 0 ? (
+					<Text style={text}>You are not in a family yet.</Text>
+				) : (
+					families.value.families.map((family) => (
+						<Text key={family.id} style={text}>
+							{family.name}
+						</Text>
+					))
+				))}
+			{families !== undefined && families.kind !== "signed_out" && (
+				<Pressable
+					accessibilityRole="button"
+					onPress={signOut}
+					style={[styles.button, { borderColor: theme.text }]}
+				>
+					<Text style={text}>Sign out</Text>
+				</Pressable>
+			)}
+		</View>
+	);
+}
+
 const styles = StyleSheet.create({
 	scrollView: {
 		flex: 1,
 		paddingHorizontal: 20,
 		paddingTop: 28,
+	},
+	content: {
+		gap: 16,
 	},
 	card: {
 		padding: 16,
@@ -73,5 +163,13 @@ const styles = StyleSheet.create({
 	},
 	title: {
 		fontWeight: "600",
+	},
+	button: {
+		minHeight: 44,
+		borderWidth: 2,
+		paddingHorizontal: 16,
+		textAlignVertical: "center",
+		alignItems: "center",
+		justifyContent: "center",
 	},
 });

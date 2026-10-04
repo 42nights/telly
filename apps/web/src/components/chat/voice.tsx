@@ -8,21 +8,21 @@ const VOICE_LABEL = {
 	transcribing: "Working…",
 } as const;
 
-/** The mic button and its live label. The recording goes to the family agent as the question. */
+/** The mic button and its live label. `onRecording` asks the family agent or fills the message box. */
 export function VoiceButton({
 	setStatus,
-	askVoice,
+	onRecording,
 }: {
 	setStatus: (status: string | null) => void;
-	/** Sends the recording and returns a message to show, or null. */
-	askVoice: (audio: Blob) => Promise<string | null>;
+	/** Uses the recording and returns a message to show, or null. */
+	onRecording: (audio: Blob) => Promise<string | null>;
 }) {
 	const [voice, setVoice] = useState<keyof typeof VOICE_LABEL>("idle");
 	const recorder = useRef<MediaRecorder | null>(null);
 
 	const transcribe = async (audio: Blob) => {
 		setVoice("transcribing");
-		setStatus(await askVoice(audio));
+		setStatus(await onRecording(audio));
 		setVoice("idle");
 	};
 

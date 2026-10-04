@@ -81,9 +81,10 @@ export const send = (
 						headers: { "content-type": "application/json" },
 					}),
 		});
+		const text = await response.text();
 		return {
 			status: response.status,
-			json: (await response.json()) as unknown,
+			json: (text === "" ? null : JSON.parse(text)) as unknown,
 		};
 	});
 

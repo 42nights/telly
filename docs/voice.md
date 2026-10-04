@@ -1,4 +1,4 @@
-# Voice backend contract
+# Voice contract and web client
 
 Backend for voice and text requests ([#16](https://github.com/ayaangazali/telly/issues/16), [#63](https://github.com/ayaangazali/telly/issues/63)). Plan: [`docs/plan.md`](plan.md) (Requests, Voice) and the board's ElevenLabs card: "Speak reminders and agent replies in the user's language."
 
@@ -46,3 +46,14 @@ Set in `apps/server/.env.schema` (Varlock):
 ## Adapter for request orchestration
 
 `elevenLabsVoice(config)` returns a `Voice` with `transcribe(audio, languageCode?)` and `synthesize({ text, languageCode? })`. Both return an `Effect` that fails with `VoiceError { reason: "unavailable" | "upstream_error", message }`.
+
+## Web client (wearer home)
+
+`apps/web/src/components/wearer/request.tsx`, `answer.tsx`, and `speech.tsx` use these routes on the wearer home (`/hud`). The phone uses the same web app.
+
+- **Talk:** the recording goes to `POST /ask/voice`. The screen shows the transcript and the heard language ("You said (heard in Spanish)"). The answer plays once in that language. Each request is detected again, so a language change in the middle of a conversation changes the reply language.
+- **Typed:** the question goes to `POST /ask`. The answer plays once through `POST /voice/speech` without `languageCode`, so the provider uses the language of the answer text. Gemini answers in the language of the question.
+- **Controls:** Stop ends the voice at once. Say it again and Slower (0.75×, browser playback rate) replay the kept audio and make no new provider call. Ask something else also stops the voice.
+- **Failures:** Cancel while the answer loads puts the typed text back in the box. A failed request keeps the typed text or the recording in memory, and Try again sends it again. When speech fails, the text answer stays and the reason shows.
+- **No microphone or sound:** a denied or missing microphone shows the reason, and the text box stays. A blocked sound keeps the text answer.
+- **Not yet:** the wearer's stored language preference (care profile, #26) and urgent-help routing (#34) are owned by those issues. The family tools are read-only, so a spoken "okay" cannot complete a medication or meal record.

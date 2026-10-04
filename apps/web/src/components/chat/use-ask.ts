@@ -1,9 +1,19 @@
-import { FamilyAnswer, VoiceAnswer } from "@health/contracts/ask";
+import {
+	FamilyAnswer,
+	type FamilyQuestion,
+	type QuestionAttachment,
+	VoiceAnswer,
+} from "@health/contracts/ask";
 import { useState } from "react";
 
 import { type ApiResult, apiRequest, familyPath } from "@/lib/api";
 
-import { type Ask, type GeminiStatus, nextGeminiStatus } from "./logic";
+import {
+	type Ask,
+	failureText,
+	type GeminiStatus,
+	nextGeminiStatus,
+} from "./logic";
 
 /**
  * Questions to Gemini with `POST /ask` and `POST /ask/voice`. There is no answer history route, so
@@ -18,13 +28,14 @@ export function useAsk(familyId: string) {
 			current.map((ask) => (ask.id === id ? { ...ask, ...change } : ask)),
 		);
 
-	const start = (question: string) => {
+	const start = (question: string, files: readonly string[]) => {
 		const id = crypto.randomUUID();
 		setAsks((current) => [
 			...current,
 			{
 				id,
 				question,
+				files,
 				askedAt: new Date().toISOString(),
 				state: { kind: "pending" },
 			},
@@ -37,29 +48,28 @@ export function useAsk(familyId: string) {
 		setStatus((current) => nextGeminiStatus(current, result));
 		if (result.kind === "ready") return true;
 		console.error("Gemini did not answer:", result);
-		update(id, {
-			state: {
-				kind: "failed",
-				message:
-					result.kind === "signed_out" ? "Sign in first." : result.message,
-			},
-		});
+		update(id, { state: { kind: "failed", message: failureText(result) } });
 		return false;
 	};
 
-	/** Asks `question`; resolves true once Gemini answered. */
-	const ask = async (question: string): Promise<boolean> => {
-		const id = start(question);
+	/** Asks `question` with the attached files; resolves true once Gemini answered. */
+	const ask = async (
+		question: string,
+		attachments: readonly QuestionAttachment[],
+	): Promise<boolean> => {
+		const id = start(
+			question,
+			attachments.map((file) => file.name),
+		);
+		const body: FamilyQuestion = {
+			question,
+			timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			...(attachments.length > 0 ? { attachments } : {}),
+		};
 		const result = await apiRequest(
 			FamilyAnswer,
 			familyPath(familyId, "/ask"),
-			{
-				method: "POST",
-				body: {
-					question,
-					timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-				},
-			},
+			{ method: "POST", body },
 		);
 		if (!settle(id, result) || result.kind !== "ready") return false;
 		update(id, { state: { kind: "answered", answer: result.value } });
@@ -68,7 +78,7 @@ export function useAsk(familyId: string) {
 
 	/** Asks with a recording. Returns a message when no speech plays, otherwise null. */
 	const askVoice = async (audio: Blob): Promise<string | null> => {
-		const id = start("Voice question");
+		const id = start("Voice question", []);
 		const zone = encodeURIComponent(
 			Intl.DateTimeFormat().resolvedOptions().timeZone,
 		);
