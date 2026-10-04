@@ -21,19 +21,33 @@ CI (`.github/workflows/health-deploy.yml`) builds one artifact, deploys it, and 
 - variables `HEALTH_SERVER_URL`: `https://api.saintess.tech`, and `HEALTH_WEB_URL`: `https://app.saintess.tech`
 - secrets `TELLY_DEPLOY_CLOUDFLARE_API_TOKEN` and `TELLY_SECRETS_PULL_TOKEN`: copy them from the shared key store by hand.
 
-From an operator machine, with the two secrets in your environment and `crane`, `jq`, and `bun` installed:
+Until those are set (#184), CI skips the deploy. From an operator machine, release the checked-out commit with one command. It publishes the SpacetimeDB module to Maincloud without deleting data, then builds, packs, deploys, and smoke-checks the Worker. It needs `bun`, `jq`, `crane`, and `spacetime` on `PATH` and the credential files named at the top of `deploy/cloudflare/release.sh`:
 
 ```bash
-bun run --filter server build
-set -a; . deploy/cloudflare/settings.env; set +a
-NODE_ENV=production VITE_SERVER_URL="$HEALTH_SERVER_URL" VITE_OIDC_ISSUER="$OIDC_ISSUER" \
-  VITE_OIDC_CLIENT_ID="$OIDC_AUDIENCE" bun run --filter web build
-sh scripts/pack-health.sh health.tar.gz
-sh deploy/cloudflare/deploy.sh health.tar.gz
-node apps/server/scripts/smoke.ts https://api.saintess.tech
+sh deploy/cloudflare/release.sh
 ```
 
-Each deploy restarts the container with the new image and settings. The first request after a deploy can take about 35 seconds.
+If the module change needs a data wipe or breaks clients, the publish stops at its prompt and the Worker is not deployed. Never add `--delete-data`.
+
+`https://app.saintess.tech/version.txt` shows the live commit. Each deploy restarts the container with the new image and settings, and the container pulls its keys again. The first request after a deploy can take about 35 seconds.
+
+### Auto-deploy from the operator host
+
+The systemd user timer `telly-autodeploy` checks `origin/main` every 60 s. When it moved, `deploy/cloudflare/autodeploy.sh` runs `release.sh` from its own clone (`~/.local/share/telly-autodeploy/telly`), one run at a time. A failed commit is not retried. State is in `~/.local/state/telly-autodeploy/` (`deployed`, `failed`).
+
+```bash
+# install (crane in ~/.local/share/telly-autodeploy/bin or on PATH)
+git clone https://github.com/ayaangazali/telly.git ~/.local/share/telly-autodeploy/telly
+cp deploy/cloudflare/autodeploy.sh ~/.local/share/telly-autodeploy/
+cp deploy/cloudflare/telly-autodeploy.service deploy/cloudflare/telly-autodeploy.timer ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now telly-autodeploy.timer
+# stop / start / logs
+systemctl --user stop telly-autodeploy.timer
+systemctl --user start telly-autodeploy.timer
+journalctl --user -u telly-autodeploy.service -f
+```
+
+Stop the timer when CI deploy is set up, so two deployers never race.
 
 ## Rollback
 
