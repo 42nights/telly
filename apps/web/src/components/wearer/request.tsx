@@ -12,15 +12,30 @@ import { isMedicineRequest } from "./logic";
 // ponytail: fixed cap keeps a forgotten recording under the 10 MiB upload limit.
 const MAX_RECORDING_MS = 60_000;
 
+/** What the wearer asked: typed text, or a recording kept in memory until the next request. */
+type Pending =
+	| { readonly kind: "text"; readonly text: string }
+	| { readonly kind: "voice"; readonly audio: Blob };
+
 type Step =
-	| { readonly kind: "ready"; readonly problem?: string }
+	/** `draft` refills the text box, so a cancelled typed request is not lost. */
+	| {
+			readonly kind: "ready";
+			readonly problem?: string;
+			readonly draft?: string | undefined;
+	  }
 	| { readonly kind: "listening"; readonly stop: () => void }
-	| { readonly kind: "thinking"; readonly asked: string | null }
+	| {
+			readonly kind: "thinking";
+			readonly asked: string | null;
+			readonly cancel: () => void;
+	  }
 	| { readonly kind: "answer"; readonly reply: Reply }
 	| {
 			readonly kind: "failed";
 			readonly asked: string | null;
 			readonly failure: ApiFailure;
+			readonly request: Pending;
 	  };
 
 const failureTitle = {
@@ -72,32 +87,37 @@ export const startRecording = async (
 
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-function Listening({ stop }: { stop: (() => void) | null }) {
+/** Recording (`action` stops it) or waiting for the answer (`action` cancels and keeps the request). */
+function Listening({
+	thinking,
+	action,
+}: {
+	thinking: boolean;
+	action: () => void;
+}) {
 	return (
 		<div
 			aria-live="polite"
 			className="grid justify-items-center gap-3 py-4 text-center"
 		>
 			<span className="win95-inset grid size-20 place-items-center bg-white">
-				{stop === null ? (
+				{thinking ? (
 					<Loader2 aria-hidden className="size-10 animate-spin" />
 				) : (
 					<Mic aria-hidden className="size-10 text-[#000080]" />
 				)}
 			</span>
 			<p className="font-semibold text-[22px]">
-				{stop === null ? "Thinking…" : "I'm listening…"}
+				{thinking ? "Thinking…" : "I'm listening…"}
 			</p>
-			{stop !== null && (
-				<Button
-					className="h-14 min-w-48 text-[20px] [&_svg]:size-6"
-					onClick={stop}
-					variant="outline"
-				>
-					<Square aria-hidden />
-					Stop
-				</Button>
-			)}
+			<Button
+				className="h-14 min-w-48 text-[20px] [&_svg]:size-6"
+				onClick={action}
+				variant="outline"
+			>
+				<Square aria-hidden />
+				{thinking ? "Cancel" : "Stop"}
+			</Button>
 		</div>
 	);
 }
@@ -106,16 +126,18 @@ function AskForm({
 	familyId,
 	talkNote,
 	problem,
+	draft,
 	onTalk,
 	onAsk,
 }: {
 	familyId: string | null;
 	talkNote: string;
 	problem: string | undefined;
+	draft: string | undefined;
 	onTalk: () => void;
 	onAsk: (text: string) => void;
 }) {
-	const [typed, setTyped] = useState("");
+	const [typed, setTyped] = useState(draft ?? "");
 	return (
 		<div className="grid gap-3">
 			<h2 className="font-bold text-[26px]">What do you need?</h2>
@@ -168,7 +190,7 @@ function AskForm({
 /**
  * The wearer's request: Talk or a typed question. A medicine request opens the medicine finder;
  * any other question goes to Gemini (`POST /ask`, or `POST /ask/voice` for Talk). A failure shows
- * as a failure, never as an answer.
+ * as a failure, never as an answer, and keeps the request for Try again.
  */
 export function Request({
 	familyId,
@@ -180,31 +202,51 @@ export function Request({
 }) {
 	const navigate = useNavigate();
 	const [step, setStep] = useState<Step>({ kind: "ready" });
+	/** Ends the recording or the request in progress. */
 	const release = useRef(() => {});
 	useEffect(() => () => release.current(), []);
 	const done = () => setStep({ kind: "ready" });
 	const openMedicine = (q: string) =>
 		void navigate({ to: "/medicine", search: { q } });
 
+	/** Shows "Thinking…" with Cancel; returns the signal for the request. */
+	const think = (asked: string | null) => {
+		const controller = new AbortController();
+		release.current = () => controller.abort();
+		setStep({
+			kind: "thinking",
+			asked,
+			cancel: () => {
+				controller.abort();
+				setStep({ kind: "ready", draft: asked ?? undefined });
+			},
+		});
+		return controller.signal;
+	};
+
 	const ask = async (text: string) => {
 		const question = text.trim();
 		if (question === "") return;
 		if (isMedicineRequest(question)) return openMedicine(question);
+		const request = { kind: "text", text: question } as const;
 		if (familyId === null)
 			return setStep({
 				kind: "failed",
 				asked: question,
 				failure: { kind: "signed_out" },
+				request,
 			});
-		setStep({ kind: "thinking", asked: question });
+		const signal = think(question);
 		const result = await apiRequest(
 			FamilyAnswer,
 			familyPath(familyId, "/ask"),
 			{
 				method: "POST",
 				body: { question, timeZone: timeZone() },
+				signal,
 			},
-		);
+		).catch(() => null);
+		if (result === null) return;
 		setStep(
 			result.kind === "ready"
 				? {
@@ -214,10 +256,11 @@ export function Request({
 							asked: question,
 							answer: result.value,
 							audio: null,
+							languageCode: null,
 							voiceNote: null,
 						},
 					}
-				: { kind: "failed", asked: question, failure: result },
+				: { kind: "failed", asked: question, failure: result, request },
 		);
 	};
 
@@ -228,7 +271,7 @@ export function Request({
 				kind: "ready",
 				problem: "I didn't hear anything. Try again.",
 			});
-		setStep({ kind: "thinking", asked: null });
+		const signal = think(null);
 		const result = await apiRequest(
 			VoiceAnswer,
 			familyPath(
@@ -238,10 +281,17 @@ export function Request({
 			{
 				method: "POST",
 				rawBody: { data: audio, type: audio.type || "audio/webm" },
+				signal,
 			},
-		);
+		).catch(() => null);
+		if (result === null) return;
 		if (result.kind !== "ready")
-			return setStep({ kind: "failed", asked: null, failure: result });
+			return setStep({
+				kind: "failed",
+				asked: null,
+				failure: result,
+				request: { kind: "voice", audio },
+			});
 		const { transcript, answer, speech } = result.value;
 		if (isMedicineRequest(transcript.text))
 			return openMedicine(transcript.text.trim());
@@ -252,6 +302,7 @@ export function Request({
 				asked: transcript.text.trim(),
 				answer,
 				audio: speech.status === "ok" ? speech.audio : null,
+				languageCode: transcript.languageCode,
 				voiceNote:
 					speech.status === "ok"
 						? null
@@ -270,14 +321,15 @@ export function Request({
 
 	switch (step.kind) {
 		case "listening":
-			return <Listening stop={step.stop} />;
+			return <Listening action={step.stop} thinking={false} />;
 		case "thinking":
-			return <Listening stop={null} />;
+			return <Listening action={step.cancel} thinking />;
 		case "answer":
 			return (
 				<AnswerPanel familyId={familyId} onDone={done} reply={step.reply} />
 			);
-		case "failed":
+		case "failed": {
+			const { request } = step;
 			return (
 				<AnswerFailed
 					asked={step.asked}
@@ -287,12 +339,23 @@ export function Request({
 							: step.failure.message
 					}
 					onDone={done}
-					title={failureTitle[step.failure.kind]}
+					onRetry={() =>
+						void (request.kind === "text"
+							? ask(request.text)
+							: askByVoice(request.audio))
+					}
+					title={
+						request.kind === "voice" && step.failure.kind === "unavailable"
+							? "Talk is not available right now. You can type your question."
+							: failureTitle[step.failure.kind]
+					}
 				/>
 			);
+		}
 		default:
 			return (
 				<AskForm
+					draft={step.draft}
 					familyId={familyId}
 					onAsk={(text) => void ask(text)}
 					onTalk={() => void talk()}
