@@ -6,7 +6,6 @@ import {
 	Footprints,
 	HeartHandshake,
 	House,
-	LogIn,
 	LogOut,
 	MessageCircle,
 	Moon,
@@ -14,13 +13,9 @@ import {
 	Settings,
 	Users,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 
-import {
-	getSessionToken,
-	onSessionChange,
-	setSessionToken,
-} from "@/lib/session";
+import { setSessionToken } from "@/lib/session";
 
 // Five screens stay on the bar so it fits one row on a 390 px phone (#209); the rest open from More.
 const barLinks = [
@@ -47,13 +42,8 @@ const MENU_WIDTH = 192; // w-48
 const menuItem =
 	"flex min-h-11 items-center gap-2 px-3 text-sm hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground focus-visible:outline-none aria-[current=page]:font-bold";
 
-/** The app's taskbar: one raised button per screen; the current screen shows pressed. */
+/** The signed-in app's taskbar: one raised button per screen; the current screen shows pressed. */
 export default function Header() {
-	const [signedIn, setSignedIn] = useState(() => getSessionToken() !== null);
-	useEffect(
-		() => onSessionChange(() => setSignedIn(getSessionToken() !== null)),
-		[],
-	);
 	const moreActive = useLocation({
 		select: (location) => inMoreMenu(location.pathname),
 	});
@@ -118,29 +108,17 @@ export default function Header() {
 						className="mx-1 my-1 border-t border-t-[var(--win95-shadow)] border-b border-b-[var(--win95-highlight)]"
 					/>
 					<li>
-						{signedIn ? (
-							<button
-								type="button"
-								className={`${menuItem} w-full`}
-								onClick={() => {
-									close();
-									setSessionToken(null);
-								}}
-							>
-								<LogOut aria-hidden className="size-4" />
-								Sign out
-							</button>
-						) : (
-							<Link
-								to="/sign-in"
-								className={menuItem}
-								onClick={close}
-								activeProps={{ "aria-current": "page" }}
-							>
-								<LogIn aria-hidden className="size-4" />
-								Sign in
-							</Link>
-						)}
+						<button
+							type="button"
+							className={`${menuItem} w-full`}
+							onClick={() => {
+								close();
+								setSessionToken(null);
+							}}
+						>
+							<LogOut aria-hidden className="size-4" />
+							Sign out
+						</button>
 					</li>
 				</ul>
 			</div>

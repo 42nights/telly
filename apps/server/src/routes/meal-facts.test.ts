@@ -4,8 +4,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { Meal, MealEstimate, Meals } from "@health/contracts/meal-facts";
 import { ReminderHistory } from "@health/contracts/reminders";
 import { Effect, Schema } from "effect";
-import { Identity } from "spacetimedb";
-import type { FamilyDb } from "../db";
 import { mealRoutes } from "./meal-facts";
 import { reminderRoutes } from "./reminders";
 import {
@@ -14,23 +12,9 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
-
-type Family = { readonly db: FamilyDb; readonly familyId: string };
-
-/** The founder grants itself #26 care scopes (founder bootstrap). */
-const grant = (family: Family, scopes: readonly string[]) =>
-	Effect.forEach(scopes, (scope) =>
-		Effect.promise(() =>
-			family.db.connection.reducers.setCareGrant({
-				familyId: BigInt(family.familyId),
-				member: Identity.fromString(family.db.identity),
-				scope,
-				granted: true,
-			}),
-		),
-	);
 
 // A PNG header is all the route reads before it forwards the photo; this one says 4×3 pixels.
 const photo = {
@@ -81,8 +65,8 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 	test("a photo and its estimate never report intake or complete the meal reminder; only an intake report does", () =>
 		withDb((db) =>
 			Effect.gen(function* () {
+				// A new family's founder holds every care scope (#188): no sharing step comes first.
 				const family = yield* openFamily(db, "Meal family");
-				yield* grant(family, ["health_records", "media"]);
 				const app = familyApp(family.db, family.familyId, mealRoutes(config));
 
 				// The meal is a #28 meal reminder's occurrence; its facts link to it by id.
@@ -188,7 +172,6 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 		withDb((db) =>
 			Effect.gen(function* () {
 				const family = yield* openFamily(db, "No camera family");
-				yield* grant(family, ["health_records", "media"]);
 				const app = familyApp(
 					family.db,
 					family.familyId,
@@ -228,17 +211,56 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 			}),
 		));
 
+	test("another family's founder cannot estimate or report a meal here", () =>
+		withDb((db) =>
+			Effect.gen(function* () {
+				const family = yield* openFamily(db, "Guarded meal family");
+				const { db: other } = yield* openFamily(db, "Other meal family");
+				const outsider = familyApp(other, family.familyId, mealRoutes(config));
+				expect(
+					[
+						yield* send(outsider, "POST", "/meals/m/estimates", {
+							source: "description",
+							text: "Tea",
+						}),
+						yield* send(outsider, "POST", "/meals/m/intake", {
+							type: "intake_report",
+							kind: "meal",
+							amount: "some",
+							words: null,
+							reportedBy: "wearer",
+							via: "tap",
+						}),
+					].map(failure),
+				).toEqual([
+					[403, "forbidden"],
+					[403, "forbidden"],
+				]);
+			}),
+		));
+
 	test("meal records need health_records, and a photo also needs media", () =>
 		withDb((db) =>
 			Effect.gen(function* () {
 				const family = yield* openFamily(db, "Sharing family");
+				yield* setOwnScopes(
+					family.db,
+					family.familyId,
+					["health_records", "media"],
+					false,
+				);
 				const app = familyApp(family.db, family.familyId, mealRoutes(config));
 				expect(failure(yield* send(app, "GET", "/meals"))).toEqual([
 					403,
 					"forbidden",
 				]);
 
-				yield* grant(family, ["health_records"]);
+				yield* setOwnScopes(
+					family.db,
+					family.familyId,
+					["health_records"],
+					true,
+				);
 				const before = estimates;
 				const photoEstimate = yield* send(
 					app,

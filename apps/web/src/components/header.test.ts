@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	createMemoryHistory,
-	createRootRoute,
-	createRoute,
-	createRouter,
-} from "@tanstack/react-router";
+import { isRedirect } from "@tanstack/react-router";
 
 import { Route as care } from "@/routes/care";
 import { Route as dashboard } from "@/routes/dashboard";
@@ -24,35 +19,24 @@ describe("More menu", () => {
 });
 
 describe("merged screens", () => {
-	// The real `/care` and `/dashboard` redirects, mounted at their paths in a small route tree.
-	const root = createRootRoute();
-	const tree = root.addChildren([
-		createRoute({ ...care.options, getParentRoute: () => root, path: "/care" }),
-		createRoute({
-			...dashboard.options,
-			getParentRoute: () => root,
-			path: "/dashboard",
-		}),
-		createRoute({ getParentRoute: () => root, path: "/care-profile" }),
-		createRoute({ getParentRoute: () => root, path: "/family" }),
-	]);
-	const open = async (path: string) => {
-		const router = createRouter({
-			routeTree: tree,
-			history: createMemoryHistory({ initialEntries: [path] }),
-			// A browser router: Bun has no `window`, so the router would otherwise run as a server.
-			isServer: false,
-			origin: "http://app.test",
-		});
-		await router.load();
-		return router.state.location.pathname;
+	/** Where a route's `beforeLoad` sends the browser, or null when it lets the page load. */
+	const target = (beforeLoad: ((context: never) => unknown) | undefined) => {
+		// Both redirects ignore the router context, so the test passes none.
+		const noContext = undefined as never;
+		try {
+			beforeLoad?.(noContext);
+		} catch (thrown) {
+			if (isRedirect(thrown)) return thrown.options.to;
+			throw thrown;
+		}
+		return null;
 	};
 
-	test("an old Care link opens the care plan", async () => {
-		expect(await open("/care")).toBe("/care-profile");
+	test("an old Care link opens the care plan", () => {
+		expect(target(care.options.beforeLoad)).toBe("/care-profile");
 	});
 
-	test("an old Dashboard link opens Family", async () => {
-		expect(await open("/dashboard")).toBe("/family");
+	test("an old Dashboard link opens Family", () => {
+		expect(target(dashboard.options.beforeLoad)).toBe("/family");
 	});
 });

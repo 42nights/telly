@@ -20,6 +20,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 
@@ -80,6 +81,7 @@ describe.skipIf(dbConfig === undefined)("cooking", () => {
 				const theirs = familyApp(relative, familyId, routes());
 
 				// Without `health_records` nothing is read, and the reply says so.
+				yield* setOwnScopes(owner, familyId, ["health_records"], false);
 				expect(failure(yield* send(app, "GET", "/cooking/profile"))).toEqual([
 					403,
 					"forbidden",
@@ -90,16 +92,7 @@ describe.skipIf(dbConfig === undefined)("cooking", () => {
 				);
 				expect(blind.suggestions.map((s) => s.id)).toContain("scrambled-eggs");
 
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					yield* send(app, "POST", "/care-access", {
-						identity: owner.identity,
-						scope,
-						granted: true,
-					});
+				yield* setOwnScopes(owner, familyId, ["health_records"], true);
 				const empty = Schema.decodeUnknownSync(CookingProfileRecord)(
 					(yield* send(app, "GET", "/cooking/profile")).json,
 				);
