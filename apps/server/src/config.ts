@@ -3,7 +3,7 @@ import type { ElevenLabsConfig } from "./integrations/elevenlabs";
 import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
-import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
+import { type QwenConfig, qwenConfigFrom } from "./integrations/qwen";
 import type { R2Config } from "./integrations/r2";
 
 export type ServerConfig = {
@@ -18,8 +18,8 @@ export type ServerConfig = {
 	readonly finchnode?: Finchnode;
 	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
 	readonly fetchAgent?: FetchAgentConfig | undefined;
-	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
-	readonly gemma?: GemmaConfig | undefined;
+	/** Undefined when no Qwen deployment is configured: the cue route then answers `unavailable`. */
+	readonly qwen?: QwenConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
 };
@@ -45,7 +45,7 @@ type Env = {
 	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
 	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
 	readonly TELLY_R2_ENDPOINT?: string | undefined;
-} & Parameters<typeof gemmaConfigFrom>[0];
+} & Parameters<typeof qwenConfigFrom>[0];
 
 /** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
 const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
@@ -104,12 +104,12 @@ export const serverConfig = (env: Env): ServerConfig => {
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 		: undefined;
-	const gemma = gemmaConfigFrom(env);
+	const qwen = qwenConfigFrom(env);
 	if (issuer && audience && uri && database)
 		return {
 			...base,
 			gemini,
-			gemma,
+			qwen,
 			auth: {
 				issuer,
 				audience,
@@ -121,5 +121,5 @@ export const serverConfig = (env: Env): ServerConfig => {
 		throw new Error(
 			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none (OIDC_CLIENT_SECRET needs all four)",
 		);
-	return { ...base, gemini, gemma, auth: undefined };
+	return { ...base, gemini, qwen, auth: undefined };
 };
