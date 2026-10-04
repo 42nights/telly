@@ -1,7 +1,7 @@
 # Continuous deployment for the health app (issue #2): build the server and web artifacts once from
 # main, deploy those exact artifacts, then smoke-check the deployed URLs.
 #
-# Target (captain decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
+# Target (owner decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
 # deploy/cloudflare/deploy.sh: the Worker `telly` serves web/ as static assets and runs server/ in a
 # Cloudflare Container. Public settings are in deploy/cloudflare/settings.env. Every job runs only
 # when the repository variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set
