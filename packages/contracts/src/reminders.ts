@@ -88,7 +88,10 @@ export const Reminder = Schema.Struct({
 });
 export type Reminder = typeof Reminder.Type;
 
-/** `GET /reminders`. `DELETE /reminders/:reminderId` stops future occurrences; history stays. */
+/**
+ * `GET /reminders`. `DELETE /reminders/:reminderId` stops the reminder and removes its occurrences
+ * that are not yet due (each holds only its `scheduled` event); every other occurrence stays.
+ */
 export const Reminders = Schema.Struct({ reminders: Schema.Array(Reminder) });
 export type Reminders = typeof Reminders.Type;
 
@@ -146,7 +149,7 @@ const ClientSource = Schema.Literals(["phone", "web", "glasses"]);
 
 const Wording = Schema.NullOr(Schema.String.check(Schema.isMaxLength(2000)));
 
-/** One recorded step of an occurrence. Events are never changed or removed. */
+/** One recorded step of an occurrence. Events are never changed. */
 export const ReminderEvent = Schema.Struct({
 	id: DbId,
 	occurrenceId: DbId,
