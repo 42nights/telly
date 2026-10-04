@@ -1,7 +1,8 @@
 // The full-screen AR screen for saving and finding a medicine pin.
 // Ideas from Apple's "Saving and Loading World Data" sample (Apple Sample Code License): save only
-// when `worldMappingStatus` is `.mapped` or `.extending`, ask the person to move the phone while
-// the session relocalizes, and hide the marker until relocalization ends. No code is copied.
+// when `worldMappingStatus` is `.mapped` or `.extending`, and ask the person to move the phone
+// while the session relocalizes. No code is copied. The find follows the stages that the ar-sim
+// tool (tools/ar-sim) measured: pairing mode, then an arrow, then the marker once the pin is stable.
 import ARKit
 import SceneKit
 import UIKit
@@ -12,8 +13,11 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     case find(label: String, pin: UUID, map: ARWorldMap)
   }
 
-  // A find gives up when the room does not match within this time.
-  private static let relocalizationTimeout: TimeInterval = 120
+  // Pairing mode stays on until the person cancels; this only settles the request before the web
+  // app's own 10-minute limit.
+  private static let relocalizationTimeout: TimeInterval = 9 * 60
+  // The pin is stable when it stays within 5 cm for this many frames (half a second at 60 fps).
+  private static let stableFrames = 30
 
   private let mode: Mode
   private var reply: (([String: Any]) -> Void)?
@@ -23,12 +27,17 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   private let closeButton = UIButton(type: .system)
   private let pinButton = UIButton(type: .system)
   private let crosshair = UIView()
-  // Find mode: points from the screen edge to the pin while the pin is off screen.
+  // Find mode: points to the pin after relocalization, until the pin is stable and on screen.
   private let arrow = UIImageView(image: UIImage(systemName: "arrow.up.circle.fill"))
   private let marker: SCNNode
   private var saving = false
-  private var found = false
   private var timeout: Timer?
+  // Find mode state.
+  private var settled = false
+  private var stableFrom: simd_float3?
+  private var stableCount = 0
+  private var pairingTurn: Float = 0
+  private var lastYaw: Float?
 
   init(mode: Mode, reply: @escaping ([String: Any]) -> Void) {
     self.mode = mode
@@ -153,7 +162,7 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       arrow.isHidden = true
       arrow.isAccessibilityElement = false
       view.addSubview(arrow)
-      setHint("Move your phone slowly around the room.")
+      setHint("Turn slowly and look around the room.")
     }
   }
 
@@ -262,45 +271,84 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
         ? "Point the dot at the \(label), then tap Pin here."
         : "Move your phone slowly around the room so it can learn the space.")
     case .find:
-      guard let pin = frame.anchors.first(where: isPin), case .normal = frame.camera.trackingState else { return }
-      if found {
-        pointArrow(at: pin)
+      guard let pin = frame.anchors.first(where: isPin), case .normal = frame.camera.trackingState else {
+        arrow.isHidden = true
+        pair(frame)
         return
       }
-      found = true
+      let position = simd_make_float3(pin.transform.columns.3)
+      if !settled {
+        // ARKit can move the anchor while it relocalizes; the marker waits until it holds still.
+        if let start = stableFrom, simd_distance(start, position) <= 0.05 {
+          stableCount += 1
+        } else {
+          stableFrom = position
+          stableCount = 0
+        }
+      }
+      guide(to: position)
+    }
+  }
+
+  // Pairing mode: no fix yet. One full turn without a fix asks the person to walk closer.
+  private func pair(_ frame: ARFrame) {
+    let yaw = frame.camera.eulerAngles.y
+    if let lastYaw {
+      let step = remainderf(yaw - lastYaw, 2 * .pi)
+      pairingTurn += abs(step)
+    }
+    lastYaw = yaw
+    if settled {
+      setHint("Move your phone slowly around the room.")
+    } else if (frame.lightEstimate?.ambientIntensity ?? 1000) < 100 {
+      setHint("Turn on a light, then turn slowly and look around the room.")
+    } else if pairingTurn >= 2 * .pi {
+      setHint("Walk closer to where you pinned the \(label) and look around.")
+    } else {
+      setHint("Turn slowly and look around the room.")
+    }
+  }
+
+  // Arrow toward the pin until it is stable and on screen, then the marker.
+  private func guide(to position: simd_float3) {
+    let point = sceneView.projectPoint(SCNVector3(position.x, position.y, position.z))
+    let bounds = sceneView.bounds
+    let behind = point.z > 1
+    let screenPoint = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+    let onScreen = !behind && bounds.insetBy(dx: 24, dy: 24).contains(screenPoint)
+
+    if !settled, onScreen, stableCount >= Self.stableFrames {
+      settled = true
       timeout?.invalidate()
       marker.isHidden = false
-      setHint("Your \(label) is at the red dot.")
       var done = closeButton.configuration
       done?.title = "Done"
       closeButton.configuration = done
       send(["type": "ar.pinFound"])
-      pointArrow(at: pin)
     }
-  }
-
-  // Shows the arrow at the screen edge, toward the pin, when the pin is off screen or behind.
-  private func pointArrow(at pin: ARAnchor) {
-    let position = pin.transform.columns.3
-    let point = sceneView.projectPoint(SCNVector3(position.x, position.y, position.z))
-    let bounds = sceneView.bounds
-    let behind = point.z > 1
-    let onScreen = !behind && bounds.insetBy(dx: 24, dy: 24).contains(CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
-    let wasHidden = arrow.isHidden
-    arrow.isHidden = onScreen
-    if onScreen {
-      if !wasHidden { setHint("Your \(label) is at the red dot.") }
+    if settled, onScreen {
+      arrow.isHidden = true
+      setHint("Your \(label) is at the red dot.")
       return
     }
-    // Behind the camera the projection mirrors, so the direction flips.
-    var dx = CGFloat(point.x) - bounds.midX
-    var dy = CGFloat(point.y) - bounds.midY
+
+    arrow.isHidden = false
+    if onScreen {
+      // Not stable yet: the arrow sits under the pin and points up at it.
+      arrow.center = CGPoint(x: screenPoint.x, y: min(screenPoint.y + 64, bounds.maxY - 48))
+      arrow.transform = .identity
+      setHint("Walk toward the arrow and hold your phone steady.")
+      return
+    }
+    // Off screen: the arrow sits at the screen edge. Behind the camera the projection mirrors.
+    var dx = screenPoint.x - bounds.midX
+    var dy = screenPoint.y - bounds.midY
     if behind { dx = -dx; dy = -dy }
     let length = max(hypot(dx, dy), 1)
     let radius = min(bounds.width, bounds.height) / 2 - 48
     arrow.center = CGPoint(x: bounds.midX + dx / length * radius, y: bounds.midY + dy / length * radius)
     arrow.transform = CGAffineTransform(rotationAngle: atan2(dx, -dy))
-    if wasHidden { setHint("Turn toward the arrow to see your \(label).") }
+    setHint("Turn toward the arrow to see your \(label).")
   }
 
   func session(_ session: ARSession, didFailWithError error: Error) {
