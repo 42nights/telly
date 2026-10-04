@@ -107,10 +107,10 @@ export const returnPath = (path: string | undefined): string =>
 		? path
 		: "/";
 
-/** A finder link (#308): `/medicine?link=<token>` opens without sign-in, and the server checks the token. */
+/** A finder link (#308): `/find?token=<token>` opens without sign-in, and the server checks the token. */
 const isFinderLink = (location: ParsedLocation) =>
-	location.pathname === "/medicine" &&
-	new URLSearchParams(location.searchStr).has("link");
+	location.pathname === "/find" &&
+	new URLSearchParams(location.searchStr).has("token");
 
 /**
  * Root `beforeLoad`: with no session, every page except sign-in and a finder link goes to sign-in,

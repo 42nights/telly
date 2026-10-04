@@ -1,6 +1,6 @@
 // Family-scoped health data. Every table is private: clients read only through the per-sender views
 // below, and every reducer checks the caller's family membership itself, independent of the server.
-import { Identity, TimeDuration, Timestamp } from "spacetimedb";
+import { Identity, Timestamp } from "spacetimedb";
 import {
 	type Infer,
 	type InferSchema,
@@ -359,8 +359,8 @@ const medicineMemory = table(
 	},
 );
 
-// One member's permission to remember where their medicine containers were last seen (#29, #291).
-// Without this row no sighting of that member is stored, and removing it deletes their sightings.
+// One member's agreed familiar places to search when a thing moved (#29, #291). Remembering is on
+// for every member without it (#301); `setMedicineMemory` off deletes it with every sighting.
 const medicinePlaces = table(
 	{
 		name: "medicine_places",
@@ -384,14 +384,15 @@ const medicinePlaces = table(
 	},
 );
 
-// Where one member's medicine container was last seen: one row per member and container
-// description. Only a newer camera observation that the person confirmed changes it; `notFoundAt`
-// marks it outdated.
+// Where one member's object was last seen: one row per member and object label (#29, #301). An
+// object is medicine or any personal thing: keys, glasses, a wallet. Only a newer camera
+// observation that the person confirmed changes it; `notFoundAt` marks it outdated.
 const medicineSighting = table(
 	{ name: "medicine_sighting" },
 	{
 		id: t.u64().primaryKey().autoInc(),
 		familyId: t.u64().index("btree"),
+		// The object's label, such as "Lisinopril bottle" or "keys".
 		container: t.string(),
 		place: t.string(),
 		// When the camera captured the frame the container was found in.
@@ -403,6 +404,35 @@ const medicineSighting = table(
 		notFoundAt: t.option(t.timestamp()),
 		// The member whose medicine this is (#291). Rows from before #291 hold the zero identity until
 		// `migrateMedicineMembers` gives them to the family's wearer.
+		personId: t.identity().default(Identity.zero()),
+		// What kind of object it is (#301): "keys", "glasses", "medicine", ... Older rows are medicine.
+		category: t.string().default("medicine"),
+		// Base64 JPEG of the object from the confirming picture; empty for rows from before #301.
+		thumbnail: t.string().default(""),
+		// The places it was seen before `place`, oldest first, at most `MAX_PAST_PLACES` (#301).
+		pastPlaces: t.array(t.string()).default([]),
+	},
+);
+
+// Where a remembered object sits in the room, pinned with ARKit on the person's iPhone (contract
+// telly-ar-pin, generalized in #301). The world map itself is in R2 at
+// `ar-pins/<familyId>/<personId>/<objectId>.worldmap`, or `ar-pins/<familyId>/<objectId>.worldmap`
+// for a pin saved before #301; this row only says that it exists. One pin per object; forgetting
+// the object or the member's memory deletes it.
+const medicineArPin = table(
+	{ name: "medicine_ar_pin" },
+	{
+		// The `medicine_sighting` id of the pinned object. The column keeps its first name, so the
+		// pins saved before #301 stay valid.
+		containerId: t.u64().primaryKey(),
+		familyId: t.u64().index("btree"),
+		anchorId: t.string(),
+		mapBytes: t.u32(),
+		savedBy: t.identity(),
+		createdAt: t.timestamp(),
+		updatedAt: t.timestamp(),
+		// The member whose object this is (#301). Pins from before #301 hold the zero identity, and
+		// their map is at the first key.
 		personId: t.identity().default(Identity.zero()),
 	},
 );
@@ -969,19 +999,14 @@ const finderLink = table(
 	},
 );
 
-// The server's wake address (#308). The server container sleeps when no request comes, so a timer
-// opens this address when a wearer text is due: the server starts and sends the text on time.
-const serverWake = table(
-	{ name: "server_wake" },
-	{ id: t.u8().primaryKey(), url: t.string() },
-);
-
-const wakeTimer = table(
-	{ name: "wake_timer" },
+// The name each person signed in with (the Google profile name), written by that person
+// (`setMyName`) and shown only to the members of their families (`myFamilyPeople`).
+const memberName = table(
+	{ name: "member_name" },
 	{
-		scheduledId: t.u64().primaryKey().autoInc(),
-		scheduledAt: t.scheduleAt(),
-		familyId: t.u64().index("btree"),
+		member: t.identity().primaryKey(),
+		name: t.string(),
+		updatedAt: t.timestamp(),
 	},
 );
 
@@ -1003,6 +1028,7 @@ const spacetimedb = schema({
 	medicineMemory,
 	medicinePlaces,
 	medicineSighting,
+	medicineArPin,
 	contactLadder,
 	careNeed,
 	contactAttempt,
@@ -1032,8 +1058,7 @@ const spacetimedb = schema({
 	familyDeletion,
 	wearerText,
 	finderLink,
-	serverWake,
-	wakeTimer,
+	memberName,
 });
 export default spacetimedb;
 
@@ -2103,8 +2128,10 @@ export const setMedicineMemory = spacetimedb.reducer(
 			for (const sighting of [
 				...ctx.db.medicineSighting.familyId.filter(familyId),
 			])
-				if (sighting.personId.isEqual(personId))
+				if (sighting.personId.isEqual(personId)) {
 					ctx.db.medicineSighting.id.delete(sighting.id);
+					ctx.db.medicineArPin.containerId.delete(sighting.id);
+				}
 			return;
 		}
 		for (const place of places) requireText("place", place);
@@ -2146,6 +2173,9 @@ export const migrateMedicineMembers = spacetimedb.reducer((ctx) => {
 
 // A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
 const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+const MAX_PAST_PLACES = 19;
+// A 160 px JPEG is about 10 KB of base64; this leaves room and still keeps the rows small.
+const MAX_THUMBNAIL_CHARS = 64 * 1024;
 
 const sightingFields = {
 	familyId: t.u64(),
@@ -2156,6 +2186,8 @@ const sightingFields = {
 	source: t.string(),
 	confidence: t.f64(),
 	labelRead: t.bool(),
+	category: t.string(),
+	thumbnail: t.string(),
 };
 type Sighting = {
 	familyId: bigint;
@@ -2166,13 +2198,16 @@ type Sighting = {
 	source: string;
 	confidence: number;
 	labelRead: boolean;
+	category: string;
+	thumbnail: string;
 };
 
 /** Stores a member's sighting once the caller's access is checked. */
 const storeSighting = (ctx: Ctx, seen: Sighting) => {
-	if (placesOf(ctx, seen.familyId, seen.personId) === undefined)
-		throw new SenderError("medicine memory is off for this member");
 	requireText("container", seen.container);
+	requireText("category", seen.category);
+	if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
+		throw new SenderError("the thumbnail is too large");
 	requireText("place", seen.place);
 	requireText("source", seen.source);
 	if (!(seen.confidence >= 0 && seen.confidence <= 1))
@@ -2182,13 +2217,19 @@ const storeSighting = (ctx: Ctx, seen: Sighting) => {
 	if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
 		throw new SenderError("seenAt must be a current observation");
 	const key = seen.container.trim().toLowerCase();
-	const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+	const row = {
+		...seen,
+		savedBy: ctx.sender,
+		notFoundAt: undefined,
+		pastPlaces: [] as string[],
+	};
 	for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
 		if (!old.personId.isEqual(seen.personId)) continue;
 		if (old.container.trim().toLowerCase() !== key) continue;
 		if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
 			throw new SenderError("a newer sighting is already stored");
-		ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+		const pastPlaces = [...old.pastPlaces, old.place].slice(-MAX_PAST_PLACES);
+		ctx.db.medicineSighting.id.update({ ...row, id: old.id, pastPlaces });
 		return;
 	}
 	ctx.db.medicineSighting.insert({ ...row, id: 0n });
@@ -2202,15 +2243,81 @@ export const rememberMedicine = spacetimedb.reducer(
 	},
 );
 
+// One sighting the caller may change: a missing one fails like another family's, so ids leak nothing.
+const ownSighting = (ctx: Ctx, id: bigint) => {
+	const found = ctx.db.medicineSighting.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMedicineOf(ctx, found.familyId, found.personId);
+	return found;
+};
+
 // The person looked at the remembered place and the container was not there. The place stays as
 // the last sighting, marked outdated, until a new sighting replaces it.
 export const markMedicineNotFound = spacetimedb.reducer(
 	{ id: t.u64() },
 	(ctx, { id }) => {
-		const found = ctx.db.medicineSighting.id.find(id);
-		if (found === null) throw new SenderError("not a member of this family");
-		requireMedicineOf(ctx, found.familyId, found.personId);
+		const found = ownSighting(ctx, id);
 		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
+// Forgets one remembered object (#301): its sighting and its AR pin. The server deletes the map.
+export const forgetMedicineSighting = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		ownSighting(ctx, id);
+		ctx.db.medicineSighting.id.delete(id);
+		ctx.db.medicineArPin.containerId.delete(id);
+	},
+);
+
+// The largest world map a pin keeps; the server refuses a larger one before it stores anything.
+const MAX_WORLD_MAP_BYTES = 16 * 1024 * 1024;
+
+// Stores or replaces the AR pin of a remembered object. The server has already stored the world map
+// in R2; the row records its anchor and size. The same member rule as the object's sighting.
+export const saveMedicineArPin = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		objectId: t.u64(),
+		anchorId: t.string(),
+		mapBytes: t.u32(),
+	},
+	(ctx, { objectId, ...pin }) => {
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
+		if (sighting?.familyId !== pin.familyId) {
+			requireMember(ctx, pin.familyId);
+			throw new SenderError("no such sighting in this family");
+		}
+		// The member rule of #291: the sighting's member, or a manager of everyone's things.
+		requireMedicineOf(ctx, pin.familyId, sighting.personId);
+		requireText("anchorId", pin.anchorId);
+		if (pin.mapBytes === 0 || pin.mapBytes > MAX_WORLD_MAP_BYTES)
+			throw new SenderError("the world map must be 1 byte to 16 MB");
+		const old = ctx.db.medicineArPin.containerId.find(objectId);
+		const row = {
+			...pin,
+			containerId: objectId,
+			savedBy: ctx.sender,
+			personId: sighting.personId,
+			createdAt: old?.createdAt ?? ctx.timestamp,
+			updatedAt: ctx.timestamp,
+		};
+		if (old === null) ctx.db.medicineArPin.insert(row);
+		else ctx.db.medicineArPin.containerId.update(row);
+	},
+);
+
+// Deletes one object's AR pin; a missing pin is already deleted. The server deletes the map.
+export const deleteMedicineArPin = spacetimedb.reducer(
+	{ familyId: t.u64(), objectId: t.u64() },
+	(ctx, { familyId, objectId }) => {
+		requireMember(ctx, familyId);
+		const pin = ctx.db.medicineArPin.containerId.find(objectId);
+		if (pin?.familyId !== familyId) return;
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
+		if (sighting !== null) requireMedicineOf(ctx, familyId, sighting.personId);
+		ctx.db.medicineArPin.containerId.delete(objectId);
 	},
 );
 
@@ -3432,24 +3539,25 @@ export const myFamilies = spacetimedb.view(
 			.rightSemijoin(ctx.from.family, (m, f) => m.familyId.eq(f.id)),
 );
 
+// Health records (#26): the views below need `health_records`, except for the wearer (see
+// `healthReader`). Family chat stays visible to every member.
 export const myHealthSamples = spacetimedb.view(
 	{ name: "my_health_samples", public: true },
 	t.array(healthSample.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.healthSample, (m, s) =>
-				m.familyId.eq(s.familyId),
-			),
+		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones.
+		healthReader(
+			ctx,
+			(familyId) => ctx.db.healthSample.familyId.filter(familyId),
+			(s) => s.recordedBy.isEqual(ctx.sender),
+		),
 );
 
 export const myAlerts = spacetimedb.view(
 	{ name: "my_alerts", public: true },
 	t.array(alert.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.alert, (m, a) => m.familyId.eq(a.familyId)),
+		healthReader(ctx, (familyId) => ctx.db.alert.familyId.filter(familyId)),
 );
 
 export const myMessages = spacetimedb.view(
@@ -3483,15 +3591,14 @@ export const myAlertThresholds = spacetimedb.view(
 			),
 );
 
+// Each delivery repeats its alert's summary, so it is a health record too.
 export const myAlertDeliveries = spacetimedb.view(
 	{ name: "my_alert_deliveries", public: true },
 	t.array(alertDelivery.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.alertDelivery, (m, d) =>
-				m.familyId.eq(d.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.alertDelivery.familyId.filter(familyId),
+		),
 );
 
 // The delivery operator's work queue across families. Empty for every other identity.
@@ -3531,9 +3638,7 @@ export const myReports = spacetimedb.view(
 	{ name: "my_reports", public: true },
 	t.array(report.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.report, (m, r) => m.familyId.eq(r.familyId)),
+		healthReader(ctx, (familyId) => ctx.db.report.familyId.filter(familyId)),
 );
 
 export const myFinchnodeLinks = spacetimedb.view(
@@ -3607,6 +3712,19 @@ export const myFamilyMembers = spacetimedb.view(
 		]),
 );
 
+// The pins of the objects the caller may read (`medicineReader`): a pin follows its sighting.
+export const myMedicineArPins = spacetimedb.view(
+	{ name: "my_medicine_ar_pins", public: true },
+	t.array(medicineArPin.rowType),
+	(ctx) =>
+		medicineReader(ctx, (familyId) =>
+			ctx.db.medicineSighting.familyId.filter(familyId),
+		).flatMap((sighting) => {
+			const pin = ctx.db.medicineArPin.containerId.find(sighting.id);
+			return pin === null ? [] : [pin];
+		}),
+);
+
 export const myContactLadders = spacetimedb.view(
 	{ name: "my_contact_ladders", public: true },
 	t.array(contactLadder.rowType),
@@ -3662,22 +3780,18 @@ export const myReminderOccurrences = spacetimedb.view(
 	{ name: "my_reminder_occurrences", public: true },
 	t.array(reminderOccurrence.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reminderOccurrence, (m, o) =>
-				m.familyId.eq(o.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.reminderOccurrence.familyId.filter(familyId),
+		),
 );
 
 export const myReminderEvents = spacetimedb.view(
 	{ name: "my_reminder_events", public: true },
 	t.array(reminderEvent.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reminderEvent, (m, e) =>
-				m.familyId.eq(e.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.reminderEvent.familyId.filter(familyId),
+		),
 );
 
 // The caller's own locations, and those of people who share theirs with the caller. Another
@@ -3731,6 +3845,30 @@ const careReader = <Row>(
 			? [...rows(m.familyId)]
 			: [],
 	);
+
+// Health records (#26): rows of families where the caller holds `health_records` now, or is the
+// wearer (the founder, the family's first member), who always reads their own. Without either,
+// only rows that `own` accepts. A revoke empties them at once.
+// ponytail: re-reads each family's rows on every change; a query-builder view needs the latest
+// grant event as a column.
+const healthReader = <Row>(
+	ctx: ViewCtx<InferSchema<typeof spacetimedb>>,
+	rows: (familyId: bigint) => Iterable<Row>,
+	own: (row: Row) => boolean = () => false,
+): Row[] =>
+	[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) => {
+		const all = [...rows(m.familyId)];
+		const wearer = [...ctx.db.familyMember.familyId.filter(m.familyId)].every(
+			(other) => other.id >= m.id,
+		);
+		return wearer ||
+			holdsCareScope(
+				ctx.db.careGrantEvent.byFamilyMember.filter([m.familyId, ctx.sender]),
+				"health_records",
+			)
+			? all
+			: all.filter(own);
+	});
 
 export const myCareProfiles = spacetimedb.view(
 	{ name: "my_care_profiles", public: true },
@@ -4111,6 +4249,7 @@ export const deleteFamily = spacetimedb.reducer(
 			db.medicineMemory.familyId,
 			db.medicinePlaces.familyId,
 			db.medicineSighting.familyId,
+			db.medicineArPin.familyId,
 			db.contactLadder.familyId,
 			db.careNeed.familyId,
 			db.contactAttempt.familyId,
@@ -4134,7 +4273,6 @@ export const deleteFamily = spacetimedb.reducer(
 			db.familyPushToken.familyId,
 			db.wearerText.familyId,
 			db.finderLink.familyId,
-			db.wakeTimer.familyId,
 		])
 			index.delete(familyId);
 		db.family.id.delete(familyId);
@@ -4196,44 +4334,7 @@ const textWearer = (
 		note: undefined,
 		settledAt: undefined,
 	});
-	ctx.db.wakeTimer.insert({
-		scheduledId: 0n,
-		scheduledAt: ScheduleAt.time(notBefore.microsSinceUnixEpoch),
-		familyId,
-	});
 };
-
-/** The delivery operator saves the address that starts the server, such as its `/health`. */
-export const setServerWake = spacetimedb.reducer(
-	{ url: t.string() },
-	(ctx, { url }) => {
-		requireOperator(ctx);
-		if (!/^https:\/\/[^\s/]+\/\S*$/.test(url))
-			throw new SenderError("url must be an https address");
-		if (ctx.db.serverWake.id.find(0) === null)
-			ctx.db.serverWake.insert({ id: 0, url });
-		else ctx.db.serverWake.id.update({ id: 0, url });
-	},
-);
-
-/** Opens the wake address when a wearer text is due. */
-export const wakeServer = spacetimedb.procedure(
-	{ onSchedule: wakeTimer },
-	{ timer: wakeTimer.rowType },
-	t.unit(),
-	(ctx) => {
-		if (!ctx.sender.isEqual(ctx.databaseIdentity)) return {};
-		const url = ctx.withTx((tx) => tx.db.serverWake.id.find(0)?.url);
-		if (url === undefined) return {};
-		try {
-			// The first start of the server container takes about 35 s.
-			ctx.http.fetch(url, { timeout: TimeDuration.fromMillis(60_000) });
-		} catch {
-			// ponytail: a failed wake only delays the text until the next request starts the server.
-		}
-		return {};
-	},
-);
 
 /** The first prompt of a reminder occurrence. Its prompts already wait for quiet hours. */
 const textReminder = (ctx: Ctx, o: OccurrenceRow) =>
@@ -4465,6 +4566,7 @@ export const rememberByFinderLink = spacetimedb.reducer(
 	{
 		tokenHash: t.string(),
 		container: t.string(),
+		category: t.string(),
 		place: t.string(),
 		seenAt: t.timestamp(),
 		confidence: t.f64(),
@@ -4472,7 +4574,13 @@ export const rememberByFinderLink = spacetimedb.reducer(
 	},
 	(ctx, { tokenHash, ...seen }) => {
 		const { familyId, personId } = liveFinderLink(ctx, tokenHash);
-		storeSighting(ctx, { ...seen, familyId, personId, source: "photo" });
+		storeSighting(ctx, {
+			...seen,
+			familyId,
+			personId,
+			source: "photo",
+			thumbnail: "",
+		});
 	},
 );
 
@@ -4488,11 +4596,11 @@ export const finderLinks = spacetimedb.view(
 			personId: t.identity(),
 			expiresAt: t.timestamp(),
 			usedAt: t.option(t.timestamp()),
-			remembering: t.bool(),
 			sightings: t.array(
 				t.object("FinderSighting", {
 					id: t.u64(),
 					container: t.string(),
+					category: t.string(),
 					place: t.string(),
 					seenAt: t.timestamp(),
 					confidence: t.f64(),
@@ -4507,14 +4615,12 @@ export const finderLinks = spacetimedb.view(
 			? []
 			: [...ctx.db.finderLink.iter()].map((link) => ({
 					...link,
-					remembering: !ctx.db.medicinePlaces.byFamilyPerson
-						.filter([link.familyId, link.personId])
-						.next().done,
 					sightings: [...ctx.db.medicineSighting.familyId.filter(link.familyId)]
 						.filter((s) => s.personId.isEqual(link.personId))
 						.map((s) => ({
 							id: s.id,
 							container: s.container,
+							category: s.category,
 							place: s.place,
 							seenAt: s.seenAt,
 							confidence: s.confidence,
@@ -4522,4 +4628,43 @@ export const finderLinks = spacetimedb.view(
 							notFoundAt: s.notFoundAt,
 						})),
 				})),
+);
+
+export const setMyName = spacetimedb.reducer(
+	{ name: t.string() },
+	(ctx, { name }) => {
+		requireText("name", name);
+		const row = { member: ctx.sender, name, updatedAt: ctx.timestamp };
+		if (ctx.db.memberName.member.find(ctx.sender) === null)
+			ctx.db.memberName.insert(row);
+		else ctx.db.memberName.member.update(row);
+	},
+);
+
+// The people of the caller's families, each with the name they signed in with (none until they
+// sign in again). The family's NOOP ingest identity is a member but not a person, so it is left out.
+export const myFamilyPeople = spacetimedb.view(
+	{ name: "my_family_people", public: true },
+	t.array(
+		t.object("FamilyPerson", {
+			familyId: t.u64(),
+			member: t.identity(),
+			name: t.option(t.string()),
+		}),
+	),
+	(ctx) =>
+		[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap(
+			({ familyId }) => {
+				const ingest = ctx.db.familyPushToken.familyId.find(familyId)?.ingest;
+				return [...ctx.db.familyMember.familyId.filter(familyId)]
+					.filter(
+						({ member }) => ingest === undefined || !member.isEqual(ingest),
+					)
+					.map(({ member }) => ({
+						familyId,
+						member,
+						name: ctx.db.memberName.member.find(member)?.name,
+					}));
+			},
+		),
 );

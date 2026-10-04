@@ -1,11 +1,12 @@
 // Onboarding screen 4 (.lavish/onboarding-plan.html#wf-4, #wf-4c, #whoop): three real sources, each
 // skippable. Health data comes only from the WHOOP strap through NOOP; nothing here writes a reading.
 import type { Family } from "@health/contracts";
-import { FamilyInvite, WhoopPushToken } from "@health/contracts/families";
+import { WhoopPushToken } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 
+import { InviteLink, useInvite } from "@/components/family/invite";
 import { ENV } from "@/env";
 import { apiRequest, familyPath } from "@/lib/api";
 
@@ -59,7 +60,7 @@ export function ConnectScreen({ family }: { family: Family }) {
 	const status = useSetupStatus(family.id);
 	const [open, setOpen] = useState<Open | null>(null);
 	const [whoopLink, setWhoopLink] = useState<string | null>(null);
-	const [inviteLink, setInviteLink] = useState<string | null>(null);
+	const invite = useInvite(family.id);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -80,18 +81,11 @@ export function ConnectScreen({ family }: { family: Family }) {
 		);
 	};
 
-	const invite = async () => {
+	const sendInvite = async () => {
 		setOpen("invite");
 		setError(null);
-		const result = await apiRequest(
-			FamilyInvite,
-			familyPath(family.id, "/invites"),
-			{ method: "POST" },
-		);
-		if (result.kind !== "ready") return setError(failureText(result));
-		setInviteLink(
-			`${location.origin}/join/${encodeURIComponent(result.value.code)}`,
-		);
+		const failed = await invite.create();
+		if (failed !== null) return setError(failed);
 		status.markInvited();
 	};
 
@@ -138,7 +132,6 @@ export function ConnectScreen({ family }: { family: Family }) {
 							onSaved={(text) => {
 								setMessage(text);
 								setOpen(null);
-								status.refreshReminders();
 							}}
 						/>
 					)}
@@ -148,20 +141,10 @@ export function ConnectScreen({ family }: { family: Family }) {
 					title="Invite family"
 					note="Share a join link"
 					action="Invite"
-					onAction={() => void invite()}
+					onAction={() => void sendInvite()}
 				>
-					{open === "invite" && inviteLink !== null && (
-						<div className="grid gap-2">
-							<p>
-								Send this link. The person signs in with Google and joins{" "}
-								{family.name}.
-							</p>
-							<ShareLink link={inviteLink} title={`Join ${family.name}`} />
-							<p className="text-xs">
-								Link works once, ends in 7 days. Joined people get no care
-								permissions until you grant them (Care plan → Sharing).
-							</p>
-						</div>
+					{open === "invite" && invite.link !== null && (
+						<InviteLink link={invite.link} familyName={family.name} />
 					)}
 				</Row>
 			</ul>

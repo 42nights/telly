@@ -17,6 +17,7 @@ import {
 	errorOf,
 	integration,
 	json,
+	shareHealthRecords,
 	startIntegration,
 	type User,
 } from "./harness";
@@ -149,10 +150,11 @@ describe.skipIf(!it)("lab report flow", () => {
 		expect(bytes).toEqual(it.bucket.get(key)?.body ?? new Uint8Array());
 	});
 
-	test("another family member sees the report but not the creator's private PDF", async () => {
+	test("a family member with health records sees the report but not the creator's private PDF", async () => {
 		if (!it) return;
 		const relative = await it.signIn(`reports-relative-${run}`);
 		await addMember(owner, path, relative);
+		await shareHealthRecords(owner, path, relative);
 
 		const listed = await json(
 			Reports,

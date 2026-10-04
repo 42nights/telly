@@ -18,7 +18,7 @@ const BAD_LINK =
 function Join() {
 	const { code } = Route.useParams();
 	const navigate = Route.useNavigate();
-	const { select, reload } = useFamily();
+	const { select } = useFamily();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +32,6 @@ function Join() {
 		setBusy(false);
 		if (result.kind === "ready") {
 			select(result.value.family.id);
-			reload();
 			return navigate({ to: "/hud" });
 		}
 		// A 401 ends the session; the sign-in gate then returns the person to this link.

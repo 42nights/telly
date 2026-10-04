@@ -13,6 +13,7 @@ const PATHS = [
 	"/",
 	"/hud",
 	"/medicine",
+	"/find",
 	"/trip",
 	"/family",
 	"/care-profile",
@@ -30,7 +31,7 @@ const PATHS = [
 	"/care/plan",
 	"/care/sharing",
 	"/settings/device",
-	"/settings/places",
+	"/settings/things",
 	"/settings/reports",
 	"/settings/speaker",
 	"/welcome",
@@ -65,11 +66,24 @@ test("/ redirects to Family inside the app layout with its head tags", async () 
 	const { router } = renderRoute("/");
 	await waitFor(() => expect(router.state.location.pathname).toBe("/family"));
 	expect(screen.getAllByRole("navigation").length).toBeGreaterThan(0);
-	await waitFor(() => expect(document.title).toBe("Health HUD"));
+	await waitFor(() => expect(document.title).toBe("Family · Telly"));
 	expect(
 		document.querySelector('meta[name="description"]')?.getAttribute("content"),
-	).toBe("Health HUD and family dashboard");
-	expect(document.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe(
-		"/favicon.ico",
-	);
+	).toBe("Telly: day-to-day help for memory loss, with the family in the loop");
+});
+
+test("each page names itself in the tab title", async () => {
+	for (const [path, title] of [
+		["/sign-in", "Sign in · Telly"],
+		["/find", "Find · Telly"],
+		["/settings/device", "Device · Telly"],
+		["/family/alerts", "Alerts · Telly"],
+		["/hud", "HUD · Telly"],
+	] as const) {
+		if (path !== "/sign-in") signIn();
+		serve({ "GET /api/families": { families: [FAMILY] } });
+		const { unmount } = renderRoute(path);
+		await waitFor(() => expect(document.title).toBe(title));
+		unmount();
+	}
 });

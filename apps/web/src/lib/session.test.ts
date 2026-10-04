@@ -131,12 +131,10 @@ describe("sign-in gate", () => {
 		expect(open("/sign-in?code=c&state=s")).toBe("page");
 	});
 
-	test("signed out, a finder link opens the medicine page; other pages still need sign-in", () => {
-		expect(open("/medicine?person=7&link=t")).toBe("page");
-		expect(open("/medicine?person=7")).toMatchObject(
-			toSignIn("/medicine?person=7"),
-		);
-		expect(open("/family?link=t")).toMatchObject(toSignIn("/family?link=t"));
+	test("signed out, a finder link opens Find things; other pages still need sign-in", () => {
+		expect(open("/find?person=7&token=t")).toBe("page");
+		expect(open("/find?person=7")).toMatchObject(toSignIn("/find?person=7"));
+		expect(open("/family?token=t")).toMatchObject(toSignIn("/family?token=t"));
 	});
 
 	test("signed in, the page opens", () => {

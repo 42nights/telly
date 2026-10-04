@@ -40,7 +40,7 @@ type Bucket = Map<
 	{ body: Uint8Array; type: string; lastModified: string }
 >;
 
-/** The S3 calls `integrations/r2.ts` makes: PUT, HEAD, presigned GET, and a ListObjectsV2 page. */
+/** The S3 calls `integrations/r2.ts` makes: PUT, HEAD, GET, DELETE, presigned GET, and a ListObjectsV2 page. */
 const fakeR2 = (
 	bucket: Bucket,
 	request: Request,
@@ -73,6 +73,10 @@ const fakeR2 = (
 			lastModified: new Date().toISOString(),
 		});
 		return new Response(null, { status: 200 });
+	}
+	if (request.method === "DELETE") {
+		bucket.delete(key);
+		return new Response(null, { status: 204 });
 	}
 	const object = bucket.get(key);
 	if (object === undefined) return new Response(null, { status: 404 });
@@ -274,4 +278,18 @@ export const addMember = async (owner: User, path: string, member: User) => {
 		identity: member.identity,
 	});
 	expect(added.status).toBe(204);
+};
+
+/** Shares health records (#26) with `member` as `owner`, as the care-access screen does. */
+export const shareHealthRecords = async (
+	owner: User,
+	path: string,
+	member: User,
+) => {
+	const granted = await owner.call("POST", `${path}/care-access`, {
+		identity: member.identity,
+		scope: "health_records",
+		granted: true,
+	});
+	expect(granted.status).toBe(204);
 };

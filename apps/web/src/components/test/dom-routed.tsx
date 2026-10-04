@@ -4,7 +4,13 @@
 // A side-effect import is never reordered, so Happy DOM is registered before the imports below load.
 import "./register";
 
-import { afterAll, afterEach, mock, setDefaultTimeout } from "bun:test";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	mock,
+	setDefaultTimeout,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
 	createMemoryHistory,
@@ -103,20 +109,27 @@ export const signIn = () => setSessionToken("test-token");
 
 /**
  * Registers Happy DOM for this file, mocks `@/env` (the generated module needs varlock at runtime;
- * tests need only the server URL), and resets the page, storage, and session after each test.
- * Bun applies `mock.module` to an already imported module only from the test file's top level.
+ * tests need only the server URL), and resets the page, storage, session, and query cache after
+ * each test. Bun applies `mock.module` to an already imported module only from the test file's
+ * top level.
  */
 export const setupDom = () => {
 	mock.module("@/env", () => ({ ENV: { VITE_SERVER_URL: SERVER } }));
 	registerDom();
 	setDefaultTimeout(30_000);
 	const realFetch = globalThis.fetch;
-	afterEach(() => {
+	beforeAll(async () => {
+		const { prepareQueryCache } = await import("@/lib/test/query");
+		prepareQueryCache();
+	});
+	afterEach(async () => {
 		cleanup();
 		globalThis.fetch = realFetch;
 		setSessionToken(null);
 		localStorage.clear();
 		sessionStorage.clear();
+		const { queryClient } = await import("@/lib/query");
+		queryClient.clear();
 	});
 	afterAll(async () => {
 		// React runs work left by the last test (such as unmount effects) on its next scheduler

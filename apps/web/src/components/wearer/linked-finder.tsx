@@ -1,4 +1,4 @@
-// The medicine finder opened from an iMessage link (#308), without sign-in. The link token works
+// Find things opened from an iMessage link (#308), without sign-in. The link token works
 // once: the page trades it for a page session and keeps that session only in memory. A reload sends
 // the used token again, and a used or expired link goes to the normal sign-in.
 import {
@@ -62,6 +62,15 @@ const post = async <A,>(
 			message: `The server sent an unexpected reply: ${error}`,
 		};
 	}
+};
+
+/** The signed-in Find page for the same person, member, and thing. */
+const findPath = (target: LinkTarget) => {
+	const search = new URLSearchParams();
+	for (const [key, value] of Object.entries(target))
+		if (value !== undefined) search.set(key, value);
+	const query = search.toString();
+	return query === "" ? "/find" : `/find?${query}`;
 };
 
 // One `open` per token: React runs a new effect twice in development, and a link works once.
@@ -168,24 +177,40 @@ function AddPlace({
 	);
 }
 
-function Places({ finder }: { finder: LinkedFinderReply }) {
+/** The saved things, newest first, with the thing the link asked about (`object`) on top. */
+function Places({
+	finder,
+	object,
+}: {
+	finder: LinkedFinderReply;
+	object: string | undefined;
+}) {
 	const now = useNow();
+	const sightings = finder.sightings.toSorted(
+		(a, b) => Number(b.id === object) - Number(a.id === object),
+	);
 	return (
 		<section
 			aria-label="Your places"
 			className="win95-raised flex min-h-0 flex-1 flex-col gap-2 p-3"
 		>
 			<h3 className="font-semibold text-[22px]">Where things were last seen</h3>
-			{finder.sightings.length === 0 ? (
+			{sightings.length === 0 ? (
 				<p>Nothing is saved yet.</p>
 			) : (
 				<>
 					<ul className="win95-inset grid min-h-24 flex-1 content-start overflow-y-auto bg-card">
-						{finder.sightings.map((sighting) => (
+						{sightings.map((sighting) => (
 							<li
-								className="grid gap-0.5 border-b border-b-[var(--win95-shadow)] px-3 py-2 last:border-b-0"
+								className={cn(
+									"grid gap-0.5 border-b border-b-[var(--win95-shadow)] px-3 py-2 last:border-b-0",
+									sighting.id === object && "bg-[#ffffe1]",
+								)}
 								key={sighting.id}
 							>
+								{sighting.id === object && (
+									<b className="text-[18px]">You asked about this</b>
+								)}
 								<b className="break-words">{sighting.container}</b>
 								<span className="break-words">{sighting.place}</span>
 								<span className="text-[18px] text-muted-foreground">
@@ -225,18 +250,26 @@ function OpenFailed({
 	);
 }
 
-/** The finder page for a link token. `person` and `q` come from the link. */
+/** What the link names besides its token. A used or expired link signs in and opens the same thing. */
+type LinkTarget = {
+	readonly person: string | undefined;
+	readonly member: string | undefined;
+	readonly object: string | undefined;
+};
+
+/** The finder page for a link token. */
 export function LinkedFinder({
 	token,
-	person,
+	link,
 	q,
 	add,
 }: {
 	token: string;
-	person: string | undefined;
+	link: LinkTarget;
 	q: string;
 	add: boolean;
 }) {
+	const { person, member, object } = link;
 	const navigate = useNavigate();
 	const [state, setState] = useState<Reply<LinkedFinderReply> | null>(null);
 	const [attempt, setAttempt] = useState(0);
@@ -244,15 +277,10 @@ export function LinkedFinder({
 		() =>
 			void navigate({
 				to: "/sign-in",
-				search: {
-					redirect:
-						person === undefined
-							? "/medicine"
-							: `/medicine?person=${encodeURIComponent(person)}`,
-				},
+				search: { redirect: findPath({ person, member, object }) },
 				replace: true,
 			}),
-		[navigate, person],
+		[navigate, person, member, object],
 	);
 
 	useEffect(() => {
@@ -280,7 +308,7 @@ export function LinkedFinder({
 		setAttempt((n) => n + 1);
 	};
 
-	const addPlace = finder?.remembering === true && (
+	const addPlace = finder !== null && (
 		<AddPlace
 			highlight={add}
 			onExpired={expired}
@@ -302,14 +330,8 @@ export function LinkedFinder({
 					{state?.kind === "error" && (
 						<OpenFailed message={state.message} onRetry={retry} />
 					)}
-					{finder !== null && !finder.remembering && (
-						<p className={box}>
-							Remembering places is off. Your family can turn it on in Settings
-							&gt; Medicine places.
-						</p>
-					)}
 					{add && addPlace}
-					{finder !== null && <Places finder={finder} />}
+					{finder !== null && <Places finder={finder} object={object} />}
 					{!add && addPlace}
 					{finder !== null && (
 						<p>

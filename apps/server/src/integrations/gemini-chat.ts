@@ -192,28 +192,33 @@ const interact = (
 	});
 
 /**
- * Runs the calls in order through the family tools and returns their `function_result` steps. A
- * failed tool call stops the answer with its `ApiFailure`; the model never continues without data.
+ * Runs the calls together through the family tools and returns their `function_result` steps in
+ * call order. A failed tool call stops the answer with its `ApiFailure` and interrupts the others;
+ * the model never continues without data.
  */
 const functionResults = (
 	run: FamilyTools["run"],
 	calls: ReadonlyArray<{ id: string; name: string; arguments?: unknown }>,
 ) =>
-	Effect.forEach(calls, (call) =>
-		Effect.tryPromise({
-			try: (signal) => run(call.name, call.arguments ?? {}, signal),
-			catch: (error) =>
-				error instanceof ApiFailure
-					? error
-					: new ApiFailure("upstream_error", "A family tool failed"),
-		}).pipe(
-			Effect.map((result) => ({
-				type: "function_result",
-				name: call.name,
-				call_id: call.id,
-				result: [{ type: "text", text: JSON.stringify(result) }],
-			})),
-		),
+	Effect.forEach(
+		calls,
+		(call) =>
+			Effect.tryPromise({
+				try: (signal) => run(call.name, call.arguments ?? {}, signal),
+				catch: (error) =>
+					error instanceof ApiFailure
+						? error
+						: new ApiFailure("upstream_error", "A family tool failed"),
+			}).pipe(
+				Effect.map((result) => ({
+					type: "function_result",
+					name: call.name,
+					call_id: call.id,
+					result: [{ type: "text", text: JSON.stringify(result) }],
+				})),
+			),
+		// The calls of one round are independent reads, and each Fetch.ai round trip takes seconds.
+		{ concurrency: "unbounded" },
 	);
 
 /**

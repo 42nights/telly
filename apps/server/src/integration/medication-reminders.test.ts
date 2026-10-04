@@ -21,8 +21,8 @@ import {
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
 import {
-	type MedicineDetectionRequest,
-	MedicineDetections,
+	type ObjectDetectionRequest,
+	ObjectDetections,
 } from "@health/contracts/vision";
 import { GEMINI_VISION_MODEL } from "../integrations/gemini";
 import {
@@ -31,6 +31,7 @@ import {
 	errorOf,
 	integration,
 	json,
+	shareHealthRecords,
 	startIntegration,
 	type User,
 } from "./harness";
@@ -73,7 +74,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 	let owner: User;
 	let member: User;
 	let family: { id: string; path: string };
-	let detections: MedicineDetections;
+	let detections: ObjectDetections;
 	let instructionId: string;
 	let reminder: Reminder;
 	let acknowledged: ReminderOccurrenceDetail;
@@ -87,7 +88,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 		family = await createFamily(owner, "Medication");
 	});
 
-	test("the creator turns on medicine memory and reads it back", async () => {
+	test("the creator sets the places to search and reads them back", async () => {
 		const places = ["kitchen counter", "bedside table"];
 		const saved = await json(
 			MedicineMemory,
@@ -96,7 +97,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 				places,
 			}),
 		);
-		expect(saved.permission).toMatchObject({ places, setBy: owner.identity });
+		expect(saved.places).toEqual(places);
 		const reread = await json(
 			MedicineMemory,
 			await owner.call("GET", `${family.path}/medicine-memory`),
@@ -120,6 +121,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 											detections: [
 												{
 													box_2d: [100, 200, 500, 400],
+													category: "medicine",
 													label: LABEL,
 													label_readable: true,
 													confidence: 0.92,
@@ -142,16 +144,17 @@ describe.skipIf(!integration)("medication reminders", () => {
 		} as const;
 		const image = { type: "image/png", data: png.toString("base64") } as const;
 		detections = await json(
-			MedicineDetections,
-			await owner.call("POST", `${family.path}/vision/medicine-detections`, {
+			ObjectDetections,
+			await owner.call("POST", `${family.path}/vision/object-detections`, {
 				frame,
 				image,
-			} satisfies MedicineDetectionRequest),
+			} satisfies ObjectDetectionRequest),
 		);
 		expect(detections.frame).toEqual(frame);
 		expect(detections.model).toBe(GEMINI_VISION_MODEL);
 		expect(detections.detections).toEqual([
 			{
+				category: "medicine",
 				label: LABEL,
 				confidence: 0.92,
 				needsVerification: false,
@@ -422,8 +425,9 @@ describe.skipIf(!integration)("medication reminders", () => {
 			).toEqual(detail);
 	});
 
-	test("a second family member sees the acknowledged and snoozed states, not the owner's medicine", async () => {
+	test("a second family member with health records sees the acknowledged and snoozed states, not the owner's medicine", async () => {
 		await addMember(owner, family.path, member);
+		await shareHealthRecords(owner, family.path, member);
 		const seen = await ownOccurrences(member);
 		expect(seen).toEqual(
 			expect.arrayContaining(

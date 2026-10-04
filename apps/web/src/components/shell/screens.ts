@@ -9,7 +9,7 @@ import {
 	House,
 	type LucideIcon,
 	MessageCircle,
-	Pill,
+	ScanSearch,
 	Settings,
 	Users,
 	Utensils,
@@ -56,7 +56,7 @@ export const familyScreens = [
 
 export const wearerScreens = [
 	{ to: "/hud", label: "Home", icon: House },
-	{ to: "/medicine", label: "Medicine", icon: Pill },
+	{ to: "/find", label: "Find things", icon: ScanSearch },
 	{ to: "/trip", label: "Going out", icon: DoorOpen },
 ] as const satisfies readonly Screen[];
 
@@ -67,10 +67,10 @@ export const settingsScreen = {
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
 		{ to: "/settings/speaker", label: "Home speaker" },
-		{ to: "/settings/places", label: "Medicine places" },
+		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
-		{ to: "/settings/family", label: "Delete family" },
+		{ to: "/settings/family", label: "Family" },
 	],
 } as const satisfies Screen;
 

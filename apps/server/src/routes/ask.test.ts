@@ -11,6 +11,7 @@ import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import { Identity } from "spacetimedb";
 import { type FamilyDb, openFamilyDb } from "../db";
+import { redeem } from "../delegation";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import { elevenLabsVoice, maxAudioBytes } from "../integrations/elevenlabs";
 import { askRoutes } from "./ask";
@@ -27,6 +28,7 @@ type Body = {
 	input: unknown[];
 	system_instruction: string;
 	store: boolean;
+	tools: unknown[];
 };
 const geminiBodies: Body[] = [];
 let gemini: (body: Body, request: Request) => Response | Promise<Response>;
@@ -52,16 +54,29 @@ const sleepSample = (sourceTime: string) => ({
 	quality: "unvalidated",
 	recordedBy: "c200".padEnd(64, "0"),
 });
-const bridgeCalls: Array<{ family_id: string; request: unknown }> = [];
+const bridgeCalls: Array<{
+	family_id: string;
+	request: unknown;
+	delegation?: string;
+}> = [];
+// Whether each call's delegation could be redeemed while the question was still running.
+const lentDuringCall: boolean[] = [];
 let samples: unknown[] = [];
+// Set: the bridge answers no call until two are open at once.
+let pair: PromiseWithResolvers<void> | undefined;
 const bridge = Bun.serve({
 	port: 0,
 	fetch: async (request) => {
-		const call = (await request.json()) as {
-			family_id: string;
-			request: unknown;
-		};
+		const call = (await request.json()) as (typeof bridgeCalls)[number];
 		bridgeCalls.push(call);
+		if (pair !== undefined) {
+			if (bridgeCalls.length === 2) pair.resolve();
+			await pair.promise;
+		}
+		if (call.delegation !== undefined)
+			lentDuringCall.push(
+				redeem(call.delegation, BigInt(call.family_id)) !== undefined,
+			);
 		return Response.json({
 			family_id: call.family_id,
 			status: 200,
@@ -135,6 +150,7 @@ const answerWith = (followUps: unknown) => {
 beforeEach(() => {
 	geminiBodies.length = 0;
 	bridgeCalls.length = 0;
+	pair = undefined;
 	transcriptions = 0;
 	samples = [sleepSample(new Date().toISOString())];
 	answerWith(["Did Mom nap today?"]);
@@ -184,6 +200,18 @@ const mount = (configured = { gemini: true, fetch: true }) =>
 			);
 		});
 const app = mount();
+// The signed-in member's connection, as `authenticate` sets it; only the delegation uses it here.
+const memberDb = {
+	connection: { isActive: true },
+	identity: "c200".padEnd(64, "0"),
+	token: "member-token",
+} as unknown as FamilyDb;
+const signedIn = new Hono<FamilyEnv>()
+	.use("/api/families/:familyId/*", async (c, next) => {
+		c.set("db", memberDb);
+		await next();
+	})
+	.route("/", app);
 const ask = (body: unknown, target = app, signal?: AbortSignal) =>
 	target.request("http://test/api/families/7/ask", {
 		method: "POST",
@@ -225,6 +253,17 @@ describe("POST /ask", () => {
 				],
 			},
 		]);
+	});
+
+	test("through Fetch.ai, the worker gets this family's delegation only while the question runs", async () => {
+		lentDuringCall.length = 0;
+		const response = await ask({ question: "How did Mom sleep?" }, signedIn);
+		expect(response.status).toBe(200);
+		const [call] = bridgeCalls;
+		expect(call?.family_id).toBe("7");
+		expect(lentDuringCall).toEqual([true]);
+		// Released with the answer: the worker can no longer read the family.
+		expect(redeem(call?.delegation ?? "", 7n)).toBeUndefined();
 	});
 
 	test("records that are missing or old stay explicit", async () => {
@@ -271,6 +310,45 @@ describe("POST /ask", () => {
 		}
 		expect(geminiBodies).toHaveLength(0);
 		expect(bridgeCalls).toHaveLength(0);
+	});
+
+	test("a greeting gets one Gemini call without tools, so no Fetch.ai tool runs", async () => {
+		gemini = () => Response.json(answer("Hello! How can I help?"));
+		for (const question of ["Hi", "hello!", "Thank you, Telly.", "Buenos días"])
+			expect((await ask({ question }, signedIn)).status).toBe(200);
+		expect(geminiBodies.map((body) => body.tools)).toEqual([[], [], [], []]);
+		expect(bridgeCalls).toHaveLength(0);
+		// A greeting with a question in it still gets the tools.
+		answerWith([]);
+		expect((await ask({ question: "Hi, how did Mom sleep?" })).status).toBe(
+			200,
+		);
+		expect(geminiBodies[4]?.tools.length).toBeGreaterThan(0);
+		expect(bridgeCalls).toHaveLength(1);
+	});
+
+	test("the tools of one round run at the same time", async () => {
+		const second = {
+			type: "function_call",
+			id: "call_2",
+			name: "health_samples",
+			arguments: { metric: "sleep_hours", limit: 2 },
+		};
+		gemini = (body) =>
+			Response.json(
+				body.input.length === 1
+					? { ...functionCall, steps: [...functionCall.steps, second] }
+					: answer("Mom slept 7.5 hours (synthetic)."),
+			);
+		// One call at a time never opens the second call, so the answer would not come.
+		pair = Promise.withResolvers();
+		expect((await ask({ question: "How did Mom sleep?" })).status).toBe(200);
+		expect(bridgeCalls).toHaveLength(2);
+		// The results go back in call order.
+		expect(geminiBodies[1]?.input.slice(-2)).toEqual([
+			expect.objectContaining({ call_id: "call_1" }),
+			expect.objectContaining({ call_id: "call_2" }),
+		]);
 	});
 
 	test("help requests and serious symptoms are urgent; repeats, feelings, and errands are not", () => {

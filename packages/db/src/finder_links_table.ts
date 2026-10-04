@@ -21,7 +21,6 @@ export default __t.row({
   personId: __t.identity().name("person_id"),
   expiresAt: __t.timestamp().name("expires_at"),
   usedAt: __t.option(__t.timestamp()).name("used_at"),
-  remembering: __t.bool(),
   get sightings() {
     return __t.array(FinderSighting);
   },

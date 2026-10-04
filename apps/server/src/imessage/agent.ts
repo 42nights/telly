@@ -22,9 +22,7 @@ const photoTypes: Record<string, FinderImage["type"]> = {
 };
 const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
 
-/** The handler for each delivered message. Webhooks deliver at least once, so a message id that was
- * seen before gets no second reply. */
-export const iMessageHandler = (deps: {
+type Deps = {
 	readonly senders: ReadonlyMap<string, bigint>;
 	readonly answer: (
 		familyId: bigint,
@@ -32,47 +30,74 @@ export const iMessageHandler = (deps: {
 	) => Promise<FamilyAnswer>;
 	/** Undefined without the delivery operator: item questions then go to `answer`. */
 	readonly wearer: WearerActions | undefined;
-}) => {
+};
+
+/** The reply to a photo: the wearer actions save what it shows. */
+const photoReply = async (
+	wearer: WearerActions,
+	familyId: bigint,
+	photo: { readonly mimeType: string; readonly read: () => Promise<Buffer> },
+) => {
+	const type = photoTypes[photo.mimeType.toLowerCase()];
+	if (type === undefined) return "Please send a photo or a short text.";
+	const bytes = await photo.read();
+	if (bytes.length > MAX_PHOTO_BYTES)
+		return "That photo is too large. Please send a smaller one.";
+	return wearer.savePhoto(familyId, {
+		type,
+		data: bytes.toString("base64"),
+	});
+};
+
+/** The reply to a text: a wearer action, or the family question flow. */
+const textReply = async (deps: Deps, familyId: bigint, text: string) => {
+	const { wearer } = deps;
+	if (wearer !== undefined && isDoneReply(text))
+		return wearer.done(familyId, text);
+	const item = itemAsk(text);
+	if (wearer !== undefined && item !== undefined)
+		return wearer.findItem(familyId, item);
+	const question = Schema.decodeUnknownOption(FamilyQuestion)({
+		question: text,
+	});
+	if (question._tag === "None") return invalidReply;
+	return (await deps.answer(familyId, question.value)).answer;
+};
+
+/** The reply text; a failure becomes the "cannot answer" reply. */
+const replyTo = (deps: Deps, familyId: bigint, content: Message["content"]) =>
+	(content.type === "attachment" && deps.wearer !== undefined
+		? photoReply(deps.wearer, familyId, content)
+		: textReply(deps, familyId, content.type === "text" ? content.text : "")
+	).catch((error: unknown) => {
+		console.error("imessage: answer failed", error);
+		return unavailableReply;
+	});
+
+/** The handler for each delivered message. Webhooks deliver at least once, so a message id that was
+ * seen before gets no second reply. */
+export const iMessageHandler = (deps: Deps) => {
 	let ignored = 0;
 	// ponytail: the last 1000 ids of this process only; a retry that reaches a new container can get a second reply.
 	const seen = new Set<string>();
 
-	/** The reply text, or undefined for a message that gets none. */
-	const replyTo = async (
-		familyId: bigint,
-		content: Message["content"],
-	): Promise<string | undefined> => {
-		const { wearer } = deps;
-		if (content.type === "attachment") {
-			if (wearer === undefined) return undefined;
-			const type = photoTypes[content.mimeType.toLowerCase()];
-			if (type === undefined) return undefined;
-			const bytes = await content.read();
-			if (bytes.length > MAX_PHOTO_BYTES)
-				return "That photo is too large. Please send a smaller one.";
-			return wearer.savePhoto(familyId, {
-				type,
-				data: bytes.toString("base64"),
-			});
-		}
-		if (content.type !== "text") return undefined;
-		if (wearer !== undefined && isDoneReply(content.text))
-			return wearer.done(familyId, content.text);
-		const item = itemAsk(content.text);
-		if (wearer !== undefined && item !== undefined)
-			return wearer.findItem(familyId, item);
-		const question = Schema.decodeUnknownOption(FamilyQuestion)({
-			question: content.text,
-		});
-		if (question._tag === "None") return invalidReply;
-		return (await deps.answer(familyId, question.value)).answer;
+	/** True the first time a message id arrives. */
+	const isNew = (id: string) => {
+		if (seen.has(id)) return false;
+		seen.add(id);
+		if (seen.size > 1000) seen.delete(seen.values().next().value as string);
+		return true;
 	};
 
+	/** Only inbound text, and a photo for the wearer actions, get an answer. */
+	const answerable = ({ direction, content }: Message) =>
+		direction !== "outbound" &&
+		(content.type === "text" ||
+			(content.type === "attachment" && deps.wearer !== undefined));
+
 	return async (space: Space, message: Message) => {
-		if (seen.has(message.id)) return;
-		seen.add(message.id);
-		if (seen.size > 1000) seen.delete(seen.values().next().value as string);
-		if (message.direction === "outbound") return;
+		if (!isNew(message.id) || !answerable(message)) return;
+		const { content } = message;
 		const familyId = deps.senders.get(message.sender?.id.trim() ?? "");
 		if (familyId === undefined) {
 			ignored += 1;
@@ -81,18 +106,35 @@ export const iMessageHandler = (deps: {
 			);
 			return;
 		}
-		let reply: string | undefined;
-		try {
-			reply = await replyTo(familyId, message.content);
-		} catch (error) {
-			console.error("imessage: answer failed", error);
-			reply = unavailableReply;
-		}
-		if (reply === undefined) return;
+		// Read receipt and typing go out with the answer, not before it: they never delay the reply.
+		// Both are best-effort; a failure only costs the indicator.
+		const arrived = Date.now();
+		const shown = Promise.allSettled([
+			space.read(message),
+			space.startTyping(),
+		]).then((results) => {
+			for (const result of results)
+				if (result.status === "rejected")
+					console.warn(
+						"imessage: read receipt or typing failed",
+						result.reason,
+					);
+		});
+		const reply = await replyTo(deps, familyId, content);
+		const answered = Date.now();
+		// Typing must start before the reply, or the indicator would stay after it.
+		await shown;
 		try {
 			await space.send(reply);
 		} catch (error) {
 			console.error("imessage: send failed", error);
 		}
+		const sent = Date.now();
+		const written = message.timestamp.getTime();
+		console.log(
+			`imessage: replied ${sent - written} ms after the message was written (delivery ${arrived - written} ms, answer ${answered - arrived} ms, send ${sent - answered} ms)`,
+		);
+		// Also clears the indicator after a failed send.
+		await space.stopTyping().catch(() => {});
 	};
 };

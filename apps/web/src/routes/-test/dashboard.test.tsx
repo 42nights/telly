@@ -7,6 +7,9 @@ const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
+const { apiStart } = await import("@/lib/api");
+// The failure notices show at once here, not after the window a starting API gets.
+apiStart.windowMs = 0;
 
 const ME = "a".repeat(64);
 const OTHER = "b".repeat(64);
@@ -360,9 +363,7 @@ test("shows each section's failure when the server refuses or fails", async () =
 
 	// The alert card and the list both say why.
 	const alerts = await alertsTab();
-	expect(
-		await alerts.findAllByText("Not a member of this family"),
-	).toHaveLength(2);
+	expect(await alerts.findAllByText("Not shared with you")).toHaveLength(2);
 	const rules = await thresholdsTab();
 	expect(await rules.findByText("Thresholds unavailable")).toBeTruthy();
 	expect(rules.getByText("Database down")).toBeTruthy();

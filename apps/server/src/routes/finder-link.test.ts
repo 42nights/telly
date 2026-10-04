@@ -20,14 +20,6 @@ const familyWithPlace = (name: string, container: string, place: string) =>
 		const { db, familyId } = yield* openFamily(dbConfig, name);
 		const personId = Identity.fromString(db.identity);
 		yield* Effect.promise(() =>
-			db.connection.reducers.setMedicineMemory({
-				familyId: BigInt(familyId),
-				personId,
-				enabled: true,
-				places: [place],
-			}),
-		);
-		yield* Effect.promise(() =>
 			db.connection.reducers.rememberMedicine({
 				familyId: BigInt(familyId),
 				personId,
@@ -37,6 +29,8 @@ const familyWithPlace = (name: string, container: string, place: string) =>
 				source: "camera_check",
 				confidence: 0.9,
 				labelRead: true,
+				category: "medicine",
+				thumbnail: "",
 			}),
 		);
 		return BigInt(familyId);
@@ -61,11 +55,11 @@ describe.skipIf(dbConfig === undefined || operatorToken === undefined)(
 						wearer.findItem(familyId, "pills"),
 					);
 					expect(reply).toStartWith(
-						"Your pills: kitchen counter, seen just now.\nFind it: https://app.test/medicine?",
+						"Your pills: kitchen counter, seen just now.\nFind it: https://app.test/find?",
 					);
 					const link = new URL(reply.slice(reply.indexOf("https://")));
 					expect(link.searchParams.get("person")).toBe(familyId.toString());
-					const token = link.searchParams.get("link");
+					const token = link.searchParams.get("token");
 
 					const app = new Hono()
 						.route("/", finderLinkRoutes(operator, undefined))

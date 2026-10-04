@@ -7,6 +7,9 @@ const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
+const { apiStart } = await import("@/lib/api");
+// The failure notices show at once here, not after the window a starting API gets.
+apiStart.windowMs = 0;
 
 const ME = "a".repeat(64);
 const AT = "2026-10-04T10:00:00.000Z";
@@ -116,18 +119,16 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 	const put = calls.find((call) => call.method === "PUT");
 	expect(put?.path).toBe(`${BASE}/care-profile`);
 	expect(put?.body).toMatchObject({ preferredName: "Rosie", language: null });
-	// After a write every part is read again.
-	for (const part of [
-		"/care-access",
-		"/care-profile",
-		"/care-instructions",
-		"/care-profile/prompt",
-	])
-		expect(
-			calls.filter(
-				(call) => call.method === "GET" && call.path === `${BASE}${part}`,
-			).length,
-		).toBe(2);
+	// A saved profile reads the profile and what the wearer hears again; the grants and the
+	// instructions did not change, so they stay cached.
+	const reads = (part: string) =>
+		calls.filter(
+			(call) => call.method === "GET" && call.path === `${BASE}${part}`,
+		).length;
+	await waitFor(() => expect(reads("/care-profile/prompt")).toBe(2));
+	expect(reads("/care-profile")).toBe(2);
+	expect(reads("/care-access")).toBe(1);
+	expect(reads("/care-instructions")).toBe(1);
 	// The re-read profile replaces the edited form.
 	expect(screen.getByLabelText("Preferred name")).toHaveProperty(
 		"value",

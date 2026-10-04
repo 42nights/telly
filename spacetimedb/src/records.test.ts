@@ -23,7 +23,7 @@ describe("reports", () => {
 
 	test("a member creates a report that only members see", () => {
 		h.call(mod.createReport, alice, draft);
-		expect(h.view(mod.myReports, bob)).toMatchObject([
+		expect(h.view(mod.myReports, alice)).toMatchObject([
 			{ id: "r1", createdBy: alice, reviewedAt: undefined },
 		]);
 		expect(h.view(mod.myReports, mallory)).toEqual([]);
@@ -452,6 +452,8 @@ describe("medicine memory", () => {
 		source: "camera",
 		confidence: 0.9,
 		labelRead: true,
+		category: "medicine",
+		thumbnail: "",
 		...over,
 	});
 	const on = (personId = bob, places = ["kitchen"]) =>
@@ -471,12 +473,10 @@ describe("medicine memory", () => {
 		});
 
 	test("each member's places and sightings are their own; disabling wipes only theirs", () => {
-		expect(() => h.call(mod.rememberMedicine, bob, seen())).toThrow(
-			"medicine memory is off for this member",
-		);
+		// Remembering is on without any places row (#301).
+		h.call(mod.rememberMedicine, bob, seen());
 		on();
 		on(alice, ["bath"]);
-		h.call(mod.rememberMedicine, bob, seen());
 		h.call(mod.rememberMedicine, alice, seen({ personId: alice }));
 		expect(h.view(mod.myMedicinePlaces, bob)).toMatchObject([
 			{ personId: bob, places: ["kitchen"], setBy: bob },
@@ -647,6 +647,90 @@ describe("medicine memory", () => {
 			);
 	});
 
+	test("any object keeps its category, picture, and earlier places, newest last", () => {
+		on();
+		const keys = { container: "keys", category: "keys", thumbnail: "/9j/AA" };
+		h.call(mod.rememberMedicine, bob, seen(keys));
+		for (const [minute, place] of [
+			["51", "sofa"],
+			["52", "kitchen"],
+		] as const)
+			h.call(
+				mod.rememberMedicine,
+				bob,
+				seen({ ...keys, place, seenAt: at(`2026-01-05T11:${minute}:00Z`) }),
+			);
+		expect(h.rows("medicineSighting")).toMatchObject([
+			{ ...keys, place: "kitchen", pastPlaces: ["kitchen", "sofa"] },
+		]);
+		expect(() =>
+			h.call(mod.rememberMedicine, bob, seen({ category: " " })),
+		).toThrow("category must not be empty");
+		expect(() =>
+			h.call(
+				mod.rememberMedicine,
+				bob,
+				seen({ thumbnail: "A".repeat(64 * 1024 + 1) }),
+			),
+		).toThrow("the thumbnail is too large");
+	});
+
+	test("an AR pin follows its object's member rule and goes with the member's memory", () => {
+		// No places row: remembering and pinning are on by default (#301).
+		h.call(mod.rememberMedicine, bob, seen());
+		h.call(mod.addFamilyMember, alice, { familyId: 1n, member: carol });
+		const pin = { familyId: 1n, objectId: 1n, anchorId: "a", mapBytes: 10 };
+		expect(() => h.call(mod.saveMedicineArPin, carol, pin)).toThrow(
+			"no care access:",
+		);
+		h.call(mod.saveMedicineArPin, bob, pin);
+		// The column keeps its first name, so a pin saved before #301 is the same row.
+		expect(h.rows("medicineArPin")).toMatchObject([
+			{ containerId: 1n, anchorId: "a", savedBy: bob, personId: bob },
+		]);
+		expect(h.view(mod.myMedicineArPins, bob)).toHaveLength(1);
+		expect(h.view(mod.myMedicineArPins, carol)).toEqual([]);
+		expect(h.view(mod.myMedicineArPins, alice)).toHaveLength(1);
+		expect(() =>
+			h.call(mod.deleteMedicineArPin, carol, { familyId: 1n, objectId: 1n }),
+		).toThrow("no care access:");
+		expect(() =>
+			h.call(mod.saveMedicineArPin, bob, { ...pin, objectId: 9n }),
+		).toThrow("no such sighting in this family");
+
+		h.call(mod.setMedicineMemory, bob, {
+			familyId: 1n,
+			personId: bob,
+			enabled: false,
+			places: [],
+		});
+		expect(h.rows("medicineArPin")).toEqual([]);
+	});
+
+	test("forgetting one object deletes its sighting and pin, under the member rule", () => {
+		h.call(mod.rememberMedicine, bob, seen());
+		h.call(mod.rememberMedicine, bob, seen({ container: "keys" }));
+		h.call(mod.saveMedicineArPin, bob, {
+			familyId: 1n,
+			objectId: 1n,
+			anchorId: "a",
+			mapBytes: 10,
+		});
+		h.call(mod.addFamilyMember, alice, { familyId: 1n, member: carol });
+		expect(() => h.call(mod.forgetMedicineSighting, carol, { id: 1n })).toThrow(
+			"no care access:",
+		);
+		expect(() =>
+			h.call(mod.forgetMedicineSighting, mallory, { id: 1n }),
+		).toThrow("not a member of this family");
+		h.call(mod.forgetMedicineSighting, bob, { id: 1n });
+		expect(h.rows("medicineSighting")).toMatchObject([{ container: "keys" }]);
+		expect(h.rows("medicineArPin")).toEqual([]);
+		expect(() => h.call(mod.forgetMedicineSighting, bob, { id: 1n })).toThrow(
+			"not a member of this family",
+		);
+	});
+
 	test("the migration gives every shared row to the wearer and keeps it", () => {
 		const op = identity(9);
 		h.call(mod.init, op, {});
@@ -669,6 +753,10 @@ describe("medicine memory", () => {
 			savedBy: bob,
 			notFoundAt: undefined,
 			personId: Identity.zero(),
+			// The values SpacetimeDB gives the columns added in #301 to an existing row.
+			category: "medicine",
+			thumbnail: "",
+			pastPlaces: [],
 		};
 		h.db.medicineSighting?.insert(legacy);
 		expect(() => h.call(mod.migrateMedicineMembers, bob, {})).toThrow(
@@ -695,5 +783,107 @@ describe("medicine memory", () => {
 		h.call(mod.migrateMedicineMembers, op, {});
 		expect(h.rows("medicinePlaces")).toEqual(places);
 		expect(h.rows("medicineSighting")).toEqual(sightings);
+	});
+});
+
+describe("health records need health_records (#26)", () => {
+	const carol = identity(4);
+	const views = [
+		mod.myHealthSamples,
+		mod.myAlerts,
+		mod.myAlertDeliveries,
+		mod.myReports,
+		mod.myReminderOccurrences,
+		mod.myReminderEvents,
+	];
+	const seen = (who: Identity) => views.map((v) => h.view(v, who).length);
+	const none = views.map(() => 0);
+	const setGrant = (member: Identity, granted: boolean) =>
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member,
+			scope: "health_records",
+			granted,
+		});
+	const sample = (who: Identity) =>
+		h.call(mod.recordSample, who, {
+			familyId: 1n,
+			metric: "heart_rate",
+			value: 70,
+			unit: "bpm",
+			sourceTime: at("2026-01-05T11:59:00Z"),
+			source: "watch",
+			synthetic: false,
+			quality: { tag: "Validated" },
+		});
+
+	beforeEach(() => {
+		sample(alice);
+		h.call(mod.raiseAlert, alice, {
+			familyId: 1n,
+			sampleId: undefined,
+			summary: "dizzy",
+		});
+		h.call(mod.createReport, alice, {
+			id: "r1",
+			familyId: 1n,
+			markers: "[]",
+			fields: "{}",
+		});
+		h.call(mod.setReminderSettings, alice, {
+			familyId: 1n,
+			timeZone: "UTC",
+			quietStart: undefined,
+			quietEnd: undefined,
+			repeatEveryMinutes: 10,
+			maxPrompts: 2,
+			snoozeMinutes: 30,
+		});
+		h.call(mod.createReminder, alice, {
+			familyId: 1n,
+			clientId: "pills",
+			kind: "medication",
+			subjectId: undefined,
+			title: "Pills",
+			times: [13 * 60],
+		});
+		expect(seen(alice).every((n) => n > 0)).toBe(true);
+	});
+
+	test("an invited relative reads them only while granted; chat needs no grant", () => {
+		const codeHash = "a".repeat(64);
+		h.call(mod.createFamilyInvite, alice, {
+			familyId: 1n,
+			codeHash,
+			expiresAt: at("2026-01-06T12:00:00Z"),
+		});
+		h.call(mod.joinFamilyByInvite, carol, { codeHash });
+		h.call(mod.sendMessage, alice, {
+			familyId: 1n,
+			clientId: "m1",
+			body: "hi",
+		});
+		expect(seen(carol)).toEqual(none);
+		expect(h.view(mod.myMessages, carol)).toMatchObject([{ body: "hi" }]);
+
+		setGrant(carol, true);
+		expect(seen(carol)).toEqual(seen(alice));
+		setGrant(carol, false);
+		expect(seen(carol)).toEqual(none);
+	});
+
+	test("another family sees none; the wearer keeps hers after a revoke", () => {
+		expect(seen(mallory)).toEqual(none);
+		const before = seen(alice);
+		setGrant(alice, false);
+		expect(seen(alice)).toEqual(before);
+	});
+
+	test("a recorder without the grant sees only the samples it recorded", () => {
+		sample(bob);
+		expect(h.view(mod.myHealthSamples, bob)).toMatchObject([
+			{ recordedBy: bob },
+		]);
+		expect(seen(bob).slice(1)).toEqual(none.slice(1));
 	});
 });

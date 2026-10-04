@@ -52,7 +52,9 @@ import CreateFinderLinkReducer from "./create_finder_link_reducer";
 import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
 import DeleteFamilyReducer from "./delete_family_reducer";
+import DeleteMedicineArPinReducer from "./delete_medicine_ar_pin_reducer";
 import DeleteReminderReducer from "./delete_reminder_reducer";
+import ForgetMedicineSightingReducer from "./forget_medicine_sighting_reducer";
 import JoinFamilyByInviteReducer from "./join_family_by_invite_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
@@ -83,6 +85,7 @@ import RevokeClinicianShareReducer from "./revoke_clinician_share_reducer";
 import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
 import SaveCookingProfileReducer from "./save_cooking_profile_reducer";
+import SaveMedicineArPinReducer from "./save_medicine_ar_pin_reducer";
 import SendClinicianShareReducer from "./send_clinician_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
@@ -90,9 +93,9 @@ import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
+import SetMyNameReducer from "./set_my_name_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
-import SetServerWakeReducer from "./set_server_wake_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
 import SettleReportEmailReducer from "./settle_report_email_reducer";
 import SettleWearerTextReducer from "./settle_wearer_text_reducer";
@@ -126,11 +129,13 @@ import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFamilyInvitesRow from "./my_family_invites_table";
 import MyFamilyMembersRow from "./my_family_members_table";
+import MyFamilyPeopleRow from "./my_family_people_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
 import MyLocationSharesRow from "./my_location_shares_table";
 import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
+import MyMedicineArPinsRow from "./my_medicine_ar_pins_table";
 import MyMedicinePlacesRow from "./my_medicine_places_table";
 import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
@@ -291,6 +296,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyFamilyMembersRow),
+  myFamilyPeople: __table({
+    name: 'my_family_people',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyFamilyPeopleRow),
   myFinchnodeLinks: __table({
     name: 'my_finchnode_links',
     indexes: [
@@ -326,6 +338,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMealFactsRow),
+  myMedicineArPins: __table({
+    name: 'my_medicine_ar_pins',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMedicineArPinsRow),
   myMedicinePlaces: __table({
     name: 'my_medicine_places',
     indexes: [
@@ -453,7 +472,9 @@ const reducersSchema = __reducers(
   __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
   __reducerSchema("delete_family", DeleteFamilyReducer),
+  __reducerSchema("delete_medicine_ar_pin", DeleteMedicineArPinReducer),
   __reducerSchema("delete_reminder", DeleteReminderReducer),
+  __reducerSchema("forget_medicine_sighting", ForgetMedicineSightingReducer),
   __reducerSchema("join_family_by_invite", JoinFamilyByInviteReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
@@ -484,6 +505,7 @@ const reducersSchema = __reducers(
   __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
   __reducerSchema("save_cooking_profile", SaveCookingProfileReducer),
+  __reducerSchema("save_medicine_ar_pin", SaveMedicineArPinReducer),
   __reducerSchema("send_clinician_share", SendClinicianShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
@@ -491,9 +513,9 @@ const reducersSchema = __reducers(
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_family_push_token", SetFamilyPushTokenReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
+  __reducerSchema("set_my_name", SetMyNameReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
-  __reducerSchema("set_server_wake", SetServerWakeReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
   __reducerSchema("settle_report_email", SettleReportEmailReducer),
   __reducerSchema("settle_wearer_text", SettleWearerTextReducer),

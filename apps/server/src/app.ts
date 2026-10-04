@@ -16,6 +16,7 @@ import { accountRoutes } from "./routes/families";
 import { finderLinkRoutes } from "./routes/finder-link";
 import { familyDomainRoutes } from "./routes/index";
 import { signInRoutes } from "./routes/sign-in";
+import { toolRoutes } from "./routes/tools";
 
 export const createApp = (
 	config: ServerConfig,
@@ -70,6 +71,8 @@ export const createApp = (
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())
+		// Before the membership check: a delegated Fetch.ai tool call comes from a non-member.
+		.route("/api/families/:familyId", toolRoutes())
 		.route("/api/families/:familyId", family);
 
 	app.notFound((c) =>

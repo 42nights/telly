@@ -138,7 +138,9 @@ describe("wearer texts", () => {
 			wording: "I ate lunch",
 		});
 		expect(
-			h.view(mod.myReminderEvents, bob).filter((e) => e.source === "imessage"),
+			h
+				.view(mod.myReminderEvents, alice)
+				.filter((e) => e.source === "imessage"),
 		).toMatchObject([
 			{ state: "delivered" },
 			{ state: "self_reported_complete", wording: "I ate lunch" },
@@ -189,13 +191,6 @@ describe("wearer texts", () => {
 describe("finder links", () => {
 	const linkSetup = () => {
 		const h = setup();
-		for (const personId of [alice, bob])
-			h.call(mod.setMedicineMemory, personId, {
-				familyId: 1n,
-				personId,
-				enabled: true,
-				places: ["kitchen"],
-			});
 		for (const [personId, container] of [
 			[alice, "Aspirin"],
 			[bob, "Ibuprofen"],
@@ -209,6 +204,8 @@ describe("finder links", () => {
 				source: "camera",
 				confidence: 0.9,
 				labelRead: true,
+				category: "medicine",
+				thumbnail: "",
 			});
 		h.call(mod.createFinderLink, op, { familyId: 1n, tokenHash: HASH });
 		return h;
@@ -226,7 +223,7 @@ describe("finder links", () => {
 		).toThrow("not the delivery operator");
 		expect(h.view(mod.finderLinks, bob)).toEqual([]);
 		const [link] = h.view(mod.finderLinks, op);
-		expect(link).toMatchObject({ personId: alice, remembering: true });
+		expect(link).toMatchObject({ personId: alice });
 		expect(link?.sightings).toMatchObject([{ container: "Aspirin" }]);
 	});
 
@@ -249,6 +246,7 @@ describe("finder links", () => {
 			h.call(mod.rememberByFinderLink, op, {
 				tokenHash: "c".repeat(64),
 				container: "Keys",
+				category: "keys",
 				place: "hall table",
 				seenAt: h.now,
 				confidence: 0.8,
@@ -262,6 +260,7 @@ describe("finder links", () => {
 		h.call(mod.rememberByFinderLink, op, {
 			tokenHash: HASH,
 			container: "Keys",
+			category: "keys",
 			place: "hall table",
 			seenAt: h.now,
 			confidence: 0.8,

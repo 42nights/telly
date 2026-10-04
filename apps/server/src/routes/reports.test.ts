@@ -24,6 +24,7 @@ import {
 	dbConfig,
 	failure,
 	familyApp,
+	joinFamily,
 	openFamily,
 	send,
 	setOwnScopes,
@@ -71,6 +72,7 @@ const memoryBucket = () => {
 		put: async (key, body) =>
 			void objects.set(key, { body, at: new Date().toISOString() }),
 		exists: async (key) => objects.has(key),
+		get: async (key) => objects.get(key)?.body,
 		presign: async (key) => `https://storage.test/${key}?signed`,
 		list: async (prefix) =>
 			[...objects]
@@ -254,7 +256,7 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 
 				const outsiderApp = familyApp(outsider, familyId, reportRoutes());
 				const read = yield* send(outsiderApp, "GET", `/reports/${id}`);
-				expect(failure(read)).toEqual([404, "not_found"]);
+				expect(failure(read)).toEqual([403, "forbidden"]);
 
 				const theirs = outsider.connection.reducers;
 				const writes = [
@@ -284,13 +286,9 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 			Effect.gen(function* () {
 				const { objects, bucket } = memoryBucket();
 				const { db: owner, familyId } = yield* openFamily(config, "Pdf");
-				const relative = yield* openFamilyDb(config);
-				yield* Effect.promise(() =>
-					owner.connection.reducers.addFamilyMember({
-						familyId: BigInt(familyId),
-						member: Identity.fromString(relative.identity),
-					}),
-				);
+				const relative = yield* joinFamily(config, owner, familyId, [
+					"health_records",
+				]);
 				const ownerApp = familyApp(owner, familyId, reportRoutes(bucket));
 				const created = yield* send(ownerApp, "POST", "/reports");
 				const report = Schema.decodeUnknownSync(Report)(created.json);
@@ -445,13 +443,9 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db: owner, familyId } = yield* openFamily(config, "Email on");
-				const relative = yield* openFamilyDb(config);
-				yield* Effect.promise(() =>
-					owner.connection.reducers.addFamilyMember({
-						familyId: BigInt(familyId),
-						member: Identity.fromString(relative.identity),
-					}),
-				);
+				const relative = yield* joinFamily(config, owner, familyId, [
+					"health_records",
+				]);
 				const { sent, mailer } = spyMailer();
 				const app = familyApp(owner, familyId, reportRoutes(undefined, mailer));
 				const relativeApp = familyApp(

@@ -8,7 +8,12 @@ import { Users } from "lucide-react";
 
 import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
-import { type FamilyData, useFamilyData } from "@/components/family/data";
+import {
+	type FamilyData,
+	familyReads,
+	useFamilyData,
+} from "@/components/family/data";
+import { FamilyPeople } from "@/components/family/invite";
 import {
 	KeyNumbers,
 	RecentMessages,
@@ -25,9 +30,10 @@ import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
-import { PersonPicker } from "@/lib/family";
+import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyOverview,
 });
 
@@ -65,6 +71,11 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h2>
 				<MonitoringBadge state={data.monitoring} />
 			</header>
+			<FamilyPeople
+				familyId={family.id}
+				familyName={family.name}
+				me={data.me}
+			/>
 
 			<AlertSection data={data} now={now} />
 
@@ -86,7 +97,7 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList
 					state={data.monitoring}
-					records={data.records}
+					records={data.readings}
 					familyId={family.id}
 					now={now}
 				/>

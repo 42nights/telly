@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { crc32, deflateSync } from "node:zlib";
 import { ApiError } from "@health/contracts";
-import { MedicineDetections, type VisionFrame } from "@health/contracts/vision";
+import { ObjectDetections, type VisionFrame } from "@health/contracts/vision";
 import { Schema } from "effect";
 import { Hono } from "hono";
 import { ApiFailure, errorStatus } from "../http";
@@ -90,7 +90,7 @@ const routesWithTimeout = (timeout: number) =>
 // Real clock on purpose: the slow-provider case exercises the actual timeout.
 const routes = routesWithTimeout(200);
 const post = (payload: string, signal?: AbortSignal, app = routes) =>
-	app.request("/medicine-detections", {
+	app.request("/object-detections", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: payload,
@@ -148,19 +148,22 @@ describe("medicine detection route", () => {
 					detections: [
 						{
 							box_2d: [0, 0, 250, 500],
+							category: "medicine",
 							label: " Metformin ",
 							label_readable: true,
 							confidence: 0.9,
 						},
 						{
 							box_2d: [500, 500, 1000, 1000],
+							category: "medicine",
 							label: "",
 							label_readable: false,
 							confidence: 0.95,
 						},
 						{
 							box_2d: [10, 10, 20, 20],
-							label: "Aspirin",
+							category: "keys",
+							label: "keys",
 							label_readable: true,
 							confidence: 0.4,
 						},
@@ -169,18 +172,18 @@ describe("medicine detection route", () => {
 			);
 		const response = await post(body());
 		expect(response.status).toBe(200);
-		const result = Schema.decodeUnknownSync(MedicineDetections)(
+		const result = Schema.decodeUnknownSync(ObjectDetections)(
 			await response.json(),
 			{ onExcessProperty: "error" },
 		);
 		expect(result.frame).toEqual(frame);
 		expect(result.model).toBe(GEMINI_VISION_MODEL);
 		expect(
-			result.detections.map((d) => [d.label, d.needsVerification]),
+			result.detections.map((d) => [d.category, d.label, d.needsVerification]),
 		).toEqual([
-			["Metformin", false],
-			[null, true],
-			["Aspirin", true],
+			["medicine", "Metformin", false],
+			["medicine", null, true],
+			["keys", "keys", true],
 		]);
 		expect(result.detections[0]?.box).toEqual({
 			x: 100,
@@ -208,7 +211,7 @@ describe("medicine detection route", () => {
 				: interaction(JSON.stringify({ detections: [] }));
 		const response = await post(body());
 		expect(response.status).toBe(200);
-		const result = Schema.decodeUnknownSync(MedicineDetections)(
+		const result = Schema.decodeUnknownSync(ObjectDetections)(
 			await response.json(),
 			{ onExcessProperty: "error" },
 		);
@@ -229,13 +232,13 @@ describe("medicine detection route", () => {
 		const response = await post(body());
 		expect(response.status).toBe(200);
 		expect(
-			Schema.decodeUnknownSync(MedicineDetections)(await response.json()).model,
+			Schema.decodeUnknownSync(ObjectDetections)(await response.json()).model,
 		).toBe(GEMINI_FALLBACK_MODEL);
 		// The slow primary request was closed, not left running.
 		await primaryCut.promise;
 	});
 
-	const failed = "Medicine detection failed";
+	const failed = "Object detection failed";
 	const busy = "The picture checker is busy right now";
 	test.each<[string, Reply, string]>([
 		[
@@ -258,6 +261,7 @@ describe("medicine detection route", () => {
 						detections: [
 							{
 								box_2d: [500, 0, 100, 10],
+								category: "keys",
 								label: "x",
 								label_readable: true,
 								confidence: 1,

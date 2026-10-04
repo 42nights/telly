@@ -327,6 +327,13 @@ export const FamilyMember = __t.object("FamilyMember", {
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
 
+export const FamilyPerson = __t.object("FamilyPerson", {
+  familyId: __t.u64(),
+  member: __t.identity(),
+  name: __t.option(__t.string()),
+});
+export type FamilyPerson = __Infer<typeof FamilyPerson>;
+
 export const FamilyPushToken = __t.object("FamilyPushToken", {
   familyId: __t.u64(),
   tokenHash: __t.string(),
@@ -363,7 +370,6 @@ export const FinderLinkPlaces = __t.object("FinderLinkPlaces", {
   personId: __t.identity(),
   expiresAt: __t.timestamp(),
   usedAt: __t.option(__t.timestamp()),
-  remembering: __t.bool(),
   get sightings() {
     return __t.array(FinderSighting);
   },
@@ -376,6 +382,7 @@ export type FinderLinks = __Infer<typeof FinderLinks>;
 export const FinderSighting = __t.object("FinderSighting", {
   id: __t.u64(),
   container: __t.string(),
+  category: __t.string(),
   place: __t.string(),
   seenAt: __t.timestamp(),
   confidence: __t.f64(),
@@ -469,6 +476,18 @@ export const MealFact = __t.object("MealFact", {
 });
 export type MealFact = __Infer<typeof MealFact>;
 
+export const MedicineArPin = __t.object("MedicineArPin", {
+  containerId: __t.u64(),
+  familyId: __t.u64(),
+  anchorId: __t.string(),
+  mapBytes: __t.u32(),
+  savedBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+  personId: __t.identity(),
+});
+export type MedicineArPin = __Infer<typeof MedicineArPin>;
+
 export const MedicineMemory = __t.object("MedicineMemory", {
   familyId: __t.u64(),
   places: __t.array(__t.string()),
@@ -499,8 +518,18 @@ export const MedicineSighting = __t.object("MedicineSighting", {
   savedBy: __t.identity(),
   notFoundAt: __t.option(__t.timestamp()),
   personId: __t.identity(),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()),
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
+
+export const MemberName = __t.object("MemberName", {
+  member: __t.identity(),
+  name: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type MemberName = __Infer<typeof MemberName>;
 
 export const Message = __t.object("Message", {
   id: __t.u64(),
@@ -569,6 +598,9 @@ export type MyFamilyInvites = __Infer<typeof MyFamilyInvites>;
 export const MyFamilyMembers = __t.object("MyFamilyMembers", {});
 export type MyFamilyMembers = __Infer<typeof MyFamilyMembers>;
 
+export const MyFamilyPeople = __t.object("MyFamilyPeople", {});
+export type MyFamilyPeople = __Infer<typeof MyFamilyPeople>;
+
 export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
 export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
@@ -583,6 +615,9 @@ export type MyLocations = __Infer<typeof MyLocations>;
 
 export const MyMealFacts = __t.object("MyMealFacts", {});
 export type MyMealFacts = __Infer<typeof MyMealFacts>;
+
+export const MyMedicineArPins = __t.object("MyMedicineArPins", {});
+export type MyMedicineArPins = __Infer<typeof MyMedicineArPins>;
 
 export const MyMedicinePlaces = __t.object("MyMedicinePlaces", {});
 export type MyMedicinePlaces = __Infer<typeof MyMedicinePlaces>;
@@ -821,12 +856,6 @@ export const SampleQuality = __t.enum("SampleQuality", {
 });
 export type SampleQuality = __Infer<typeof SampleQuality>;
 
-export const ServerWake = __t.object("ServerWake", {
-  id: __t.u8(),
-  url: __t.string(),
-});
-export type ServerWake = __Infer<typeof ServerWake>;
-
 export const SpeakerSettings = __t.object("SpeakerSettings", {
   familyId: __t.u64(),
   enabled: __t.bool(),
@@ -883,13 +912,6 @@ export const TripStep = __t.enum("TripStep", {
   Arrived: __t.unit(),
 });
 export type TripStep = __Infer<typeof TripStep>;
-
-export const WakeTimer = __t.object("WakeTimer", {
-  scheduledId: __t.u64(),
-  scheduledAt: __t.scheduleAt(),
-  familyId: __t.u64(),
-});
-export type WakeTimer = __Infer<typeof WakeTimer>;
 
 export const WearerText = __t.object("WearerText", {
   key: __t.string(),

@@ -10,6 +10,8 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  url: __t.string(),
-};
+export default __t.row({
+  familyId: __t.u64().name("family_id"),
+  member: __t.identity(),
+  name: __t.option(__t.string()),
+});

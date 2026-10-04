@@ -7,9 +7,13 @@ import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
 import { Today } from "@/components/wearer/today";
 import { useNow } from "@/components/wearer/use-now";
-import { useWearerRecords } from "@/components/wearer/use-wearer-records";
+import {
+	loadWearerHome,
+	useWearerRecords,
+} from "@/components/wearer/use-wearer-records";
 
 export const Route = createFileRoute("/hud")({
+	loader: loadWearerHome,
 	component: HudComponent,
 });
 

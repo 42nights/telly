@@ -8,6 +8,8 @@ import { Effect, Schema } from "effect";
 import { sign } from "hono/jwt";
 import { createApp } from "../app";
 import { openFamilyDb } from "../db";
+import { delegate } from "../delegation";
+import { DELEGATION_HEADER } from "./tools";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -140,6 +142,12 @@ describe.skipIf(app === undefined)("agent tool route", () => {
 		await send(owner, "POST", `/api/families/${home.id}/members`, {
 			identity: workerMe.identity,
 		});
+		// The worker reads health samples, so it needs health_records (#26).
+		await send(owner, "POST", `/api/families/${home.id}/care-access`, {
+			identity: workerMe.identity,
+			scope: "health_records",
+			granted: true,
+		});
 
 		const tools = (family: Family) => `/api/families/${family.id}/tools`;
 		expect(
@@ -199,5 +207,73 @@ describe.skipIf(app === undefined)("agent tool route", () => {
 			400,
 			{ error: "invalid_request", message: "Request body is too large" },
 		]);
+	});
+
+	test("a delegation lends one family's records to a non-member worker until it is released", async () => {
+		const owner = `owner-${crypto.randomUUID()}`;
+		const worker = `fetch-worker-${crypto.randomUUID()}`;
+		const newFamily = async (name: string) =>
+			Schema.decodeUnknownSync(Family)(
+				(await send(owner, "POST", "/api/families", { name }))[1],
+			);
+		const home = await newFamily("Home");
+		const other = await newFamily("Other");
+		await send(
+			owner,
+			"POST",
+			`/api/families/${home.id}/samples`,
+			sample("2026-01-01T08:00:00.000Z"),
+		);
+		const asWorker = async (family: Family, delegation?: string) => {
+			if (app === undefined) throw new Error("no database");
+			const response = await app.request(`/api/families/${family.id}/tools`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${await tokenFor(worker)}`,
+					...(delegation === undefined
+						? {}
+						: { [DELEGATION_HEADER]: delegation }),
+				},
+				body: JSON.stringify({ tool: "health_samples", input: {} }),
+			});
+			return [response.status, await response.json()] as const;
+		};
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					if (uri === undefined || database === undefined) return;
+					const ownerDb = yield* openFamilyDb({
+						uri,
+						database,
+						token: yield* Effect.promise(() => tokenFor(owner)),
+					});
+					const lent = delegate(ownerDb, BigInt(home.id));
+					const [status, body] = yield* Effect.promise(() =>
+						asWorker(home, lent.token),
+					);
+					expect([status, body]).toMatchObject([
+						200,
+						{
+							tool: "health_samples",
+							samples: [{ familyId: home.id }],
+						},
+					]);
+					// The worker is not a member: no delegation, another family, or a guess is refused.
+					for (const [family, delegation] of [
+						[home, undefined],
+						[other, lent.token],
+						[home, "guess"],
+					] as const)
+						expect(
+							yield* Effect.promise(() => asWorker(family, delegation)),
+						).toMatchObject([403, { error: "forbidden" }]);
+					lent.release();
+					expect(
+						yield* Effect.promise(() => asWorker(home, lent.token)),
+					).toMatchObject([403, { error: "forbidden" }]);
+				}),
+			),
+		);
 	});
 });

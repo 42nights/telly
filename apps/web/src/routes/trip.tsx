@@ -29,9 +29,16 @@ import { useNow } from "@/components/wearer/use-now";
 import { ApiNotice } from "@/components/win95";
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { telHref, useContacts } from "@/lib/contacts";
-import { useFamily } from "@/lib/family";
+import { loadFamilyReads, useFamily } from "@/lib/family";
 
-export const Route = createFileRoute("/trip")({ component: TripScreen });
+export const Route = createFileRoute("/trip")({
+	loader: loadFamilyReads((familyId) => [
+		[Me, "/api/me"],
+		[FamilyLocations, familyPath(familyId, "/location")],
+		[FamilyRecords, familyPath(familyId)],
+	]),
+	component: TripScreen,
+});
 
 const HOME_KEY = "telly.home";
 const big = "h-14 text-[18px]";
@@ -41,11 +48,9 @@ function TripScreen() {
 	const familyId = family?.id ?? null;
 	const [trip, setTrip] = useTrip();
 	const { speech, say } = useSpeech(familyId);
-	const [refresh, setRefresh] = useState(0);
 	const path = familyId === null ? null : familyPath(familyId, "/location");
 	const locations = useApi(FamilyLocations, path, {
 		pollMs: 30_000,
-		refreshKey: refresh,
 	});
 	const me = useApi(Me, "/api/me");
 	const myId = me.kind === "ready" ? me.value.identity : null;
@@ -78,7 +83,6 @@ function TripScreen() {
 						sharing={sharing}
 						locations={locations}
 						me={me}
-						onChange={() => setRefresh((n) => n + 1)}
 					/>
 				</div>
 			</Window>
@@ -156,14 +160,12 @@ function LocationPanel({
 	sharing,
 	locations,
 	me,
-	onChange,
 }: {
 	familyId: string | null;
 	trip: Trip | null;
 	sharing: boolean;
 	locations: ApiState<FamilyLocations>;
 	me: ApiState<Me>;
-	onChange: () => void;
 }) {
 	const records = useApi(
 		FamilyRecords,
@@ -190,7 +192,6 @@ function LocationPanel({
 					familyId={familyId}
 					locations={locations.value}
 					me={me.value.identity}
-					onChange={onChange}
 					records={records}
 				/>
 			</>

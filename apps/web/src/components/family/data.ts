@@ -29,6 +29,8 @@ export type FamilyData = {
 	readonly monitoring: ApiState<Monitoring>;
 	readonly thresholds: ApiState<AlertThresholds>;
 	readonly records: ApiState<FamilyRecords>;
+	/** `records` for its readings: `forbidden` when health records are not shared with the caller. */
+	readonly readings: ApiState<FamilyRecords>;
 	/** The caller's identity, or null until `/api/me` answers. */
 	readonly me: string | null;
 	readonly markSeen: (alertId: string) => Promise<void>;
@@ -37,14 +39,23 @@ export type FamilyData = {
 	readonly seenError: string | null;
 };
 
+/** The reads of `useFamilyData`, which the Family route loaders start ahead of the screen. */
+export const familyReads = (familyId: string) =>
+	[
+		[FamilyAlerts, familyPath(familyId, "/alerts")],
+		[Monitoring, familyPath(familyId, "/monitoring")],
+		[AlertThresholds, familyPath(familyId, "/alert-thresholds")],
+		[FamilyRecords, familyPath(familyId)],
+		[Me, "/api/me"],
+	] as const;
+
 export function useFamilyData(): FamilyData {
 	const { state: familyState, family } = useFamily();
-	const [refreshKey, setRefreshKey] = useState(0);
 	const [seenError, setSeenError] = useState<string | null>(null);
 	const [busyId, setBusyId] = useState<string | null>(null);
 	const path = (suffix: string) =>
 		family === null ? null : familyPath(family.id, suffix);
-	const options = { pollMs: POLL_MS, refreshKey };
+	const options = { pollMs: POLL_MS };
 	const alerts = useApi(FamilyAlerts, path("/alerts"), options);
 	const monitoring = useApi(Monitoring, path("/monitoring"), options);
 	const thresholds = useApi(
@@ -52,10 +63,7 @@ export function useFamilyData(): FamilyData {
 		path("/alert-thresholds"),
 		options,
 	);
-	const records = useApi(FamilyRecords, path(""), {
-		pollMs: RECORDS_POLL_MS,
-		refreshKey,
-	});
+	const records = useApi(FamilyRecords, path(""), { pollMs: RECORDS_POLL_MS });
 	const me = useApi(Me, "/api/me");
 	useDemoWarning(
 		records.kind === "ready" ? records.value.samples : null,
@@ -79,8 +87,7 @@ export function useFamilyData(): FamilyData {
 			method: "POST",
 		});
 		setBusyId(null);
-		if (result.kind === "ready") setRefreshKey((key) => key + 1);
-		else
+		if (result.kind !== "ready")
 			setSeenError(
 				result.kind === "signed_out"
 					? "Sign in to mark this alert as seen."
@@ -95,6 +102,9 @@ export function useFamilyData(): FamilyData {
 		monitoring,
 		thresholds,
 		records,
+		// Records keep family chat for every member; their samples need `health_records` (#26),
+		// which `/monitoring` checks.
+		readings: monitoring.kind === "forbidden" ? monitoring : records,
 		me: me.kind === "ready" ? me.value.identity : null,
 		markSeen,
 		busyId,

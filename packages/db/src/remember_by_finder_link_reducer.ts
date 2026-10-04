@@ -13,6 +13,7 @@ import {
 export default {
   tokenHash: __t.string(),
   container: __t.string(),
+  category: __t.string(),
   place: __t.string(),
   seenAt: __t.timestamp(),
   confidence: __t.f64(),

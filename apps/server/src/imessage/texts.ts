@@ -83,32 +83,15 @@ const runWearerTexts = (
 	}).pipe(Effect.forever);
 };
 
-/**
- * Runs the outbox for the server's lifetime as the delivery operator, opening the connection again
- * whenever it fails. With an https `wakeUrl`, the database opens it when a text is due, so a
- * sleeping server container starts in time to send it.
- */
+/** Runs the outbox for the server's lifetime as the delivery operator, reopening it when it fails. */
 export const wearerTextWorker = (
 	operator: DbConfig,
 	send: (address: string, body: string) => Promise<void>,
 	phones: ReadonlyMap<bigint, string>,
-	wakeUrl: string | undefined,
 ) =>
 	Effect.scoped(
 		Effect.flatMap(openFamilyDb(operator), (db) =>
-			Effect.andThen(
-				wakeUrl === undefined
-					? Effect.void
-					: callDb(db, (c) => c.reducers.setServerWake({ url: wakeUrl })).pipe(
-							Effect.catchCause((cause) =>
-								Effect.logWarning(
-									"could not save the server wake address",
-									cause,
-								),
-							),
-						),
-				runWearerTexts(db, send, phones),
-			),
+			runWearerTexts(db, send, phones),
 		),
 	).pipe(
 		Effect.tapCause((cause) =>

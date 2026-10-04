@@ -13,7 +13,13 @@ import { useState } from "react";
 
 import { failureText } from "@/components/chat/logic";
 import { ApiNotice } from "@/components/win95";
-import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
+import {
+	type ApiState,
+	apiRequest,
+	familyPath,
+	reread,
+	useApi,
+} from "@/lib/api";
 
 import { familyStatus, isMealKind } from "./logic";
 
@@ -126,15 +132,14 @@ function ReminderList({
 
 /** The family's meal and drink reminders: the list with Delete, and a form to add one. */
 function MealReminders({ familyId }: { familyId: string }) {
-	const [refresh, setRefresh] = useState(0);
-	const reminders = useApi(Reminders, familyPath(familyId, "/reminders"), {
-		refreshKey: refresh,
-	});
-	const settings = useApi(
-		SavedReminderSettings,
-		familyPath(familyId, "/reminder-settings"),
-		{ refreshKey: refresh },
-	);
+	const remindersPath = familyPath(familyId, "/reminders");
+	const settingsPath = familyPath(familyId, "/reminder-settings");
+	const reminders = useApi(Reminders, remindersPath);
+	const settings = useApi(SavedReminderSettings, settingsPath);
+	const refresh = () => {
+		void reread(remindersPath);
+		void reread(settingsPath);
+	};
 	const [title, setTitle] = useState("");
 	const [kind, setKind] = useState<"meal" | "hydration">("meal");
 	const [times, setTimes] = useState<readonly Time[]>(() => [newTime()]);
@@ -146,42 +151,34 @@ function MealReminders({ familyId }: { familyId: string }) {
 	const save = async () => {
 		setStatus("Saving…");
 		if (noSettings) {
-			const saved = await apiRequest(
-				null,
-				familyPath(familyId, "/reminder-settings"),
-				{
-					method: "PUT",
-					body: {
-						timeZone: zone,
-						quietHours: null,
-						repeatEveryMinutes: 10,
-						maxPrompts: 3,
-						snoozeMinutes: 15,
-					},
+			const saved = await apiRequest(null, settingsPath, {
+				method: "PUT",
+				body: {
+					timeZone: zone,
+					quietHours: null,
+					repeatEveryMinutes: 10,
+					maxPrompts: 3,
+					snoozeMinutes: 15,
 				},
-			);
+			});
 			if (saved.kind !== "ready") return setStatus(failureText(saved));
 		}
-		const added = await apiRequest(
-			Reminder,
-			familyPath(familyId, "/reminders"),
-			{
-				method: "POST",
-				body: {
-					kind,
-					subjectId: null,
-					title: title.trim(),
-					times: [
-						...new Set(times.map((t) => t.value).filter((t) => t !== "")),
-					].toSorted(),
-				},
+		const added = await apiRequest(Reminder, remindersPath, {
+			method: "POST",
+			body: {
+				kind,
+				subjectId: null,
+				title: title.trim(),
+				times: [
+					...new Set(times.map((t) => t.value).filter((t) => t !== "")),
+				].toSorted(),
 			},
-		);
+		});
 		if (added.kind !== "ready") return setStatus(failureText(added));
 		setTitle("");
 		setTimes([newTime()]);
 		setStatus(`Saved: ${added.value.title}.`);
-		setRefresh((n) => n + 1);
+		refresh();
 	};
 
 	const remove = async (reminder: Reminder) => {
@@ -196,7 +193,7 @@ function MealReminders({ familyId }: { familyId: string }) {
 				? `Deleted: ${reminder.title}.`
 				: failureText(deleted),
 		);
-		setRefresh((n) => n + 1);
+		refresh();
 	};
 
 	return (

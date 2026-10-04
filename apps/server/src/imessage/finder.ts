@@ -3,8 +3,9 @@
 // it the places of a live link's person and saves a sighting only for that person. A link token or a
 // page session leaves the server once and is stored only as its SHA-256.
 import type { FinderImage, LinkedFinder } from "@health/contracts/finder-link";
-import { Effect } from "effect";
-import { Timestamp } from "spacetimedb";
+import { ObjectCategory } from "@health/contracts/vision";
+import { Effect, Schema } from "effect";
+import { type Identity, Timestamp } from "spacetimedb";
 import {
 	callDb,
 	type DbConfig,
@@ -23,11 +24,12 @@ type LinkRow = {
 	readonly tokenHash: string;
 	readonly sessionHash: string | undefined;
 	readonly familyId: bigint;
+	readonly personId: Identity;
 	readonly expiresAt: Timestamp;
-	readonly remembering: boolean;
 	readonly sightings: readonly {
 		readonly id: bigint;
 		readonly container: string;
+		readonly category: string;
 		readonly place: string;
 		readonly seenAt: Timestamp;
 		readonly labelRead: boolean;
@@ -71,10 +73,10 @@ const newestFirst = (row: Pick<LinkRow, "sightings">) =>
 export const linkedFinder = (row: LinkRow, session: string): LinkedFinder => ({
 	session,
 	expiresAt: row.expiresAt.toDate().toISOString(),
-	remembering: row.remembering,
 	sightings: newestFirst(row).map((s) => ({
 		id: s.id.toString(),
 		container: s.container,
+		category: Schema.is(ObjectCategory)(s.category) ? s.category : "other",
 		place: s.place,
 		seenAt: s.seenAt.toDate().toISOString(),
 		notFoundAt: s.notFoundAt?.toDate().toISOString() ?? null,
@@ -158,12 +160,7 @@ export const savePhotoItem = async (
 	read: (image: FinderImage) => Promise<PhotoItem>,
 	image: FinderImage,
 ) => {
-	if (!row.remembering)
-		throw new ApiFailure(
-			"conflict",
-			"Remembering places is off for this person",
-		);
-	const { item, place, confidence } = await read(image);
+	const { item, category, place, confidence } = await read(image);
 	if (item === "")
 		throw new ApiFailure(
 			"invalid_request",
@@ -179,6 +176,7 @@ export const savePhotoItem = async (
 			c.reducers.rememberByFinderLink({
 				tokenHash: row.tokenHash,
 				container: item,
+				category,
 				place,
 				seenAt: Timestamp.now(),
 				confidence,
@@ -235,47 +233,49 @@ const ago = (seen: Date, now: number) => {
 	return days === 1 ? "yesterday" : `${days} days ago`;
 };
 
-const REMEMBERING_OFF =
-	"Remembering where your things are is off for you. Your family can turn it on in Settings, Medicine places.";
-
 /**
- * The answer to an item question: the newest sighting whose name shares a word with the item, or
- * for a medicine word, the newest medicine with a read label. `link(add)` is the finder link.
+ * The answer to an item question: the newest saved thing whose name or category shares a word with
+ * the item, or for a medicine word, the newest medicine. `link(object)` is the finder link for one
+ * saved thing, or for Add a thing when `object` is undefined.
  */
 export const itemReply = (
 	item: string,
-	row: Pick<LinkRow, "remembering" | "sightings">,
-	link: (add: boolean) => string,
+	row: Pick<LinkRow, "sightings">,
+	link: (object: bigint | undefined) => string,
 	now: number,
 ) => {
-	if (!row.remembering) return REMEMBERING_OFF;
 	const wanted = new Set(stems(item));
 	const sightings = newestFirst(row);
 	const found =
-		sightings.find((s) => stems(s.container).some((w) => wanted.has(w))) ??
-		(MEDICINE.test(item) ? sightings.find((s) => s.labelRead) : undefined);
+		sightings.find((s) =>
+			stems(`${s.container} ${s.category}`).some((w) => wanted.has(w)),
+		) ??
+		(MEDICINE.test(item)
+			? sightings.find((s) => s.category === "medicine")
+			: undefined);
 	if (found === undefined)
-		return `I do not have your ${item} saved yet. Send me a photo of it where it is, and I will save the place. Or add it here: ${link(true)}`;
+		return `I do not have your ${item} saved yet. Send me a photo of it where it is, and I will save the place. Or add it here: ${link(undefined)}`;
 	const outdated =
 		found.notFoundAt === undefined
 			? ""
 			: " It was not there when you last looked.";
-	return `Your ${item}: ${found.place}, seen ${ago(found.seenAt.toDate(), now)}.${outdated}\nFind it: ${link(false)}`;
+	return `Your ${item}: ${found.place}, seen ${ago(found.seenAt.toDate(), now)}.${outdated}\nFind it: ${link(found.id)}`;
 };
 
-/** The medicine finder for the family's wearer, opened by `token`. #301 later moves it to `/find`. */
+/** Find things (#301) for the wearer, opened by `token`: one saved thing, or Add a thing. */
 const finderUrl = (
 	appUrl: string,
-	familyId: bigint,
-	token: string,
+	link: { readonly token: string; readonly row: LinkRow },
 	item: string,
-	add: boolean,
+	object: bigint | undefined,
 ) => {
-	const url = new URL("/medicine", appUrl);
-	url.searchParams.set("person", familyId.toString());
-	url.searchParams.set("link", token);
+	const url = new URL("/find", appUrl);
+	url.searchParams.set("person", link.row.familyId.toString());
+	url.searchParams.set("member", link.row.personId.toHexString());
+	if (object === undefined) url.searchParams.set("mode", "add");
+	else url.searchParams.set("object", object.toString());
+	url.searchParams.set("token", link.token);
 	url.searchParams.set("q", item);
-	if (add) url.searchParams.set("add", "1");
 	return url.toString();
 };
 
@@ -294,11 +294,11 @@ export const wearerActions = (
 ): WearerActions => ({
 	findItem: (familyId, item) =>
 		withOperator(operator, async (db) => {
-			const { token, row } = await createLink(db, familyId);
+			const link = await createLink(db, familyId);
 			return itemReply(
 				item,
-				row,
-				(add) => finderUrl(appUrl, familyId, token, item, add),
+				link.row,
+				(object) => finderUrl(appUrl, link, item, object),
 				Date.now(),
 			);
 		}),
@@ -324,16 +324,19 @@ export const wearerActions = (
 		withOperator(operator, async (db) => {
 			if (readItem === undefined)
 				throw new ApiFailure("unavailable", "Photo checks are not set up");
-			const { token, row } = await createLink(db, familyId);
-			if (!row.remembering) return REMEMBERING_OFF;
+			const link = await createLink(db, familyId);
 			try {
 				const { container, place } = await savePhotoItem(
 					db,
-					row,
+					link.row,
 					readItem,
 					image,
 				);
-				return `Saved: your ${container}, ${place}. Ask me "where are my ${container}?" any time.\nSee your places: ${finderUrl(appUrl, familyId, token, container, false)}`;
+				const saved = liveLink(
+					db,
+					(r) => r.tokenHash === link.row.tokenHash,
+				)?.sightings.find((s) => s.container === container)?.id;
+				return `Saved: your ${container}, ${place}. Ask me "where are my ${container}?" any time.\nSee it: ${finderUrl(appUrl, link, container, saved)}`;
 			} catch (error) {
 				// The photo showed no clear item or place: say what to do again.
 				if (error instanceof ApiFailure && error.code === "invalid_request")

@@ -3,10 +3,11 @@ import type { HealthSample } from "@health/contracts";
 
 import {
 	ago,
+	categoryOfRequest,
 	direction,
 	emergencyIntent,
 	evidenceLine,
-	isMedicineRequest,
+	isFindRequest,
 	itemFromRequest,
 	marker,
 	SIGHTING_OLD_MS,
@@ -32,12 +33,23 @@ const sample = (
 	...extra,
 });
 
-describe("medicine requests", () => {
-	test("medicine words open the finder; other questions do not", () => {
-		expect(isMedicineRequest("Where are my meds?")).toBe(true);
-		expect(isMedicineRequest("did I take my PILLS")).toBe(true);
-		expect(isMedicineRequest("When is Priya calling?")).toBe(false);
-		expect(isMedicineRequest("Remind me about the medal")).toBe(false);
+describe("find requests", () => {
+	test("medicine words, and finding a known object, open the finder; other questions do not", () => {
+		expect(isFindRequest("Where are my meds?")).toBe(true);
+		expect(isFindRequest("did I take my PILLS")).toBe(true);
+		expect(isFindRequest("where are my keys?")).toBe(true);
+		expect(isFindRequest("I lost my reading glasses")).toBe(true);
+		expect(isFindRequest("Call my phone")).toBe(false);
+		expect(isFindRequest("Where is my daughter?")).toBe(false);
+		expect(isFindRequest("When is Priya calling?")).toBe(false);
+		expect(isFindRequest("Remind me about the medal")).toBe(false);
+	});
+
+	test("the request names the category the arrow prefers", () => {
+		expect(categoryOfRequest("where are my pills")).toBe("medicine");
+		expect(categoryOfRequest("find my hearing aid")).toBe("hearing aid");
+		expect(categoryOfRequest("where did I leave my purse")).toBe("wallet");
+		expect(categoryOfRequest("")).toBeNull();
 	});
 
 	test("the item name comes from the request words", () => {
@@ -47,7 +59,8 @@ describe("medicine requests", () => {
 		);
 		expect(itemFromRequest("I need my pills now")).toBe("your pills");
 		expect(itemFromRequest("where are the vitamins")).toBe("your vitamins");
-		expect(itemFromRequest("")).toBe("your medicine");
+		expect(itemFromRequest("where are my car keys?")).toBe("your car keys");
+		expect(itemFromRequest("")).toBe("your things");
 	});
 });
 

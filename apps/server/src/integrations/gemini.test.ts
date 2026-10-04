@@ -146,30 +146,57 @@ describe("createGeminiDetector", () => {
 			detections([
 				{
 					box_2d: [10, 20, 300, 400],
+					category: "keys",
+					label: " car keys ",
+					label_readable: false,
+					confidence: 0.9,
+				},
+				{
+					box_2d: [10, 20, 300, 400],
+					category: "medicine",
 					label: "  Ibuprofen 200 mg ",
 					label_readable: true,
 					confidence: 0.9,
 				},
 				{
 					box_2d: [0, 0, 1000, 1000],
+					category: "medicine",
 					label: "Aspirin",
 					label_readable: false,
 					confidence: 0.4,
 				},
 				{
 					box_2d: [5, 5, 6, 6],
+					category: "glasses",
 					label: "   ",
 					label_readable: true,
 					confidence: 1,
 				},
 			]);
 		const result = await Effect.runPromise(detect());
+		// The main object keeps its place first. Only medicine needs a readable printed name.
 		expect(result).toEqual({
 			model: GEMINI_VISION_MODEL,
 			boxes: [
-				{ box: [10, 20, 300, 400], label: "Ibuprofen 200 mg", confidence: 0.9 },
-				{ box: [0, 0, 1000, 1000], label: null, confidence: 0.4 },
-				{ box: [5, 5, 6, 6], label: null, confidence: 1 },
+				{
+					box: [10, 20, 300, 400],
+					category: "keys",
+					label: "car keys",
+					confidence: 0.9,
+				},
+				{
+					box: [10, 20, 300, 400],
+					category: "medicine",
+					label: "Ibuprofen 200 mg",
+					confidence: 0.9,
+				},
+				{
+					box: [0, 0, 1000, 1000],
+					category: "medicine",
+					label: null,
+					confidence: 0.4,
+				},
+				{ box: [5, 5, 6, 6], category: "glasses", label: null, confidence: 1 },
 			],
 		});
 		expect(sent).toHaveLength(1);
@@ -218,6 +245,7 @@ describe("createGeminiDetector", () => {
 
 	const box = {
 		box_2d: [10, 10, 20, 20],
+		category: "keys",
 		label: "x",
 		label_readable: true,
 		confidence: 0.5,
@@ -233,6 +261,10 @@ describe("createGeminiDetector", () => {
 			() => detections([{ ...box, box_2d: [0, 0, 1001, 10] }]),
 		],
 		["a confidence above 1", () => detections([{ ...box, confidence: 1.5 }])],
+		[
+			"a category outside the list",
+			() => detections([{ ...box, category: "sofa" }]),
+		],
 		[
 			"an inverted box",
 			() => detections([{ ...box, box_2d: [20, 10, 10, 20] }]),

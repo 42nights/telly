@@ -116,9 +116,6 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 						operator,
 						agent.text,
 						wearerPhones(imessage.senders),
-						imessage.appUrl.startsWith("https://")
-							? `${imessage.appUrl}/health`
-							: undefined,
 					),
 				);
 		}),

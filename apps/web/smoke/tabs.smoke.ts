@@ -3,7 +3,7 @@
 // token with a future `exp`, stored where the sign-in screen stores it) and the whole server API
 // (`page.route` on VITE_SERVER_URL). Every other non-app request is blocked and fails the test.
 import type { FamilyRecords } from "@health/contracts";
-import type { FamilyList, Me } from "@health/contracts/families";
+import type { FamilyList, FamilyMembers, Me } from "@health/contracts/families";
 import type { LinkedFinder } from "@health/contracts/finder-link";
 import type { ReminderHistory } from "@health/contracts/reminders";
 import { expect, type Page, test } from "@playwright/test";
@@ -46,6 +46,9 @@ const replies: Record<string, unknown> = {
 		messages: [],
 		acknowledgements: [],
 	} satisfies FamilyRecords,
+	"/api/families/1/members": {
+		members: [{ identity: "a".repeat(64), name: null }],
+	} satisfies FamilyMembers,
 	"/api/families/1/alerts": { alerts: [] },
 	"/api/families/1/alert-thresholds": { thresholds: [] },
 	"/api/families/1/monitoring": {
@@ -98,7 +101,7 @@ const replies: Record<string, unknown> = {
 	"/api/families/1/medicine-memory": {
 		personId: "a".repeat(64),
 		people: ["a".repeat(64)],
-		permission: null,
+		places: [],
 		sightings: [],
 	},
 	"/api/families/1/care/needs": { needs: [] },
@@ -139,11 +142,11 @@ const posts: Record<string, unknown> = {
 		expiresAt: new Date(Date.now() + 15 * 60_000)
 			.toISOString()
 			.replace(/\.\d+Z$/, "Z"),
-		remembering: true,
 		sightings: [
 			{
 				id: "1",
 				container: "Lisinopril bottle",
+				category: "medicine",
 				place: "Kitchen counter, next to the kettle",
 				seenAt: "2026-01-01T08:00:00Z",
 				notFoundAt: null,
@@ -151,6 +154,7 @@ const posts: Record<string, unknown> = {
 			{
 				id: "2",
 				container: "House keys",
+				category: "keys",
 				place: "Hall table",
 				seenAt: "2026-01-01T07:00:00Z",
 				notFoundAt: "2026-01-01T09:00:00Z",
@@ -212,7 +216,7 @@ const tabs = [
 	{ name: "Visits", path: "/appointments", heading: "Upcoming visits" },
 	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
 	{ name: "Home", path: "/hud", heading: /^Home · / },
-	{ name: "Medicine", path: "/medicine", heading: "Find medicine" },
+	{ name: "Find things", path: "/find", heading: "Find things" },
 	{ name: "Going out", path: "/trip", heading: "Going out" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },
 ] as const;
@@ -267,7 +271,7 @@ const wearerPages = [
 	{ name: "home", path: "/hud", heading: /^Home · /, signedIn: true },
 	{
 		name: "finder",
-		path: `/medicine?person=1&link=${"t".repeat(43)}`,
+		path: `/find?person=1&object=2&token=${"t".repeat(43)}`,
 		heading: "Find your things",
 		signedIn: false,
 	},

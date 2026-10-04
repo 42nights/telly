@@ -5,9 +5,24 @@ import { iMessageHandler, unavailableReply } from "./agent";
 import type { WearerActions } from "./finder";
 
 const sent: string[] = [];
+// Everything the agent did in the space, in order: the read receipt, typing, and each reply.
+const events: string[] = [];
+const signals = {
+	read: async () => {
+		events.push("read");
+	},
+	startTyping: async () => {
+		events.push("typing on");
+	},
+	stopTyping: async () => {
+		events.push("typing off");
+	},
+};
 const space = {
+	...signals,
 	send: async (text: string) => {
 		sent.push(text);
+		events.push(text);
 	},
 } as unknown as Space;
 const message = (
@@ -17,6 +32,7 @@ const message = (
 ) =>
 	({
 		id: crypto.randomUUID(),
+		timestamp: new Date(),
 		direction,
 		sender: { id: sender },
 		content:
@@ -25,6 +41,7 @@ const message = (
 
 test("answers allowlisted text once and skips everything else", async () => {
 	sent.length = 0;
+	events.length = 0;
 	const asked: [bigint, string][] = [];
 	const handle = iMessageHandler({
 		senders: new Map([["+15550001111", 7n]]),
@@ -53,6 +70,15 @@ test("answers allowlisted text once and skips everything else", async () => {
 		[7n, "after?"],
 	]);
 	expect(sent).toEqual(["re: hi?", unavailableReply, "re: after?"]);
+	// Each answered message is marked read and shows typing before its reply; skipped ones get neither.
+	expect(events).toEqual(
+		["re: hi?", unavailableReply, "re: after?"].flatMap((reply) => [
+			"read",
+			"typing on",
+			reply,
+			"typing off",
+		]),
+	);
 });
 
 test("item questions, done replies, and photos go to the wearer actions", async () => {
@@ -81,6 +107,7 @@ test("item questions, done replies, and photos go to the wearer actions", async 
 	const photo = (mimeType: string) =>
 		({
 			id: crypto.randomUUID(),
+			timestamp: new Date(),
 			direction: "inbound",
 			sender: { id: "+15550001111" },
 			content: {
@@ -113,14 +140,20 @@ test("item questions, done replies, and photos go to the wearer actions", async 
 		"noted",
 		"re: where is my daughter?",
 		"saved",
+		"Please send a photo or a short text.",
 	]);
 });
 
-test("a failed reply does not stop later answers", async () => {
+test("a failed reply, read receipt, or typing signal does not stop later answers", async () => {
 	const errors = spyOn(console, "error").mockImplementation(() => {});
+	const warnings = spyOn(console, "warn").mockImplementation(() => {});
 	const delivered: string[] = [];
 	let attempts = 0;
 	const flaky = {
+		...signals,
+		read: async () => {
+			throw new Error("receipts down");
+		},
 		send: async (text: string) => {
 			attempts += 1;
 			if (attempts === 1) throw new Error("carrier down");
@@ -138,7 +171,9 @@ test("a failed reply does not stop later answers", async () => {
 		await handle(flaky, message("second?"));
 		expect(delivered).toEqual(["re: second?"]);
 		expect(errors).toHaveBeenCalledTimes(1);
+		expect(warnings).toHaveBeenCalledTimes(2);
 	} finally {
 		errors.mockRestore();
+		warnings.mockRestore();
 	}
 });

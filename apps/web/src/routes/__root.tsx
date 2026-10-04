@@ -1,4 +1,5 @@
 import { Toaster } from "@health/ui/components/sonner";
+import type { QueryClient } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -17,7 +18,8 @@ import { requireSession } from "@/lib/session";
 
 import "../index.css";
 
-type RouterAppContext = Record<string, never>;
+/** Route loaders warm the query cache before a screen opens (see `loadFamilyReads`). */
+type RouterAppContext = { readonly queryClient: QueryClient };
 
 type RootSearch = {
 	/** The family id of the person this tab shows (`useFamily`). */
@@ -38,24 +40,33 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	// No app page, nav tab, or family data shows before sign-in.
 	beforeLoad: requireSession,
 	component: RootComponent,
-	head: () => ({
+	head: ({ matches }) => ({
 		meta: [
 			{
-				title: "Health HUD",
+				title: tabTitle(matches.at(-1)?.fullPath ?? "/"),
 			},
 			{
 				name: "description",
-				content: "Health HUD and family dashboard",
-			},
-		],
-		links: [
-			{
-				rel: "icon",
-				href: "/favicon.ico",
+				content:
+					"Telly: day-to-day help for memory loss, with the family in the loop",
 			},
 		],
 	}),
 });
+
+// "Telly" on Home, "<Page> · Telly" elsewhere: the last static path segment, e.g. /settings/device → "Device · Telly".
+function tabTitle(fullPath: string): string {
+	const page = fullPath
+		.split("/")
+		.filter((s) => s && !s.startsWith("$"))
+		.at(-1);
+	if (!page) return "Telly";
+	const name =
+		page === "hud"
+			? "HUD"
+			: page.charAt(0).toUpperCase() + page.slice(1).replaceAll("-", " ");
+	return `${name} · Telly`;
+}
 
 function RootComponent() {
 	// The rendered match, not the address: the address changes before the next page has loaded, and
@@ -65,9 +76,9 @@ function RootComponent() {
 	// A finder link (#308) has no session, so it gets the bare layout too.
 	const finderLink =
 		useMatch({
-			from: "/medicine",
+			from: "/find",
 			shouldThrow: false,
-			select: (match) => match.search.link !== undefined,
+			select: (match) => match.search.token !== undefined,
 		}) === true;
 	const { person } = Route.useSearch();
 	const navigate = useNavigate();

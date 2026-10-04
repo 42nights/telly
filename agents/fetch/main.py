@@ -41,7 +41,7 @@ protocol = Protocol(name="telly-tools", version="0.1.0")
 @protocol.on_message(ToolCall, replies=ToolResult)
 async def on_tool_call(ctx: Context, sender: str, msg: ToolCall) -> None:
     try:
-        status, body = await handle_call(cfg, sender, msg.family_id, msg.request)
+        status, body = await handle_call(cfg, sender, msg.family_id, msg.request, msg.delegation)
     except Exception as exc:  # a handler must never crash the agent
         ctx.logger.error(f"unexpected {type(exc).__name__} for sender={sender}")
         status, body = error(500, "internal", "worker error")

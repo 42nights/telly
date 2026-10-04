@@ -106,13 +106,11 @@ export function LadderForm({
 	path,
 	ladder,
 	me,
-	onSaved,
 }: {
 	/** `/api/families/:familyId/care/ladder`. */
 	path: string;
 	ladder: ContactLadder | null;
 	me: string | null;
-	onSaved: () => void;
 }) {
 	const [draft, setDraft] = useState<ContactLadderInput>(
 		ladder ?? {
@@ -136,10 +134,8 @@ export function LadderForm({
 			method: "PUT",
 			body: draft,
 		});
-		if (result.kind === "ready") {
-			setStatus("Saved");
-			onSaved();
-		} else
+		if (result.kind === "ready") setStatus("Saved");
+		else
 			setStatus(
 				result.kind === "signed_out"
 					? "Sign in to save the ladder."

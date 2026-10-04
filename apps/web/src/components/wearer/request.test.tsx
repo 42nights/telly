@@ -62,7 +62,7 @@ const show = (familyId: string | null = "1", talkNote = "Loading…") => {
 	});
 	const medicine = createRoute({
 		getParentRoute: () => root,
-		path: "/medicine",
+		path: "/find",
 		component: () => <p>Medicine finder</p>,
 	});
 	const router = createRouter({
@@ -201,7 +201,7 @@ describe("typed requests", () => {
 		expect(calls).toEqual([]);
 	});
 
-	test("a medicine request opens the medicine finder with the words", async () => {
+	test("a medicine request opens the finder with the words", async () => {
 		const calls = serve({});
 		const { view, router } = show();
 		await type(view, "Where are my meds?");
@@ -426,7 +426,7 @@ describe("Talk", () => {
 		expect(onEmergency.mock.calls).toEqual([["ouch", "ouch"]]);
 	});
 
-	test("a spoken medicine request opens the medicine finder", async () => {
+	test("a spoken medicine request opens the finder", async () => {
 		granted();
 		serve({ [VOICE]: voice("where are my pills") });
 		const { view, router } = show();
