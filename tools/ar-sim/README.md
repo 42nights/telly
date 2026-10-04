@@ -24,21 +24,26 @@ Each trial uses its index as the seed, so two runs with the same pinned versions
 4. **Saved shape.** The map and the anchor go into the app's `ar.pinSaved` reply: anchor id `telly-pin-<containerId>`, and `worldMap` is base64 of a zlib-compressed archive. The trial sends that reply and the `ar.findPin` request through JSON. A baseline map is 160 to 470 KB, well under the 16 MB storage limit.
 5. **Session 2 (find).** The camera starts at a different pose with its own origin. The light is 0.6 to 1.4 times the light of session 1, with a gradient and a colour cast. An object covers 15 to 35 percent of every frame. In 12 frames, the camera turns from a random direction toward the box.
 6. **Relocalize.** Each frame matches ORB features to the map and solves PnP with RANSAC (`solvePnPRansac`, 3 px), then refines the pose with Levenberg-Marquardt. A frame gives a fix when it has at least 50 inliers. Relocalization counts only when two fixes put the anchor within 5 cm of each other. One fix from far, almost flat points can be confidently wrong. The anchor is the mean of the largest group of fixes that agree.
-7. **Project.** The session-2 VIO carries the anchor to the last frame, which looks at the box. The trial measures the 3D error (cm) and the screen error (px) against the true point on the box.
+7. **Guide, then pin.** Each session-2 frame is in one of three stages:
+   - **No fix yet:** the app shows "Move your phone slowly around the room".
+   - **Arrow:** after the first fix, the app shows an arrow toward its best guess of the anchor. The arrow also shows while the anchor is off screen. The trial measures the angle between the arrow and the true direction to the box.
+   - **Marker:** when two fixes agree and the anchor is on screen, the app shows the marker.
+8. **Project.** The session-2 VIO carries the anchor to the last frame, which looks at the box. The trial measures the 3D error (cm) and the screen error (px) against the true point on the box.
 
 ## Results
 
 Full run, 50 baseline trials and 20 trials per failure case:
 
-| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max) | within 5 cm and 20 px |
-|---|---|---|---|---|---|---|
-| baseline | 50 | 100% | 96% | 1.00 / 2.16 / 2.79 | 1.8 / 5.4 / 8.6 | 96% |
-| short-scan | 20 | 85% | 35% | 1.63 / 3.42 / 3.75 | 1.7 / 5.1 / 6.1 | 35% |
-| featureless-walls | 20 | 100% | 70% | 1.17 / 3.90 / 4.32 | 2.5 / 5.6 / 7.1 | 70% |
-| big-lighting-change | 20 | 100% | 85% | 1.10 / 2.62 / 2.64 | 2.2 / 5.1 / 7.4 | 85% |
-| far-start | 20 | 100% | 95% | 1.47 / 3.25 / 3.70 | 1.8 / 3.9 / 5.1 | 95% |
+| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max) | within 5 cm and 20 px | arrow frames | arrow error deg (median / p95) |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 50 | 100% | 96% | 1.00 / 2.16 / 2.79 | 1.8 / 5.4 / 8.6 | 96% | 86 | 0.4 / 7.0 |
+| short-scan | 20 | 85% | 35% | 1.63 / 3.42 / 3.75 | 1.7 / 5.1 / 6.1 | 35% | 38 | 0.6 / 8.7 |
+| featureless-walls | 20 | 100% | 70% | 1.17 / 3.90 / 4.32 | 2.5 / 5.6 / 7.1 | 70% | 30 | 0.8 / 3.3 |
+| big-lighting-change | 20 | 100% | 85% | 1.10 / 2.62 / 2.64 | 2.2 / 5.1 / 7.4 | 85% | 49 | 0.9 / 5.7 |
+| far-start | 20 | 100% | 95% | 1.47 / 3.25 / 3.70 | 1.8 / 3.9 / 5.1 | 95% | 32 | 0.3 / 1.5 |
 
-The bar applies to the baseline: relocalization in at least 90 percent of trials, and the p95 error at most 5 cm and at most 20 px. The baseline passes.
+The bar applies to the baseline: relocalization in at least 90 percent of trials, the p95 error at most 5 cm and at most 20 px, and the arrow p95 error at most 45 degrees (it points into the correct quarter). The baseline passes.
+The arrow guides the person earlier and more often than the marker does. In 49 of 50 baseline trials, the trial showed an arrow or a marker. In the failure cases, the arrow showed in some trials that never relocalized (short scan 2, big lighting change 1). The largest arrow error in any trial was 36.5 degrees: one baseline trial got only one fix, so it showed the arrow to the end while VIO drift built up.
 A trial that does not relocalize shows no marker. No trial put a wrong marker on the screen: every relocalized trial, failure cases included, is within 5 cm and 20 px.
 The 5 cm bar is the marker error, not a room size: the box is 8 x 12 cm, so the marker must land on it. The `far-start` case starts session 2 3 to 4 m from the box, across the room from it.
 
@@ -46,8 +51,10 @@ The 5 cm bar is the marker error, not a room size: the box is 8 x 12 cm, so the 
 ![big lighting change](evidence/big-lighting-change-1.jpg)
 ![featureless walls](evidence/featureless-walls-0.jpg)
 ![baseline, second trial](evidence/baseline-2.jpg)
+![arrow before the marker, far start](evidence/far-start-0-arrow.jpg)
+![arrow before the marker, baseline](evidence/baseline-1-arrow.jpg)
 
-Green ring: the projected pin. Red cross: the true point on the box. The files in `evidence/` are copies from `out/` after the full run. They do not show the occluder, so you can see the box.
+Green ring: the projected pin. Red cross: the true point on the box. In the arrow frames, the green arrow is the app's arrow and the red arrow is the true direction. When the guess is on screen, the arrow ends at the guess. The files in `evidence/` are copies from `out/` after the full run. They do not show the occluder, so you can see the box.
 
 ## Failure cases and app guidance
 

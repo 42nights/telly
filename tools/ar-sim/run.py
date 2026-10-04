@@ -32,7 +32,7 @@ import render as R
 CONTAINER_ID = "box-1"
 MIN_INLIERS = 50
 AGREE_M = 0.05  # two relocalization fixes agree when they put the anchor within 5 cm of each other
-PASS = {"reloc_rate": 0.90, "err_cm": 5.0, "err_px": 20.0}
+PASS = {"reloc_rate": 0.90, "err_cm": 5.0, "err_px": 20.0, "arrow_deg": 45.0}  # arrow: points into the right 90-degree sector
 BASE = {
     "span": 120, "scan_frames": 24, "plain": False,  # session 1: arc in degrees around the box
     "light": (0.6, 1.4), "gradient": 0.4, "tint": 0.1,  # session 2 lighting relative to session 1
@@ -226,8 +226,10 @@ def trial(job):
     est2 = vio(rng, true2)
     light, tint = rng.uniform(*cfg["light"]), 1 + rng.uniform(-cfg["tint"], cfg["tint"], 3)
     # ARKit keeps matching the map while it tracks. A single PnP fix on distant, near-planar points can
-    # be confidently wrong, so relocalization counts only once two fixes agree on where the anchor is.
-    fixes, first = [], None  # the anchor in session-2 coordinates, one per frame that matched the map
+    # be confidently wrong, so the marker shows only once two fixes agree on where the anchor is. Until
+    # then, and while the anchor is off screen, the app shows an arrow toward the best guess so far.
+    # Stages per frame: "-" no fix yet ("move your phone slowly"), "A" arrow, "M" marker.
+    fixes, first, stages, arrow_err, arrow_k = [], None, "", [], None
     for k, T in enumerate(true2):
         img = R.capture(R.render(faces, T), rng, light, cfg["gradient"], tint, rng.uniform(0, 6), occluder=True)
         T_mc = relocalize(orb, bf, img, mpts, mdes)
@@ -235,12 +237,21 @@ def trial(job):
             fixes.append(to_cam(T_mc @ np.linalg.inv(est2[k]), manchor[None])[0])
             if first is None and sum(np.linalg.norm(f - fixes[-1]) < AGREE_M for f in fixes) >= 2:
                 first = k
-    res["fixes"] = len(fixes)
+        if not fixes:
+            stages += "-"
+            continue
+        guess = best_guess(fixes)
+        est_c, true_c = to_cam(est2[k], guess[None])[0], to_cam(T, pin[None])[0]
+        if first is not None and on_screen(est_c):
+            stages += "M"
+            continue
+        stages += "A"
+        arrow_err.append(angle_deg(arrow(est_c), arrow(true_c)))
+        arrow_k = (k, true_c, est_c) if arrow_k is None else arrow_k
+    res.update(fixes=len(fixes), stages=stages, arrow_err=arrow_err)
     if first is None:
         return res
-    F = np.array(fixes)
-    agree = np.linalg.norm(F[:, None] - F[None], axis=2) < AGREE_M
-    anchor2 = F[agree[agree.sum(1).argmax()]].mean(0)
+    anchor2 = best_guess(fixes)
     est_c, true_c = to_cam(est2[-1], anchor2[None]), to_cam(true2[-1], pin[None])
     est_px, true_px = project(est_c)[0], project(true_c)[0]
     res.update(relocalized=True, reloc_frame=first, err_cm=100 * float(np.linalg.norm(est_c - true_c)),
@@ -252,18 +263,56 @@ def trial(job):
         cv2.putText(draw, f"{case}: {res['err_cm']:.1f} cm, {res['err_px']:.1f} px (green=pin, red=truth)",
                     (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if evidence_dir and seed < 3 and arrow_k is not None:  # the first frame that showed an arrow
+        k, true_c, est_c = arrow_k
+        draw = R.capture(R.render(faces, true2[k]), np.random.default_rng(seed), light, cfg["gradient"], tint)
+        c = np.array([R.W / 2, R.H / 2])
+        for Xc, color, width in ((est_c, (0, 255, 0), 6), (true_c, (0, 0, 255), 2)):
+            # The arrow ends at the guess when it is on screen, and points toward it from the centre when not.
+            tip = project(Xc[None])[0] if on_screen(Xc) else c + 160 * np.array([np.cos(arrow(Xc)), np.sin(arrow(Xc))])
+            cv2.arrowedLine(draw, tuple(int(v) for v in c), tuple(int(v) for v in tip), color, width, tipLength=0.25)
+        cv2.putText(draw, f"{case}: arrow before the marker (green=app, red=truth)",
+                    (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.imwrite(os.path.join(evidence_dir, f"{case}-{seed}-arrow.jpg"), draw, [cv2.IMWRITE_JPEG_QUALITY, 80])
     return res
+
+
+def best_guess(fixes):
+    """Anchor estimate: mean of the largest group of fixes within AGREE_M of each other."""
+    F = np.array(fixes)
+    agree = np.linalg.norm(F[:, None] - F[None], axis=2) < AGREE_M
+    return F[agree[agree.sum(1).argmax()]].mean(0)
+
+
+def on_screen(Xc, margin=40):
+    if Xc[2] < 0.2:
+        return False
+    u, v = project(Xc[None])[0]
+    return margin <= u <= R.W - margin and margin <= v <= R.H - margin
+
+
+def arrow(Xc):
+    """Screen direction (radians, image axes) to turn toward a camera-frame point, ahead of or behind the camera.
+    With fx == fy the projection's direction from the image centre is atan2(y, x) for points ahead."""
+    return np.arctan2(Xc[1], Xc[0])
+
+
+def angle_deg(a, b):
+    return float(np.degrees(abs((a - b + np.pi) % (2 * np.pi) - np.pi)))
 
 
 def summarize(rows):
     ok = [r for r in rows if r["relocalized"]]
     cm, px = np.array([r["err_cm"] for r in ok]), np.array([r["err_px"] for r in ok])
+    arrows = np.array([e for r in rows for e in r.get("arrow_err", [])])
     pct = lambda a, q: float(np.percentile(a, q)) if len(a) else float("nan")
     return {
         "trials": len(rows), "saved": sum(r["saved"] for r in rows), "reloc_rate": len(ok) / len(rows),
         "err_cm_median": pct(cm, 50), "err_cm_p95": pct(cm, 95), "err_cm_max": pct(cm, 100),
         "err_px_median": pct(px, 50), "err_px_p95": pct(px, 95), "err_px_max": pct(px, 100),
         "within_bar": sum(r["err_cm"] <= PASS["err_cm"] and r["err_px"] <= PASS["err_px"] for r in ok) / len(rows),
+        "arrow_frames": len(arrows), "arrow_deg_median": pct(arrows, 50), "arrow_deg_p95": pct(arrows, 95),
+        "arrow_within_45": float((arrows <= 45).mean()) if len(arrows) else float("nan"),
     }
 
 
@@ -284,17 +333,21 @@ def main():
     with Pool(a.workers) as pool:
         rows = pool.map(trial, jobs, chunksize=1)
     summary = {c: summarize([r for r in rows if r["case"] == c]) for c in CASES}
-    lines = ["| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max) | within 5 cm and 20 px |",
-             "|---|---|---|---|---|---|---|"]
+    lines = [("| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max)"
+              " | within 5 cm and 20 px | arrow frames | arrow error deg (median / p95) |"),
+             "|---|---|---|---|---|---|---|---|---|"]
     for c, s in summary.items():
         lines.append(f"| {c} | {s['trials']} | {s['saved'] / s['trials']:.0%} | {s['reloc_rate']:.0%}"
                      f" | {s['err_cm_median']:.2f} / {s['err_cm_p95']:.2f} / {s['err_cm_max']:.2f}"
-                     f" | {s['err_px_median']:.1f} / {s['err_px_p95']:.1f} / {s['err_px_max']:.1f} | {s['within_bar']:.0%} |")
+                     f" | {s['err_px_median']:.1f} / {s['err_px_p95']:.1f} / {s['err_px_max']:.1f} | {s['within_bar']:.0%}"
+                     f" | {s['arrow_frames']} | {s['arrow_deg_median']:.1f} / {s['arrow_deg_p95']:.1f} |")
     b = summary["baseline"]
-    passed = b["reloc_rate"] >= PASS["reloc_rate"] and b["err_cm_p95"] <= PASS["err_cm"] and b["err_px_p95"] <= PASS["err_px"]
+    passed = (b["reloc_rate"] >= PASS["reloc_rate"] and b["err_cm_p95"] <= PASS["err_cm"] and b["err_px_p95"] <= PASS["err_px"]
+              and b["arrow_deg_p95"] <= PASS["arrow_deg"])
     table = "\n".join(lines)
     print(table)
-    print(f"\nbaseline gate (reloc >= 90%, p95 <= 5 cm and <= 20 px): {'PASS' if passed else 'FAIL'}  ({time.time() - t0:.0f} s)")
+    print(f"\nbaseline gate (reloc >= 90%, p95 <= 5 cm and <= 20 px, arrow p95 <= {PASS['arrow_deg']:.0f} deg):"
+          f" {'PASS' if passed else 'FAIL'}  ({time.time() - t0:.0f} s)")
     with open(os.path.join(a.out, "results.json"), "w") as f:
         json.dump({"pass": passed, "summary": summary, "trials": rows}, f, indent=1)
     with open(os.path.join(a.out, "results.md"), "w") as f:
