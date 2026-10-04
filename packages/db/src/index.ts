@@ -37,27 +37,52 @@ import {
 import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
 import AddCareInstructionReducer from "./add_care_instruction_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
+import AnswerReminderReducer from "./answer_reminder_reducer";
+import ApproveClinicianShareReducer from "./approve_clinician_share_reducer";
+import CancelAppointmentReducer from "./cancel_appointment_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
+import ConfirmAppointmentReducer from "./confirm_appointment_reducer";
+import ConfirmReminderReducer from "./confirm_reminder_reducer";
 import CreateExercisePlanReducer from "./create_exercise_plan_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
+import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
+import DeleteReminderReducer from "./delete_reminder_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
+import MarkMedicineNotFoundReducer from "./mark_medicine_not_found_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
+import RecordDeliveryEventReducer from "./record_delivery_event_reducer";
 import RecordExerciseEventReducer from "./record_exercise_event_reducer";
 import RecordMealFactReducer from "./record_meal_fact_reducer";
+import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
+import RecordTripEventReducer from "./record_trip_event_reducer";
+import RememberMedicineReducer from "./remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import ReportLocationReducer from "./report_location_reducer";
+import RequestAppointmentReducer from "./request_appointment_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
+import ReviewAppointmentSummaryReducer from "./review_appointment_summary_reducer";
+import RevokeClinicianShareReducer from "./revoke_clinician_share_reducer";
+import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
+import SaveCookingProfileReducer from "./save_cooking_profile_reducer";
+import SendClinicianShareReducer from "./send_clinician_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
+import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
+import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
+import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
+import ShareLocationReducer from "./share_location_reducer";
+import SuggestAppointmentReducer from "./suggest_appointment_reducer";
+import UpdateAppointmentPrepReducer from "./update_appointment_prep_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
 import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
@@ -69,20 +94,34 @@ import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
+import MyAppointmentsRow from "./my_appointments_table";
 import MyCareGrantsRow from "./my_care_grants_table";
 import MyCareInstructionsRow from "./my_care_instructions_table";
 import MyCareNeedsRow from "./my_care_needs_table";
 import MyCareProfilesRow from "./my_care_profiles_table";
+import MyClinicianSharesRow from "./my_clinician_shares_table";
 import MyContactAttemptsRow from "./my_contact_attempts_table";
 import MyContactLaddersRow from "./my_contact_ladders_table";
+import MyCookingProfilesRow from "./my_cooking_profiles_table";
+import MyDeliveryEventsRow from "./my_delivery_events_table";
 import MyExerciseEventsRow from "./my_exercise_events_table";
 import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyLocationSharesRow from "./my_location_shares_table";
+import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
+import MyMedicineMemoryRow from "./my_medicine_memory_table";
+import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
+import MyReminderEventsRow from "./my_reminder_events_table";
+import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
+import MyReminderSettingsRow from "./my_reminder_settings_table";
+import MyRemindersRow from "./my_reminders_table";
 import MyReportsRow from "./my_reports_table";
+import MySpeakerSettingsRow from "./my_speaker_settings_table";
+import MyTripEventsRow from "./my_trip_events_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -117,6 +156,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAlertsRow),
+  myAppointments: __table({
+    name: 'my_appointments',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAppointmentsRow),
   myCareGrants: __table({
     name: 'my_care_grants',
     indexes: [
@@ -145,6 +191,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyCareProfilesRow),
+  myClinicianShares: __table({
+    name: 'my_clinician_shares',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyClinicianSharesRow),
   myContactAttempts: __table({
     name: 'my_contact_attempts',
     indexes: [
@@ -159,6 +212,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyContactLaddersRow),
+  myCookingProfiles: __table({
+    name: 'my_cooking_profiles',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCookingProfilesRow),
+  myDeliveryEvents: __table({
+    name: 'my_delivery_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyDeliveryEventsRow),
   myExerciseEvents: __table({
     name: 'my_exercise_events',
     indexes: [
@@ -194,6 +261,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myLocationShares: __table({
+    name: 'my_location_shares',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationSharesRow),
+  myLocations: __table({
+    name: 'my_locations',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationsRow),
   myMealFacts: __table({
     name: 'my_meal_facts',
     indexes: [
@@ -201,6 +282,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMealFactsRow),
+  myMedicineMemory: __table({
+    name: 'my_medicine_memory',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMedicineMemoryRow),
+  myMedicineSightings: __table({
+    name: 'my_medicine_sightings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMedicineSightingsRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -208,6 +303,34 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessagesRow),
+  myReminderEvents: __table({
+    name: 'my_reminder_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReminderEventsRow),
+  myReminderOccurrences: __table({
+    name: 'my_reminder_occurrences',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReminderOccurrencesRow),
+  myReminderSettings: __table({
+    name: 'my_reminder_settings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReminderSettingsRow),
+  myReminders: __table({
+    name: 'my_reminders',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRemindersRow),
   myReports: __table({
     name: 'my_reports',
     indexes: [
@@ -215,6 +338,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyReportsRow),
+  mySpeakerSettings: __table({
+    name: 'my_speaker_settings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MySpeakerSettingsRow),
+  myTripEvents: __table({
+    name: 'my_trip_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTripEventsRow),
   pendingAlertDeliveries: __table({
     name: 'pending_alert_deliveries',
     indexes: [
@@ -229,27 +366,52 @@ const reducersSchema = __reducers(
   __reducerSchema("acknowledge_alert", AcknowledgeAlertReducer),
   __reducerSchema("add_care_instruction", AddCareInstructionReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
+  __reducerSchema("answer_reminder", AnswerReminderReducer),
+  __reducerSchema("approve_clinician_share", ApproveClinicianShareReducer),
+  __reducerSchema("cancel_appointment", CancelAppointmentReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
+  __reducerSchema("confirm_appointment", ConfirmAppointmentReducer),
+  __reducerSchema("confirm_reminder", ConfirmReminderReducer),
   __reducerSchema("create_exercise_plan", CreateExercisePlanReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
+  __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
+  __reducerSchema("delete_reminder", DeleteReminderReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
+  __reducerSchema("mark_medicine_not_found", MarkMedicineNotFoundReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
+  __reducerSchema("record_delivery_event", RecordDeliveryEventReducer),
   __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
   __reducerSchema("record_meal_fact", RecordMealFactReducer),
+  __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
+  __reducerSchema("record_trip_event", RecordTripEventReducer),
+  __reducerSchema("remember_medicine", RememberMedicineReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("report_location", ReportLocationReducer),
+  __reducerSchema("request_appointment", RequestAppointmentReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
+  __reducerSchema("review_appointment_summary", ReviewAppointmentSummaryReducer),
+  __reducerSchema("revoke_clinician_share", RevokeClinicianShareReducer),
+  __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
+  __reducerSchema("save_cooking_profile", SaveCookingProfileReducer),
+  __reducerSchema("send_clinician_share", SendClinicianShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
+  __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
+  __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
+  __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
+  __reducerSchema("share_location", ShareLocationReducer),
+  __reducerSchema("suggest_appointment", SuggestAppointmentReducer),
+  __reducerSchema("update_appointment_prep", UpdateAppointmentPrepReducer),
   __reducerSchema("update_report", UpdateReportReducer),
   __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
   __reducerSchema("verify_exercise_plan", VerifyExercisePlanReducer),
