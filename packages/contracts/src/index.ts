@@ -223,3 +223,9 @@ export const FamilyRecords = Schema.Struct({
 	acknowledgements: Schema.Array(AlertAcknowledgement),
 });
 export type FamilyRecords = typeof FamilyRecords.Type;
+
+/** The source of every demo data copy (#334). Demo data is on while a family has such a sample. */
+export const DEMO_SOURCE = "noop:demo";
+
+/** `PUT /api/families/:familyId/demo-data`: replay a real WHOOP recording as live, or stop. */
+export const DemoDataInput = Schema.Struct({ on: Schema.Boolean });

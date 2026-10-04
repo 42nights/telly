@@ -6,7 +6,7 @@ import { Button } from "@health/ui/components/button";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, LogOut, Monitor, Users, X } from "lucide-react";
 import { useRef } from "react";
-
+import { DemoPane } from "@/components/settings/demo-data";
 import { useFamily } from "@/lib/family";
 import { setSessionToken } from "@/lib/session";
 import { setView, useView, type View } from "@/lib/view";
@@ -132,6 +132,7 @@ export function Shell() {
 				<p className="win95-status flex-1 px-2 py-0.5">
 					{family?.name ?? "No person"}
 				</p>
+				<DemoPane />
 				<p className="win95-status px-2 py-0.5">
 					{view === "wearer" ? "Wearer view" : "Family view"}
 				</p>

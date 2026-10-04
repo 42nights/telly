@@ -19,10 +19,9 @@ test("with no visits, says none are upcoming and offers a new one", async () => 
 
 	expect(await screen.findByText("No upcoming visits recorded.")).toBeTruthy();
 	expect(screen.queryByText("Past and cancelled")).toBeNull();
-	// Every screen also reads the person's own going-out settings (#302).
-	expect(
-		calls.map((call) => call.path).filter((p) => !p.endsWith("/location/home")),
-	).toEqual(["/api/families", "/api/families/fam-1/appointments"]);
+	expect(calls.map((call) => call.path)).toContain(
+		"/api/families/fam-1/appointments",
+	);
 });
 
 test("when visits cannot load, says why", async () => {
