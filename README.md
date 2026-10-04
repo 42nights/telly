@@ -306,7 +306,7 @@ flowchart LR
     api --> db[("SpacetimeDB Maincloud")]
 ```
 
-- **Use:** the Worker `telly` serves the web app and sends `/health` and `/api/*` to the Node API in a Cloudflare Container. The container pulls its keys from the secrets store at start. Report PDFs go to the private R2 bucket `telly-reports`.
+- **Use:** the Worker `telly` serves the web app and sends `/health` and `/api/*` to the Node API in a Cloudflare Container. The container pulls its keys from the secrets store at start. Report PDFs and AR medicine-pin world maps (`ar-pins/<familyId>/<containerId>.worldmap`) go to the private R2 bucket `telly-reports`.
 - **Code:** `deploy/cloudflare/`, [docs/deploy.md](docs/deploy.md), [docs/cloudflare-keys.md](docs/cloudflare-keys.md), `apps/server/src/integrations/r2.ts`. **Keys:** `TELLY_R2_*`.
 - **Proof:** `/health` and the deployed smoke passed, and the R2 token could write, read, and delete only in its bucket ([#126](https://github.com/ayaangazali/telly/pull/126)). Private PDFs: [#154](https://github.com/ayaangazali/telly/pull/154).
 - **Limits:** the CI deploy workflow is skipped until the repository variables `HEALTH_SERVER_URL` and `HEALTH_WEB_URL` are set, so deploys run from an operator machine ([#2](https://github.com/ayaangazali/telly/issues/2)).

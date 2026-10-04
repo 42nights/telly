@@ -85,7 +85,11 @@ test("a refused change returns the server's reason and does not read the memory 
 			container: "Lisinopril bottle",
 		});
 	});
-	expect(reply).toEqual({ kind: "error", message: "Remembering is off." });
+	expect(reply).toEqual({
+		kind: "error",
+		message: "Remembering is off.",
+		status: 409,
+	});
 	expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
 		`GET ${MEMORY}`,
 		`POST ${MEMORY}/sightings`,

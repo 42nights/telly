@@ -35,6 +35,7 @@ const views = [
 	"SELECT * FROM my_location_shares",
 	"SELECT * FROM my_medicine_places",
 	"SELECT * FROM my_medicine_sightings",
+	"SELECT * FROM my_medicine_ar_pins",
 	"SELECT * FROM my_family_members",
 	"SELECT * FROM my_care_profiles",
 	"SELECT * FROM my_care_instructions",

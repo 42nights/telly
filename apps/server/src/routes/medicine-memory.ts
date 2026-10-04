@@ -2,7 +2,8 @@
 // `/api/families/:familyId`. Each member has their own (#291): `?person=<identity>` names the member,
 // and the caller is the default. The module's reducers check membership, the member rule, the
 // permission, and sighting freshness again; the member check here only turns an empty view into an
-// honest `403`. Nothing here records or changes a dose.
+// honest `403`. Nothing here records or changes a dose. Turning a member's memory off also deletes
+// the AR pins of that member's sightings (`./medicine-ar-pin`) and their maps.
 import { IdentityHex } from "@health/contracts/families";
 import {
 	type MedicineMemory,
@@ -21,7 +22,9 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
 import { readAccess } from "./care-profile";
+import { deleteArPinMaps, medicineArPinRoutes } from "./medicine-ar-pin";
 
 type Ctx = Context<FamilyEnv>;
 
@@ -93,13 +96,18 @@ const readMemory = (c: Ctx): MedicineMemory => {
 	};
 };
 
-export const medicineMemoryRoutes = (): FamilyRoutes =>
+export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 	new Hono<FamilyEnv>()
+		.route("/", medicineArPinRoutes(storage))
 		.get("/medicine-memory", (c) => c.json(readMemory(c)))
 		.put("/medicine-memory", async (c) => {
 			const { enabled, places } = await decodeBody(c, SetMedicineMemory);
 			const { person } = readPerson(c);
 			const { db, familyId } = c.var;
+			// The member's sightings are the containers whose pins go with the memory.
+			const containers = enabled
+				? []
+				: readMemory(c).sightings.map((sighting) => BigInt(sighting.id));
 			await callReducer(db, (connection) =>
 				connection.reducers.setMedicineMemory({
 					familyId,
@@ -108,6 +116,8 @@ export const medicineMemoryRoutes = (): FamilyRoutes =>
 					places: places.map((place) => place.trim()),
 				}),
 			);
+			// After the module's member check; the module has deleted the pin rows.
+			await deleteArPinMaps(storage, familyId, containers);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {

@@ -9,8 +9,17 @@ import type {
 import type { MedicineDetection } from "@health/contracts/vision";
 import { Button } from "@health/ui/components/button";
 import { Link } from "@tanstack/react-router";
-import { History, MapPinOff, Save, Users } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import {
+	CameraOff,
+	History,
+	MapPinOff,
+	MapPinPlus,
+	Save,
+	ScanSearch,
+	TriangleAlert,
+	Users,
+} from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import {
 	type ApiResult,
@@ -18,8 +27,9 @@ import {
 	apiRequest,
 	familyPath,
 } from "@/lib/api";
+import { arCapabilities } from "@/lib/ar-bridge";
 import type { MedicineMemoryChange as Change } from "@/lib/medicine-memory";
-
+import { type ArOutcome, pinInAr, showInAr } from "./ar-pin";
 import { ago, sightingState } from "./logic";
 import type { PictureCheck } from "./medicine-check";
 import { useNow } from "./use-now";
@@ -90,14 +100,79 @@ function Moved({
 	);
 }
 
+type ArStep = ArOutcome | { readonly kind: "busy"; readonly text: string };
+
+/** "Pin it in AR" and "Show me in AR" for one container, with the result of the last try. */
+function ArPin({
+	familyId,
+	sighting,
+}: {
+	familyId: string;
+	sighting: MedicineSighting;
+}) {
+	const [step, setStep] = useState<ArStep | null>(null);
+	const run = async (flow: typeof pinInAr, text: string) => {
+		setStep({ kind: "busy", text });
+		setStep(await flow(familyId, sighting));
+	};
+	const busy = step?.kind === "busy";
+	const Icon =
+		step?.kind === "failed" && step.code === "camera-denied"
+			? CameraOff
+			: TriangleAlert;
+	return (
+		<div className="grid gap-2 sm:grid-cols-2">
+			<Button
+				className={lg}
+				disabled={busy}
+				onClick={() =>
+					void run(pinInAr, "Point your phone at it and tap Pin here.")
+				}
+				variant="outline"
+			>
+				<MapPinPlus aria-hidden />
+				Pin it in AR
+			</Button>
+			<Button
+				className={lg}
+				disabled={busy}
+				onClick={() =>
+					void run(showInAr, "Move your phone slowly around the room.")
+				}
+				variant="outline"
+			>
+				<ScanSearch aria-hidden />
+				Show me in AR
+			</Button>
+			{step !== null && step.kind !== "failed" && (
+				<p className="sm:col-span-2" role="status">
+					{step.text}
+				</p>
+			)}
+			{step?.kind === "failed" && (
+				<div className="win95-raised grid gap-1 p-2 sm:col-span-2" role="alert">
+					<p className="flex items-center gap-2 font-semibold">
+						<Icon aria-hidden className="size-5 shrink-0" />
+						{step.title}
+					</p>
+					<p className="text-[16px]">{step.text}</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function Sighting({
 	sighting,
 	now,
 	change,
+	ar,
 }: {
 	sighting: MedicineSighting;
 	now: number;
 	change: Change;
+	/** The family, when this device can pin in AR. */
+	ar: string | null;
 }) {
 	const [sent, setSent] = useState<Sent>(null);
 	const { outdated, old, unsure } = sightingState(sighting, now);
@@ -136,6 +211,7 @@ function Sighting({
 					It's not there
 				</Button>
 			)}
+			{ar !== null && <ArPin familyId={ar} sighting={sighting} />}
 			<Result done={null} result={sent?.kind === "ready" ? null : sent} />
 		</div>
 	);
@@ -154,6 +230,15 @@ export function LastSeen({
 	item: string;
 }) {
 	const now = useNow();
+	// AR buttons show only when the iOS shell says ARKit works; elsewhere the finder is unchanged.
+	const [arSupported, setArSupported] = useState(false);
+	useEffect(() => {
+		let live = true;
+		void arCapabilities().then((c) => live && setArSupported(c.supported));
+		return () => {
+			live = false;
+		};
+	}, []);
 	if (memory.kind === "loading" || familyId === null) return null;
 	const box = "win95-raised grid gap-2 p-3 text-[18px]";
 	if (memory.kind !== "ready")
@@ -189,6 +274,7 @@ export function LastSeen({
 			</h3>
 			{sightings.slice(0, 3).map((sighting) => (
 				<Sighting
+					ar={arSupported ? familyId : null}
 					change={change}
 					key={sighting.id}
 					now={now}
