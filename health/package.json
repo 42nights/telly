@@ -1,0 +1,46 @@
+{
+	"name": "health",
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.12",
+		"@health/config": "workspace:*",
+		"@types/node": "catalog:",
+		"fallow": "3.31.0",
+		"typescript": "^6.0.3",
+		"varlock": "catalog:"
+	},
+	"packageManager": "bun@1.4.2",
+	"private": true,
+	"scripts": {
+		"dev": "bun run --filter '*' dev",
+		"build": "bun run --filter '*' build",
+		"check-types": "bun run --filter '*' check-types",
+		"dev:native": "bun run --filter native dev",
+		"dev:web": "bun run --filter web dev",
+		"dev:server": "bun run --filter server dev",
+		"env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/",
+		"postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/",
+		"check": "biome check --write .",
+		"lint": "biome ci .",
+		"test": "bun test",
+		"smoke": "bun run --filter server smoke",
+		"check:quality": "fallow --fail-on-issues --fail-on-parse-error",
+		"check:structure": "sentrux check . && sentrux gate ."
+	},
+	"type": "module",
+	"workspaces": {
+		"packages": [
+			"apps/*",
+			"packages/*"
+		],
+		"catalog": {
+			"effect": "4.0.0",
+			"@types/node": "^26.4.1",
+			"varlock": "1.18.0",
+			"lucide-react": "^1.41.0",
+			"next-themes": "^0.4.6",
+			"sonner": "^2.0.8",
+			"@types/react-dom": "^19.2.7",
+			"tailwindcss": "^4.3.3"
+		}
+	}
+}

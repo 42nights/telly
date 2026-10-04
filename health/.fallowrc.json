@@ -1,0 +1,34 @@
+{
+	"$schema": "./node_modules/fallow/schema.json",
+	"ignoreDependencies": [
+		"babel-preset-expo",
+		"expo-splash-screen",
+		"expo-system-ui",
+		"react-native-reanimated",
+		"react-native-web",
+		"react-native-worklets"
+	],
+	"health": {
+		"maxCrap": 0
+	},
+	"boundaries": {
+		"zones": [
+			{ "name": "web", "patterns": ["apps/web/**"] },
+			{ "name": "native", "patterns": ["apps/native/**"] },
+			{ "name": "server", "patterns": ["apps/server/**"] },
+			{ "name": "contracts", "patterns": ["packages/contracts/**"] },
+			{ "name": "ui", "patterns": ["packages/ui/**"] },
+			{ "name": "db", "patterns": ["packages/db/**"] },
+			{ "name": "spacetimedb", "patterns": ["spacetimedb/**"] }
+		],
+		"rules": [
+			{ "from": "web", "allow": ["contracts", "ui"] },
+			{ "from": "native", "allow": ["contracts"] },
+			{ "from": "server", "allow": ["contracts", "db"] },
+			{ "from": "contracts", "allow": [] },
+			{ "from": "ui", "allow": [] },
+			{ "from": "db", "allow": [] },
+			{ "from": "spacetimedb", "allow": [] }
+		]
+	}
+}

@@ -1,14 +1,19 @@
 # AGENTS.md — working on NOOP
 
 > **telly:** this repo is telly, a fork of [NOOP](https://github.com/ryanbr/noop) (PolyForm
-> Noncommercial). [`health-fields.html`](health-fields.html) lists every WHOOP 5.0 / MG data field
+> Noncommercial). [`whoop/health-fields.html`](whoop/health-fields.html) lists every WHOOP 5.0 / MG data field
 > NOOP collects, how fast each one arrives (real time, events, every-15-min sync, hourly, daily), its SQLite table and column, type and unit, plus fall-detection and vibration-motor notes. Start there when building a feature
-> on strap data. [`data/`](data) holds real sample rows as one JSON array per table: summary tables
+> on strap data. [`whoop/data/`](whoop/data) holds real sample rows as one JSON array per table: summary tables
 > in full, and one hour (30 min either side of sleep onset, 2026-09-29) of every per-second stream.
-> Blobs are hex strings. `data/export.sh [noop.sqlite] [from_ts] [to_ts]` regenerates them.
+> Blobs are hex strings. `whoop/data/export.sh [noop.sqlite] [from_ts] [to_ts]` regenerates them.
 >
-> When publishing or hosting anything from this repo, publish only `health-fields.html` and `data/`.
+> When publishing or hosting anything from this repo, publish only `whoop/health-fields.html`, `whoop/data/`,
+> and the built `health/` application.
 > Never publish the rest of the repo or anyone's live NOOP database.
+>
+> [`health/`](health) is a separate application (web, phone app, and server) and follows
+> [`health/CONTRIBUTING.md`](health/CONTRIBUTING.md); its plan is [`docs/plan.md`](docs/plan.md). The
+> scope limits below apply to NOOP's source, not to `health/`.
 >
 > The rest of this file is NOOP's own contributor guide.
 

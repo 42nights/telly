@@ -1,0 +1,56 @@
+name: Health task
+description: One bounded task for the health app (health/). Claim it in a comment before you edit.
+title: "[health] "
+labels: ["health"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Coordination rules: `health/CONTRIBUTING.md`. Plan: `docs/plan.md`.
+        Never paste secret values, real health records, or personal data here.
+  - type: input
+    id: owner
+    attributes:
+      label: Owner
+      description: GitHub handle of the person who owns this task.
+      placeholder: "@handle"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What this task delivers and why.
+    validations:
+      required: true
+  - type: textarea
+    id: paths
+    attributes:
+      label: Affected paths
+      description: Files and folders this task may edit. Others must not edit them while it is claimed.
+      placeholder: "health/apps/web/src/routes/hud.tsx"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable results. Phone and web acceptance must not depend on glasses.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issues that must land first, or "none".
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Commands to run and what to observe. Post the actual results here before closing.
+      placeholder: |
+        cd health && bun run check-types && bun run test
+    validations:
+      required: true

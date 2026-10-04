@@ -1,0 +1,12 @@
+{
+	"extends": "@health/config/tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node", "bun"],
+		"paths": {
+			"@/*": ["./src/*"]
+		},
+		"jsx": "react-jsx",
+		"jsxImportSource": "hono/jsx"
+	}
+}
