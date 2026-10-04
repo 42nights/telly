@@ -62,7 +62,12 @@ const replies: Record<string, unknown> = {
 		mode: "online",
 		announcements: [],
 	},
-	"/api/families/1/medicine-memory": { permission: null, sightings: [] },
+	"/api/families/1/medicine-memory": {
+		personId: "a".repeat(64),
+		people: ["a".repeat(64)],
+		permission: null,
+		sightings: [],
+	},
 	"/api/families/1/care/needs": { needs: [] },
 	"/api/families/1/care/ladder": { ladder: null },
 	"/api/families/1/care-access": { mine: [], grants: [], history: [] },

@@ -1,8 +1,9 @@
 // Proves the AR medicine pin storage (contract telly-ar-pin) through the real server and the real
 // SpacetimeDB: the creator remembers a container, pins it with a world map, reads the same bytes
 // back, replaces and deletes it, cannot store a map over 16 MB, and turning medicine memory off
-// deletes every pin row and stored map. A signed-in non-member is refused. Only the OIDC issuer and
-// the R2 bucket are fake. The world maps are random bytes.
+// deletes every pin row and stored map of that member. A signed-in non-member is refused, and another
+// member without care access cannot see or change the pin (#291). Only the OIDC issuer and the R2
+// bucket are fake. The world maps are random bytes.
 import { beforeAll, describe, expect, test } from "bun:test";
 import {
 	MAX_WORLD_MAP_BYTES,
@@ -11,6 +12,7 @@ import {
 } from "@health/contracts/medicine-ar-pin";
 import { MedicineMemory } from "@health/contracts/medicine-memory";
 import {
+	addMember,
 	createFamily,
 	errorOf,
 	integration,
@@ -180,7 +182,54 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 		]);
 	});
 
-	test("turning medicine memory off deletes every pin row and map of the family", async () => {
+	test("another member without care access cannot see or change a pin, and their memory off keeps it", async () => {
+		const member = await harness().signIn(
+			`ar-pin-member-${crypto.randomUUID()}`,
+		);
+		await addMember(owner, family.path, member);
+		await json(
+			MedicineArPin,
+			await owner.call("PUT", pinPath(1), {
+				anchorId: "anchor-5",
+				worldMap: first.toBase64(),
+			}),
+		);
+		await json(
+			MedicineMemory,
+			await member.call("PUT", `${family.path}/medicine-memory`, {
+				enabled: true,
+				places: [],
+			}),
+		);
+		expect(await errorOf(await member.call("GET", pinPath(1)))).toEqual([
+			404,
+			"not_found",
+		]);
+		const replaced = await member.call("PUT", pinPath(1), {
+			anchorId: "anchor-6",
+			worldMap: worldMap(64, 9).toBase64(),
+		});
+		expect(await errorOf(replaced)).toEqual([404, "not_found"]);
+		expect(await errorOf(await member.call("DELETE", pinPath(1)))).toEqual([
+			403,
+			"forbidden",
+		]);
+		await json(
+			MedicineMemory,
+			await member.call("PUT", `${family.path}/medicine-memory`, {
+				enabled: false,
+				places: [],
+			}),
+		);
+		const kept = await json(
+			StoredMedicineArPin,
+			await owner.call("GET", pinPath(1)),
+		);
+		expect(kept.anchorId).toBe("anchor-5");
+		expect(stored(1)?.body).toEqual(first);
+	});
+
+	test("turning medicine memory off deletes every pin row and map of that member", async () => {
 		await json(
 			MedicineArPin,
 			await owner.call("PUT", pinPath(0), {

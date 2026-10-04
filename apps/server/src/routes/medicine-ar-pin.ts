@@ -119,20 +119,23 @@ export const medicineArPinRoutes = (storage?: R2Bucket): FamilyRoutes =>
 				const bucket = needStorage(storage);
 				const { db, familyId } = c.var;
 				const memory = rows(c);
+				const sighting = [...memory.myMedicineSightings.iter()].find(
+					(row) => row.id === containerId && row.familyId === familyId,
+				);
+				// Each member's memory is their own (#291): the sighting's member, or the caller.
+				const person = sighting?.personId.toHexString() ?? db.identity;
 				if (
-					![...memory.myMedicineMemory.iter()].some(
-						(row) => row.familyId === familyId,
+					![...memory.myMedicinePlaces.iter()].some(
+						(row) =>
+							row.familyId === familyId &&
+							row.personId.toHexString() === person,
 					)
 				)
 					throw new ApiFailure(
 						"conflict",
 						"Remembering where medicine was seen is off for this person",
 					);
-				if (
-					![...memory.myMedicineSightings.iter()].some(
-						(row) => row.id === containerId && row.familyId === familyId,
-					)
-				)
+				if (sighting === undefined)
 					throw new ApiFailure("not_found", "No such sighting for this person");
 				// The map first: a refused row leaves only an unread object, which turning medicine
 				// memory off deletes with the others.
@@ -174,4 +177,14 @@ export const deleteFamilyArPins = async (
 	if (storage === undefined) return;
 	for (const { key } of await storage.list(`ar-pins/${familyId}/`))
 		await storage.remove(key);
+};
+
+/** Deletes the stored world maps of these containers (one member's sightings); the module deletes the rows. */
+export const deleteArPinMaps = async (
+	storage: R2Bucket | undefined,
+	familyId: bigint,
+	containerIds: readonly bigint[],
+) => {
+	for (const containerId of containerIds)
+		await storage?.remove(mapKey(familyId, containerId));
 };
