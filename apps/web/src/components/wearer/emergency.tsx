@@ -1,14 +1,17 @@
+import { CareProfileRecord } from "@health/contracts/care-profile";
 import {
 	type CheckInEvent,
 	EmergencyOutcome,
 	type Handoff,
 	type LocationReading,
 } from "@health/contracts/emergency";
-import { Button } from "@health/ui/components/button";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { cn } from "@health/ui/lib/utils";
 import { Loader2, Phone, Siren, Users } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
+import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
+import { dial, isFullPhoneNumber, telHref, useContacts } from "@/lib/contacts";
 
 import { xl } from "./answer";
 import type { EmergencyIntent } from "./logic";
@@ -129,19 +132,14 @@ function Outcome({ outcome }: { outcome: EmergencyOutcome }) {
 			: outcome.family.status === "raised"
 				? "Your family got an alert."
 				: `Your family was not alerted: ${outcome.family.message}`;
-	if (outcome.action === "dispatch")
+	if (outcome.action === "help")
 		return (
 			<div className="grid gap-2" role="status">
-				<p className="font-semibold text-[22px]">
-					{outcome.call.outcome === "connected"
-						? "Practice call connected (simulated)."
-						: "Practice call failed (simulated). Get help another way."}
-				</p>
+				<p className="font-semibold text-[22px]">{family}</p>
 				<p className="text-[16px]">
-					No real call was made. Your care record was not sent to a dispatcher.
-					In a real call, follow the dispatcher's instructions.
+					To talk to someone now, press Call emergency help or Call my family.
 				</p>
-				<p className="text-[16px]">{family}</p>
+				<p className="font-bold text-[16px]">Tell the operator:</p>
 				<HandoffList handoff={outcome.handoff} />
 			</div>
 		);
@@ -222,7 +220,7 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 		[post],
 	);
 
-	// No answer by the deadline is "no response": the server dispatches.
+	// No answer by the deadline is "no response": the server alerts the family.
 	useEffect(() => {
 		if (step.kind !== "checking") return;
 		const timer = setTimeout(
@@ -253,9 +251,132 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 	return { step, help, reply, start, family };
 }
 
+const spinner = <Loader2 aria-hidden className="animate-spin" />;
+
 /**
- * Call emergency help, Call my family, and the check-in after an "ouch" or a fall. Every call is
- * simulated and says so. Automatic detection is not a source: there is no test-fall button (issue #6).
+ * Call my family: dials the first care-profile contact with a number (#26), else the number saved
+ * on this phone. With neither, one field saves a number to the care profile and dials it at once.
+ */
+function CallFamily({
+	familyId,
+	busy,
+	onCall,
+}: {
+	familyId: string | null;
+	busy: boolean;
+	onCall: () => void;
+}) {
+	const [contacts, saveContacts] = useContacts();
+	const path = familyId === null ? null : familyPath(familyId, "/care-profile");
+	const profile = useApi(CareProfileRecord, path);
+	const [draft, setDraft] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [note, setNote] = useState<string | null>(null);
+	const number =
+		(profile.kind === "ready"
+			? profile.value.profile.contacts?.find(
+					(contact) =>
+						contact.phone !== null && isFullPhoneNumber(contact.phone),
+				)?.phone
+			: null) ?? contacts.familyPhone;
+	const icon = busy ? spinner : <Users aria-hidden />;
+
+	if (number === null && profile.kind === "loading" && path !== null)
+		return (
+			<Button className={xl} disabled>
+				{spinner} Call my family
+			</Button>
+		);
+
+	if (number !== null)
+		return (
+			<div className="grid gap-1">
+				<a
+					className={cn(buttonVariants(), xl)}
+					data-slot="button"
+					href={telHref(number)}
+					onClick={onCall}
+				>
+					{icon} Call my family
+				</a>
+				{note !== null && <p className="text-[16px]">{note}</p>}
+			</div>
+		);
+
+	// The number goes to the care profile, so every device and the family's agent have it. A
+	// member who cannot edit the profile keeps it on this phone, and the screen says so.
+	const share = async (phone: string): Promise<string | null> => {
+		if (path === null || profile.kind !== "ready")
+			return `Saved on this phone only. ${
+				"message" in profile
+					? profile.message
+					: "Sign in to share it with your family."
+			}`;
+		const current = profile.value.profile;
+		const result = await apiRequest(null, path, {
+			method: "PUT",
+			body: {
+				...current,
+				contacts: [
+					...(current.contacts ?? []),
+					{ name: "Family", relationship: "Family", phone },
+				],
+			},
+		});
+		if (result.kind === "ready") return null;
+		return `Saved on this phone only. ${
+			result.kind === "signed_out"
+				? "Sign in again to share it with your family."
+				: result.message
+		}`;
+	};
+
+	const submit = (event: FormEvent) => {
+		event.preventDefault();
+		const phone = draft.trim();
+		if (!isFullPhoneNumber(phone))
+			return setError("Enter the full phone number, with the area code.");
+		setError(null);
+		saveContacts({ ...contacts, familyPhone: phone });
+		void share(phone).then(setNote);
+		onCall();
+		dial(phone);
+	};
+
+	return (
+		<form className="grid gap-2" noValidate onSubmit={submit}>
+			<label className="grid gap-1 font-bold text-[18px]">
+				Family phone number
+				<input
+					aria-describedby={error === null ? undefined : "family-phone-error"}
+					aria-invalid={error !== null}
+					autoComplete="tel"
+					className="win95-inset win95-field h-12 w-full bg-card px-2 font-normal text-[20px]"
+					inputMode="tel"
+					onChange={(event) => setDraft(event.target.value)}
+					type="tel"
+					value={draft}
+				/>
+			</label>
+			{error !== null && (
+				<p
+					className="font-bold text-[16px] text-destructive"
+					id="family-phone-error"
+				>
+					{error}
+				</p>
+			)}
+			<Button className={xl} type="submit">
+				{busy ? spinner : <Phone aria-hidden />} Save & Call
+			</Button>
+		</form>
+	);
+}
+
+/**
+ * Call emergency help, Call my family, and the check-in after an "ouch" or a fall. Each call opens
+ * the phone's dialer, where the person confirms it, and alerts the family. Automatic detection is
+ * not a source: there is no test-fall button (issue #6).
  */
 export function Emergency({
 	familyId,
@@ -264,22 +385,21 @@ export function Emergency({
 	familyId: string | null;
 	emergency: EmergencyFlow;
 }) {
-	const off = familyId === null || step.kind === "calling";
+	const [{ emergency: emergencyNumber }] = useContacts();
+	// The dialer opens without a paired person; only the family alert needs one.
+	const alerts = familyId !== null && step.kind !== "calling";
+	const busy = (what: "help" | "family") =>
+		step.kind === "calling" && step.what === what;
 	return (
 		<section aria-label="Emergency" className="win95-raised grid gap-3 p-3">
-			<div className="flex flex-wrap items-center justify-between gap-2">
-				<h2 className="font-bold text-[22px]">Emergency</h2>
-				<span className="win95-inset bg-[#ffffe1] px-2 py-0.5 font-bold text-[14px] text-black">
-					Practice mode · calls are simulated
-				</span>
-			</div>
+			<h2 className="font-bold text-[22px]">Emergency</h2>
 
 			{step.kind === "checking" ? (
 				<div className="grid gap-2" role="alertdialog" aria-label="Check-in">
 					<p className="font-semibold text-[24px]">{step.prompt}</p>
 					<p className="text-[16px]">
-						If you don't answer in {CHECK_IN_MS / 1000} seconds, I'll call for
-						help (simulated) and tell your family.
+						If you don't answer in {CHECK_IN_MS / 1000} seconds, I'll alert your
+						family.
 					</p>
 					<div className="grid grid-cols-2 gap-2">
 						<Button
@@ -299,51 +419,43 @@ export function Emergency({
 					</div>
 				</div>
 			) : (
-				<div className="grid gap-2 sm:grid-cols-2">
-					<Button
-						className={`${xl} font-bold text-destructive!`}
-						disabled={off}
-						onClick={() => void help(null)}
+				<div className="grid items-start gap-2 sm:grid-cols-2">
+					<a
+						className={cn(buttonVariants(), xl, "font-bold text-destructive!")}
+						data-slot="button"
+						href={telHref(emergencyNumber)}
+						onClick={() => alerts && void help(null)}
 					>
-						{step.kind === "calling" && step.what === "help" ? (
-							<Loader2 aria-hidden className="animate-spin" />
-						) : (
-							<Siren aria-hidden />
-						)}
+						{busy("help") ? spinner : <Siren aria-hidden />}
 						Call emergency help
-					</Button>
-					<Button className={xl} disabled={off} onClick={family}>
-						{step.kind === "calling" && step.what === "family" ? (
-							<Loader2 aria-hidden className="animate-spin" />
-						) : (
-							<Users aria-hidden />
-						)}
-						Call my family
-					</Button>
+					</a>
+					<CallFamily
+						busy={busy("family")}
+						familyId={familyId}
+						onCall={() => alerts && family()}
+					/>
 				</div>
 			)}
 
 			{familyId === null && (
 				<p className="text-[16px]">
-					Emergency calls need a paired person and sign-in.
+					Sign in with a paired person so a call also alerts your family.
 				</p>
 			)}
 			{step.kind === "calling" && (
 				<p className="flex items-center gap-2 text-[18px]" role="status">
 					<Phone aria-hidden className="size-5" />
-					{step.what === "family"
-						? "Telling your family…"
-						: "Connecting (simulated)…"}
+					{step.what === "check_in" ? "One moment…" : "Telling your family…"}
 				</p>
 			)}
 			{step.kind === "done" && <Outcome outcome={step.outcome} />}
 			{step.kind === "failed" && (
 				<p className="text-[18px] text-destructive" role="alert">
-					The request did not go through
+					The family alert did not go through
 					{step.failure.kind === "signed_out"
 						? ": sign in first."
 						: `: ${step.failure.message}`}{" "}
-					Get help another way.
+					Call for help with the buttons above.
 				</p>
 			)}
 		</section>
