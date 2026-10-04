@@ -16,12 +16,15 @@ import MarkAlertDeliveryFailedReducer from "../mark_alert_delivery_failed_reduce
 import MarkAlertDeliverySentReducer from "../mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavailable_reducer";
 import MarkMedicineNotFoundReducer from "../mark_medicine_not_found_reducer";
+import OpenCareNeedReducer from "../open_care_need_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RememberMedicineReducer from "../remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
+import RespondToCareNeedReducer from "../respond_to_care_need_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
+import SetContactLadderReducer from "../set_contact_ladder_reducer";
 import SetMedicineMemoryReducer from "../set_medicine_memory_reducer";
 import UpdateReportReducer from "../update_report_reducer";
 
@@ -35,12 +38,15 @@ export type MarkAlertDeliveryFailedParams = __Infer<typeof MarkAlertDeliveryFail
 export type MarkAlertDeliverySentParams = __Infer<typeof MarkAlertDeliverySentReducer>;
 export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliveryUnavailableReducer>;
 export type MarkMedicineNotFoundParams = __Infer<typeof MarkMedicineNotFoundReducer>;
+export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RememberMedicineParams = __Infer<typeof RememberMedicineReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
+export type RespondToCareNeedParams = __Infer<typeof RespondToCareNeedReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
+export type SetContactLadderParams = __Infer<typeof SetContactLadderReducer>;
 export type SetMedicineMemoryParams = __Infer<typeof SetMedicineMemoryReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
 

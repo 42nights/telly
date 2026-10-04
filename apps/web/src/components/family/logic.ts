@@ -23,35 +23,44 @@ export const monitoringLevel = (monitoring: Monitoring): MonitoringLevel => {
 /** A sample with no threshold to say otherwise is stale after a day. */
 const DEFAULT_MAX_AGE_SECONDS = 24 * 60 * 60;
 
+/** `sample` is null when the metric has only demo samples: those are never a reading. */
 export type Glance = {
-	readonly sample: HealthSample;
+	readonly metric: string;
+	readonly sample: HealthSample | null;
 	readonly stale: boolean;
 };
 
-/** The newest sample of each metric (by source time), with staleness from the metric's threshold. */
+/**
+ * The newest real sample of each metric (by source time), with staleness from the metric's
+ * threshold. Synthetic samples never count, as in `currentHeartRate`.
+ */
 export const newestPerMetric = (
 	samples: readonly HealthSample[],
 	thresholds: readonly AlertThreshold[],
 	now: number,
 ): Glance[] => {
-	const newest = new Map<string, HealthSample>();
+	const newest = new Map<string, HealthSample | null>();
 	for (const sample of samples) {
-		const seen = newest.get(sample.metric);
-		if (
-			seen === undefined ||
+		const seen = newest.get(sample.metric) ?? null;
+		if (sample.synthetic) {
+			if (!newest.has(sample.metric)) newest.set(sample.metric, null);
+		} else if (
+			seen === null ||
 			Date.parse(sample.sourceTime) > Date.parse(seen.sourceTime)
 		)
 			newest.set(sample.metric, sample);
 	}
-	return [...newest.values()]
-		.sort((a, b) => a.metric.localeCompare(b.metric))
-		.map((sample) => {
+	return [...newest]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([metric, sample]) => {
+			if (sample === null) return { metric, sample, stale: false };
 			const limits = thresholds
-				.filter((t) => t.metric === sample.metric)
+				.filter((t) => t.metric === metric)
 				.map((t) => t.maxAgeSeconds);
 			const maxAge =
 				limits.length === 0 ? DEFAULT_MAX_AGE_SECONDS : Math.min(...limits);
 			return {
+				metric,
 				sample,
 				stale: now - Date.parse(sample.sourceTime) > maxAge * 1000,
 			};

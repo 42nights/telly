@@ -1,7 +1,7 @@
 # Health app plan
 
 This file summarizes the approved plan for the new health application in this repository.
-The full planning board is archived as [`board.html`](board.html). GitHub issues track all implementation work.
+The full planning board is [`board.html`](board.html). GitHub issues track all implementation work.
 The product name is not decided yet.
 
 ## Product
@@ -11,7 +11,7 @@ The app helps a person with memory loss and their family. Alzheimer's care is th
 - **Medicine:** find a medicine box in a phone or browser camera frame and draw a marker and an arrow on that frame.
 - **Requests:** accept voice or text requests. Reply with screen text and multilingual audio.
 - **Family:** send family messages and health alerts. Family members ask questions about available health records.
-- **Reports:** generate, review, fill, and send a lab report to the hospital.
+- **Reports:** generate, review, and fill a lab report. Send it to the hospital after a delivery path is chosen; Finchnode only reads records.
 - **Monitoring:** detect falls and breathing problems only from validated signals. Show missing signals as "unavailable", never as "all clear".
 
 Phone and web are the primary interfaces. Every feature works without glasses.
@@ -33,7 +33,8 @@ A 3D home map is not required.
 | Voice | ElevenLabs (required) | Multilingual speech |
 | Vision | Gemini | Object detection for medicine boxes |
 | Messaging | SpacetimeDB | Stores family messages (Muse is not used) |
-| Reports | Finchnode | Hospital report handoff |
+| Reports | Finchnode | Reads lab results for reports (read only; no delivery API) |
+| iMessage | Photon Spectrum (requested) | Provider path and account access are not decided |
 | WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
 
 ### NOOP boundary
@@ -42,6 +43,7 @@ NOOP is the existing WHOOP app. Its source and documentation are in [`noop/`](..
 The new server stubs only the NOOP-to-server connection. It returns `{"status":"not_connected","source":"noop"}`.
 The stub does no transport, ingestion, or database write. It supplies no readings and no WHOOP-derived nudges.
 Clients show "NOOP not connected". Other data sources stay available with their own provenance.
+The [WHOOP capability catalog](../noop/whoop/health-fields.html) lists every field that NOOP collects, as typed placeholders. It is a reference, not a connection; #27 owns its typed contract.
 
 ### Rules that apply to every change
 
@@ -73,9 +75,10 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Gemini family conversations, service reliability, optional glasses bridge |
-| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
-| Mahesh | `maheshwarmurugesan` | Web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, optional square glasses layout |
+| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, SpacetimeDB, threshold alerts and durable delivery, data quality, Fetch.ai Agentverse, Finchnode lab results, River setup, Gemma training and inference, service reliability |
+| Ayaan | `ayaangazali` | NOOP connection boundary, optional Meta glasses SDK bridge and square layout |
+
+On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigned to `undeemed`. Mahesh wrote the October 3 backlog (#25–#51). The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK, and his other issues moved to `undeemed`.
 
 ## Build order
 
@@ -85,6 +88,18 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 4. Real providers, then the synthetic sample-to-alert smoke test.
 5. Deployment to the approved target.
 6. Optional glasses adapter, verified on hardware separately.
+
+Step 5 needs an approved deployment target. The production sign-in issuer, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication are separate decisions.
+
+## Planning board
+
+[`board.html`](board.html) is one static HTML file with no build step and no network data.
+Open it directly in a browser, or serve the folder: `python3 -m http.server 45500 -d docs`, then go to `http://127.0.0.1:45500/board.html`.
+
+- **Flows:** each demo flow and each October 3 backlog flow links its GitHub issues. "Flow details" shows the trigger, required context, prompt, allowed replies, next action, failure, sharing, and completion.
+- **Placeholders:** wireframe values in `{braces}` are typed placeholders, not readings. People and messages are synthetic. Thresholds are family-set, not clinical.
+- **Reports:** dated lab results (Finchnode, read only) stay separate from wearable observations.
+- **WHOOP:** the board links the catalog and separates confirmed BLE capability, unavailable data, unvalidated data, and deferred hardware research.
 
 ## Coordination
 

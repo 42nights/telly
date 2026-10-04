@@ -80,6 +80,9 @@ test("evidence reads as a short line with source and age, and marks old samples"
 	expect(evidenceLine({ ...sample("e", 30 * 60), stale: true }, now)).toBe(
 		"Heart rate 72 bpm · from phone · 30 h ago (old)",
 	);
+	expect(
+		evidenceLine({ ...sample("e", 3), stale: true, synthetic: true }, now),
+	).toBe("Heart rate 72 bpm · from phone · 3 min ago (demo, not real)");
 });
 
 describe("marker", () => {

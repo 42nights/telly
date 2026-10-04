@@ -54,13 +54,19 @@ export const evidenceLine = (
 		readonly source: string;
 		readonly sourceTime: string;
 		readonly stale: boolean;
+		readonly synthetic: boolean;
 	},
 	now: number,
 ): string => {
 	const metric = sample.metric.replaceAll("_", " ");
 	const name = `${metric.charAt(0).toUpperCase()}${metric.slice(1)}`;
 	const age = ago(now - Date.parse(sample.sourceTime));
-	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${sample.stale ? " (old)" : ""}`;
+	const flag = sample.synthetic
+		? " (demo, not real)"
+		: sample.stale
+			? " (old)"
+			: "";
+	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${flag}`;
 };
 
 /** Where `bpm` sits on the range bar, as a percentage clamped to the bar. */
