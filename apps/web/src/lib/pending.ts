@@ -2,12 +2,11 @@
 // a lost connection neither drops nor repeats them: each action gets one `clientId` when it is
 // queued and keeps it on every resend, and the server stores a resend with the same `clientId` once.
 // Queue only routes that dedupe by `clientId` (family messages: `send_message`; reminders: #28).
-import { tokenClaims } from "@health/contracts/session";
 import { Schema } from "effect";
 import { useSyncExternalStore } from "react";
 
 import { apiRequest } from "./api";
-import { getSessionToken, onSessionChange } from "./session";
+import { getSessionToken, onSessionChange, tokenClaims } from "./session";
 
 const KEY = "telly.pending";
 const RETRY_MS = 15_000;
