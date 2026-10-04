@@ -40,6 +40,7 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | NOOP-to-server connection | Stub only. Reports `not_connected`, with no transport, readings, or nudges |
 | Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database |
 | Sign-in check and family data API (server only) | OIDC token check and family access on every `/api` route except `/api/sources`. Tested with a local test issuer only. The production issuer is not chosen, and no sign-in screen exists ([#4](https://github.com/ayaangazali/telly/issues/4)) |
+| Threshold alerts and durable delivery (server only) | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
 | Product features from the overview | Planned |
 | Providers: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
@@ -87,8 +88,17 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `GET /api/families/:familyId` | That family's samples, alerts, messages, and acknowledgements |
 | `POST /api/families/:familyId/members` | Add a person by their database identity |
 | `POST /api/families/:familyId/samples` | Record a health sample; the database sets the receive time |
+| `GET /api/families/:familyId/alerts` | Alerts, newest first, each with its source sample, delivery state, and acknowledgements |
+| `POST /api/families/:familyId/alerts/:alertId/acknowledgements` | Acknowledge an alert as the caller; repeating it returns the same acknowledgement |
+| `GET`, `PUT /api/families/:familyId/alert-thresholds` | List the alert rules; set one rule per metric and direction |
+| `DELETE /api/families/:familyId/alert-thresholds/:thresholdId` | Remove a rule |
+| `GET /api/families/:familyId/monitoring` | Each rule's state from the newest validated sample: `in_range`, `out_of_range`, or `unavailable` (`missing` or `stale`) |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
+
+When the database records a validated sample, it checks the family's rules in the same transaction. A fresh sample in the rule's unit that is strictly beyond the limit writes the alert and its queued delivery together. A replayed sample (same rule, source, and source time) raises nothing new. A stale sample raises nothing, and monitoring shows it as `unavailable`, never in range. No model takes part in this check.
+
+The alert outbox sends each delivery at least once, with the idempotency key `alert-<alertId>`. It runs as the identity that published the module: set `ALERT_OPERATOR_TOKEN` to that identity's SpacetimeDB token. Without it, deliveries stay `queued`. Without a delivery transport, they become `unavailable`, never `sent`. Delivery (`queued`, `sent`, `failed`, `unavailable`) and family acknowledgement are separate.
 
 ## Checks
 
@@ -99,7 +109,7 @@ bun run test              # Behavior tests
 bun run check:quality     # Fallow: unused code, duplication, complexity, import boundaries
 bun run check:structure   # Sentrux rules and regression gate
 bun run --filter server build && bun run smoke   # Real server responses under Node
-bun run db:test           # Family-access tests on an isolated in-memory local SpacetimeDB
+bun run db:test           # Family-access, alert, and outbox tests on an isolated in-memory local SpacetimeDB
 bun run build             # Production build of every app
 ```
 

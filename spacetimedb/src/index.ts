@@ -259,7 +259,9 @@ const raiseThresholdAlerts = (ctx: Ctx, sample: StoredSample) => {
 			age >= -MAX_CLOCK_AHEAD_MICROS &&
 			age <= BigInt(rule.maxAgeSeconds) * 1_000_000n;
 		const above = rule.direction.tag === "Above";
-		const beyond = above ? sample.value > rule.limit : sample.value < rule.limit;
+		const beyond = above
+			? sample.value > rule.limit
+			: sample.value < rule.limit;
 		if (rule.unit !== sample.unit || !fresh || !beyond) continue;
 		const key = `${rule.id}/${sample.source}/${sourceMicros}`;
 		if (ctx.db.thresholdTrigger.key.find(key) !== null) continue;
@@ -441,7 +443,9 @@ const openDelivery = (ctx: Ctx, alertId: bigint) => {
 };
 
 const secondsFromNow = (ctx: Ctx, seconds: number) =>
-	new Timestamp(ctx.timestamp.microsSinceUnixEpoch + BigInt(seconds) * 1_000_000n);
+	new Timestamp(
+		ctx.timestamp.microsSinceUnixEpoch + BigInt(seconds) * 1_000_000n,
+	);
 
 /** Takes a due delivery for `leaseSeconds`. A worker that stops mid-send loses the lease, and the delivery is retried. */
 export const claimAlertDelivery = spacetimedb.reducer(
@@ -589,11 +593,31 @@ export const myAlertDeliveries = spacetimedb.view(
 // ponytail: scans the whole outbox on each change; index the status when delivery history grows.
 export const pendingAlertDeliveries = spacetimedb.view(
 	{ name: "pending_alert_deliveries", public: true },
-	t.array(alertDelivery.rowType),
+	t.array(
+		t.object("PendingDelivery", {
+			alertId: t.u64(),
+			familyId: t.u64(),
+			summary: t.string(),
+			status: DeliveryStatus,
+			attempts: t.u32(),
+			notBefore: t.timestamp(),
+			updatedAt: t.timestamp(),
+		}),
+	),
 	(ctx) =>
 		ctx.db.operator.identity.find(ctx.sender) === null
 			? []
-			: [...ctx.db.alertDelivery.iter()].filter(
-					(d) => d.status.tag === "Queued" || d.status.tag === "Unavailable",
-				),
+			: [...ctx.db.alertDelivery.iter()]
+					.filter(
+						(d) => d.status.tag === "Queued" || d.status.tag === "Unavailable",
+					)
+					.map((d) => ({
+						alertId: d.alertId,
+						familyId: d.familyId,
+						summary: d.summary,
+						status: d.status,
+						attempts: d.attempts,
+						notBefore: d.notBefore,
+						updatedAt: d.updatedAt,
+					})),
 );

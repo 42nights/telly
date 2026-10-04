@@ -15,7 +15,7 @@ import {
 
 
 export default __t.row({
-  alertId: __t.u64().primaryKey().name("alert_id"),
+  alertId: __t.u64().name("alert_id"),
   familyId: __t.u64().name("family_id"),
   summary: __t.string(),
   get status() {
@@ -23,6 +23,5 @@ export default __t.row({
   },
   attempts: __t.u32(),
   notBefore: __t.timestamp().name("not_before"),
-  lastError: __t.option(__t.string()).name("last_error"),
   updatedAt: __t.timestamp().name("updated_at"),
 });

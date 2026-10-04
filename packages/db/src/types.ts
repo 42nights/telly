@@ -137,6 +137,19 @@ export type Operator = __Infer<typeof Operator>;
 export const PendingAlertDeliveries = __t.object("PendingAlertDeliveries", {});
 export type PendingAlertDeliveries = __Infer<typeof PendingAlertDeliveries>;
 
+export const PendingDelivery = __t.object("PendingDelivery", {
+  alertId: __t.u64(),
+  familyId: __t.u64(),
+  summary: __t.string(),
+  get status() {
+    return DeliveryStatus;
+  },
+  attempts: __t.u32(),
+  notBefore: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {
   Validated: __t.unit(),

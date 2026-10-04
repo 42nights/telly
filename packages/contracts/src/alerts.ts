@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { NewHealthSample } from "./families";
 import { Alert, AlertAcknowledgement, HealthSample } from "./index";
 
 // Threshold alerts and their delivery (issue #5). Ids, identities, and times use the same string
@@ -13,10 +14,10 @@ export type ThresholdDirection = typeof ThresholdDirection.Type;
  * is stale: older than `maxAgeSeconds` when it arrives.
  */
 export const AlertThresholdInput = Schema.Struct({
-	metric: Schema.NonEmptyString,
+	metric: NewHealthSample.fields.metric,
 	direction: ThresholdDirection,
 	limit: Schema.Finite,
-	unit: Schema.NonEmptyString,
+	unit: NewHealthSample.fields.unit,
 	maxAgeSeconds: Schema.Int.check(
 		Schema.isBetween({ minimum: 1, maximum: 7 * 24 * 60 * 60 }),
 	),

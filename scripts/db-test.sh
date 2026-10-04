@@ -32,4 +32,5 @@ token=$(curl -fsS -X POST "$server/v1/identity" | sed -n 's/.*"token":"\([^"]*\)
 spacetime --config-path "$data/cli.toml" login --token "$token" >/dev/null
 spacetime --config-path "$data/cli.toml" publish --server "$server" --module-path spacetimedb --yes health-test
 SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIMEDB_OPERATOR_TOKEN="$token" \
-	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/alerts.db.test.ts
+	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
+	apps/server/src/routes/alerts.test.ts
