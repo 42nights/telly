@@ -1,8 +1,9 @@
 // Runs against a real local SpacetimeDB with the module published: `bun run db:test` starts an
 // isolated in-memory database, publishes, sets SPACETIMEDB_URI and SPACETIMEDB_DATABASE, and runs
 // this file. Each connection below is a separate identity issued by that database.
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { describe, expect, spyOn, test } from "bun:test";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { Identity, Timestamp } from "spacetimedb";
 import {
 	callDb,
@@ -252,4 +253,94 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 		expect(Date.now() - started).toBeLessThan(3000);
 		down.close();
 	});
+
+	test("a database that never answers an open fails as unavailable after three timed-out attempts", async () => {
+		if (config === undefined) throw new Error("no database configured");
+		const hung = await dbProxy(config.uri);
+		hung.setMode("freeze");
+		try {
+			const error = await Effect.runPromise(
+				Effect.gen(function* () {
+					const opening = yield* Effect.forkChild(
+						Effect.flip(
+							Effect.scoped(openFamilyDb({ ...config, uri: hung.uri })),
+						),
+					);
+					// Three 5 s attempts with 250 ms and 500 ms backoff: about 15.75 s of database silence.
+					let waited = 0;
+					while (opening.pollUnsafe() === undefined && waited < 60_000) {
+						yield* TestClock.adjust("250 millis");
+						waited += 250;
+						yield* Effect.yieldNow;
+					}
+					expect(opening.pollUnsafe()).toBeDefined();
+					expect(waited).toBeGreaterThanOrEqual(15_750);
+					return yield* Fiber.join(opening);
+				}).pipe(Effect.provide(TestClock.layer())),
+			);
+			expect(error).toEqual(new DbUnavailable({ reason: "connect timed out" }));
+		} finally {
+			hung.close();
+		}
+	});
+
+	test("a refused subscription fails the open at once as unavailable and closes its socket", async () => {
+		if (config === undefined) throw new Error("no database configured");
+		const link = await dbProxy(config.uri);
+		// As a module without the server's views would: the database refuses the subscription.
+		const builder = await Effect.runPromise(
+			Effect.scoped(
+				Effect.map(openFamilyDb(config), ({ connection }) =>
+					Object.getPrototypeOf(connection.subscriptionBuilder()),
+				),
+			),
+		);
+		const subscribe = builder.subscribe;
+		const refused = spyOn(builder, "subscribe").mockImplementation(function (
+			this: unknown,
+		) {
+			return subscribe.call(this, ["SELECT * FROM no_such_view"]);
+		});
+		try {
+			const accepted = link.nextSocket();
+			const started = Date.now();
+			const error = await Effect.runPromise(
+				Effect.flip(Effect.scoped(openFamilyDb({ ...config, uri: link.uri }))),
+			);
+			expect(error).toEqual(
+				new DbUnavailable({ reason: "subscription failed" }),
+			);
+			expect(refused).toHaveBeenCalledTimes(3);
+			// Far below one 5 s connect timeout: the refusal is not waited out.
+			expect(Date.now() - started).toBeLessThan(3000);
+			await closed(await accepted);
+		} finally {
+			refused.mockRestore();
+			link.close();
+		}
+	});
+
+	test("a call the database never answers fails as unavailable after 5 s", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const family = yield* openFamilyDb(config);
+					// The SDK never settles a call the database does not answer.
+					const call = yield* Effect.forkChild(
+						Effect.flip(callDb(family, () => new Promise<never>(() => {}))),
+					);
+					yield* Effect.yieldNow;
+					yield* TestClock.adjust("4999 millis");
+					expect(call.pollUnsafe()).toBeUndefined();
+					yield* TestClock.adjust("1 millis");
+					expect(yield* Fiber.join(call)).toEqual(
+						new DbUnavailable({ reason: "call timed out" }),
+					);
+					// A timed-out call leaves the connection usable.
+					yield* callDb(family, (c) =>
+						c.reducers.createFamily({ name: "After timeout" }),
+					);
+				}),
+			).pipe(Effect.provide(TestClock.layer())),
+		));
 });

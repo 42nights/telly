@@ -2,7 +2,8 @@
 // which becomes the delivery operator, and passes its token in SPACETIMEDB_OPERATOR_TOKEN. The
 // transports here, except `familyThread`, are local test doubles: they prove the outbox protocol.
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Logger } from "effect";
+import { TestClock } from "effect/testing";
 import { Timestamp } from "spacetimedb";
 import {
 	type DbConfig,
@@ -10,8 +11,10 @@ import {
 	openFamilyDb,
 	readFamilyRecords,
 } from "../db";
+import { dbProxy } from "../db-proxy";
 import {
 	type AlertMessage,
+	alertOutboxWorker,
 	DeliveryFailure,
 	familyThread,
 	runAlertOutbox,
@@ -101,6 +104,25 @@ const rejection = (operation: () => Promise<void>) =>
 		operation().then(
 			() => "accepted",
 			(error: unknown) => String(error),
+		),
+	);
+
+/** Captures each log line's message parts in place of the console. */
+const capturedLogs = () => {
+	const logs: unknown[][] = [];
+	const layer = Logger.layer([
+		Logger.make(({ message }) => {
+			logs.push([message].flat());
+		}),
+	]);
+	return { logs, layer };
+};
+
+/** Waits until the operator's queue holds the family's delivery, so a worker's first poll sees it. */
+const queued = (operator: FamilyDb, familyId: bigint) =>
+	eventually(() =>
+		[...operator.connection.db.pendingAlertDeliveries.iter()].find(
+			(row) => row.familyId === familyId,
 		),
 	);
 
@@ -454,5 +476,234 @@ describe.skipIf(config === undefined)("threshold alerts and outbox", () => {
 					).toBe(5_000_000);
 				}),
 			),
+		));
+
+	test("a send that never finishes times out and is queued for retry", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const db = yield* openFamilyDb(config);
+					const operator = yield* openOperator(config);
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					yield* queued(operator, familyId);
+					const sending = Promise.withResolvers<void>();
+					yield* Effect.forkScoped(
+						runAlertOutbox(
+							operator,
+							(message) =>
+								message.familyId === familyId.toString()
+									? Effect.andThen(
+											Effect.sync(() => sending.resolve()),
+											Effect.never,
+										)
+									: Effect.void,
+							"50 millis",
+						),
+					);
+					yield* Effect.promise(() => sending.promise);
+					yield* TestClock.adjust("20 seconds");
+					const delivery = yield* eventually(() => {
+						const found = readAlerts(db, familyId.toString())[0]?.delivery;
+						return found?.lastError ? found : undefined;
+					});
+					expect(delivery).toMatchObject({
+						status: "queued",
+						attempts: 1,
+						lastError: "Delivery timed out",
+					});
+				}),
+			).pipe(Effect.provide(TestClock.layer())),
+		));
+
+	test("a connection that drops after a send stops the loop for a reopen and leaves the delivery to be resent", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					if (operatorToken === undefined)
+						throw new Error("SPACETIMEDB_OPERATOR_TOKEN is unset");
+					const link = yield* Effect.acquireRelease(
+						Effect.promise(() => dbProxy(config.uri)),
+						(proxy) => Effect.sync(() => proxy.close()),
+					);
+					const db = yield* openFamilyDb(config);
+					const operator = yield* openFamilyDb({
+						...config,
+						uri: link.uri,
+						token: operatorToken,
+					});
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					const { alertId } = yield* queued(operator, familyId);
+					const { logs, layer } = capturedLogs();
+					// The send reaches the family, then the network drops before the report.
+					const stopped = yield* Effect.flip(
+						runAlertOutbox(
+							operator,
+							(message) =>
+								Effect.sync(() => {
+									if (message.familyId === familyId.toString()) link.drop();
+								}),
+							"50 millis",
+						).pipe(Effect.provide(layer)),
+					);
+					expect(stopped).toEqual(new Error("operator connection closed"));
+					expect(logs.map((parts) => parts[0])).toContain(
+						`alert ${alertId} delivery step failed`,
+					);
+					// Claimed but never reported sent: the lease runs out and a reopened worker resends.
+					const delivery = yield* eventually(() => {
+						const found = readAlerts(db, familyId.toString())[0]?.delivery;
+						return found?.attempts === 1 ? found : undefined;
+					});
+					expect(delivery).toMatchObject({ status: "queued", lastError: null });
+				}),
+			),
+		));
+
+	test("a transport without credentials leaves the delivery unavailable with its reason, never failed", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const db = yield* openFamilyDb(config);
+					const operator = yield* openOperator(config);
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					yield* queued(operator, familyId);
+					yield* Effect.forkScoped(
+						runAlertOutbox(
+							operator,
+							(message) =>
+								message.familyId === familyId.toString()
+									? Effect.fail(
+											new DeliveryFailure({
+												kind: "unavailable",
+												reason: "SMS is not configured",
+											}),
+										)
+									: Effect.void,
+							"200 millis",
+						),
+					);
+					const delivery = yield* eventually(() => {
+						const found = readAlerts(db, familyId.toString())[0]?.delivery;
+						return found?.status === "unavailable" ? found : undefined;
+					});
+					expect(delivery.lastError).toBe("SMS is not configured");
+				}),
+			),
+		));
+
+	test("the family thread refuses a send from a connection that is not the operator, as retryable", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const db = yield* openFamilyDb(config);
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					const [alert] = readAlerts(db, familyId.toString());
+					if (alert === undefined) throw new Error("alert missing");
+					const failure = yield* Effect.flip(
+						familyThread(db)({
+							alertId: alert.alert.id,
+							familyId: familyId.toString(),
+							summary: alert.alert.summary,
+							idempotencyKey: `alert-${alert.alert.id}`,
+						}),
+					);
+					expect(failure).toEqual(
+						new DeliveryFailure({
+							kind: "retryable",
+							reason: "The family thread did not accept the alert",
+						}),
+					);
+					expect(
+						readFamilyRecords(db).messages.filter(
+							(m) => m.familyId === familyId.toString(),
+						),
+					).toEqual([]);
+				}),
+			),
+		));
+
+	test("without an operator the worker only warns, and deliveries stay queued", async () => {
+		const { logs, layer } = capturedLogs();
+		await Effect.runPromise(
+			alertOutboxWorker(undefined).pipe(Effect.provide(layer)),
+		);
+		expect(logs).toEqual([
+			[
+				"The alert outbox is not configured (ALERT_OPERATOR_TOKEN and the SpacetimeDB settings): deliveries stay queued",
+			],
+		]);
+	});
+
+	test("the worker delivers a due alert to its family thread as the operator", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					if (operatorToken === undefined)
+						throw new Error("SPACETIMEDB_OPERATOR_TOKEN is unset");
+					const db = yield* openFamilyDb(config);
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					yield* Effect.forkScoped(
+						alertOutboxWorker({ ...config, token: operatorToken }),
+					);
+					const delivery = yield* eventually(() => {
+						const found = readAlerts(db, familyId.toString())[0]?.delivery;
+						return found?.status === "sent" ? found : undefined;
+					});
+					expect(delivery.attempts).toBe(1);
+					const thread = yield* eventually(() => {
+						const rows = readFamilyRecords(db).messages.filter(
+							(m) => m.familyId === familyId.toString(),
+						);
+						return rows.length > 0 ? rows : undefined;
+					});
+					expect(thread).toEqual([
+						expect.objectContaining({
+							body: expect.stringMatching(/^Synthetic: heart_rate 150 bpm /),
+							clientId: expect.stringMatching(/^alert-\d+$/),
+						}),
+					]);
+				}),
+			),
+		));
+
+	test("a worker whose database is down warns and reopens every 5 s instead of stopping", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const down = yield* Effect.acquireRelease(
+						Effect.promise(() => dbProxy(config.uri)),
+						(proxy) => Effect.sync(() => proxy.close()),
+					);
+					down.setMode("refuse");
+					const { logs, layer } = capturedLogs();
+					const worker = yield* Effect.forkScoped(
+						alertOutboxWorker({ ...config, uri: down.uri }).pipe(
+							Effect.provide(layer),
+						),
+					);
+					const reopenings = () =>
+						logs.filter(
+							(parts) => parts[0] === "alert outbox stopped; reopening",
+						).length;
+					// Advance the open's backoff and the 5 s reopen delay; each turn lets the refusals arrive.
+					let waited = 0;
+					while (reopenings() < 2 && waited < 60_000) {
+						yield* TestClock.adjust("250 millis");
+						waited += 250;
+						yield* Effect.promise(
+							() => new Promise<void>((resolve) => setImmediate(resolve)),
+						);
+					}
+					expect(reopenings()).toBe(2);
+					// Two failed opens (each about 0.75 s of backoff) and one 5 s wait between them.
+					expect(waited).toBeGreaterThanOrEqual(5_000);
+					expect(worker.pollUnsafe()).toBeUndefined();
+				}),
+			).pipe(Effect.provide(TestClock.layer())),
 		));
 });
