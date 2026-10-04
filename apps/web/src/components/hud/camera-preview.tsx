@@ -219,7 +219,7 @@ export function CameraPreview({
 							video.srcObject = state.stream;
 					}}
 				/>
-				<div className="absolute inset-x-2 bottom-2 flex flex-wrap items-end justify-end gap-2">
+				<div className="camera-controls absolute inset-x-2 bottom-2 flex flex-wrap items-end justify-end gap-2">
 					{children}
 					<Button onClick={stop}>
 						<CameraOff aria-hidden />

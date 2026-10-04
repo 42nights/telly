@@ -130,7 +130,7 @@ function PictureTag({
 		text =
 			age === "just now" ? "Picture taken just now" : `Picture from ${age}`;
 	return (
-		<span className="win95-raised absolute top-2 left-2 flex items-center gap-1.5 bg-[#ffffe1] px-2 py-1 text-[15px] text-black">
+		<span className="win95-raised absolute top-2 left-[var(--chip-left,0.5rem)] flex items-center gap-1.5 bg-[#ffffe1] px-2 py-1 text-[15px] text-black">
 			{text}
 		</span>
 	);
@@ -138,14 +138,17 @@ function PictureTag({
 
 /**
  * The checked picture in place of the live video, with marker boxes drawn in frame pixels: the
- * SVG viewBox is the frame, so the boxes scale with the picture exactly.
+ * SVG viewBox is the frame, so the boxes scale with the picture exactly. With `cover`, the picture
+ * fills its box and is cropped like a covering video.
  */
 export function CheckedPicture({
 	check,
 	best,
+	cover = false,
 }: {
 	check: PictureCheck;
 	best: ObjectDetection | null;
+	cover?: boolean;
 }) {
 	const detections =
 		check.result.kind === "done" ? check.result.detections : [];
@@ -153,7 +156,7 @@ export function CheckedPicture({
 		<>
 			<img
 				alt="Camera frame that was checked"
-				className="absolute inset-0 size-full bg-black object-contain"
+				className={`absolute inset-0 size-full bg-black ${cover ? "object-cover" : "object-contain"}`}
 				src={check.picture}
 			/>
 			{/* Before the markers, so a marker's ✓/? tag stays on top where they overlap. */}
@@ -161,7 +164,7 @@ export function CheckedPicture({
 			<svg
 				aria-hidden
 				className="pointer-events-none absolute inset-0 size-full"
-				preserveAspectRatio="xMidYMid meet"
+				preserveAspectRatio={cover ? "xMidYMid slice" : "xMidYMid meet"}
 				viewBox={`0 0 ${check.frame.width} ${check.frame.height}`}
 			>
 				{detections.map((detection) => (

@@ -8,12 +8,13 @@ import { FullScreenButton, useFullScreen } from "./full-screen";
 installDom();
 
 function Finder() {
-	const screen = useFullScreen<HTMLDivElement>({
-		normal: "normal",
-		full: "full",
-	});
+	const screen = useFullScreen<HTMLDivElement>();
 	return (
-		<div data-testid="frame" {...screen.frame}>
+		<div
+			className={screen.full ? "full" : "normal"}
+			data-testid="frame"
+			{...screen.frame}
+		>
 			<FullScreenButton full={screen.full} toggle={screen.toggle} />
 		</div>
 	);

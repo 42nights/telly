@@ -292,7 +292,7 @@ export function Thumb({ sighting }: { sighting: MedicineSighting }) {
  * "Where is my…?": the member's saved things, newest first. Picking one shows where it was last
  * seen, where it is usually kept, and on an iPhone with a pin starts finding it in AR. `asked` is
  * the category of the request, which picks the first matching thing; `open` is a thing a link
- * opens, as if the person picked it.
+ * opens, as if the person picked it. `compact` (over the camera) shows only that one thing.
  */
 export function SavedThings({
 	memory,
@@ -301,6 +301,7 @@ export function SavedThings({
 	asked,
 	ar,
 	open,
+	compact = false,
 }: {
 	memory: ApiState<MedicineMemory>;
 	change: Change;
@@ -308,6 +309,7 @@ export function SavedThings({
 	asked: ObjectDetection["category"] | null;
 	ar: boolean;
 	open: string | null;
+	compact?: boolean;
 }) {
 	const now = useNow();
 	const [picked, setPicked] = useState<{
@@ -325,7 +327,7 @@ export function SavedThings({
 		);
 	const { places, sightings } = memory.value;
 	if (sightings.length === 0)
-		return (
+		return compact ? null : (
 			<p className="text-[16px] text-muted-foreground">
 				No saved things yet. Point the camera at something you often lose, then
 				tap Save.
@@ -334,6 +336,23 @@ export function SavedThings({
 	const shown =
 		sightings.find((s) => s.id === picked?.id) ??
 		(asked === null ? undefined : sightings.find((s) => s.category === asked));
+	const detail = shown && (
+		<Sighting
+			ar={ar ? familyId : null}
+			change={change}
+			familyId={familyId}
+			findNow={picked?.id === shown.id && picked.byTap}
+			key={shown.id}
+			now={now}
+			places={places}
+			sighting={shown}
+			sightings={sightings}
+		/>
+	);
+	if (compact)
+		return detail ? (
+			<section aria-label="Where is my…?">{detail}</section>
+		) : null;
 	return (
 		<section aria-label="Where is my…?" className={box}>
 			<h3 className="flex items-center gap-2 font-semibold">
@@ -362,19 +381,9 @@ export function SavedThings({
 					</li>
 				))}
 			</ul>
-			{shown !== undefined && (
+			{detail && (
 				<>
-					<Sighting
-						ar={ar ? familyId : null}
-						change={change}
-						familyId={familyId}
-						findNow={picked?.id === shown.id && picked.byTap}
-						key={shown.id}
-						now={now}
-						places={places}
-						sighting={shown}
-						sightings={sightings}
-					/>
+					{detail}
 					<p className="text-[16px]">
 						This is where it was seen before, not where it is now. Go there and
 						check with the camera.

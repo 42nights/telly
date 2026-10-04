@@ -62,7 +62,8 @@ function Found({
 	const labelRule = medicine
 		? "Check the label on the box before you take anything."
 		: "";
-	const spoken = [`Looks like ${looksLike(best)}.`, way, unsure, labelRule]
+	// No direction: by the time the audio plays the phone has moved. The live guide speaks it.
+	const spoken = [`Looks like ${looksLike(best)}.`, unsure, labelRule]
 		.filter(Boolean)
 		.join(" ");
 	const saidThis = speech.key === `${check.id}:${choice.skipped}`;
@@ -71,7 +72,7 @@ function Found({
 			<p className="break-words text-[22px]">
 				Looks like: <b>{looksLike(best)}</b>
 			</p>
-			<p className="font-semibold">{way}</p>
+			<p className="finder-way font-semibold">{way}</p>
 			{unsure !== "" && <p className="font-semibold">{unsure}</p>}
 			{medicine && (
 				<p className="win95-raised flex items-start gap-3 p-4 text-[18px]">
@@ -79,7 +80,7 @@ function Found({
 					{labelRule}
 				</p>
 			)}
-			<div className="grid grid-cols-2 gap-2">
+			<div className="finder-actions grid grid-cols-2 gap-2">
 				<Button className={`win95-primary ${xl}`} onClick={choice.save}>
 					<Save aria-hidden />
 					Save

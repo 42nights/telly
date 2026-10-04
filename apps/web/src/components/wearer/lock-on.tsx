@@ -5,7 +5,7 @@
 
 import type { ObjectDetection } from "@health/contracts/vision";
 import { Button } from "@health/ui/components/button";
-import { ArrowUp, Compass } from "lucide-react";
+import { Compass, Volume2, VolumeX } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 import {
@@ -17,6 +17,7 @@ import {
 	seenAt,
 	type Vec,
 } from "./guide";
+import { type Guide, GuideCue } from "./guide-cue";
 import { objectName } from "./logic";
 import { capture, detect, type PictureCheck } from "./medicine-check";
 import { Marker } from "./medicine-picture";
@@ -33,9 +34,6 @@ import {
 } from "./tracker";
 
 type Size = { readonly width: number; readonly height: number };
-
-/** One instruction on the camera view: an arrow (screen angle, radians) and its words. */
-type Guide = { readonly angle: number; readonly words: string };
 
 type View = {
 	readonly frame: Size;
@@ -176,6 +174,8 @@ export function LockOn({
 		guide: null,
 	});
 	const orientation = useOrientation();
+	// ponytail: on for each new lock; remember the choice per device if people turn it off often.
+	const [voice, setVoice] = useState(true);
 	const latest = orientation.latest;
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the parent keys this per check and object.
@@ -295,15 +295,13 @@ export function LockOn({
 			: view.state === "locked"
 				? "✓ Locked on"
 				: `Looking for ${name}…`;
-	const turn = (guide: Guide) => ({
-		transform: `rotate(${guide.angle + Math.PI / 2}rad)`,
-	});
 	return (
 		<>
+			{/* `slice`: the finder's video covers its box, so the frame is cropped the same way. */}
 			<svg
 				aria-hidden
 				className="pointer-events-none absolute inset-0 size-full"
-				preserveAspectRatio="xMidYMid meet"
+				preserveAspectRatio="xMidYMid slice"
 				viewBox={`0 0 ${view.frame.width} ${view.frame.height}`}
 			>
 				{view.box !== null && (
@@ -316,37 +314,22 @@ export function LockOn({
 					</g>
 				)}
 			</svg>
-			{view.state === "lost" && view.guide !== null && (
-				<div
-					aria-hidden
-					className="pointer-events-none absolute inset-0 grid place-items-center"
-				>
-					<ArrowUp
-						className="size-24 text-[#ffd400] drop-shadow-[0_0_3px_#000] md:size-44"
-						strokeWidth={3}
-						style={turn(view.guide)}
-					/>
-				</div>
-			)}
-			{view.guide !== null && (
-				<div className="pointer-events-none absolute inset-x-0 top-12 flex justify-center px-2">
-					<p className="flex items-center gap-2 border-2 border-[#ffd400] bg-black/85 px-3 py-1 font-bold text-[#ffd400] text-[22px] md:gap-3 md:px-4 md:py-2 md:text-[32px]">
-						<ArrowUp
-							aria-hidden
-							className="size-10 shrink-0"
-							strokeWidth={3}
-							style={turn(view.guide)}
-						/>
-						{view.guide.words}
-					</p>
-				</div>
-			)}
-			<span className="win95-raised absolute top-2 left-2 bg-[#ffffe1] px-2 py-1 text-[15px] text-black">
+			<GuideCue big={view.state === "lost"} guide={view.guide} voice={voice} />
+			<span className="win95-raised absolute top-2 left-[var(--chip-left,0.5rem)] bg-[#ffffe1] px-2 py-1 text-[15px] text-black">
 				{tag}
 			</span>
+			<Button
+				aria-label={
+					voice ? "Turn the voice guide off" : "Turn the voice guide on"
+				}
+				className="absolute top-2 right-[var(--voice-right,0.5rem)] size-12 [&_svg]:size-6"
+				onClick={() => setVoice(!voice)}
+			>
+				{voice ? <Volume2 aria-hidden /> : <VolumeX aria-hidden />}
+			</Button>
 			{orientation.ask && (
 				<Button
-					className="absolute bottom-2 left-2 h-12 text-[16px]"
+					className="absolute top-28 left-2 h-12 text-[16px]"
 					onClick={orientation.allow}
 				>
 					<Compass aria-hidden />

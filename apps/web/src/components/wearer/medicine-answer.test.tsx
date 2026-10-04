@@ -178,7 +178,7 @@ describe("ObjectAnswer", () => {
 			expect(view.getByRole("status").textContent).toBe("Speaking…"),
 		);
 		expect(calls[0]?.body).toEqual({
-			text: "Looks like medicine. The label looks like “Lisinopril”. Look to the left, low down. I'm not sure about this one. Look closely at the label. Check the label on the box before you take anything.",
+			text: "Looks like medicine. The label looks like “Lisinopril”. I'm not sure about this one. Look closely at the label. Check the label on the box before you take anything.",
 		});
 		expect(FakeAudio.made.length).toBe(1);
 		expect(view.getByRole("button", { name: "Say it again" })).toBeDefined();

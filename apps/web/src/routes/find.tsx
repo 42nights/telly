@@ -1,7 +1,7 @@
 import type { ObjectDetection } from "@health/contracts/vision";
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ScanSearch } from "lucide-react";
+import { ArrowLeft, ScanSearch, X } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
@@ -9,6 +9,7 @@ import { Page } from "@/components/hud/window";
 import {
 	FullScreenButton,
 	useFullScreen,
+	usePhone,
 } from "@/components/wearer/full-screen";
 import {
 	RememberPlace,
@@ -74,14 +75,27 @@ function FindThingsComponent() {
 }
 
 /**
- * The finder's frame. Normal: it fills the window, the camera takes the room left, and the answer
- * scrolls in its own box. Full screen: it covers the screen above the app frame, inside the
- * safe area, and the header row goes.
+ * The finder's layout. `page`: it fills the window, the camera takes the room left, and the answer
+ * scrolls in its own box. `overlay` (a phone, or desktop full screen): it covers the screen above
+ * the app frame, the video covers it edge to edge, the header row goes, and the answer floats on
+ * the video as compact translucent controls (`.finder-panel` in index.css).
  */
-const FRAME = {
-	normal:
-		"grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3",
-	full: "fixed inset-0 z-[1000] grid grid-rows-[minmax(0,1fr)_auto] gap-2 bg-[#c0c0c0] pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:gap-x-6 [&>:first-child]:hidden",
+const LAYOUT = {
+	page: {
+		frame:
+			"grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3",
+		camera:
+			"win95-inset relative -mx-1 min-h-48 min-w-0 overflow-hidden bg-card md:mx-0 [&_video]:object-cover",
+		answer:
+			"grid max-h-[24dvh] min-w-0 content-start gap-3 overflow-y-auto text-[20px] md:max-h-none",
+	},
+	overlay: {
+		frame:
+			"fixed inset-0 z-[1000] bg-black [--chip-left:3.75rem] [&>:first-child]:hidden",
+		camera: "absolute inset-0 overflow-hidden [&_video]:object-cover",
+		answer:
+			"finder-panel absolute inset-x-0 bottom-0 grid max-h-[65dvh] content-end gap-2 overflow-y-auto bg-gradient-to-t from-black/85 via-black/60 to-transparent px-3 pt-10 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-white md:left-auto md:w-[28rem]",
+	},
 };
 
 function FindThingsPage({
@@ -112,14 +126,19 @@ function FindThingsPage({
 	// The lock-on follows one object of one check; its live direction belongs to that pair.
 	const lockKey = `${check?.id}:${choice.skipped}`;
 	const way = useLiveWay(lockKey);
-	const screen = useFullScreen<HTMLDivElement>(FRAME);
+	const screen = useFullScreen<HTMLDivElement>();
+	const phone = usePhone();
+	const layout = LAYOUT[phone || screen.full ? "overlay" : "page"];
 
 	return (
 		<Page
 			icon={ScanSearch}
 			title={mode === "add" ? "Add a thing" : "Find things"}
 		>
-			<div {...screen.frame}>
+			<div
+				className={`${layout.frame} ${phone ? "" : "[--voice-right:4rem]"}`}
+				{...screen.frame}
+			>
 				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
 					<Link
 						className={buttonVariants({
@@ -140,8 +159,8 @@ function FindThingsPage({
 					<YouAsked q={q} />
 				</div>
 
-				{/* The camera is the finder: edge to edge on a phone, the large left area on a desktop. */}
-				<div className="win95-inset relative -mx-1 min-h-48 min-w-0 overflow-hidden bg-card md:mx-0">
+				{/* The camera is the finder: the whole screen on a phone, the large left area on a desktop. */}
+				<div className={layout.camera}>
 					<CameraPreview
 						camera={camera}
 						onVideo={(element) => {
@@ -158,13 +177,23 @@ function FindThingsPage({
 						onWay={way.set}
 						video={video}
 					/>
-					<FullScreenButton full={screen.full} toggle={screen.toggle} />
+					{phone ? (
+						<Link
+							aria-label="Close the finder"
+							className={buttonVariants({
+								className: "absolute top-2 left-2 z-10 size-12 [&_svg]:size-6",
+							})}
+							data-slot="button"
+							to="/hud"
+						>
+							<X aria-hidden />
+						</Link>
+					) : (
+						<FullScreenButton full={screen.full} toggle={screen.toggle} />
+					)}
 				</div>
 
-				<div
-					aria-live="polite"
-					className="grid max-h-[24dvh] min-w-0 content-start gap-3 overflow-y-auto text-[20px] md:max-h-none"
-				>
+				<div aria-live="polite" className={layout.answer}>
 					<ObjectAnswer
 						best={best}
 						check={check}
@@ -191,6 +220,7 @@ function FindThingsPage({
 						ar={ar}
 						asked={category}
 						change={change}
+						compact={layout === LAYOUT.overlay}
 						familyId={familyId}
 						memory={memory}
 						open={object ?? null}
@@ -231,7 +261,7 @@ function OverCamera({
 	return live && check.result.kind === "done" && best !== null ? (
 		<LockOn best={best} check={check} {...lock} />
 	) : (
-		<CheckedPicture best={best} check={check} />
+		<CheckedPicture best={best} check={check} cover />
 	);
 }
 
