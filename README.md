@@ -38,7 +38,7 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Server endpoints `GET /health` and `GET /api/sources` | Ready |
 | CI: lint, types, tests, Fallow, Sentrux, server build and runtime smoke | Runs on Namespace runners ([runs](https://github.com/ayaangazali/telly/actions/workflows/health.yml)) |
 | NOOP-to-server connection | Stub only. Reports `not_connected`, with no transport, readings, or nudges |
-| Database (SpacetimeDB) and generated server bindings | Planned |
+| Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database. No sign-in or HTTP route uses them yet |
 | Product features from the overview | Planned |
 | Providers: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
@@ -54,6 +54,7 @@ You need:
 - Node.js 24, for the server build and the smoke test
 - Expo Go on a phone, or an iOS or Android simulator, for the phone app
 - [Sentrux](https://github.com/sentrux/sentrux), only for `bun run check:structure`
+- The [SpacetimeDB CLI](https://spacetimedb.com/install) 2.10.2, only for `bun run db:generate` and `bun run db:test`
 
 Run from the repository root:
 
@@ -83,10 +84,11 @@ bun run test              # Behavior tests
 bun run check:quality     # Fallow: unused code, duplication, complexity, import boundaries
 bun run check:structure   # Sentrux rules and regression gate
 bun run --filter server build && bun run smoke   # Real server responses under Node
+bun run db:test           # Family-access tests on an isolated in-memory local SpacetimeDB
 bun run build             # Production build of every app
 ```
 
-`bun run check` runs Biome and writes fixes.
+`bun run check` runs Biome and writes fixes. After you change `spacetimedb/`, run `bun run db:generate` and commit `packages/db/` with it; never edit `packages/db/src` by hand. CI fails when the bindings are stale.
 
 CI runs these checks in [`.github/workflows/health.yml`](.github/workflows/health.yml). The one required status is `health / required`.
 
@@ -115,7 +117,7 @@ The setup record is in [#21](https://github.com/ayaangazali/telly/issues/21).
 | Phone app | Expo (React Native) |
 | Server | Node, Hono for HTTP, Effect 4 for service logic |
 | Contracts | Effect Schema in `@health/contracts` |
-| Data (planned) | SpacetimeDB |
+| Data | SpacetimeDB (TypeScript module in `spacetimedb/`, generated bindings in `@health/db`) |
 | Providers (planned) | Gemini vision, ElevenLabs voice, Grokbot family agents and messages, Fetch.ai Agentverse tool routing, Finchnode report handoff, Gemma on River AI |
 
 ```text
@@ -127,13 +129,15 @@ packages/
   contracts/    Shared Effect Schema API contracts
   config/       Shared strict TypeScript configuration
   ui/           shadcn/ui components for the web app
+  db/           Generated SpacetimeDB bindings, server-only (bun run db:generate)
+spacetimedb/    SpacetimeDB module: family-scoped tables, reducers, and views
 docs/           Approved planning board and plan summary
 noop/           NOOP, a separate project
 ```
 
 Clients import only `@health/contracts`, and the web app also imports `@health/ui`. Only the server can import database code. Fallow and Sentrux enforce these rules in CI.
 
-Later issues add `spacetimedb/`, `packages/db/`, `agents/fetch/`, and `training/gemma/`.
+Later issues add `agents/fetch/` and `training/gemma/`.
 
 ## Contributing
 

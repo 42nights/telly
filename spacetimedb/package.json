@@ -1,0 +1,16 @@
+{
+	"name": "@health/spacetimedb",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"spacetimedb": "catalog:"
+	},
+	"devDependencies": {
+		"@health/config": "workspace:*",
+		"typescript": "^6.0.3"
+	}
+}

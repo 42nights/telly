@@ -27,6 +27,8 @@ permissions:
 env:
   SENTRUX_VERSION: v0.5.7
   SENTRUX_SHA256: 3237f80fe20d54aad4deefa8a143f0d60543bb5d2d6ad891eb42432f155725a6
+  SPACETIME_VERSION: v2.10.2
+  SPACETIME_SHA256: 5dbe3f27a8c9e27a1d9aa86e9101f0eb6f5cf5aebea0240b589750e424a695bd
 
 jobs:
   changes:
@@ -46,6 +48,8 @@ jobs:
             health:
               - 'apps/**'
               - 'packages/**'
+              - 'spacetimedb/**'
+              - 'patches/**'
               - 'package.json'
               - 'bun.lock'
               - 'bunfig.toml'
@@ -76,6 +80,14 @@ jobs:
             run: bun run check:quality
           - name: build-smoke
             run: bun run --filter server build && bun run smoke && bun run --filter web build
+          # Fails when packages/db is stale against spacetimedb/, then runs the family-access
+          # tests against an isolated in-memory local database.
+          - name: db
+            run: >-
+              bun run db:generate &&
+              git diff --exit-code -- packages/db &&
+              test -z "$(git status --porcelain -- packages/db)" &&
+              bun run db:test
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,6 +98,16 @@ jobs:
         if: matrix.name == 'build-smoke'
         with:
           node-version: 24
+      - name: Install SpacetimeDB CLI (checksum-verified)
+        if: matrix.name == 'db'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/spacetime.tar.gz" \
+            "https://github.com/clockworklabs/SpacetimeDB/releases/download/$SPACETIME_VERSION/spacetime-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$SPACETIME_SHA256  $RUNNER_TEMP/spacetime.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/spacetime"
+          tar -xzf "$RUNNER_TEMP/spacetime.tar.gz" -C "$RUNNER_TEMP/spacetime"
+          ln -s spacetimedb-cli "$RUNNER_TEMP/spacetime/spacetime"
+          echo "$RUNNER_TEMP/spacetime" >> "$GITHUB_PATH"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache

@@ -1,0 +1,13 @@
+diff --git a/dist/lib/constraints.d.ts b/dist/lib/constraints.d.ts
+index bf711623aa283f813cb935cb53c76bf10eb46b2e..329dc8e56b26f47ed4c34a1564998e44536b7dd6 100644
+--- a/dist/lib/constraints.d.ts
++++ b/dist/lib/constraints.d.ts
+@@ -34,7 +34,7 @@ export type ColumnIsUnique<M extends ColumnMetadata<any>> = M extends {
+  * of constraint definitions.
+  */
+ export type ConstraintOpts<AllowedCol extends string> = {
+-    name?: string;
++    name?: string | undefined;
+ } & {
+     constraint: 'unique';
+     columns: [AllowedCol];
