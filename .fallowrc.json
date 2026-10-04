@@ -1,6 +1,12 @@
 {
 	"$schema": "./node_modules/fallow/schema.json",
-	"entry": ["packages/db/src/**/*.ts"],
+	"entry": [
+		"packages/db/src/**/*.ts",
+		"spacetimedb/src/**/*.test.ts",
+		"deploy/cloudflare/worker.js",
+		"deploy/cloudflare/landing/style.css"
+	],
+	"duplicates": { "ignore": ["packages/db/src/**"] },
 	"ignoreDependencies": [
 		"babel-preset-expo",
 		"expo-splash-screen",

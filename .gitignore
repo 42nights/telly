@@ -69,3 +69,22 @@ deploy.env.*
 __pycache__/
 *.pyc
 .venv/
+
+# Qwen training: datasets, run manifests, recordings, and model weights stay outside Git
+training/qwen/data/
+training/qwen/runs/
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.bin
+training/**/*.wav
+training/**/*.mp3
+training/**/*.m4a
+training/**/*.aac
+training/**/*.flac
+training/**/*.ogg
+training/**/*.opus
+training/**/*.webm
+training/**/*.mp4
+training/**/*.mov

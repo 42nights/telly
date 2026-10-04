@@ -27,7 +27,10 @@
 		"check:structure": "sh scripts/check-structure.sh",
 		"db:generate": "rm -rf packages/db/src && spacetime generate --lang typescript --module-path spacetimedb --out-dir packages/db/src --yes",
 		"db:test": "sh scripts/db-test.sh",
-		"db:drill": "bun apps/server/scripts/backup-drill.ts"
+		"db:drill": "bun apps/server/scripts/backup-drill.ts",
+		"walkthrough": "bun apps/server/scripts/walkthrough.ts",
+		"secrets:push": "bun apps/server/scripts/cloudflare-keys.ts push",
+		"secrets:pull": "bun apps/server/scripts/cloudflare-keys.ts pull"
 	},
 	"type": "module",
 	"workspaces": {

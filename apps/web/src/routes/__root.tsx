@@ -3,17 +3,22 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
+	useMatch,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
+import { FamilyProvider, NewFamilyBar } from "@/lib/family";
+import { requireSession } from "@/lib/session";
 
 import "../index.css";
 
 type RouterAppContext = Record<string, never>;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
+	// No app page, nav tab, or family data shows before sign-in.
+	beforeLoad: requireSession,
 	component: RootComponent,
 	head: () => ({
 		meta: [
@@ -35,6 +40,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+	// The rendered match, not the address: the address changes before the next page has loaded, and
+	// switching the layout early remounts the page that is still showing.
+	const signingIn =
+		useMatch({ from: "/sign-in", shouldThrow: false }) !== undefined;
 	return (
 		<>
 			<HeadContent />
@@ -44,10 +53,21 @@ function RootComponent() {
 				disableTransitionOnChange
 				storageKey="vite-ui-theme"
 			>
-				<div className="grid h-svh grid-rows-[auto_1fr] print:block print:h-auto">
-					<Header />
-					<Outlet />
-				</div>
+				{signingIn ? (
+					<div className="win95-desktop h-svh overflow-y-auto">
+						<Outlet />
+					</div>
+				) : (
+					<FamilyProvider>
+						<div className="win95-desktop flex h-svh flex-col">
+							<Header />
+							<NewFamilyBar />
+							<div className="min-h-0 flex-1 overflow-y-auto">
+								<Outlet />
+							</div>
+						</div>
+					</FamilyProvider>
+				)}
 				<Toaster richColors />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />

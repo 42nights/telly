@@ -2,6 +2,7 @@
 // isolated in-memory database, publishes, sets SPACETIMEDB_URI and SPACETIMEDB_DATABASE, and runs
 // this file. Each connection below is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
+import { CareScope } from "@health/contracts/care-profile";
 import { Effect } from "effect";
 import { Identity, Timestamp } from "spacetimedb";
 import {
@@ -106,7 +107,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 						}),
 					);
 					yield* Effect.promise(() =>
-						mine.sendMessage({ familyId, body: "On my way" }),
+						mine.sendMessage({ familyId, clientId: "m1", body: "On my way" }),
 					);
 					const before = readFamilyRecords(owner);
 					const [alert] = before.alerts;
@@ -136,7 +137,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 							quality: { tag: "Validated" },
 						}),
 						theirs.raiseAlert({ familyId, sampleId: undefined, summary: "x" }),
-						theirs.sendMessage({ familyId, body: "x" }),
+						theirs.sendMessage({ familyId, clientId: "m1", body: "x" }),
 						theirs.acknowledgeAlert({ alertId: BigInt(alert.id) }),
 						theirs.addFamilyMember({
 							familyId,
@@ -156,7 +157,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					// Through `callDb`, a refusal is `DbRejected`, distinct from an outage.
 					const refused = yield* Effect.flip(
 						callDb(outsider, (c) =>
-							c.reducers.sendMessage({ familyId, body: "x" }),
+							c.reducers.sendMessage({ familyId, clientId: "m2", body: "x" }),
 						),
 					);
 					expect(refused).toEqual(
@@ -164,6 +165,54 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					);
 
 					expect(readFamilyRecords(owner)).toEqual(before);
+				}),
+			),
+		));
+
+	test("a new family's founder holds every care scope, a later member none, and only the operator runs the backfill", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const token = process.env.SPACETIMEDB_OPERATOR_TOKEN;
+					if (token === undefined)
+						throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
+					const owner = yield* openFamilyDb(config);
+					const relative = yield* openFamilyDb(config);
+					const operator = yield* openFamilyDb({ ...config, token });
+					const mine = owner.connection.reducers;
+					yield* Effect.promise(() => mine.createFamily({ name: "Nakamura" }));
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					yield* Effect.promise(() =>
+						mine.addFamilyMember({
+							familyId,
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const grants = () =>
+						[...owner.connection.db.myCareGrants.iter()]
+							.filter((g) => g.familyId === familyId)
+							.map((g) => [g.member.toHexString(), g.scope, g.granted])
+							.sort();
+					const founder = CareScope.literals
+						.map((scope) => [owner.identity, scope, true])
+						.sort();
+					expect(grants()).toEqual(founder);
+
+					const refused = yield* Effect.promise(() =>
+						mine.backfillFounderCareGrants({}).then(String, String),
+					);
+					expect(refused).toBe("SenderError: not the delivery operator");
+					// A family that has grant events is left as it is.
+					yield* Effect.promise(() =>
+						operator.connection.reducers.backfillFounderCareGrants({}),
+					);
+					// The owner's own call after the backfill sees every earlier commit.
+					yield* Effect.promise(() =>
+						mine.sendMessage({ familyId, clientId: "sync", body: "Synced" }),
+					);
+					expect(grants()).toEqual(founder);
 				}),
 			),
 		));

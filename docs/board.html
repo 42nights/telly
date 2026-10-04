@@ -6,8 +6,8 @@
 <title>Health glasses · hackathon board</title>
 <style>
   :root {
-    --bg: #f6f6f3; --card: #ffffff; --ink: #18181b; --muted: #74747c; --line: #d6d6d2;
-    --soft: #eeeeea; --accent: #5048e5; --warn: #d9480f;
+    --bg: #f6f6f3; --card: #ffffff; --ink: #18181b; --muted: #67676f; --line: #d6d6d2;
+    --soft: #eeeeea; --accent: #5048e5; --warn: #c2410c;
     --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -20,6 +20,7 @@
   body { margin: 0; }
   main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
   :where(.grid, .flex) > * { min-width: 0; }
+  a:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   svg { display: block; width: 100%; height: auto; }
 
   header.hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -59,6 +60,14 @@
   .flow { display: grid; grid-template-columns: 210px 1fr; gap: 18px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px; }
   .flow h3 { margin: 0; font-size: 15px; font-weight: 600; }
   .flow .own { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .flow .iss { font-size: 12px; margin-top: 4px; }
+  .flow .iss a, .flow dd a { color: var(--accent); }
+  .flow details { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 8px; }
+  .flow summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .flow dl { display: grid; grid-template-columns: 130px 1fr; gap: 4px 14px; margin: 10px 0 2px; font-size: 13px; line-height: 1.45; }
+  .flow dt { color: var(--muted); font-weight: 600; }
+  .flow dd { margin: 0; }
+  .flow.text-only { grid-template-columns: 1fr; }
 
   /* wireframes */
   .wf-grid { display: grid; grid-template-columns: 0.72fr 1.5fr 1fr; gap: 14px; margin-top: 14px; align-items: start; }
@@ -79,6 +88,9 @@
   .sources a, .integration a, .stack-notes a { color: var(--accent); }
   #repo-tree { overflow-x: auto; }
   #repo-tree pre { white-space: pre; overflow-wrap: normal; }
+  .catalog { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 14px; }
+  .catalog ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+  .catalog a, #whoop-catalog a, .sh a { color: var(--accent); }
 
   /* svg classes */
   .n  { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
@@ -118,10 +130,10 @@
   @media (max-width: 640px) {
     main { padding: 24px 14px 60px; }
     .hero h1 { font-size: 42px; }
-    .names, .wf-grid { grid-template-columns: 1fr; }
-    .flow { grid-template-columns: 1fr; }
+    .names, .wf-grid, .flow dl { grid-template-columns: 1fr; }
+    .flow { grid-template-columns: minmax(0, 1fr); }
     .panel { padding: 14px; }
-    .panel, .flow, #wf-hud { overflow-x: auto; }
+    .panel, .flow-steps, #wf-hud { overflow-x: auto; }
     #system svg, #team svg, #stack svg, #keys svg, #quality-flow svg { min-width: 860px; }
     .flow svg { min-width: 720px; }
     #wf-hud svg { min-width: 620px; }
@@ -141,7 +153,7 @@
   <div>
     <h1>Health glasses <span class="chip acc">name later</span></h1>
     <p class="tag">Every feature without glasses. An optional display, not a dependency.</p>
-    <p class="tag" style="font-size:14px">Static archive of the approved planning board. Implementation is tracked in GitHub issues; see docs/plan.md.</p>
+    <p class="tag" style="font-size:14px">Approved plan, updated 2026-10-04 with the current providers, owners, open decisions, flow-to-issue links, and typed placeholders. GitHub issues track implementation; see docs/plan.md.</p>
   </div>
 </header>
 <nav>
@@ -247,11 +259,11 @@
       <text class="t" x="670" y="201">Threshold rules</text>
       <text class="s" x="670" y="220">fall · breath · heart</text>
     </g>
-    <g id="sys-muse"><title>Grokbot runs family agents and carries family messages; Fetch.ai routes agent requests</title>
+    <g id="sys-muse"><title>Gemini answers family questions with data tools through Fetch.ai; SpacetimeDB stores family messages</title>
       <rect class="n" x="652" y="270" width="256" height="76" rx="14"/>
-      <text class="t" x="670" y="296"><tspan class="sp">Grokbot</tspan> family agents</text>
+      <text class="t" x="670" y="296"><tspan class="sp">Gemini</tspan> family agents</text>
       <text class="s" x="670" y="316"><tspan class="sp">Fetch.ai</tspan> Agentverse · required</text>
-      <text class="s" x="670" y="334"><tspan class="sp">Grokbot</tspan> messages · replies</text>
+      <text class="s" x="670" y="334">Messages in <tspan class="sp">SpacetimeDB</tspan></text>
     </g>
     <g id="sys-lab"><title>Lab report generator</title>
       <rect class="n" x="652" y="372" width="256" height="66" rx="14"/>
@@ -267,7 +279,7 @@
     <g id="sys-training"><title>Train Gemma on River AI, then deploy the model to cloud inference</title>
       <rect class="n" x="652" y="618" width="256" height="70" rx="14"/>
       <text class="t" x="670" y="646"><tspan class="sp">River AI</tspan> training</text>
-      <text class="s" x="670" y="668">Gemma 3B post-train · J + A</text>
+      <text class="s" x="670" y="668">Gemma 3B post-train · J</text>
       <path class="e" d="M780 616 V564" marker-end="url(#ah)"/>
     </g>
 
@@ -279,14 +291,15 @@
       <text class="s" x="1008" y="138">web dashboard</text>
       <text class="s" x="1008" y="160">any time zone</text>
     </g>
-    <g id="sys-finch"><title>Proposed Finchnode report handoff; verify the API before using patient data</title>
+    <g id="sys-finch"><title>Finchnode reads lab results (keyless synthetic demo); it has no delivery API</title>
       <rect class="n" x="990" y="372" width="160" height="66" rx="14"/>
       <text class="t" x="1008" y="400"><tspan class="sp">Finchnode</tspan></text>
-      <text class="s" x="1008" y="420">report handoff</text>
+      <text class="s" x="1008" y="420">lab results · read only</text>
     </g>
-    <g id="sys-hospital"><title>Hospital</title>
+    <g id="sys-hospital"><title>Hospital: the report delivery path is a separate open decision</title>
       <rect class="n" x="990" y="476" width="160" height="66" rx="14"/>
-      <text class="t" x="1008" y="514">Hospital</text>
+      <text class="t" x="1008" y="502">Hospital</text>
+      <text class="s" x="1008" y="524">delivery not chosen</text>
     </g>
 
     <!-- edges -->
@@ -304,42 +317,77 @@
       <path class="e" d="M642 405 H650" marker-end="url(#ah)"/></g>
     <g id="edge-alert"><title>Alert pushed to family</title>
       <path class="ew" d="M910 205 H988" marker-end="url(#ahw)"/><text class="elw" x="949" y="197" text-anchor="middle">alert</text></g>
-    <g id="edge-ask"><title>Family asks Grokbot agents; agents use data tools through Fetch.ai</title>
+    <g id="edge-ask"><title>Family asks Gemini agents; agents use data tools through Fetch.ai</title>
       <path class="e" d="M910 303 H1070 V236" marker-start="url(#ah)" marker-end="url(#ah)"/><text class="el" x="985" y="295" text-anchor="middle">ask · answer</text></g>
-    <g id="edge-report"><title>Report to Finchnode</title>
-      <path class="e" d="M910 405 H988" marker-end="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">report</text></g>
-    <path id="edge-hospital" class="e" d="M1070 440 V474" marker-end="url(#ah)"><title>Finchnode to hospital</title></path>
+    <g id="edge-report"><title>Finchnode lab results feed the report generator (read only)</title>
+      <path class="e" d="M910 405 H988" marker-start="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">labs</text></g>
+    <path id="edge-hospital" class="e" d="M910 425 H950 V509 H988" stroke-dasharray="5 5" marker-end="url(#ah)"><title>Report to hospital: delivery path not chosen; Finchnode cannot send</title></path>
   </svg>
-  <div class="legend"><span><b>Blue</b> = sponsor / tool</span><span><i></i>data</span><span><i class="w"></i>alert</span><span>Proposed service boundaries; verify APIs and device access.</span></div>
+  <div class="legend"><span><b>Bold blue</b> = sponsor / tool</span><span><i></i>data</span><span><i class="w"></i>alert (labeled)</span><span>Proposed service boundaries; verify APIs and device access.</span></div>
   </div>
   <div class="sh" style="margin-top:24px"><h2>Why each integration exists</h2><p>Concrete roles, not prize-only additions.</p></div>
   <div class="integrations" id="integration-reasons">
     <div class="integration"><strong>River AI</strong><p>Train Gemma on health-cue examples. Deploy the resulting model for inference.</p></div>
     <div class="integration"><strong>Gemma 3B</strong><p>Turn health context into a bounded cue, such as a walk reminder.</p></div>
-    <div class="integration"><strong>Grokbot · agent runtime</strong><p>Answer family questions with data tools. Coordinate report and notification actions.</p></div>
-    <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Grokbot calls these tools for family questions.</p></div>
+    <div class="integration"><strong>Gemini · family chat</strong><p>Answer family questions with data tools and cite the records. ElevenLabs speaks the reply.</p></div>
+    <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Gemini calls these tools for family questions.</p></div>
     <div class="integration"><strong>Gemini vision</strong><p>Locate the medicine box in the current frame. Draw its marker without a 3D map.</p></div>
     <div class="integration"><strong>ElevenLabs · required</strong><p>Speak reminders and agent replies in the user's language.</p></div>
     <div class="integration"><strong>NOOP → server · stub only</strong><p>Preserve NOOP itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
     <div class="integration"><strong>HealthKit · conditional bridge</strong><p>Aggregate other phone health sources. Do not force WHOOP through this bridge.</p></div>
     <div class="integration"><strong>Tiger Data · not selected</strong><p>Alternative for historical health analytics. No second store in the selected demo.</p></div>
     <div class="integration"><strong>SpacetimeDB · selected</strong><p>Store health samples and sync alerts, messages, and acknowledgements.</p></div>
-    <div class="integration"><strong>Finchnode</strong><p>Hand an approved report to the hospital. Validate the API with synthetic data first.</p></div>
+    <div class="integration"><strong>Finchnode · read only</strong><p>Read lab results for the report; the keyless synthetic demo works. It cannot send reports. Hospital delivery is a separate decision.</p></div>
     <div class="integration"><strong>3D home map · not required</strong><p>Optional future room navigation. The current demo has no map dependency.</p></div>
     <div class="integration"><strong>Meta · optional adapter</strong><p>Mirror the phone session when glasses are available. No pairing, DAT permission, or glasses connection may gate another feature.</p></div>
+    <div class="integration"><strong>Photon iMessage · requested</strong><p>Family questions over iMessage through Photon Spectrum. The cloud provider is chosen (Free plan), and families use an allowlist of sender addresses.</p></div>
+  </div>
+  <div id="whoop-catalog" style="margin-top:24px">
+    <div class="sh"><h2>WHOOP data · catalog, not a connection</h2><p>The NOOP-to-server link stays not connected. No board value is a WHOOP reading.</p></div>
+    <p class="tag" style="font-size:13px">Every field NOOP collects from a WHOOP 5.0 / MG strap is in the <a href="https://github.com/ayaangazali/telly/blob/main/noop/whoop/health-fields.html">exhaustive WHOOP capability catalog</a> (reference only; it shows types such as {int} bpm, not readings). The typed contract for that catalog is <a href="https://github.com/ayaangazali/telly/issues/27">#27</a>. The live connection is <a href="https://github.com/ayaangazali/telly/issues/69">#69</a> and <a href="https://github.com/ayaangazali/telly/issues/70">#70</a>, owned by @ayaangazali.</p>
+    <div class="catalog">
+      <div class="integration"><strong>Confirmed BLE capability (NOOP, on the strap)</strong><ul>
+        <li>Heart rate, about 1 Hz, standard characteristic 0x2A37</li>
+        <li>R-R intervals in ms, every beat</li>
+        <li>Battery %, standard characteristic 0x2A19</li>
+        <li>100 Hz motion, only during a user-started capture session</li>
+        <li>Double-tap and wrist on / off events</li>
+        <li>Per-second history arrives on sync, 90 s to 15 min late</li>
+      </ul></div>
+      <div class="integration"><strong>Unavailable</strong><ul>
+        <li>NOOP → server: <code>not_connected</code>; no transport, ingestion, readings, zeros, or nudges</li>
+        <li>SpO₂: the strap sends no blood-oxygen value</li>
+        <li>Raw respiration: no rows from the 5.0 / MG; respiratory rate is only estimated from R-R</li>
+        <li>Recovery and skin-temperature deviation: need a baseline; not populated</li>
+      </ul></div>
+      <div class="integration"><strong>Unvalidated data</strong><ul>
+        <li>Skin-contact flag and the possible SpO₂ byte</li>
+        <li>Skin-temperature conversion (catalog lists both ADC and raw ÷ 100; #27 resolves it)</li>
+        <li>MG ECG waveform: experimental, seen on one device</li>
+        <li>Strain above 21, accelerometer-saturated event, optical blocks, hardware step counter (not decoded)</li>
+      </ul></div>
+      <div class="integration"><strong>Deferred hardware research</strong><ul>
+        <li>Buzz, stop, and double-tap without deleting the wake alarm: <a href="https://github.com/ayaangazali/telly/issues/38">#38</a></li>
+        <li>Fall and breathing signal validation (no measured latency): <a href="https://github.com/ayaangazali/telly/issues/6">#6</a></li>
+        <li>Optional Meta glasses adapter and display: <a href="https://github.com/ayaangazali/telly/issues/18">#18</a>, <a href="https://github.com/ayaangazali/telly/issues/19">#19</a></li>
+        <li>HealthKit import: <a href="https://github.com/ayaangazali/telly/issues/47">#47</a></li>
+      </ul></div>
+    </div>
   </div>
 </section>
 
 <!-- 03 FLOWS -->
 <section id="flows">
-  <div class="sh"><span class="no">03</span><h2>Flows</h2><p>Five demo moments. No 3D map required.</p></div>
+  <div class="sh"><span class="no">03</span><h2>Flows</h2><p>Five demo moments. No 3D map required. Each flow links its issues; open “Flow details” for its trigger, required context, prompt, allowed replies, next action, failure, sharing, and completion.</p></div>
   <div class="flows" id="flow-list"></div>
   <p class="tag" style="font-size:13px">Use the phone camera for markers and validated phone or health-source signals for alerts. Missing signals mean unavailable monitoring, never “all clear”.</p>
+  <div class="sh" style="margin-top:24px"><h2>October 3 backlog flows</h2><p>Wearer, family, and report flows from <a href="https://github.com/ayaangazali/telly/issues/25">#25</a>. Each issue holds its current state; this board does not claim an implementation. The care profile <a href="https://github.com/ayaangazali/telly/issues/26">#26</a> supplies their verified context and sharing grants. The <a href="walkthrough.md">hackathon walkthrough</a> (<a href="https://github.com/ayaangazali/telly/issues/51">#51</a>) runs medication, meal, family handoff, and report on one synthetic history.</p></div>
+  <div class="flows" id="backlog-list"></div>
 </section>
 
 <!-- 04 SCREENS -->
 <section id="screens">
-  <div class="sh"><span class="no">04</span><h2>Screens</h2><p>Grayscale wireframes.</p></div>
+  <div class="sh"><span class="no">04</span><h2>Screens</h2><p>Grayscale wireframes. Values in {braces} are typed placeholders, not readings. People and messages (Mom, Priya) are synthetic. NOOP is not connected, so no screen shows a WHOOP value.</p></div>
 
   <div class="wf" id="wf-hud">
     <h3>Wearer HUD · phone / browser <span>· original glasses sketch; optional glasses mirror</span></h3>
@@ -354,7 +402,7 @@
       <!-- 1 status -->
       <g id="hud-status"><title>Status: heart rate, time, health bar</title>
         <path class="wf-i" d="M52 56 c-6 -6 -14 0 -8 7 l8 8 l8 -8 c6 -7 -2 -13 -8 -7 z"/>
-        <text class="wf-b" x="68" y="68">72 · 2:00 pm</text>
+        <text class="wf-b" x="68" y="68">{bpm} · {time}</text>
         <rect class="wf-s" x="44" y="80" width="120" height="7" rx="3.5"/><rect class="wf-m" x="44" y="80" width="84" height="7" rx="3.5"/>
       </g>
       <!-- 2 request -->
@@ -367,7 +415,7 @@
       <g id="hud-marker"><title>AR marker on the found object, with arrow</title>
         <rect x="90" y="214" width="140" height="120" rx="10" class="wf-k" style="fill:url(#hatch)"/>
         <rect class="wf-f" x="100" y="176" width="120" height="26" rx="13"/>
-        <text class="wf-t" x="160" y="194" text-anchor="middle">Meds · 2 pm</text>
+        <text class="wf-t" x="160" y="194" text-anchor="middle">Meds · {time}</text>
         <path class="wf-k" d="M392 404 C 360 380, 300 356, 242 338" marker-end="url(#wah)" stroke-width="2.4"/>
       </g>
       <!-- 4 column -->
@@ -386,7 +434,7 @@
       </g>
       <!-- callouts -->
       <g class="co">
-        <circle class="wf-i" cx="182" cy="62" r="11"/><text class="wf-inv" x="182" y="66" text-anchor="middle">1</text>
+        <circle class="wf-i" cx="182" cy="88" r="11"/><text class="wf-inv" x="182" y="92" text-anchor="middle">1</text>
         <circle class="wf-i" cx="560" cy="59" r="11"/><text class="wf-inv" x="560" y="63" text-anchor="middle">2</text>
         <circle class="wf-i" cx="252" cy="230" r="11"/><text class="wf-inv" x="252" y="234" text-anchor="middle">3</text>
         <circle class="wf-i" cx="784" cy="54" r="11"/><text class="wf-inv" x="784" y="58" text-anchor="middle">4</text>
@@ -400,11 +448,11 @@
       <title id="display-t">Proposed square display with status, request, image marker, and message column</title>
       <rect x="1" y="1" width="598" height="598" rx="24" fill="#090909" stroke="#888"/>
       <g fill="#fff" font-family="sans-serif">
-        <text x="24" y="40" font-size="20">Connected</text><text x="385" y="40" font-size="18">Data age: 12 s</text>
+        <text x="24" y="40" font-size="20">{link state}</text><text x="385" y="40" font-size="18">Data age: {int} s</text>
         <rect x="24" y="64" width="552" height="60" rx="12" fill="none" stroke="#ddd"/>
         <text x="42" y="101" font-size="24">Where are my meds?</text>
         <rect x="24" y="148" width="350" height="308" rx="12" fill="#242424" stroke="#aaa"/>
-        <text x="42" y="178" font-size="18">Captured image · example</text>
+        <text x="42" y="178" font-size="18">Captured frame · synthetic</text>
         <rect x="72" y="248" width="130" height="112" rx="8" fill="none" stroke="#fff" stroke-width="3"/>
         <path d="M290 404 L218 365 M218 365 L243 366 M218 365 L225 388" fill="none" stroke="#fff" stroke-width="3"/>
         <text x="72" y="229" font-size="22">Saved medicine</text>
@@ -430,24 +478,24 @@
         <g id="ph-head"><title>Who and how they are</title>
           <circle class="wf-s" cx="52" cy="82" r="20"/>
           <text class="wf-b" x="82" y="78">Mom</text>
-          <circle class="wf-m" cx="86" cy="93" r="3.5"/><text class="wf-x" x="94" y="97">all good</text>
+          <circle class="wf-m" cx="86" cy="93" r="3.5"/><text class="wf-x" x="94" y="97">monitoring: {state}</text>
         </g>
         <g id="ph-tiles"><title>Today at a glance</title>
-          <rect class="wf-l" x="30" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="42" y="144">Sleep</text><text class="wf-v" x="42" y="174">6h40</text>
-          <rect class="wf-l" x="120" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="132" y="144">Heart</text><text class="wf-v" x="132" y="174">72</text>
-          <rect class="wf-l" x="210" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="222" y="144">Steps</text><text class="wf-v" x="222" y="174">2.1k</text>
+          <rect class="wf-l" x="30" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="42" y="144">Sleep</text><text class="wf-t" x="42" y="174">{float} h</text>
+          <rect class="wf-l" x="120" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="132" y="144">Heart</text><text class="wf-t" x="132" y="174">{int} bpm</text>
+          <rect class="wf-l" x="210" y="122" width="80" height="70" rx="12"/><text class="wf-x" x="222" y="144">Steps</text><text class="wf-t" x="222" y="174">{int}</text>
         </g>
-        <g id="ph-alert"><title>Threshold alert card</title>
+        <g id="ph-alert"><title>Threshold alert card: a suspected event stays unconfirmed until someone checks</title>
           <rect class="wf-k" x="30" y="212" width="260" height="98" rx="14" stroke-width="2.4"/>
-          <text class="wf-b" x="48" y="240">Fall detected</text>
-          <text class="wf-x" x="48" y="258">2:14 pm · kitchen</text>
+          <text class="wf-b" x="48" y="240">Suspected fall · check-in</text>
+          <text class="wf-x" x="48" y="258">{time} · {source} · unconfirmed</text>
           <rect class="wf-i" x="48" y="270" width="104" height="28" rx="14"/><text class="wf-inv" x="100" y="288" text-anchor="middle">Call</text>
           <rect class="wf-k" x="162" y="270" width="110" height="28" rx="14"/><text class="wf-t" x="217" y="288" text-anchor="middle">Seen</text>
         </g>
-        <g id="ph-chat"><title>Ask the Grokbot agent</title>
+        <g id="ph-chat"><title>Ask the Gemini family agent</title>
           <text class="wf-x" x="30" y="344">FAMILY CHAT</text>
           <rect class="wf-s" x="96" y="356" width="194" height="38" rx="16"/><text class="wf-t" x="193" y="380" text-anchor="middle">How is she sleeping?</text>
-          <rect class="wf-l" x="30" y="406" width="206" height="56" rx="16"/><text class="wf-t" x="46" y="430">6h 40m · 2 wake-ups</text><text class="wf-x" x="46" y="450">better than Tuesday</text>
+          <rect class="wf-l" x="30" y="406" width="206" height="56" rx="16"/><text class="wf-t" x="46" y="430">{float} h · {source}</text><text class="wf-x" x="46" y="450">{date} · or “unavailable”</text>
         </g>
         <g id="ph-input"><title>Message box</title>
           <rect class="wf-l" x="30" y="530" width="260" height="42" rx="21"/><text class="wf-x" x="52" y="556">Ask…</text>
@@ -474,40 +522,40 @@
         </g>
         <text class="wf-b" x="164" y="78">Mom · this week</text>
         <g id="db-stats"><title>Key numbers</title>
-          <rect class="wf-l" x="164" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="178" y="112">HRV</text><text class="wf-v" x="178" y="138">54 ms</text>
-          <rect class="wf-l" x="326" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="340" y="112">Sleep</text><text class="wf-v" x="340" y="138">6.6 h</text>
-          <rect class="wf-l" x="488" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="502" y="112">Alerts</text><text class="wf-v" x="502" y="138">1</text>
+          <rect class="wf-l" x="164" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="178" y="112">HRV</text><text class="wf-v" x="178" y="138">{float} ms</text>
+          <rect class="wf-l" x="326" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="340" y="112">Sleep</text><text class="wf-v" x="340" y="138">{float} h</text>
+          <rect class="wf-l" x="488" y="92" width="150" height="56" rx="10"/><text class="wf-x" x="502" y="112">Alerts</text><text class="wf-v" x="502" y="138">{int}</text>
         </g>
         <g id="db-hrv"><title>HRV trend</title>
           <rect class="wf-l" x="164" y="162" width="312" height="140" rx="10"/>
-          <text class="wf-x" x="178" y="182">HRV · 7 days</text>
+          <text class="wf-x" x="178" y="182">HRV · {7 days} · placeholder shape</text>
           <line class="wf-l" x1="178" y1="286" x2="462" y2="286"/>
           <polyline class="wf-k" points="182,260 226,248 270,254 314,232 358,240 402,218 446,226" stroke-width="2.4"/>
         </g>
         <g id="db-sleep"><title>Sleep per night</title>
           <rect class="wf-l" x="488" y="162" width="150" height="140" rx="10"/>
-          <text class="wf-x" x="502" y="182">Sleep</text>
+          <text class="wf-x" x="502" y="182">Sleep · placeholder</text>
           <rect class="wf-m" x="504" y="236" width="12" height="50" rx="3"/><rect class="wf-m" x="522" y="226" width="12" height="60" rx="3"/>
           <rect class="wf-m" x="540" y="246" width="12" height="40" rx="3"/><rect class="wf-m" x="558" y="220" width="12" height="66" rx="3"/>
           <rect class="wf-m" x="576" y="232" width="12" height="54" rx="3"/><rect class="wf-m" x="594" y="216" width="12" height="70" rx="3"/>
           <rect class="wf-i" x="612" y="224" width="12" height="62" rx="3"/>
         </g>
-        <g id="db-thresh"><title>Alert thresholds, editable</title>
-          <text class="wf-x" x="164" y="330">THRESHOLDS</text>
-          <text class="wf-t" x="164" y="356">Heart &gt; 110</text><line class="wf-l" x1="290" y1="352" x2="470" y2="352" stroke-width="4"/><circle class="wf-i" cx="400" cy="352" r="7"/>
-          <text class="wf-t" x="164" y="384">SpO₂ &lt; 92</text><line class="wf-l" x1="290" y1="380" x2="470" y2="380" stroke-width="4"/><circle class="wf-i" cx="330" cy="380" r="7"/>
-          <text class="wf-t" x="164" y="412">Still 2 h</text><line class="wf-l" x1="290" y1="408" x2="470" y2="408" stroke-width="4"/><circle class="wf-i" cx="372" cy="408" r="7"/>
+        <g id="db-thresh"><title>Alert thresholds set by the family; not clinical thresholds</title>
+          <text class="wf-x" x="164" y="330">THRESHOLDS · FAMILY-SET, NOT CLINICAL</text>
+          <text class="wf-t" x="164" y="356">Heart &gt; {bpm}</text><line class="wf-l" x1="290" y1="352" x2="470" y2="352" stroke-width="4"/><circle class="wf-i" cx="400" cy="352" r="7"/>
+          <text class="wf-t" x="164" y="384">SpO₂ · unavailable</text><line class="wf-l" x1="290" y1="380" x2="470" y2="380" stroke-width="4" stroke-dasharray="4 6"/>
+          <text class="wf-t" x="164" y="412">Still &gt; {h} h</text><line class="wf-l" x1="290" y1="408" x2="470" y2="408" stroke-width="4"/><circle class="wf-i" cx="372" cy="408" r="7"/>
         </g>
         <g id="db-alerts"><title>Recent alerts</title>
           <text class="wf-x" x="488" y="330">ALERTS</text>
-          <rect class="wf-l" x="488" y="340" width="150" height="30" rx="8"/><circle class="wf-i" cx="504" cy="355" r="4"/><text class="wf-t" x="516" y="360">Fall · Tue</text>
-          <rect class="wf-l" x="488" y="378" width="150" height="30" rx="8"/><circle class="wf-m" cx="504" cy="393" r="4"/><text class="wf-t" x="516" y="398">HR high · Mon</text>
+          <rect class="wf-l" x="488" y="340" width="150" height="30" rx="8"/><circle class="wf-i" cx="504" cy="355" r="4"/><text class="wf-t" x="516" y="360">{rule} · {date}</text>
+          <rect class="wf-l" x="488" y="378" width="150" height="30" rx="8"/><circle class="wf-m" cx="504" cy="393" r="4"/><text class="wf-t" x="516" y="398">{rule} · {date}</text>
         </g>
       </svg>
     </div>
 
     <div class="wf" id="wf-lab">
-      <h3>Lab report <span>· fillable</span></h3>
+      <h3>Lab report <span>· fillable · dated labs apart from wearable observations</span></h3>
       <svg viewBox="0 0 440 580" role="img" aria-labelledby="lab-t">
         <title id="lab-t">Lab report layout with fillable fields</title>
         <rect class="wf-f" x="20" y="10" width="400" height="560" rx="6"/>
@@ -524,29 +572,34 @@
           <text class="wf-x" x="44" y="158">Physician</text><rect class="wf-l" x="44" y="164" width="170" height="24" rx="4"/>
           <text class="wf-x" x="228" y="158">Hospital</text><rect class="wf-l" x="228" y="164" width="172" height="24" rx="4"/>
         </g>
-        <g id="lab-table"><title>Markers table: value, range, flag</title>
-          <rect class="wf-s" x="44" y="206" width="356" height="26" rx="4"/>
-          <text class="wf-x" x="56" y="223">MARKER</text><text class="wf-x" x="204" y="223">VALUE</text><text class="wf-x" x="276" y="223">RANGE</text><text class="wf-x" x="362" y="223">FLAG</text>
+        <g id="lab-table"><title>Dated lab results from Finchnode, kept separate from wearable observations; no wearable value becomes a lab result or a clinical threshold</title>
+          <text class="wf-x" x="44" y="204">DATED LABS · FINCHNODE, READ ONLY</text>
+          <rect class="wf-s" x="44" y="210" width="356" height="24" rx="4"/>
+          <text class="wf-x" x="56" y="226">MARKER</text><text class="wf-x" x="160" y="226">VALUE</text><text class="wf-x" x="250" y="226">DATE</text><text class="wf-x" x="320" y="226">LAB RANGE</text>
           <g class="rows">
-            <text class="wf-t" x="56" y="257">HRV</text><rect class="wf-l" x="200" y="241" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="257">20–70 ms</text><circle class="wf-k" cx="374" cy="252" r="7"/>
-            <line class="wf-l" x1="44" y1="270" x2="400" y2="270"/>
-            <text class="wf-t" x="56" y="291">Resting HR</text><rect class="wf-l" x="200" y="275" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="291">60–100</text><circle class="wf-k" cx="374" cy="286" r="7"/>
-            <line class="wf-l" x1="44" y1="304" x2="400" y2="304"/>
-            <text class="wf-t" x="56" y="325">Sleep</text><rect class="wf-l" x="200" y="309" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="325">7–9 h</text><circle class="wf-i" cx="374" cy="320" r="7"/>
-            <line class="wf-l" x1="44" y1="338" x2="400" y2="338"/>
-            <text class="wf-t" x="56" y="359">SpO₂</text><rect class="wf-l" x="200" y="343" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="359">95–100 %</text><circle class="wf-k" cx="374" cy="354" r="7"/>
-            <line class="wf-l" x1="44" y1="372" x2="400" y2="372"/>
-            <text class="wf-t" x="56" y="393">Resp. rate</text><rect class="wf-l" x="200" y="377" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="393">12–20</text><circle class="wf-k" cx="374" cy="388" r="7"/>
-            <line class="wf-l" x1="44" y1="406" x2="400" y2="406"/>
-            <text class="wf-t" x="56" y="427">Falls</text><rect class="wf-l" x="200" y="411" width="60" height="22" rx="4"/><text class="wf-x" x="276" y="427">0 / week</text><circle class="wf-k" cx="374" cy="422" r="7"/>
+            <text class="wf-t" x="56" y="254">{lab marker}</text><text class="wf-x" x="160" y="254">{float} {unit}</text><text class="wf-x" x="250" y="254">{date}</text><text class="wf-x" x="320" y="254">{from lab}</text>
+            <line class="wf-l" x1="44" y1="264" x2="400" y2="264"/>
+            <text class="wf-t" x="56" y="282">{lab marker}</text><text class="wf-x" x="160" y="282">{float} {unit}</text><text class="wf-x" x="250" y="282">{date}</text><text class="wf-x" x="320" y="282">{from lab}</text>
+          </g>
+          <text class="wf-x" x="44" y="310">WEARABLE OBSERVATIONS · NOT LAB RESULTS</text>
+          <rect class="wf-s" x="44" y="316" width="356" height="24" rx="4"/>
+          <text class="wf-x" x="56" y="332">SIGNAL</text><text class="wf-x" x="160" y="332">VALUE</text><text class="wf-x" x="250" y="332">PERIOD · SOURCE</text>
+          <g class="rows">
+            <text class="wf-t" x="56" y="358">Resting HR</text><text class="wf-x" x="160" y="358">{int} bpm</text><text class="wf-x" x="250" y="358">{period} · {source}</text>
+            <line class="wf-l" x1="44" y1="366" x2="400" y2="366"/>
+            <text class="wf-t" x="56" y="384">HRV (RMSSD)</text><text class="wf-x" x="160" y="384">{float} ms</text><text class="wf-x" x="250" y="384">{period} · {source}</text>
+            <line class="wf-l" x1="44" y1="392" x2="400" y2="392"/>
+            <text class="wf-t" x="56" y="410">SpO₂</text><text class="wf-x" x="160" y="410">unavailable</text><text class="wf-x" x="250" y="410">no validated source</text>
+            <line class="wf-l" x1="44" y1="418" x2="400" y2="418"/>
+            <text class="wf-t" x="56" y="436">Falls</text><text class="wf-x" x="160" y="436">unavailable</text><text class="wf-x" x="250" y="436">no validated detector</text>
           </g>
         </g>
         <g id="lab-notes"><title>Notes field</title>
           <text class="wf-x" x="44" y="460">Notes</text><rect class="wf-l" x="44" y="466" width="356" height="46" rx="4"/>
         </g>
-        <g id="lab-send"><title>Sign and send to hospital via Finchnode</title>
+        <g id="lab-send"><title>Sign, then send to the hospital; the delivery path is a separate decision because Finchnode only reads records</title>
           <line class="wf-k" x1="44" y1="550" x2="200" y2="550"/><text class="wf-x" x="44" y="564">Signed</text>
-          <rect class="wf-i" x="244" y="528" width="156" height="32" rx="16"/><text class="wf-inv" x="322" y="548" text-anchor="middle">Send · Finchnode</text>
+          <rect class="wf-k" x="244" y="528" width="156" height="32" rx="16" stroke-dasharray="5 4"/><text class="wf-t" x="322" y="548" text-anchor="middle">Send · not chosen</text>
         </g>
       </svg>
     </div>
@@ -582,9 +635,8 @@
   <div class="settled" id="github-owners" aria-label="Verified GitHub assignees">
     <span class="chip">J · undeemed</span>
     <span class="chip">A · ayaangazali</span>
-    <span class="chip">M · maheshwarmurugesan</span>
   </div>
-  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. Deployment needs an approved target and credentials.</p>
+  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. On 2026-10-04 every issue that Mahesh (maheshwarmurugesan) owned moved to undeemed. Mahesh wrote the October 3 backlog (#25–#51) and opened draft PR #90. The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK; his other issues moved to undeemed. Deployment needs an approved target and credentials.</p>
 </section>
 
 <!-- 06 STACK -->
@@ -630,7 +682,7 @@
       <g id="stack-integrations">
         <rect class="n" x="360" y="320" width="620" height="100" rx="14"/>
         <text class="t" x="380" y="350">Required integrations, behind the service</text>
-        <text class="s" x="380" y="374">Grokbot · Gemini · ElevenLabs · Finchnode</text>
+        <text class="s" x="380" y="374">Gemini chat + vision · ElevenLabs · Finchnode (read only)</text>
         <text class="s" x="380" y="398">Fetch.ai: Python uAgents worker · River: Python Gemma training</text>
       </g>
       <rect class="cp" x="20" y="450" width="960" height="48" rx="12"/>
@@ -642,7 +694,7 @@
     <div class="integration"><strong>Why Effect 4</strong><p>Keep typed service logic, schemas, and resource cleanup. Hono owns HTTP; do not depend on the unstable HttpApi module.</p></div>
     <div class="integration"><strong>Why Node + Bun workspaces</strong><p>Node has documented SpacetimeDB SDK support. Bun workspaces share packages across web, native, and server. Biome handles formatting and lint.</p></div>
     <div class="integration"><strong>Why no SQL ORM</strong><p>SpacetimeDB is already selected. Use its schema and generated bindings, not a second database.</p></div>
-    <div class="integration"><strong>Authentication</strong><p>Use verified OIDC identities and family permissions in both API and database. SpacetimeAuth beta remains a release risk, not a waived check.</p></div>
+    <div class="integration"><strong>Authentication</strong><p>Use verified OIDC identities and family permissions in both API and database. Google is the sign-in issuer (decided 2026-10-04).</p></div>
     <div class="integration"><strong>Release gate</strong><p>Pin tested versions. Prove access control, reconnects, stale-data behavior, and alert delivery before calling the system reliable.</p></div>
   </div>
   <details class="stack-notes" id="hono-choice">
@@ -768,7 +820,7 @@
     <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
     <div class="integration"><strong>One schema owner</strong><p>Database source lives in spacetimedb/. Generate packages/db from it. Commit both together; never edit generated files.</p></div>
     <div class="integration"><strong>No dependency cycles</strong><p>Contracts import no apps, database code, or secrets. Apps never import each other. Python workers use the API, not TypeScript internals.</p></div>
-    <div class="integration"><strong>Parallel ownership</strong><p>M owns HUD and reports. A owns data and Fetch.ai. J owns native, dashboard, and Gemma. Claim shared-file edits in an issue.</p></div>
+    <div class="integration"><strong>Parallel ownership</strong><p>J owns the web HUD, reports, native, dashboard, family chat, data, alerts, Fetch.ai, Finchnode, Gemma, and River. A owns NOOP and the optional Meta glasses SDK. Claim shared-file edits in an issue.</p></div>
   </div>
   <details class="stack-notes" id="repo-app-files">
     <summary>App files · shallow until the code grows</summary>
@@ -799,7 +851,7 @@ apps/server/
     config.ts       Validated, redacted runtime configuration
     db.ts           Server database connection
     integrations/   noop.ts (connection stub) · gemini.ts · elevenlabs.ts
-                    grokbot.ts · finchnode.ts
+                    gemini-chat.ts · finchnode.ts
                     fetch.ts · gemma.ts</pre>
     <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
     <p>Keep HUD and reports under web routes. Keep the existing NOOP source in noop/; add the new app without connecting it.</p>
@@ -1039,14 +1091,15 @@ export const GeminiKey = Config.schema(
 <section id="decide">
   <div class="sh"><span class="no">09</span><h2>Confirmed direction</h2><p>Everything must work without glasses. NOOP stays with the friend. The name stays deferred.</p></div>
   <div class="settled" aria-label="Confirmed direction">
-    <span class="chip acc">River AI training</span><span class="chip acc">Grokbot agents</span>
+    <span class="chip acc">River AI training</span><span class="chip acc">Gemini family agents</span>
     <span class="chip acc">No 3D map dependency</span><span class="chip acc">Glasses optional</span>
     <span class="chip acc">NOOP server link stubbed</span><span class="chip acc">One repository</span><span class="chip acc">Stability first</span>
     <span class="chip acc">Fetch.ai Agentverse required</span><span class="chip acc">ElevenLabs required</span>
     <span class="chip acc">Phone + web first</span><span class="chip acc">SpacetimeDB selected</span>
-    <span class="chip acc">Alzheimer's first</span><span class="chip acc">Grokbot family chat</span>
+    <span class="chip acc">Alzheimer's first</span><span class="chip acc">Gemini chat · ElevenLabs voice</span>
   </div>
   <p class="tag" style="font-size:14px">No hardware answer is needed to start. Glasses verification applies only to the optional adapter.</p>
+  <p class="tag" style="font-size:14px">Decided on 2026-10-04: Google sign-in, deployment on the team's Cloudflare account, and SpacetimeDB Maincloud. Still open, outside this plan: data retention, hospital delivery, the River base model and spend, live NOOP data, Photon iMessage access, and public source or agent publication.</p>
 </section>
 
 </main>
@@ -1060,51 +1113,254 @@ const el = (tag, attrs, text) => {
   return e;
 };
 
-/* 03 flows */
+/* 03 flows: spec order matches FIELDS; "#N" in text becomes an issue link */
+const FIELDS = ["Trigger", "Required context", "Prompt", "Allowed replies", "Next action", "Failure", "Sharing", "Completion"];
 const flows = [
-  { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · M", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
-  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · A, J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
-  { id: "ask", title: '"How is Mom sleeping?"', own: "Grokbot → data tools · J", steps: ['Family asks', 'Grokbot agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
-  { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'] },
-  { id: "lab", title: "Lab report → hospital", own: "Grokbot → report tool · M, A", steps: ['Health markers', 'Report tool', 'Review report', 'Finchnode', 'Hospital'] },
+  { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · J", iss: [15, 29, 31, 16], steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'], spec: [
+    "The wearer asks by voice or text, or chooses “find it” from a medication prompt (#31).",
+    "Saved container description with its last-seen place, time, and source (#29); the current camera frame.",
+    "“Last seen {place} at {time}. Point the camera there.” Last seen is never worded as currently observed.",
+    "Found it · not there · repeat · help · stop.",
+    "Gemini marks the candidate on the same frame and the app speaks a short direction (#15, #16).",
+    "No camera permission: voice or text guidance. Old or low-confidence record: labeled. Moved: search familiar places or offer caregiver help. Never identify loose pills by color.",
+    "Photos and the last-seen record are saved only with media or memory permission (#26).",
+    "The wearer confirms the container. Finding it does not change the dose state."] },
+  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · J", warn: true, iss: [5, 6, 34, 30], steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'], spec: [
+    "A validated detector event (#6) or an explicit request for help. A manual test button is not detection.",
+    "Validated signal with source time and freshness; contact ladder (#30); verified conditions, medications, and allergies for the handoff (#34).",
+    "A brief check-in: “Are you OK? Do you want help?”",
+    "I'm OK · call my family · call emergency help · no response.",
+    "Persist the alert and its pending delivery together (#5), then run the contact ladder. Emergency dispatch is simulated in the demo.",
+    "No validated source: monitoring shows unavailable, never all clear. An unanswered routine reminder never starts dispatch. Failed or uncertain delivery stays visible.",
+    "Only authorized facts, with source, time, and uncertainty, go to permitted contacts.",
+    "A family member accepts responsibility and confirms help. Sent is not acknowledged."] },
+  { id: "ask", title: '"How is Mom sleeping?"', own: "Gemini → data tools · J", iss: [11, 7, 13, 12], steps: ['Family asks', 'Gemini agent', 'Fetch.ai → data', 'Answer + source, date'], spec: [
+    "A signed-in family member asks in the phone app (#12) or the web dashboard (#13).",
+    "Family-scoped records with source and freshness, read through Fetch.ai data tools (#7); verified family membership (#4).",
+    "The family member's own question.",
+    "Free-text question or follow-up.",
+    "Gemini answers and cites the records (#11); ElevenLabs can speak the answer; SpacetimeDB stores the message.",
+    "Missing data: “unavailable” with the source. Provider outage: an error state, never an invented answer. NOOP: not connected.",
+    "Only members of that family with a health-record grant (#26).",
+    "The answer shows its source and date and stays in the family thread."] },
+  { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", iss: [27, 69, 70], steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'], spec: [
+    "Any feature that asks for WHOOP data.",
+    "The NOOP adapter state, which is {\"status\":\"not_connected\",\"source\":\"noop\"}.",
+    "“NOOP not connected.”",
+    "None.",
+    "Show other sources with their own provenance.",
+    "This flow is the failure state: no transport, ingestion, readings, zeros, or WHOOP-derived nudges.",
+    "Nothing to share.",
+    "“Unavailable” is shown. A live connection waits on its owner's handoff (#69)."] },
+  { id: "lab", title: "Lab report → hospital", own: "report tool · Finchnode reads labs · J", iss: [17, 8, 44], steps: ['Markers + labs', 'Report tool', 'Review report', 'Delivery choice', 'Hospital'], spec: [
+    "A family member opens Reports and generates a report (#17).",
+    "Dated lab results from Finchnode (read only; keyless synthetic demo), kept apart from wearable observations with their period and source.",
+    "A review screen that shows each value with its source, date, and unit.",
+    "Fill · edit · sign · discard.",
+    "The reviewed report waits for a delivery path. Send stays unavailable until the hospital-delivery decision (#8).",
+    "Finchnode error: shown. Missing values stay blank, not guessed. Nothing is presented as medical advice.",
+    "Clinician delivery needs its own sharing grant (#26).",
+    "Reviewed and signed. Delivery, when a path exists, shows queued, sent, failed, and uncertain (#8)."] },
 ];
-const list = document.getElementById("flow-list");
-for (const f of flows) {
+const backlog = [
+  { id: "reminder", title: "Reminder lifecycle", own: "demo · common to medication, meals, appointments, charging · J", iss: [28], spec: [
+    "A saved reminder time in the wearer's local time zone, outside quiet hours.",
+    "Saved schedule, quiet hours, repeat spacing, and maximum repeats (#26).",
+    "The saved reminder text, spoken and shown.",
+    "Later · already did it · help · repeat · not now · stop. “OK” or a dismissed buzz only acknowledges.",
+    "Persist the outcome, then schedule the configured follow-up.",
+    "No answer stays unresolved; silence never starts emergency dispatch. Retries and restarts never record twice.",
+    "Authorized family see the reminder history.",
+    "Self-reported complete or caregiver-confirmed, kept as separate states."] },
+  { id: "medication", title: "Medication time", own: "demo · J", iss: [31], spec: [
+    "A scheduled time from the verified medication plan.",
+    "Verified plan with source and date (#26); recorded dose events.",
+    "The saved instruction. What, when, and why come only from verified context.",
+    "Taken · already taken · later · help · unsure · find it (#15).",
+    "Record the wearer's report through the reminder lifecycle (#28).",
+    "Unsure: read the recorded evidence and offer human help. Never suggest an extra dose.",
+    "Unresolved questions go to the allowed caregiver with the original wording, time, and uncertainty.",
+    "Dose self-reported or caregiver-confirmed. Container found or opened is not ingestion."] },
+  { id: "meal-check", title: "Meal and hydration check-in", own: "demo · J", iss: [32], spec: [
+    "An agreed meal or drink time.",
+    "Personal routine and verified dietary or fluid restrictions; no universal target.",
+    "A check-in that asks about the barrier.",
+    "Eaten or drunk · later · decline · help. Barriers: forgot, not hungry, unwell, cannot prepare, reach, or open food, no food, difficulty eating, plans changed.",
+    "A next step for that barrier, with bounded follow-ups.",
+    "Still unresolved after the routine threshold: caregiver handoff. Urgent symptoms: the help flow.",
+    "Family see delivered, self-reported intake, and unresolved as separate states.",
+    "Self-reported intake. A reply is not proof of eating or drinking."] },
+  { id: "meal-photo", title: "Meal photo and nutrition estimate", own: "demo · J", iss: [33], spec: [
+    "The wearer takes a meal photo or describes the meal.",
+    "Camera, or voice and text; media retention and sharing permission (#26).",
+    "Estimated foods and portions, labeled as estimates.",
+    "Correct the food · correct the portion · how much I ate · skip.",
+    "Save the photo, the estimate, and the reported portion as separate facts.",
+    "No camera or permission: voice or text. An estimate never becomes a lab measurement.",
+    "As the media permission allows.",
+    "The wearer reports the portion eaten. A photo or an empty plate never sets “eaten”."] },
+  { id: "memory", title: "Memory and emotional support", own: "demo · J", iss: [35], spec: [
+    "A repeated question, confusion, or distress in conversation (#16).",
+    "Confirmed names, routines, trip purposes, and earlier requests.",
+    "One short, calm next step in the chosen language.",
+    "Repeat · talk · call someone · stop.",
+    "Offer conversation or a human contact.",
+    "An urgent request or a concerning symptom switches to the help flow. Never invent a memory.",
+    "A human contact only when the wearer accepts the offer.",
+    "The wearer ends the conversation or reaches a contact."] },
+  { id: "trends", title: "Health trend explanation", own: "later · J", iss: [36], spec: [
+    "The wearer or a family member asks about a trend.",
+    "Wearable history, dated labs, reports, and the saved care plan, each with source, period, unit, quality, and sync age.",
+    "An explanation that keeps reports, measurements, derived scores, and estimates apart.",
+    "Follow-up question · ask for a review.",
+    "Offer an agreed routine or a review check-in.",
+    "Unknown or conflicting data is said plainly. No diagnosis or heart-attack prediction. NOOP stays unavailable.",
+    "Health-record grant (#26).",
+    "An answer with dated sources."] },
+  { id: "bedtime", title: "Bedtime continuity", own: "later · J", iss: [37], spec: [
+    "Bedtime.",
+    "Saved overnight reminders; an available phone or speaker; charge and connectivity.",
+    "Confirm the overnight channel; offer music with volume and a sleep timer.",
+    "Voice · accessible button · verified gesture.",
+    "Move the saved reminders to the phone or speaker.",
+    "An unheard alarm follows the routine fallback, never automatic 911. Removing glasses never stops the phone schedule. WHOOP buzz waits on #38.",
+    "Reminder history as in the reminder lifecycle (#28).",
+    "The overnight channel is confirmed. Delivery is not completion."] },
+  { id: "leaving", title: "Leaving home", own: "later · J", iss: [39], spec: [
+    "A supported departure signal or a manual request.",
+    "Essentials from the saved profile; location permission is optional.",
+    "One simple departure question.",
+    "Yes, with a purpose · cancel · plans changed.",
+    "Remind only relevant essentials; save the stated purpose with its time.",
+    "Location denied: manual preparation still works. Repeated boundary events are debounced.",
+    "Chosen departure and arrival events go to authorized family only.",
+    "The purpose is saved and later prompts reuse it."] },
+  { id: "directions", title: "Directions and help getting home", own: "later · J", iss: [40], spec: [
+    "An active trip, or “help me get home”.",
+    "Saved trip purpose; location with its time and accuracy.",
+    "A calm audio direction and the trip purpose.",
+    "Repeat · cancel route · plans changed · help.",
+    "Help starts the family handoff (#30).",
+    "GPS denied, stale, indoor, network loss, and phone-not-carried are shown. No “safe to cross” claim.",
+    "Per-person location sharing and revocation.",
+    "The trip ends or a family member accepts the handoff."] },
+  { id: "exercise", title: "Guided exercise", own: "later · J", iss: [41], spec: [
+    "An agreed activity time.",
+    "The agreed activity and recorded restrictions.",
+    "An invitation to the agreed activity.",
+    "Start · pause · repeat · slower · stop · help.",
+    "Phone or web video or audio; glasses only after #18 and #19.",
+    "Pain, dizziness, or distress: stop and offer help. No response is not completion.",
+    "Not defined in the issue.",
+    "Completed, kept apart from declined, started, and stopped."] },
+  { id: "cooking", title: "Cooking, one step at a time", own: "later · J", iss: [42], spec: [
+    "The wearer asks for a meal idea.",
+    "Available ingredients, allergies, preferences, and verified diet; missing restrictions are disclosed.",
+    "One step at a time.",
+    "Repeat · pause · explain · stop · help.",
+    "Offer human help for tasks outside the agreed capability.",
+    "The camera never judges that a stove or food is safe.",
+    "Not defined in the issue.",
+    "The wearer confirms the meal; only then does it go to the intake record (#33)."] },
+  { id: "delivery", title: "Food delivery · simulated", own: "later · J", iss: [43], spec: [
+    "Meal preparation is impractical.",
+    "Approved address, recipient presence, diet and allergies, delivery window, and budget with fees.",
+    "A delivery proposal.",
+    "Approve · change · decline.",
+    "A simulated order with an order ID.",
+    "Out-of-budget or unapproved substitutions are rejected; retries reconcile before any repeat purchase.",
+    "Purchase grant (#26).",
+    "Delivered (simulated). Delivery is not eating."] },
+  { id: "appointment", title: "Appointment preparation", own: "later · report flow · J", iss: [44, 17, 8], spec: [
+    "An upcoming visit or a proposed appointment.",
+    "Local time, clinician, place, transport, recorded concerns, and dated labs (#17).",
+    "A reminder and a reviewed summary.",
+    "Confirm · change · share the summary · decline.",
+    "Request the booking or clinician update after explicit confirmation (simulated).",
+    "Suggested or requested is never shown as confirmed. Sent is not read.",
+    "Chosen recipient, contents, and frequency; clinician-delivery grant (#26).",
+    "A provider-confirmed booking (simulated in the demo)."] },
+  { id: "charging", title: "Charging and recovery", own: "demo · J", iss: [45], spec: [
+    "Low battery, disconnect, restart, or reconnect.",
+    "Separate phone, glasses, and wearable state; last contact time where known.",
+    "A charging reminder tied to a familiar place.",
+    "Snooze · decline · done.",
+    "Reconcile pending actions on reconnect.",
+    "Unknown battery is not zero; disconnected is not unworn; cached is not current. No new WHOOP readings.",
+    "Not defined in the issue.",
+    "No duplicate doses, meals, messages, calls, or orders after recovery."] },
+  { id: "speaker", title: "Home-speaker handoff · research", own: "research · J", iss: [46], spec: [
+    "Glasses are charging and the wearer enabled the speaker channel.",
+    "A named device and provider with verified capabilities.",
+    "The reminder, with private details withheld by default.",
+    "As in the reminder lifecycle (#28).",
+    "Phone fallback.",
+    "Provider offline or refuses: use the phone. No duplicate announcements.",
+    "The wearer chooses what may be spoken in a shared room.",
+    "A simulated speaker until provider access is confirmed."] },
+];
+const issueUrl = n => `https://github.com/ayaangazali/telly/issues/${n}`;
+const linked = (parent, text) => {
+  for (const part of text.split(/(#\d+)/)) {
+    if (/^#\d+$/.test(part)) {
+      const a = document.createElement("a");
+      a.href = issueUrl(part.slice(1)); a.textContent = part;
+      parent.appendChild(a);
+    } else parent.appendChild(document.createTextNode(part));
+  }
+};
+const renderFlow = (f, list) => {
   const row = document.createElement("div");
-  row.className = "flow"; row.id = "flow-" + f.id;
-  row.innerHTML = `<div><h3></h3><div class="own"></div></div>`;
+  row.className = f.steps ? "flow" : "flow text-only"; row.id = "flow-" + f.id;
+  row.innerHTML = `<div><h3></h3><div class="own"></div><div class="iss">Issues: </div></div>`;
   row.querySelector("h3").textContent = f.title;
   row.querySelector(".own").textContent = f.own;
-  const W = 1000, H = 64, gap = 34, n = f.steps.length, w = (W - gap * (n - 1)) / n;
-  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
-  svg.appendChild(el("title", {}, f.title));
-  const defs = el("defs", {});
-  const m = el("marker", { id: "fa-" + f.id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto" });
-  m.appendChild(el("path", { d: "M0 0 L10 5 L0 10 z", class: f.warn ? "ahw" : "ah" }));
-  defs.appendChild(m); svg.appendChild(defs);
-  f.steps.forEach((s, i) => {
-    const x = i * (w + gap);
-    const g = el("g", { id: `flow-${f.id}-${i + 1}` });
-    g.appendChild(el("title", {}, s));
-    const last = i === n - 1;
-    g.appendChild(el("rect", { x: x + 1, y: 8, width: w - 2, height: 48, rx: 24, class: "n", style: last ? "stroke:var(--ink);stroke-width:2" : "" }));
-    g.appendChild(el("circle", { cx: x + 26, cy: 32, r: 11, class: "cp" }));
-    g.appendChild(el("text", { x: x + 26, y: 36, "text-anchor": "middle", class: "s", style: "font-weight:600" }, i + 1));
-    g.appendChild(el("text", { x: x + 44, y: 37, class: "c", style: "font-size:13px" }, s));
-    svg.appendChild(g);
-    if (!last) svg.appendChild(el("path", { d: `M${x + w + 4} 32 H${x + w + gap - 4}`, class: f.warn ? "ew" : "e", "marker-end": `url(#fa-${f.id})` }));
+  linked(row.querySelector(".iss"), f.iss.map(n => "#" + n).join(" · "));
+  if (f.steps) {
+    const W = 1000, H = 64, gap = 34, n = f.steps.length, w = (W - gap * (n - 1)) / n;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" });
+    svg.appendChild(el("title", {}, f.title));
+    const defs = el("defs", {});
+    const m = el("marker", { id: "fa-" + f.id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto" });
+    m.appendChild(el("path", { d: "M0 0 L10 5 L0 10 z", class: f.warn ? "ahw" : "ah" }));
+    defs.appendChild(m); svg.appendChild(defs);
+    f.steps.forEach((s, i) => {
+      const x = i * (w + gap);
+      const g = el("g", { id: `flow-${f.id}-${i + 1}` });
+      g.appendChild(el("title", {}, s));
+      const last = i === n - 1;
+      g.appendChild(el("rect", { x: x + 1, y: 8, width: w - 2, height: 48, rx: 24, class: "n", style: last ? "stroke:var(--ink);stroke-width:2" : "" }));
+      g.appendChild(el("circle", { cx: x + 26, cy: 32, r: 11, class: "cp" }));
+      g.appendChild(el("text", { x: x + 26, y: 36, "text-anchor": "middle", class: "s", style: "font-weight:600" }, i + 1));
+      g.appendChild(el("text", { x: x + 44, y: 37, class: "c", style: "font-size:13px" }, s));
+      svg.appendChild(g);
+      if (!last) svg.appendChild(el("path", { d: `M${x + w + 4} 32 H${x + w + gap - 4}`, class: f.warn ? "ew" : "e", "marker-end": `url(#fa-${f.id})` }));
+    });
+    const steps = document.createElement("div");
+    steps.className = "flow-steps"; steps.appendChild(svg);
+    row.appendChild(steps);
+  }
+  const details = document.createElement("details");
+  details.innerHTML = `<summary>Flow details</summary><dl></dl>`;
+  const dl = details.querySelector("dl");
+  FIELDS.forEach((label, i) => {
+    const dt = document.createElement("dt"); dt.textContent = label;
+    const dd = document.createElement("dd"); linked(dd, f.spec[i]);
+    dl.append(dt, dd);
   });
-  row.appendChild(svg);
+  row.appendChild(details);
   list.appendChild(row);
-}
+};
+flows.forEach(f => renderFlow(f, document.getElementById("flow-list")));
+backlog.forEach(f => renderFlow(f, document.getElementById("backlog-list")));
 
 /* 05 team swimlanes */
 const team = document.getElementById("team-svg");
 const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows", "camera + validated data"], ["3 · Family loop", "durable alert + ask"], ["4 · Recovery", "report + failure checks"]];
 const lanes = [
-  ["M", "Mahesh", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
-  ["A", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
-  ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot family chat"], ["Dashboard + recovery"]]],
+  ["M", "J", "Jerry (M)", "Jerry · reassigned from Mahesh on 2026-10-04", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
+  ["A", "J", "Jerry (A)", "Jerry · reassigned from Ayaan on 2026-10-04; Ayaan keeps NOOP and the Meta glasses SDK", [["NOOP link · Ayaan", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode labs"]]],
+  ["J", "J", "Jerry", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Gemini family chat"], ["Dashboard + recovery"]]],
 ];
 const CX = 110, CW = 222, LY = 74, LH = 84;
 phases.forEach(([a, b], i) => {
@@ -1112,10 +1368,10 @@ phases.forEach(([a, b], i) => {
   team.appendChild(el("text", { x: x + 8, y: 26, class: "t" }, a));
   team.appendChild(el("text", { x: x + 8, y: 46, class: "s" }, b));
 });
-lanes.forEach(([k, name, cells], r) => {
+lanes.forEach(([id, k, name, full, cells], r) => {
   const y = LY + r * LH;
-  const g = el("g", { id: "lane-" + k });
-  g.appendChild(el("title", {}, name));
+  const g = el("g", { id: "lane-" + id });
+  g.appendChild(el("title", {}, full));
   g.appendChild(el("rect", { x: 0, y: y, width: 1000, height: LH - 10, rx: 14, class: "cp" }));
   g.appendChild(el("circle", { cx: 34, cy: y + 30, r: 17, style: "fill:var(--ink)" }));
   g.appendChild(el("text", { x: 34, y: y + 35, "text-anchor": "middle", class: "t", style: "fill:var(--card)" }, k));

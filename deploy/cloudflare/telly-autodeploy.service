@@ -1,0 +1,8 @@
+[Unit]
+Description=Release origin/main of Telly when it changes (deploy/cloudflare/autodeploy.sh)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/share/telly-autodeploy/bin:%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/bin/sh %h/.local/share/telly-autodeploy/autodeploy.sh
+TimeoutStartSec=30min

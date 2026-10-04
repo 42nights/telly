@@ -5,7 +5,11 @@ import { MedicineDetections, type VisionFrame } from "@health/contracts/vision";
 import { Schema } from "effect";
 import { Hono } from "hono";
 import { ApiFailure, errorStatus } from "../http";
-import { GEMINI_VISION_MODEL, type GeminiConfig } from "../integrations/gemini";
+import {
+	GEMINI_FALLBACK_MODEL,
+	GEMINI_VISION_MODEL,
+	type GeminiConfig,
+} from "../integrations/gemini";
 import { imageSize, toFramePixels, visionRoutes } from "./vision";
 
 // Synthetic test frames only: a flat gray PNG and a header-only JPEG. No real camera image.
@@ -196,11 +200,52 @@ describe("medicine detection route", () => {
 		});
 	});
 
+	test("falls back to the steadier model when the primary one is overloaded", async () => {
+		reply = async (request) =>
+			((await request.json()) as { model: string }).model ===
+			GEMINI_VISION_MODEL
+				? new Response(null, { status: 503 })
+				: interaction(JSON.stringify({ detections: [] }));
+		const response = await post(body());
+		expect(response.status).toBe(200);
+		const result = Schema.decodeUnknownSync(MedicineDetections)(
+			await response.json(),
+			{ onExcessProperty: "error" },
+		);
+		expect(result.model).toBe(GEMINI_FALLBACK_MODEL);
+		expect(lastRequest?.json).toMatchObject({ model: GEMINI_FALLBACK_MODEL });
+	});
+
+	test("falls back when the primary model is too slow, within the same budget", async () => {
+		const primaryCut = Promise.withResolvers<void>();
+		const Sent = Schema.Struct({ model: Schema.String });
+		reply = async (request) => {
+			const { model } = Schema.decodeUnknownSync(Sent)(await request.json());
+			if (model === GEMINI_FALLBACK_MODEL)
+				return interaction(JSON.stringify({ detections: [] }));
+			request.signal.addEventListener("abort", () => primaryCut.resolve());
+			return new Promise<Response>(() => {});
+		};
+		const response = await post(body());
+		expect(response.status).toBe(200);
+		expect(
+			Schema.decodeUnknownSync(MedicineDetections)(await response.json()).model,
+		).toBe(GEMINI_FALLBACK_MODEL);
+		// The slow primary request was closed, not left running.
+		await primaryCut.promise;
+	});
+
 	const failed = "Medicine detection failed";
+	const busy = "The picture checker is busy right now";
 	test.each<[string, Reply, string]>([
 		[
-			"an HTTP error",
+			"an overloaded provider",
 			() => new Response("quota exceeded for key AIza-secret", { status: 429 }),
+			busy,
+		],
+		[
+			"an HTTP error",
+			() => new Response("internal detail AIza-secret", { status: 500 }),
 			failed,
 		],
 		["a failed interaction", () => interaction("{}", "failed"), failed],
@@ -225,7 +270,7 @@ describe("medicine detection route", () => {
 		[
 			"a slow provider",
 			() => new Promise<Response>(() => {}),
-			"Medicine detection timed out",
+			"The picture checker is busy right now and did not answer in time",
 		],
 	])(
 		"reports %s as upstream_error without provider text",
@@ -233,10 +278,10 @@ describe("medicine detection route", () => {
 			reply = next;
 			const response = await post(body());
 			expect(response.status).toBe(502);
-			expect(await errorOf(response)).toEqual({
-				error: "upstream_error",
-				message,
-			});
+			const error = await errorOf(response);
+			expect(error.error).toBe("upstream_error");
+			expect(error.message).toStartWith(message);
+			expect(error.message).not.toContain("AIza");
 		},
 	);
 

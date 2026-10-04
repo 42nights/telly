@@ -1,5 +1,4 @@
 import type { ApiError, Health, Sources } from "@health/contracts";
-import { Effect } from "effect";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -12,30 +11,23 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
-import { elevenLabsVoice } from "./integrations/elevenlabs";
-import { noopConnection } from "./integrations/noop";
-import { alertRoutes } from "./routes/alerts";
-import { accountRoutes, familyRoutes } from "./routes/families";
-import { finchnodeRoutes } from "./routes/finchnode";
-import { reportRoutes } from "./routes/reports";
-import { toolRoutes } from "./routes/tools";
-import { visionRoutes } from "./routes/vision";
-import { voiceRoutes } from "./routes/voice";
+import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
+import { accountRoutes } from "./routes/families";
+import { familyDomainRoutes } from "./routes/index";
+import { signInRoutes } from "./routes/sign-in";
 
-export const createApp = (config: ServerConfig) => {
-	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
+export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
+	const noop = noopRoutes(ingest);
+	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes())
-		.route("/", alertRoutes())
-		.route("/", voiceRoutes(elevenLabsVoice(config.voice)))
-		.route("/vision", visionRoutes(config.gemini))
-		.route("/", reportRoutes())
-		.route("/", finchnodeRoutes(config.finchnode))
-		.route("/", toolRoutes());
+		.route("/", familyDomainRoutes(config));
 
 	const app = new Hono()
-		.use(logger())
+		// Redact the NOOP ingest key from logged URLs.
+		.use(
+			logger((line) => console.log(line.replace(/([?&]k=)[^&\s]*/g, "$1***"))),
+		)
 		.use(
 			"/*",
 			cors({
@@ -46,13 +38,12 @@ export const createApp = (config: ServerConfig) => {
 		.get("/health", (c) =>
 			c.json({ status: "ok", service: "server" } satisfies Health),
 		)
-		.get("/api/sources", async (c) => {
-			// The request signal interrupts the effect when the client disconnects.
-			const noop = await Effect.runPromise(noopConnection, {
-				signal: c.req.raw.signal,
-			});
-			return c.json({ sources: [noop] } satisfies Sources);
-		})
+		.get("/api/sources", (c) =>
+			c.json({ sources: [noop.status(Date.now())] } satisfies Sources),
+		)
+		.post("/api/noop/ingest", noop.ingest)
+		// Sign-in itself cannot require sign-in.
+		.route("/api/sign-in", signInRoutes(config.auth))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())

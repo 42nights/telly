@@ -10,6 +10,7 @@ const DrawerLayout = () => {
 
 	return (
 		<Drawer
+			initialRouteName="web"
 			screenOptions={{
 				headerStyle: {
 					backgroundColor: theme.background,
@@ -28,12 +29,32 @@ const DrawerLayout = () => {
 			}}
 		>
 			<Drawer.Screen
+				name="web"
+				options={{
+					headerTitle: "App",
+					drawerLabel: "App",
+					drawerIcon: ({ size, color }) => (
+						<Ionicons name="globe-outline" size={size} color={color} />
+					),
+				}}
+			/>
+			<Drawer.Screen
 				name="index"
 				options={{
 					headerTitle: "Home",
 					drawerLabel: "Home",
 					drawerIcon: ({ size, color }) => (
 						<Ionicons name="home-outline" size={size} color={color} />
+					),
+				}}
+			/>
+			<Drawer.Screen
+				name="sign-in"
+				options={{
+					headerTitle: "Sign in",
+					drawerLabel: "Sign in",
+					drawerIcon: ({ size, color }) => (
+						<Ionicons name="key-outline" size={size} color={color} />
 					),
 				}}
 			/>

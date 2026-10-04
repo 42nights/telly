@@ -12,5 +12,6 @@ import {
 
 export default {
   familyId: __t.u64(),
+  clientId: __t.string(),
   body: __t.string(),
 };
