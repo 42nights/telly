@@ -44,6 +44,8 @@ export type IMessageConfig = {
 	readonly projectSecret: string;
 	readonly webhookSecret: string;
 	readonly senders: ReadonlyMap<string, bigint>;
+	/** The web app's address, the first `CORS_ORIGIN`: finder links in texts open there. */
+	readonly appUrl: string;
 };
 
 export type Env = {
@@ -130,7 +132,13 @@ const imessageConfig = (env: Env): IMessageConfig | undefined => {
 			);
 		senders.set(match[1] as string, BigInt(match[2] as string));
 	}
-	return { projectId, projectSecret, webhookSecret, senders };
+	return {
+		projectId,
+		projectSecret,
+		webhookSecret,
+		senders,
+		appUrl: env.CORS_ORIGIN.split(",")[0]?.trim() ?? "",
+	};
 };
 
 /** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */

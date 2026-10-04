@@ -66,47 +66,77 @@ test("when records are unavailable, shows the offline banner and retries", async
 	).toBeGreaterThan(before);
 });
 
-test("an urgent answer to a meal check-in calls for help with the wearer's words", async () => {
+test("Today shows the next reminder and only the alerts I have not seen", async () => {
 	signIn();
-	const now = new Date();
-	const calls = serve({
+	const me = "a".repeat(64);
+	const iso = (ms: number) =>
+		new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+	const occurrence = (
+		id: string,
+		title: string,
+		at: number,
+		state: string,
+	) => ({
+		occurrence: {
+			id,
+			reminderId: id,
+			familyId: "7",
+			kind: "meal",
+			subjectId: null,
+			title,
+			scheduledFor: iso(at),
+			state,
+			promptDue: false,
+			prompts: 0,
+			nextPromptAt: null,
+		},
+		events: [],
+	});
+	const alert = (id: string, summary: string) => ({
+		id,
+		familyId: "fam-1",
+		sampleId: null,
+		summary,
+		raisedBy: "monitor",
+		createdAt: iso(Date.now() - 60_000),
+	});
+	const hour = 3600_000;
+	serve({
 		"GET /api/families": { families: [FAMILY] },
-		"GET /api/families/fam-1": RECORDS,
+		"GET /api/me": {
+			issuer: "https://issuer.test",
+			subject: "user-1",
+			identity: me,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		},
+		"GET /api/families/fam-1": {
+			...RECORDS,
+			alerts: [alert("1", "Heart rate high"), alert("2", "Fall detected")],
+			acknowledgements: [
+				{
+					id: "9",
+					alertId: "2",
+					familyId: "fam-1",
+					member: me,
+					acknowledgedAt: iso(Date.now()),
+				},
+			],
+		},
 		"GET /api/families/fam-1/reminder-occurrences": {
 			occurrences: [
-				{
-					occurrence: {
-						id: "1",
-						reminderId: "9",
-						familyId: "7",
-						kind: "meal",
-						subjectId: null,
-						title: "Lunch",
-						scheduledFor: new Date(now.getTime() - 60_000)
-							.toISOString()
-							.replace(/\.\d+Z$/, "Z"),
-						state: "delivered",
-						promptDue: false,
-						prompts: 1,
-						nextPromptAt: "2099-01-01T00:00:00Z",
-					},
-					events: [],
-				},
+				occurrence("3", "Dinner", Date.now() + 5 * hour, "scheduled"),
+				occurrence("2", "Lunch", Date.now() + hour, "scheduled"),
+				occurrence("1", "Breakfast", Date.now() - hour, "scheduled"),
 			],
 		},
 	});
 	renderRoute("/hud");
 
-	const words = await screen.findByPlaceholderText("Or tell me in your words");
-	fireEvent.change(words, { target: { value: "I am choking" } });
-	fireEvent.submit(words);
-
-	await waitFor(() =>
-		expect(
-			calls.find(
-				(c) =>
-					c.method === "POST" && c.path === "/api/families/fam-1/emergency",
-			)?.body,
-		).toMatchObject({ kind: "help", report: "I am choking" }),
-	);
+	const next = await screen.findByText(/^Next:/);
+	expect(next.textContent).toStartWith("Next: Lunch at ");
+	expect(await screen.findByText("Heart rate high")).toBeTruthy();
+	await waitFor(() => expect(screen.queryByText("Fall detected")).toBeNull());
 });

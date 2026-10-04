@@ -2,6 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import type { FamilyAnswer } from "@health/contracts/ask";
 import type { Message, Space } from "@spectrum-ts/core";
 import { iMessageHandler, unavailableReply } from "./agent";
+import type { WearerActions } from "./finder";
 
 const sent: string[] = [];
 // Everything the agent did in the space, in order: the read receipt, typing, and each reply.
@@ -49,6 +50,7 @@ test("answers allowlisted text once and skips everything else", async () => {
 			if (question === "boom") throw new Error("down");
 			return { answer: `re: ${question}` } as FamilyAnswer;
 		},
+		wearer: undefined,
 	});
 	const first = message("hi?");
 	for (const item of [
@@ -79,6 +81,69 @@ test("answers allowlisted text once and skips everything else", async () => {
 	);
 });
 
+test("item questions, done replies, and photos go to the wearer actions", async () => {
+	sent.length = 0;
+	const calls: string[] = [];
+	const wearer: WearerActions = {
+		findItem: async (familyId, item) => {
+			calls.push(`find ${familyId} ${item}`);
+			return `found ${item}`;
+		},
+		done: async (familyId, words) => {
+			calls.push(`done ${familyId} ${words}`);
+			return "noted";
+		},
+		savePhoto: async (familyId, image) => {
+			calls.push(`photo ${familyId} ${image.type} ${image.data}`);
+			return "saved";
+		},
+	};
+	const handle = iMessageHandler({
+		senders: new Map([["+15550001111", 7n]]),
+		answer: async (_, { question }) =>
+			({ answer: `re: ${question}` }) as FamilyAnswer,
+		wearer,
+	});
+	const photo = (mimeType: string) =>
+		({
+			id: crypto.randomUUID(),
+			timestamp: new Date(),
+			direction: "inbound",
+			sender: { id: "+15550001111" },
+			content: {
+				type: "attachment",
+				mimeType,
+				read: async () => Buffer.from("img"),
+			},
+		}) as unknown as Message;
+	for (const item of [
+		message("Where did I put my blood pressure pills this morning?"),
+		message("I can't find my keys"),
+		message("Done"),
+		message("I ate lunch"),
+		message("where is my daughter?"),
+		photo("image/HEIC"),
+		photo("application/pdf"),
+	])
+		await handle(space, item);
+	expect(calls).toEqual([
+		"find 7 blood pressure pills",
+		"find 7 keys",
+		"done 7 Done",
+		"done 7 I ate lunch",
+		"photo 7 image/heic aW1n",
+	]);
+	expect(sent).toEqual([
+		"found blood pressure pills",
+		"found keys",
+		"noted",
+		"noted",
+		"re: where is my daughter?",
+		"saved",
+		"Please send a photo or a short text.",
+	]);
+});
+
 test("a failed reply, read receipt, or typing signal does not stop later answers", async () => {
 	const errors = spyOn(console, "error").mockImplementation(() => {});
 	const warnings = spyOn(console, "warn").mockImplementation(() => {});
@@ -100,6 +165,7 @@ test("a failed reply, read receipt, or typing signal does not stop later answers
 			senders: new Map([["+15550001111", 7n]]),
 			answer: async (_, { question }) =>
 				({ answer: `re: ${question}` }) as FamilyAnswer,
+			wearer: undefined,
 		});
 		await handle(flaky, message("first?"));
 		await handle(flaky, message("second?"));
