@@ -1,9 +1,11 @@
-// The care plan (#26, docs/board.html#wf-family): profile, instructions, sharing, and what the wearer
-// hears. Each part needs its own grant; a part without one says so instead of showing nothing.
+// The care plan (#26, docs/board.html#wf-family): profile, instructions, sharing, what the wearer
+// hears, and the family's care needs and contact ladder (#30, merged here by #209). Each plan part
+// needs its own grant; a part without one says so instead of showing nothing.
 import { createFileRoute } from "@tanstack/react-router";
 import { MessageSquareText } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { CareNeedsWindow } from "@/components/care/needs-window";
 import { type CareData, useCare } from "@/components/care-profile/data";
 import { InstructionsWindow } from "@/components/care-profile/instructions-window";
 import { ProfileWindow } from "@/components/care-profile/profile-window";
@@ -88,6 +90,7 @@ function CarePlan({ familyId }: { familyId: string }) {
 						/>
 					)}
 				</Part>
+				<CareNeedsWindow familyId={familyId} />
 			</div>
 			<div className="grid gap-3">
 				<Part state={care.profile} what="the care profile">

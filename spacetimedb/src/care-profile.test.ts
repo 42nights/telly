@@ -37,9 +37,67 @@ const instruction = (over: Record<string, unknown> = {}) => ({
 	...over,
 });
 
+const EVERY_SCOPE = [
+	"care_plan_edit",
+	"clinician_delivery",
+	"family_access",
+	"health_records",
+	"location",
+	"media",
+	"purchases",
+];
+
+type GrantRow = {
+	familyId: bigint;
+	member: typeof alice;
+	scope: string;
+	granted: boolean;
+	changedBy: typeof alice;
+};
+
 describe("setCareGrant", () => {
-	test("the founder may set up sharing until someone holds family_access", () => {
+	test("a new family's founder holds every scope; other members hold none (#188)", () => {
 		const h = setup();
+		const start = h.rows("careGrantEvent").length;
+		const family1 = h
+			.rows<GrantRow>("careGrantEvent")
+			.filter((row) => row.familyId === 1n);
+		expect(family1.map((row) => row.scope).sort()).toEqual(EVERY_SCOPE);
+		for (const row of family1)
+			expect(row).toMatchObject({
+				member: alice,
+				granted: true,
+				changedBy: alice,
+			});
+		expect(() => grant(h, bob, bob, "health_records")).toThrow(
+			"no care access: family_access",
+		);
+		grant(h, alice, bob, "family_access");
+		// The founder gives up family_access: she may no longer grant, but bob may.
+		grant(h, alice, alice, "family_access", false);
+		expect(() => grant(h, alice, alice, "family_access")).toThrow(
+			"no care access: family_access",
+		);
+		grant(h, bob, alice, "family_access");
+		grant(h, alice, bob, "media", false);
+		expect(h.rows("careGrantEvent").slice(start)).toMatchObject([
+			{ member: bob, scope: "family_access", granted: true, changedBy: alice },
+			{
+				member: alice,
+				scope: "family_access",
+				granted: false,
+				changedBy: alice,
+			},
+			{ member: alice, scope: "family_access", granted: true, changedBy: bob },
+			{ member: bob, scope: "media", granted: false, changedBy: alice },
+		]);
+	});
+
+	test("in a family from before #188 (no grants), the founder may set up sharing until someone holds family_access", () => {
+		const h = setup();
+		// Such a family has no grant event at all; drop the ones `createFamily` now writes.
+		const events = h.db.careGrantEvent as unknown as { rows: GrantRow[] };
+		events.rows = events.rows.filter((row) => row.familyId !== 1n);
 		expect(() => grant(h, bob, bob, "health_records")).toThrow(
 			"no care access: family_access",
 		);
@@ -50,7 +108,9 @@ describe("setCareGrant", () => {
 		);
 		grant(h, bob, alice, "family_access");
 		grant(h, alice, bob, "media", false);
-		expect(h.rows("careGrantEvent")).toMatchObject([
+		expect(
+			h.rows<GrantRow>("careGrantEvent").filter((row) => row.familyId === 1n),
+		).toMatchObject([
 			{ member: bob, scope: "family_access", granted: true, changedBy: alice },
 			{ member: alice, scope: "family_access", granted: true, changedBy: bob },
 			{ member: bob, scope: "media", granted: false, changedBy: alice },
@@ -63,8 +123,9 @@ describe("setCareGrant", () => {
 		[alice, mallory, "media", "the grantee is not a member of this family"],
 	])("rejects bad input %#", (by, member, scope, msg) => {
 		const h = setup();
+		const before = h.rows("careGrantEvent");
 		expect(() => grant(h, by, member, scope)).toThrow(msg);
-		expect(h.rows("careGrantEvent")).toEqual([]);
+		expect(h.rows("careGrantEvent")).toEqual(before);
 	});
 
 	test("the latest event wins: revoke then regrant", () => {
@@ -79,8 +140,18 @@ describe("setCareGrant", () => {
 	test("myCareGrants shows the family's grants to members only", () => {
 		const h = setup();
 		grant(h, alice, bob, "media");
-		expect(h.view(mod.myCareGrants, bob)).toMatchObject([{ scope: "media" }]);
-		expect(h.view(mod.myCareGrants, mallory)).toEqual([]);
+		const byBob = h.view(mod.myCareGrants, bob) as unknown as GrantRow[];
+		expect(byBob.filter((row) => row.member.isEqual(bob))).toMatchObject([
+			{ scope: "media" },
+		]);
+		expect(byBob.every((row) => row.familyId === 1n)).toBe(true);
+		// Mallory sees only her own family's grants: her founder grants.
+		const byMallory = h.view(
+			mod.myCareGrants,
+			mallory,
+		) as unknown as GrantRow[];
+		expect(byMallory).toHaveLength(EVERY_SCOPE.length);
+		expect(byMallory.every((row) => row.familyId === 2n)).toBe(true);
 	});
 });
 

@@ -101,3 +101,15 @@ If a key is exposed, revoke it immediately. Removing it from a comment or from G
 ## Revoke server access
 
 Replace the store secret `TELLY_SECRETS_PULL_TOKEN` in the dashboard (**Secrets Store**) with a new random value of at least 32 characters, then run `bun run secrets:push` with an empty key file to redeploy. Retrieval with the old token then stops for every host. Give the new pull file to the remaining servers. A lost host still holds the keys that it pulled, so rotate each of them.
+
+## Merge bot GitHub App key
+
+The firstmate merge queue and CI polling call GitHub as the App `telly-merge-bot` (App id 5184662, owner `undeemed`, installed on `undeemed/telly` only). An App installation has its own REST budget of 5,000 requests per hour, separate from the budget of the `undeemed` account.
+
+The store secret `TELLY_GH_APP_PRIVATE_KEY` holds the App private key (PEM). It is not a server key, so the `telly-secrets` Worker does not serve it. On the merge host, the key is at `~/.config/telly/gh-app/private-key.pem` (mode 600), and `~/.config/telly/gh-app/app.env` holds the App id and the installation id. `~/.local/bin/telly-gh-token` prints an installation token. It caches the token in `~/.config/telly/gh-app/token.cache` and gets a new one when less than 10 minutes remain.
+
+```bash
+GH_TOKEN=$(telly-gh-token) gh api repos/undeemed/telly --jq .full_name
+```
+
+To rotate the key, generate a new private key on the App settings page, replace the PEM file and the store secret, then delete the old key on the App settings page.
