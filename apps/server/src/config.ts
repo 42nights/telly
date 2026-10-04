@@ -30,6 +30,15 @@ export type ServerConfig = {
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
 	readonly noop?: NoopConfig | undefined;
+	/** Undefined when Photon Spectrum is not configured: no iMessage agent runs. */
+	readonly imessage?: IMessageConfig | undefined;
+};
+
+/** Photon Spectrum Cloud project and the iMessage addresses allowed to ask, each mapped to its family. */
+export type IMessageConfig = {
+	readonly projectId: string;
+	readonly projectSecret: string;
+	readonly senders: ReadonlyMap<string, bigint>;
 };
 
 type Env = {
@@ -57,6 +66,9 @@ type Env = {
 	readonly NOOP_FAMILY_ID?: string | undefined;
 	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
 	readonly TELLY_REQUIRED_KEYS?: string | undefined;
+	readonly SPECTRUM_PROJECT_ID?: string | undefined;
+	readonly SPECTRUM_PROJECT_SECRET?: string | undefined;
+	readonly TELLY_IMESSAGE_SENDERS?: string | undefined;
 } & Parameters<typeof gemmaConfigFrom>[0];
 
 /** `bun run secrets:pull` lists every key it wrote in TELLY_REQUIRED_KEYS. A listed key that is
@@ -86,6 +98,30 @@ const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
 			"Set both TELLY_FETCH_BRIDGE_URL and TELLY_FETCH_BRIDGE_TOKEN, or neither",
 		);
 	return undefined;
+};
+
+/** iMessage needs all three values; a partial set or a malformed sender list fails startup. */
+const imessageConfig = (env: Env): IMessageConfig | undefined => {
+	const {
+		SPECTRUM_PROJECT_ID: projectId,
+		SPECTRUM_PROJECT_SECRET: projectSecret,
+		TELLY_IMESSAGE_SENDERS: list,
+	} = env;
+	if (!(projectId || projectSecret || list)) return undefined;
+	if (!(projectId && projectSecret && list))
+		throw new Error(
+			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
+		);
+	const senders = new Map<string, bigint>();
+	for (const entry of list.split(",")) {
+		const match = /^\s*([^=\s]+)\s*=\s*(\d+)\s*$/.exec(entry);
+		if (match === null)
+			throw new Error(
+				"TELLY_IMESSAGE_SENDERS must be address=familyId pairs separated by commas",
+			);
+		senders.set(match[1] as string, BigInt(match[2] as string));
+	}
+	return { projectId, projectSecret, senders };
 };
 
 /** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */
@@ -177,5 +213,6 @@ export const serverConfig = (env: Env): ServerConfig => {
 		gemma: gemmaConfigFrom(env),
 		auth,
 		noop,
+		imessage: imessageConfig(env),
 	};
 };

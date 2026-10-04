@@ -93,8 +93,10 @@ const wearerRules = [
 	"Use short, simple sentences. Give at most one next step.",
 ].join("\n");
 
-export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
-	const ask = (familyId: bigint, question: FamilyQuestion) => {
+/** Answers one family question; the routes and the iMessage agent share it. */
+export const familyAnswer =
+	({ gemini, fetchAgent }: Pick<AskDeps, "gemini" | "fetchAgent">) =>
+	(familyId: bigint, question: FamilyQuestion) => {
 		const now = new Date();
 		// Checked before any provider, so help never waits on a model or a missing configuration.
 		const urgent = urgentRequest(question.question);
@@ -133,6 +135,9 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 			),
 		);
 	};
+
+export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
+	const ask = familyAnswer({ gemini, fetchAgent });
 	return new Hono<FamilyEnv>()
 		.post(
 			"/ask",
