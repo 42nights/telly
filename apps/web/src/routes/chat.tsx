@@ -2,7 +2,7 @@ import { Me } from "@health/contracts/families";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, CloudOff, MessagesSquare, RotateCw } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef, useState } from "react";
 
 import { Composer } from "@/components/chat/composer";
 import { ChatLog } from "@/components/chat/entries";
@@ -113,9 +113,14 @@ function ChatBody({
 	familyName: string;
 	identity: string | null;
 }) {
-	const { messages, read, retryRead } = useChat(familyId);
-	const { asks, status, ask, askVoice } = useAsk(familyId);
-	const header = <ChatHeader familyName={familyName} gemini={status} />;
+	const chat = useChat(familyId);
+	const agent = useAsk(familyId);
+	const [draft, setDraft] = useState("");
+	/** The member label of the family message being answered; null asks the family agent. */
+	const [replyTo, setReplyTo] = useState<string | null>(null);
+	const input = useRef<HTMLTextAreaElement>(null);
+	const { read } = chat;
+	const header = <ChatHeader familyName={familyName} gemini={agent.status} />;
 	if (read.kind === "signed_out" || read.kind === "forbidden")
 		return (
 			<>
@@ -134,16 +139,30 @@ function ChatBody({
 		<div className="grid gap-2">
 			{header}
 			<ChatLog
-				items={timeline(messages, asks)}
+				items={timeline(chat.messages, agent.asks)}
 				identity={identity}
 				emptyText={emptyText}
+				onReply={(label) => {
+					setReplyTo(label);
+					input.current?.focus();
+				}}
+				onFollowUp={(question) => {
+					setReplyTo(null);
+					setDraft(question);
+					input.current?.focus();
+				}}
 			/>
-			{down && <Outage failure={read} onRetry={retryRead} />}
+			{down && <Outage failure={read} onRetry={chat.refresh} />}
 			<Composer
+				draft={draft}
+				setDraft={setDraft}
+				input={input}
+				replyTo={replyTo}
+				onCancelReply={() => setReplyTo(null)}
 				placeholder={`Ask about ${familyName}'s health records…`}
 				offline={down}
-				onSend={ask}
-				askVoice={askVoice}
+				agent={agent}
+				family={chat}
 			/>
 		</div>
 	);

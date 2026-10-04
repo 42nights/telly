@@ -1,0 +1,124 @@
+# Continuous deployment for the health app (issue #2): build the server and web artifacts once from
+# main, deploy those exact artifacts, then smoke-check the deployed URLs.
+#
+# Target (captain decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
+# deploy/cloudflare/deploy.sh: the Worker `telly` serves web/ as static assets and runs server/ in a
+# Cloudflare Container. Public settings are in deploy/cloudflare/settings.env. Every job runs only
+# when the repository variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set (both
+# https://telly.jerry-2c0.workers.dev), and `deploy` needs the repository secrets
+# TELLY_DEPLOY_CLOUDFLARE_API_TOKEN and TELLY_SECRETS_PULL_TOKEN (docs/deploy.md).
+#
+# Secrets: only push and workflow_dispatch start this workflow, never pull_request, so pull-request
+# jobs never get deployment secrets. `build` gets no secrets, so nothing secret can enter the
+# artifacts. The API pulls its provider keys from the shared key store at container start
+# (docs/cloudflare-keys.md).
+#
+# Artifact `health-<sha>` (health.tar.gz, scripts/pack-health.sh), kept 30 days:
+#   server/  index.mjs (all dependencies bundled), .env.schema, scripts/cloudflare-keys.ts, and
+#            node_modules/varlock, which `varlock/auto-load` runs at startup.
+#   web/     static files built for HEALTH_SERVER_URL and the sign-in settings. `/` opens the HUD.
+#
+# Rollback: open the last good run of this workflow and re-run its deploy and smoke jobs. They use
+# that run's own artifact and workflow file, and the concurrency group queues them after any
+# running deploy. GitHub re-runs jobs for 30 days, which matches the artifact retention.
+name: health-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'patches/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'bunfig.toml'
+      - 'tsconfig.json'
+      - '.github/workflows/health-deploy.yml'
+      - 'deploy/cloudflare/**'
+      - 'scripts/pack-health.sh'
+  workflow_dispatch:
+
+# One deploy at a time, in order. Never cancel a running deploy halfway.
+concurrency:
+  group: health-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: vars.HEALTH_SERVER_URL != '' && vars.HEALTH_WEB_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter server build
+      - name: Build the web app for the deployed API and sign-in
+        run: |
+          set -a; . deploy/cloudflare/settings.env; set +a
+          NODE_ENV=production VITE_SERVER_URL="$HEALTH_SERVER_URL" VITE_OIDC_ISSUER="$OIDC_ISSUER" \
+            VITE_OIDC_CLIENT_ID="$OIDC_AUDIENCE" bun run --filter web build
+      - name: Pack the artifact
+        run: sh scripts/pack-health.sh health.tar.gz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: health-${{ github.sha }}
+          path: health.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+  # Publishes the artifact to the 42nights Cloudflare account (deploy/cloudflare/deploy.sh). The
+  # repository owner sets the two secrets; their values are in the shared key store (docs/deploy.md).
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: health-${{ github.sha }}
+      - name: Install crane
+        run: |
+          v=v0.22.1
+          curl -sSfL -o crane.tgz "https://github.com/google/go-containerregistry/releases/download/$v/go-containerregistry_Linux_x86_64.tar.gz"
+          curl -sSfL -o checksums.txt "https://github.com/google/go-containerregistry/releases/download/$v/checksums.txt"
+          grep ' go-containerregistry_Linux_x86_64.tar.gz$' checksums.txt | sed 's/ .*/  crane.tgz/' | sha256sum -c
+          mkdir -p "$RUNNER_TEMP/bin" && tar -xzf crane.tgz -C "$RUNNER_TEMP/bin" crane
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - run: sh deploy/cloudflare/deploy.sh health.tar.gz
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.TELLY_DEPLOY_CLOUDFLARE_API_TOKEN }}
+          TELLY_SECRETS_PULL_TOKEN: ${{ secrets.TELLY_SECRETS_PULL_TOKEN }}
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      # /health and /api/sources answer and decode with @health/contracts.
+      - run: node scripts/smoke.ts "$HEALTH_SERVER_URL"
+        working-directory: apps/server
+        env:
+          HEALTH_SERVER_URL: ${{ vars.HEALTH_SERVER_URL }}
+      # The deployed web app loads and renders the HUD's wearable status line.
+      - name: Web app renders the HUD
+        env:
+          HEALTH_WEB_URL: ${{ vars.HEALTH_WEB_URL }}
+        run: |
+          google-chrome --headless=new --disable-gpu --virtual-time-budget=15000 --dump-dom "$HEALTH_WEB_URL" > dom.html
+          grep -q 'WHOOP ·' dom.html || { echo "::error::the web app did not render the HUD"; exit 1; }

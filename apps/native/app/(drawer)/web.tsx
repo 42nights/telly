@@ -1,10 +1,9 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
-import { loadSession, type Session } from "@/lib/session";
+import { loadWebSession, type WebSession } from "@/lib/web-session";
 
 const styles = StyleSheet.create({
 	fill: { flex: 1 },
@@ -17,12 +16,12 @@ const styles = StyleSheet.create({
 	text: { fontSize: 17, textAlign: "center" },
 });
 
-export default function Home() {
-	const [session, setSession] = useState<Session | null | undefined>();
+export default function WebApp() {
+	const [session, setSession] = useState<WebSession | null | undefined>();
 
 	useFocusEffect(
 		useCallback(() => {
-			void loadSession().then(setSession);
+			void loadWebSession().then(setSession);
 		}, []),
 	);
 
@@ -36,15 +35,13 @@ export default function Home() {
 			</View>
 		);
 	return (
-		<SafeAreaView style={styles.fill} edges={["top"]}>
-			<WebView
-				key={session.url}
-				source={{ uri: session.url }}
-				injectedJavaScriptBeforeContentLoaded={`sessionStorage.setItem("telly.session.token", ${JSON.stringify(session.token)}); true;`}
-				mediaCapturePermissionGrantType="grant"
-				allowsInlineMediaPlayback
-				style={styles.fill}
-			/>
-		</SafeAreaView>
+		<WebView
+			key={session.url}
+			source={{ uri: session.url }}
+			injectedJavaScriptBeforeContentLoaded={`sessionStorage.setItem("telly.session.token", ${JSON.stringify(session.token)}); true;`}
+			mediaCapturePermissionGrantType="grant"
+			allowsInlineMediaPlayback
+			style={styles.fill}
+		/>
 	);
 }

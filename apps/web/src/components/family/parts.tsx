@@ -1,6 +1,6 @@
 // Pieces both family screens use: the alert card with its three actions, the monitoring badge and
 // list, and today's newest readings. Each shows only what the server returned.
-import type { Family, HealthSample } from "@health/contracts";
+import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type { FamilyAlert, Monitoring } from "@health/contracts/alerts";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
@@ -21,6 +21,7 @@ import {
 	type MonitoringLevel,
 	metricLabel,
 	monitoringLevel,
+	newestNoopSample,
 	newestPerMetric,
 	seenText,
 } from "./logic";
@@ -289,7 +290,19 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 		);
 	return (
 		<ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-			{glance.map(({ sample, stale }) => {
+			{glance.map(({ metric, sample, stale }) => {
+				if (sample === null)
+					return (
+						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-2">
+							<span className="text-sm">{metricLabel(metric)}</span>
+							<b className="text-muted-foreground text-xl leading-tight">
+								Unavailable
+							</b>
+							<span className="text-muted-foreground text-xs">
+								No real reading stored
+							</span>
+						</li>
+					);
 				const flag =
 					sample.quality === "unvalidated"
 						? "Unvalidated"
@@ -298,13 +311,13 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 							: null;
 				return (
 					<li
-						key={sample.metric}
+						key={metric}
 						className={cn(
 							"win95-inset grid gap-0.5 p-2",
 							flag === null ? "bg-card" : "bg-[#ffffe1]",
 						)}
 					>
-						<span className="text-sm">{metricLabel(sample.metric)}</span>
+						<span className="text-sm">{metricLabel(metric)}</span>
 						<b className="text-2xl leading-tight">
 							{sample.value}{" "}
 							<span className="font-normal text-sm">{sample.unit}</span>
@@ -320,8 +333,21 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 	);
 }
 
-/** Each threshold's live state from `/monitoring`, plus the source that is not connected. */
-export function MonitoringList({ state }: { state: ApiState<Monitoring> }) {
+export function MonitoringList({
+	state,
+	records,
+	familyId,
+	now,
+}: {
+	state: ApiState<Monitoring>;
+	records: ApiState<FamilyRecords>;
+	familyId: string;
+	now: number;
+}) {
+	const whoop =
+		records.kind === "ready"
+			? newestNoopSample(records.value.samples, familyId)
+			: null;
 	return (
 		<ul className="win95-inset grid divide-y divide-border bg-card text-sm">
 			{state.kind !== "ready" ? (
@@ -356,7 +382,11 @@ export function MonitoringList({ state }: { state: ApiState<Monitoring> }) {
 			)}
 			<li className="flex justify-between gap-2 p-2">
 				<span>WHOOP</span>
-				<span>NOOP not connected</span>
+				<span>
+					{whoop === null
+						? "NOOP not connected"
+						: `Connected · ${ago(whoop.sourceTime, now)} · unvalidated`}
+				</span>
 			</li>
 		</ul>
 	);

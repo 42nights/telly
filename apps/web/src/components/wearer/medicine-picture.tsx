@@ -6,7 +6,21 @@ import { ago, marker } from "./logic";
 import type { CheckResult, PictureCheck } from "./medicine-check";
 import { useNow } from "./use-now";
 
-/** One box in frame pixels, and the arrow when it is the most confident one. */
+const SURE = "#fff";
+const UNSURE = "#ffd400";
+
+/** The tag text: an icon character plus words, so the marker never relies on color alone. */
+const tagText = ({ label, needsVerification }: MedicineDetection) => {
+	const name =
+		label !== null && label.length > 24 ? `${label.slice(0, 23)}…` : label;
+	if (!needsVerification) return `✓ ${name ?? "Medicine box"}`;
+	return name === null ? "? Check the label" : `? ${name} · check label`;
+};
+
+/**
+ * One box in frame pixels with a tag, and the arrow when it is the most confident one. A box that
+ * needs a label check is yellow and dashed and its tag starts with "?"; a sure one is white with "✓".
+ */
 function Marker({
 	detection,
 	frame,
@@ -19,6 +33,22 @@ function Marker({
 	const m = marker(detection.box, frame);
 	if (m.rect.width <= 0 || m.rect.height <= 0) return null;
 	const stroke = Math.max(2, frame.width / 200);
+	const color = detection.needsVerification ? UNSURE : SURE;
+	const text = tagText(detection);
+	// About 1/20 of the frame width: ≈16 px on a phone-width picture.
+	const size = Math.max(14, frame.width / 20);
+	// Above the box when it fits and the arrow does not come from there, else below; inside the frame.
+	const above = m.rect.y >= size * 1.6 && !(arrow && m.fromTop);
+	const tagY = above
+		? m.rect.y - size * 0.5
+		: Math.min(
+				m.rect.y + m.rect.height + size * 1.2,
+				frame.height - size * 0.3,
+			);
+	const tagX = Math.max(
+		0,
+		Math.min(m.rect.x, frame.width - text.length * size * 0.6),
+	);
 	return (
 		<g>
 			<rect
@@ -28,7 +58,30 @@ function Marker({
 				stroke="#000"
 				strokeWidth={stroke * 2}
 			/>
-			<rect {...m.rect} fill="none" stroke="#fff" strokeWidth={stroke} />
+			<rect
+				{...m.rect}
+				fill="none"
+				stroke={color}
+				strokeDasharray={
+					detection.needsVerification
+						? `${stroke * 4} ${stroke * 2}`
+						: undefined
+				}
+				strokeWidth={stroke}
+			/>
+			<text
+				fill={color}
+				fontSize={size}
+				fontWeight="bold"
+				paintOrder="stroke"
+				stroke="#000"
+				strokeLinejoin="round"
+				strokeWidth={size * 0.25}
+				x={tagX}
+				y={tagY}
+			>
+				{text}
+			</text>
 			{arrow && (
 				<>
 					<path
@@ -41,10 +94,10 @@ function Marker({
 					<path
 						d={m.arrow}
 						fill="none"
-						stroke="#fff"
+						stroke={color}
 						strokeWidth={stroke * 1.3}
 					/>
-					<polygon fill="#fff" points={m.head} />
+					<polygon fill={color} points={m.head} />
 				</>
 			)}
 		</g>
@@ -80,7 +133,8 @@ function PictureTag({
 
 /**
  * The checked picture in place of the live video, with marker boxes drawn in frame pixels: the
- * SVG viewBox is the frame, so the boxes scale with the picture exactly.
+ * SVG viewBox is the frame, so the boxes scale with the picture exactly. A cleared check shows
+ * nothing, so the live video comes back without markers.
  */
 export function CheckedPicture({
 	check,
@@ -89,6 +143,7 @@ export function CheckedPicture({
 	check: PictureCheck;
 	best: MedicineDetection | null;
 }) {
+	if (check.result.kind === "cleared") return null;
 	const detections =
 		check.result.kind === "done" ? check.result.detections : [];
 	return (
@@ -98,6 +153,8 @@ export function CheckedPicture({
 				className="absolute inset-0 size-full bg-black object-contain"
 				src={check.picture}
 			/>
+			{/* Before the markers, so a marker's ✓/? tag stays on top where they overlap. */}
+			<PictureTag capturedAt={check.capturedAt} result={check.result} />
 			<svg
 				aria-hidden
 				className="pointer-events-none absolute inset-0 size-full"
@@ -113,7 +170,6 @@ export function CheckedPicture({
 					/>
 				))}
 			</svg>
-			<PictureTag capturedAt={check.capturedAt} result={check.result} />
 		</>
 	);
 }

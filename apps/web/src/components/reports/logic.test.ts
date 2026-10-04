@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import type { FinchnodeLab } from "@health/contracts/reports";
+import { type FinchnodeLab, ReportFields } from "@health/contracts/reports";
+import { Schema } from "effect";
 
 import {
+	demoText,
+	draftChanged,
 	draftOf,
+	FIELD_LIMITS,
+	type FieldName,
 	fieldErrors,
 	fieldsOf,
 	labRange,
@@ -10,30 +15,28 @@ import {
 	markerValue,
 } from "./logic";
 
-const empty = draftOf({
-	patientName: null,
-	dateOfBirth: null,
-	patientId: null,
-	physician: null,
-	hospital: null,
-	notes: null,
-});
+const empty = draftOf(
+	Schema.decodeUnknownSync(ReportFields)({
+		patientName: null,
+		dateOfBirth: null,
+		patientId: null,
+		physician: null,
+		hospital: null,
+		notes: null,
+	}),
+);
 
 describe("report fields", () => {
-	test("limits follow the contract: 200 per field, 4000 for notes", () => {
-		expect(
-			fieldErrors({
-				...empty,
-				physician: "x".repeat(200),
-				notes: "x".repeat(4000),
-			}),
-		).toEqual({});
-		const errors = fieldErrors({
-			...empty,
-			physician: "x".repeat(201),
-			notes: "x".repeat(4001),
-		});
-		expect(Object.keys(errors).sort()).toEqual(["notes", "physician"]);
+	test("the form's limits are the shared schema's limits", () => {
+		for (const name of Object.keys(FIELD_LIMITS) as FieldName[])
+			for (const length of [FIELD_LIMITS[name], FIELD_LIMITS[name] + 1]) {
+				const draft = { ...empty, [name]: "x".repeat(length) };
+				const accepted = Schema.is(ReportFields)(fieldsOf(draft));
+				expect([name, accepted]).toEqual([
+					name,
+					fieldErrors(draft)[name] === undefined,
+				]);
+			}
 	});
 
 	test("an empty box is sent as null", () => {
@@ -41,6 +44,14 @@ describe("report fields", () => {
 			"Dr. Lee",
 		);
 		expect(fieldsOf({ ...empty, physician: "   " }).physician).toBeNull();
+	});
+
+	test("a correction is a change; surrounding spaces are not", () => {
+		expect(draftChanged({ ...empty, notes: "  " }, empty)).toBe(false);
+		const correction = { metric: "hrv", value: 45, reason: "Typo" };
+		const corrected = { ...empty, corrections: [correction] };
+		expect(draftChanged(corrected, empty)).toBe(true);
+		expect(draftChanged(corrected, draftOf(fieldsOf(corrected)))).toBe(false);
 	});
 });
 
@@ -82,4 +93,17 @@ describe("lab display", () => {
 			"12.0-15.5 (range from epic)",
 		);
 	});
+});
+
+test("demoText says demo for synthetic, in the same case", () => {
+	expect(demoText("Northstar Health System (Synthetic)")).toBe(
+		"Northstar Health System (Demo)",
+	);
+	expect(demoText("synthetic reference: SYNTHETIC")).toBe(
+		"demo reference: DEMO",
+	);
+	expect(demoText("synthetic_data")).toBe(
+		"Demo records, not real patient data",
+	);
+	expect(demoText("4.5 mmol/L")).toBe("4.5 mmol/L");
 });

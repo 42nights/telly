@@ -1,10 +1,12 @@
-// Phone numbers for the "Call Mom" and "Call 911" buttons. There is no server contract for contact
-// numbers yet, so they are saved on this device only and the screens say so. Calls start in the
-// phone's own dialer through `tel:` links; the app never calls or texts by itself.
+// Phone numbers for the "Call Mom", "Call family", and "Call 911" buttons. There is no server
+// contract for contact numbers yet, so they are saved on this device only and the screens say so.
+// Calls start in the phone's own dialer through `tel:` links; the app never calls or texts by itself.
 import { useEffect, useState } from "react";
 
 export type Contacts = {
 	readonly momPhone: string | null;
+	/** The family member the wearer screen's "Call family" button calls. */
+	readonly familyPhone: string | null;
 	readonly emergency: string;
 	/** `Date.now()` of the last save on this device, or null when never saved. */
 	readonly savedAt: number | null;
@@ -13,6 +15,7 @@ export type Contacts = {
 const KEY = "telly.contacts";
 const DEFAULT_CONTACTS: Contacts = {
 	momPhone: null,
+	familyPhone: null,
 	emergency: "911",
 	savedAt: null,
 };
@@ -28,22 +31,20 @@ export const isFullPhoneNumber = (value: string): boolean => {
 export const telHref = (value: string): string =>
 	`tel:${value.trim().startsWith("+") ? "+" : ""}${value.replace(/\D/g, "")}`;
 
+const phoneOrNull = (stored: object, key: string): string | null => {
+	const value: unknown = key in stored ? Reflect.get(stored, key) : null;
+	return typeof value === "string" && isFullPhoneNumber(value) ? value : null;
+};
+
 const read = (): Contacts => {
 	try {
 		const stored: unknown = JSON.parse(localStorage.getItem(KEY) ?? "null");
 		if (typeof stored !== "object" || stored === null) return DEFAULT_CONTACTS;
-		const momPhone = "momPhone" in stored ? stored.momPhone : null;
-		const emergency = "emergency" in stored ? stored.emergency : null;
 		const savedAt = "savedAt" in stored ? stored.savedAt : null;
 		return {
-			momPhone:
-				typeof momPhone === "string" && isFullPhoneNumber(momPhone)
-					? momPhone
-					: null,
-			emergency:
-				typeof emergency === "string" && isFullPhoneNumber(emergency)
-					? emergency
-					: DEFAULT_CONTACTS.emergency,
+			momPhone: phoneOrNull(stored, "momPhone"),
+			familyPhone: phoneOrNull(stored, "familyPhone"),
+			emergency: phoneOrNull(stored, "emergency") ?? DEFAULT_CONTACTS.emergency,
 			savedAt: typeof savedAt === "number" ? savedAt : null,
 		};
 	} catch {

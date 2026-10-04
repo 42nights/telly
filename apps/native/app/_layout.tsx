@@ -21,7 +21,7 @@ const DARK_THEME = {
 };
 
 export const unstable_settings = {
-	initialRouteName: "index",
+	initialRouteName: "(drawer)",
 };
 
 const styles = StyleSheet.create({
@@ -38,7 +38,7 @@ export default function RootLayout() {
 			<StatusBar style={isDarkColorScheme ? "light" : "dark"} />
 			<GestureHandlerRootView style={styles.container}>
 				<Stack>
-					<Stack.Screen name="index" options={{ headerShown: false }} />
+					<Stack.Screen name="(drawer)" options={{ headerShown: false }} />
 					<Stack.Screen name="signin" options={{ headerShown: false }} />
 				</Stack>
 			</GestureHandlerRootView>

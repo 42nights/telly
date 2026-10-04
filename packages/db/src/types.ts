@@ -58,6 +58,209 @@ export const AlertThreshold = __t.object("AlertThreshold", {
 });
 export type AlertThreshold = __Infer<typeof AlertThreshold>;
 
+export const Appointment = __t.object("Appointment", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  visit: __t.string(),
+  prep: __t.string(),
+  source: __t.string(),
+  suggestedBy: __t.identity(),
+  suggestedAt: __t.timestamp(),
+  requestedBy: __t.option(__t.identity()),
+  requestedAt: __t.option(__t.timestamp()),
+  confirmation: __t.option(__t.string()),
+  confirmedBy: __t.option(__t.identity()),
+  confirmedAt: __t.option(__t.timestamp()),
+  cancelledBy: __t.option(__t.identity()),
+  cancelledAt: __t.option(__t.timestamp()),
+  summary: __t.option(__t.string()),
+  summaryReviewedBy: __t.option(__t.identity()),
+  summaryReviewedAt: __t.option(__t.timestamp()),
+});
+export type Appointment = __Infer<typeof Appointment>;
+
+// The tagged union or sum type for the algebraic type `AttemptChannel`.
+export const AttemptChannel = __t.enum("AttemptChannel", {
+  Call: __t.unit(),
+  Message: __t.unit(),
+});
+export type AttemptChannel = __Infer<typeof AttemptChannel>;
+
+// The tagged union or sum type for the algebraic type `AttemptStatus`.
+export const AttemptStatus = __t.enum("AttemptStatus", {
+  Queued: __t.unit(),
+  Sent: __t.unit(),
+  Delivered: __t.unit(),
+  Answered: __t.unit(),
+  Accepted: __t.unit(),
+  Declined: __t.unit(),
+  NoAnswer: __t.unit(),
+  FollowUpExpired: __t.unit(),
+});
+export type AttemptStatus = __Infer<typeof AttemptStatus>;
+
+export const CareGrantEvent = __t.object("CareGrantEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  member: __t.identity(),
+  scope: __t.string(),
+  granted: __t.bool(),
+  changedBy: __t.identity(),
+  changedAt: __t.timestamp(),
+});
+export type CareGrantEvent = __Infer<typeof CareGrantEvent>;
+
+export const CareInstruction = __t.object("CareInstruction", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  kind: __t.string(),
+  name: __t.string(),
+  instruction: __t.string(),
+  times: __t.array(__t.string()),
+  reason: __t.option(__t.string()),
+  source: __t.string(),
+  effectiveDate: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+  verifiedBy: __t.option(__t.identity()),
+  verifiedAt: __t.option(__t.timestamp()),
+});
+export type CareInstruction = __Infer<typeof CareInstruction>;
+
+export const CareNeed = __t.object("CareNeed", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  get kind() {
+    return NeedKind;
+  },
+  summary: __t.string(),
+  get facts() {
+    return __t.array(NeedFact);
+  },
+  alertId: __t.option(__t.u64()),
+  dueAt: __t.timestamp(),
+  get steps() {
+    return __t.array(ContactStep);
+  },
+  hasBackup: __t.bool(),
+  answerSeconds: __t.u32(),
+  followUpSeconds: __t.u32(),
+  get status() {
+    return NeedStatus;
+  },
+  step: __t.u32(),
+  acceptedBy: __t.option(__t.identity()),
+  followUpBy: __t.option(__t.timestamp()),
+  raisedBy: __t.identity(),
+  clientId: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type CareNeed = __Infer<typeof CareNeed>;
+
+export const CareProfileVersion = __t.object("CareProfileVersion", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  profile: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+});
+export type CareProfileVersion = __Infer<typeof CareProfileVersion>;
+
+export const ClinicianShare = __t.object("ClinicianShare", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  appointmentId: __t.string(),
+  recipient: __t.string(),
+  sections: __t.string(),
+  consent: __t.string(),
+  frequency: __t.string(),
+  approvedBy: __t.identity(),
+  approvedAt: __t.timestamp(),
+  approvedSummaryAt: __t.option(__t.timestamp()),
+  revokedBy: __t.option(__t.identity()),
+  revokedAt: __t.option(__t.timestamp()),
+  sends: __t.u32(),
+  lastSentAt: __t.option(__t.timestamp()),
+});
+export type ClinicianShare = __Infer<typeof ClinicianShare>;
+
+export const ContactAttempt = __t.object("ContactAttempt", {
+  key: __t.string(),
+  needId: __t.u64(),
+  familyId: __t.u64(),
+  step: __t.u32(),
+  member: __t.identity(),
+  get channel() {
+    return AttemptChannel;
+  },
+  get status() {
+    return AttemptStatus;
+  },
+  body: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type ContactAttempt = __Infer<typeof ContactAttempt>;
+
+// The tagged union or sum type for the algebraic type `ContactDetail`.
+export const ContactDetail = __t.enum("ContactDetail", {
+  Minimal: __t.unit(),
+  Summary: __t.unit(),
+  Facts: __t.unit(),
+});
+export type ContactDetail = __Infer<typeof ContactDetail>;
+
+export const ContactLadder = __t.object("ContactLadder", {
+  familyId: __t.u64(),
+  get contacts() {
+    return __t.array(ContactStep);
+  },
+  get backup() {
+    return __t.option(ContactStep);
+  },
+  answerSeconds: __t.u32(),
+  followUpSeconds: __t.u32(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ContactLadder = __Infer<typeof ContactLadder>;
+
+export const ContactStep = __t.object("ContactStep", {
+  member: __t.identity(),
+  name: __t.string(),
+  timeZone: __t.string(),
+  get detail() {
+    return ContactDetail;
+  },
+  get callFor() {
+    return __t.array(NeedKind);
+  },
+});
+export type ContactStep = __Infer<typeof ContactStep>;
+
+export const CookingProfile = __t.object("CookingProfile", {
+  familyId: __t.u64(),
+  profile: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+});
+export type CookingProfile = __Infer<typeof CookingProfile>;
+
+export const DeliveryEvent = __t.object("DeliveryEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  proposalId: __t.string(),
+  get status() {
+    return OrderStatus;
+  },
+  proposal: __t.option(__t.string()),
+  note: __t.string(),
+  actor: __t.identity(),
+  at: __t.timestamp(),
+});
+export type DeliveryEvent = __Infer<typeof DeliveryEvent>;
+
 // The tagged union or sum type for the algebraic type `DeliveryStatus`.
 export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Queued: __t.unit(),
@@ -66,6 +269,29 @@ export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Unavailable: __t.unit(),
 });
 export type DeliveryStatus = __Infer<typeof DeliveryStatus>;
+
+export const ExerciseEvent = __t.object("ExerciseEvent", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  planId: __t.string(),
+  sessionId: __t.string(),
+  kind: __t.string(),
+  reason: __t.option(__t.string()),
+  actor: __t.identity(),
+  at: __t.timestamp(),
+});
+export type ExerciseEvent = __Infer<typeof ExerciseEvent>;
+
+export const ExercisePlan = __t.object("ExercisePlan", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  plan: __t.string(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  verifiedBy: __t.option(__t.identity()),
+  verifiedAt: __t.option(__t.timestamp()),
+});
+export type ExercisePlan = __Infer<typeof ExercisePlan>;
 
 export const Family = __t.object("Family", {
   id: __t.u64(),
@@ -109,6 +335,96 @@ export const HealthSample = __t.object("HealthSample", {
 });
 export type HealthSample = __Infer<typeof HealthSample>;
 
+export const LadderTimer = __t.object("LadderTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  needId: __t.u64(),
+  step: __t.u32(),
+  get purpose() {
+    return LadderTimerPurpose;
+  },
+});
+export type LadderTimer = __Infer<typeof LadderTimer>;
+
+// The tagged union or sum type for the algebraic type `LadderTimerPurpose`.
+export const LadderTimerPurpose = __t.enum("LadderTimerPurpose", {
+  Send: __t.unit(),
+  AnswerDue: __t.unit(),
+  FollowUpDue: __t.unit(),
+});
+export type LadderTimerPurpose = __Infer<typeof LadderTimerPurpose>;
+
+export const Location = __t.object("Location", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get status() {
+    return LocationStatus;
+  },
+  get fix() {
+    return __t.option(LocationFix);
+  },
+  reportedAt: __t.timestamp(),
+});
+export type Location = __Infer<typeof Location>;
+
+export const LocationFix = __t.object("LocationFix", {
+  latitude: __t.f64(),
+  longitude: __t.f64(),
+  accuracyMeters: __t.f64(),
+  fixTime: __t.timestamp(),
+});
+export type LocationFix = __Infer<typeof LocationFix>;
+
+export const LocationShare = __t.object("LocationShare", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  viewer: __t.identity(),
+  sharedAt: __t.timestamp(),
+});
+export type LocationShare = __Infer<typeof LocationShare>;
+
+// The tagged union or sum type for the algebraic type `LocationStatus`.
+export const LocationStatus = __t.enum("LocationStatus", {
+  Fix: __t.unit(),
+  GpsDenied: __t.unit(),
+  NoFix: __t.unit(),
+});
+export type LocationStatus = __Infer<typeof LocationStatus>;
+
+export const MealFact = __t.object("MealFact", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  mealId: __t.string(),
+  fact: __t.string(),
+  recordedBy: __t.identity(),
+  recordedAt: __t.timestamp(),
+});
+export type MealFact = __Infer<typeof MealFact>;
+
+export const MedicineMemory = __t.object("MedicineMemory", {
+  familyId: __t.u64(),
+  places: __t.array(__t.string()),
+  setBy: __t.identity(),
+  setAt: __t.timestamp(),
+});
+export type MedicineMemory = __Infer<typeof MedicineMemory>;
+
+export const MedicineSighting = __t.object("MedicineSighting", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  container: __t.string(),
+  place: __t.string(),
+  seenAt: __t.timestamp(),
+  source: __t.string(),
+  confidence: __t.f64(),
+  labelRead: __t.bool(),
+  savedBy: __t.identity(),
+  notFoundAt: __t.option(__t.timestamp()),
+});
+export type MedicineSighting = __Infer<typeof MedicineSighting>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -131,6 +447,42 @@ export type MyAlertThresholds = __Infer<typeof MyAlertThresholds>;
 export const MyAlerts = __t.object("MyAlerts", {});
 export type MyAlerts = __Infer<typeof MyAlerts>;
 
+export const MyAppointments = __t.object("MyAppointments", {});
+export type MyAppointments = __Infer<typeof MyAppointments>;
+
+export const MyCareGrants = __t.object("MyCareGrants", {});
+export type MyCareGrants = __Infer<typeof MyCareGrants>;
+
+export const MyCareInstructions = __t.object("MyCareInstructions", {});
+export type MyCareInstructions = __Infer<typeof MyCareInstructions>;
+
+export const MyCareNeeds = __t.object("MyCareNeeds", {});
+export type MyCareNeeds = __Infer<typeof MyCareNeeds>;
+
+export const MyCareProfiles = __t.object("MyCareProfiles", {});
+export type MyCareProfiles = __Infer<typeof MyCareProfiles>;
+
+export const MyClinicianShares = __t.object("MyClinicianShares", {});
+export type MyClinicianShares = __Infer<typeof MyClinicianShares>;
+
+export const MyContactAttempts = __t.object("MyContactAttempts", {});
+export type MyContactAttempts = __Infer<typeof MyContactAttempts>;
+
+export const MyContactLadders = __t.object("MyContactLadders", {});
+export type MyContactLadders = __Infer<typeof MyContactLadders>;
+
+export const MyCookingProfiles = __t.object("MyCookingProfiles", {});
+export type MyCookingProfiles = __Infer<typeof MyCookingProfiles>;
+
+export const MyDeliveryEvents = __t.object("MyDeliveryEvents", {});
+export type MyDeliveryEvents = __Infer<typeof MyDeliveryEvents>;
+
+export const MyExerciseEvents = __t.object("MyExerciseEvents", {});
+export type MyExerciseEvents = __Infer<typeof MyExerciseEvents>;
+
+export const MyExercisePlans = __t.object("MyExercisePlans", {});
+export type MyExercisePlans = __Infer<typeof MyExercisePlans>;
+
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
@@ -140,16 +492,97 @@ export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
 
+export const MyLocationShares = __t.object("MyLocationShares", {});
+export type MyLocationShares = __Infer<typeof MyLocationShares>;
+
+export const MyLocations = __t.object("MyLocations", {});
+export type MyLocations = __Infer<typeof MyLocations>;
+
+export const MyMealFacts = __t.object("MyMealFacts", {});
+export type MyMealFacts = __Infer<typeof MyMealFacts>;
+
+export const MyMedicineMemory = __t.object("MyMedicineMemory", {});
+export type MyMedicineMemory = __Infer<typeof MyMedicineMemory>;
+
+export const MyMedicineSightings = __t.object("MyMedicineSightings", {});
+export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
+
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
 
+export const MyReminderEvents = __t.object("MyReminderEvents", {});
+export type MyReminderEvents = __Infer<typeof MyReminderEvents>;
+
+export const MyReminderOccurrences = __t.object("MyReminderOccurrences", {});
+export type MyReminderOccurrences = __Infer<typeof MyReminderOccurrences>;
+
+export const MyReminderSettings = __t.object("MyReminderSettings", {});
+export type MyReminderSettings = __Infer<typeof MyReminderSettings>;
+
+export const MyReminders = __t.object("MyReminders", {});
+export type MyReminders = __Infer<typeof MyReminders>;
+
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
+
+export const MySpeakerSettings = __t.object("MySpeakerSettings", {});
+export type MySpeakerSettings = __Infer<typeof MySpeakerSettings>;
+
+export const MyTripEvents = __t.object("MyTripEvents", {});
+export type MyTripEvents = __Infer<typeof MyTripEvents>;
+
+export const NeedFact = __t.object("NeedFact", {
+  text: __t.string(),
+  source: __t.string(),
+  observedAt: __t.timestamp(),
+  uncertainty: __t.string(),
+});
+export type NeedFact = __Infer<typeof NeedFact>;
+
+// The tagged union or sum type for the algebraic type `NeedKind`.
+export const NeedKind = __t.enum("NeedKind", {
+  Alert: __t.unit(),
+  Help: __t.unit(),
+  CallReminder: __t.unit(),
+});
+export type NeedKind = __Infer<typeof NeedKind>;
+
+// The tagged union or sum type for the algebraic type `NeedResponse`.
+export const NeedResponse = __t.enum("NeedResponse", {
+  Seen: __t.unit(),
+  Answer: __t.unit(),
+  Accept: __t.unit(),
+  Decline: __t.unit(),
+  ConfirmHelp: __t.unit(),
+});
+export type NeedResponse = __Infer<typeof NeedResponse>;
+
+// The tagged union or sum type for the algebraic type `NeedStatus`.
+export const NeedStatus = __t.enum("NeedStatus", {
+  Open: __t.unit(),
+  Accepted: __t.unit(),
+  Resolved: __t.unit(),
+  Unresolved: __t.unit(),
+});
+export type NeedStatus = __Infer<typeof NeedStatus>;
 
 export const Operator = __t.object("Operator", {
   identity: __t.identity(),
 });
 export type Operator = __Infer<typeof Operator>;
+
+// The tagged union or sum type for the algebraic type `OrderStatus`.
+export const OrderStatus = __t.enum("OrderStatus", {
+  Proposed: __t.unit(),
+  Approved: __t.unit(),
+  Replaced: __t.unit(),
+  Placed: __t.unit(),
+  Uncertain: __t.unit(),
+  Failed: __t.unit(),
+  Delivered: __t.unit(),
+  Eaten: __t.unit(),
+});
+export type OrderStatus = __Infer<typeof OrderStatus>;
 
 export const PendingAlertDeliveries = __t.object("PendingAlertDeliveries", {});
 export type PendingAlertDeliveries = __Infer<typeof PendingAlertDeliveries>;
@@ -166,6 +599,76 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const Reminder = __t.object("Reminder", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  kind: __t.string(),
+  subjectId: __t.option(__t.string()),
+  title: __t.string(),
+  times: __t.array(__t.u16()),
+  clientId: __t.string(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type Reminder = __Infer<typeof Reminder>;
+
+export const ReminderEvent = __t.object("ReminderEvent", {
+  id: __t.u64(),
+  occurrenceId: __t.u64(),
+  familyId: __t.u64(),
+  state: __t.string(),
+  response: __t.option(__t.string()),
+  at: __t.timestamp(),
+  actor: __t.option(__t.identity()),
+  source: __t.string(),
+  wording: __t.option(__t.string()),
+});
+export type ReminderEvent = __Infer<typeof ReminderEvent>;
+
+export const ReminderOccurrence = __t.object("ReminderOccurrence", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  reminderId: __t.u64(),
+  slot: __t.string(),
+  kind: __t.string(),
+  subjectId: __t.option(__t.string()),
+  title: __t.string(),
+  minuteOfDay: __t.u16(),
+  scheduledFor: __t.timestamp(),
+  state: __t.string(),
+  promptDue: __t.bool(),
+  prompts: __t.u32(),
+  nextPromptAt: __t.option(__t.timestamp()),
+});
+export type ReminderOccurrence = __Infer<typeof ReminderOccurrence>;
+
+export const ReminderRequest = __t.object("ReminderRequest", {
+  key: __t.string(),
+  fingerprint: __t.string(),
+});
+export type ReminderRequest = __Infer<typeof ReminderRequest>;
+
+export const ReminderSettings = __t.object("ReminderSettings", {
+  familyId: __t.u64(),
+  timeZone: __t.string(),
+  quietStart: __t.option(__t.u16()),
+  quietEnd: __t.option(__t.u16()),
+  repeatEveryMinutes: __t.u32(),
+  maxPrompts: __t.u32(),
+  snoozeMinutes: __t.u32(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReminderSettings = __Infer<typeof ReminderSettings>;
+
+export const ReminderTimer = __t.object("ReminderTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  occurrenceId: __t.u64(),
+  dueAt: __t.timestamp(),
+});
+export type ReminderTimer = __Infer<typeof ReminderTimer>;
 
 export const Report = __t.object("Report", {
   id: __t.string(),
@@ -186,6 +689,16 @@ export const SampleQuality = __t.enum("SampleQuality", {
 });
 export type SampleQuality = __Infer<typeof SampleQuality>;
 
+export const SpeakerSettings = __t.object("SpeakerSettings", {
+  familyId: __t.u64(),
+  enabled: __t.bool(),
+  room: __t.string(),
+  sharedRoomKinds: __t.array(__t.string()),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type SpeakerSettings = __Infer<typeof SpeakerSettings>;
+
 // The tagged union or sum type for the algebraic type `ThresholdDirection`.
 export const ThresholdDirection = __t.enum("ThresholdDirection", {
   Above: __t.unit(),
@@ -198,4 +711,38 @@ export const ThresholdTrigger = __t.object("ThresholdTrigger", {
   alertId: __t.u64(),
 });
 export type ThresholdTrigger = __Infer<typeof ThresholdTrigger>;
+
+export const TripEvent = __t.object("TripEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  tripId: __t.string(),
+  get step() {
+    return TripStep;
+  },
+  source: __t.string(),
+  purpose: __t.option(__t.string()),
+  destination: __t.option(__t.string()),
+  notifyDeparture: __t.bool(),
+  notifyArrival: __t.bool(),
+  by: __t.identity(),
+  at: __t.timestamp(),
+});
+export type TripEvent = __Infer<typeof TripEvent>;
+
+export const TripPlan = __t.object("TripPlan", {
+  purpose: __t.string(),
+  destination: __t.option(__t.string()),
+  notifyDeparture: __t.bool(),
+  notifyArrival: __t.bool(),
+});
+export type TripPlan = __Infer<typeof TripPlan>;
+
+// The tagged union or sum type for the algebraic type `TripStep`.
+export const TripStep = __t.enum("TripStep", {
+  Asked: __t.unit(),
+  Leaving: __t.unit(),
+  Cancelled: __t.unit(),
+  Arrived: __t.unit(),
+});
+export type TripStep = __Infer<typeof TripStep>;
 

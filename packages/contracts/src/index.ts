@@ -7,13 +7,10 @@ export const Health = Schema.Struct({
 });
 export type Health = typeof Health.Type;
 
-/**
- * The NOOP-to-server connection is intentionally stubbed (friend-owned integration).
- * It carries no readings and no WHOOP-derived nudges; clients must show the source as unavailable.
- */
 export const NoopConnection = Schema.Struct({
 	source: Schema.Literal("noop"),
-	status: Schema.Literal("not_connected"),
+	status: Schema.Literals(["not_connected", "connected"]),
+	lastSeenAt: Schema.NullOr(Schema.String),
 });
 export type NoopConnection = typeof NoopConnection.Type;
 
@@ -22,6 +19,49 @@ export const Sources = Schema.Struct({
 	sources: Schema.Array(NoopConnection),
 });
 export type Sources = typeof Sources.Type;
+
+const NoopReading = Schema.optional(Schema.NullOr(Schema.Finite));
+
+export const NoopBatch = Schema.Struct({
+	tables: Schema.Struct({
+		hrSample: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					ts: Schema.Int,
+					bpm: Schema.Finite,
+				}),
+			),
+		),
+		event: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					ts: Schema.Int,
+					kind: Schema.String,
+				}),
+			),
+		),
+		dailyMetric: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					day: Schema.String,
+					restingHr: NoopReading,
+					avgHrv: NoopReading,
+					respRateBpm: NoopReading,
+					totalSleepMin: NoopReading,
+					efficiency: NoopReading,
+					steps: NoopReading,
+					strain: NoopReading,
+					skinTempC: NoopReading,
+					recovery: NoopReading,
+				}),
+			),
+		),
+	}),
+});
+export type NoopBatch = typeof NoopBatch.Type;
 
 /**
  * Every non-2xx JSON response from the server. `unauthorized` (401): no valid sign-in.
@@ -61,9 +101,10 @@ const getDecoded = async <T>(
 	schema: Schema.Decoder<T>,
 	url: string,
 	signal: AbortSignal,
+	headers?: Record<string, string>,
 ): Promise<Loaded<T>> => {
 	try {
-		const response = await fetch(url, { signal });
+		const response = await fetch(url, { signal, headers: headers ?? {} });
 		if (!response.ok)
 			return {
 				kind: "error",
@@ -80,15 +121,17 @@ const getDecoded = async <T>(
 
 /**
  * Starts a decoded GET and reports the result unless cancelled first. Returns the cancel function,
- * so a React effect can be `useEffect(() => loadDecoded(schema, url, setState), [])`.
+ * so a React effect can be `useEffect(() => loadDecoded(schema, url, setState), [])`. Signed-in
+ * reads pass the `Authorization` header in `headers`.
  */
 export const loadDecoded = <T>(
 	schema: Schema.Decoder<T>,
 	url: string,
 	onLoaded: (result: Loaded<T>) => void,
+	headers?: Record<string, string>,
 ): (() => void) => {
 	const controller = new AbortController();
-	void getDecoded(schema, url, controller.signal).then((result) => {
+	void getDecoded(schema, url, controller.signal, headers).then((result) => {
 		if (!controller.signal.aborted) onLoaded(result);
 	});
 	return () => controller.abort();

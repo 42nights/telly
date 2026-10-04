@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import type { ApiFailure } from "@/lib/api";
 
+import { direction } from "./logic";
 import type { PictureCheck } from "./medicine-check";
 import { SpeechLine, useSpeech } from "./speech";
 
@@ -44,10 +45,12 @@ function Found({
 	const navigate = useNavigate();
 	const { speech, say } = useSpeech(familyId);
 	const single = detections.length === 1;
+	const way = direction(best.box, check.frame);
 	const spoken = [
 		single
 			? `I marked ${item} in the picture.`
 			: `I marked ${detections.length} medicine containers. The arrow points to the most likely one.`,
+		way,
 		best.label === null ? "" : `The label looks like “${best.label}”.`,
 		best.needsVerification
 			? "I'm not sure about this one. Look closely at the label."
@@ -69,6 +72,7 @@ function Found({
 					</>
 				)}
 			</p>
+			<p className="font-semibold">{way}</p>
 			{best.label !== null && (
 				<p className="break-words">The label looks like “{best.label}”.</p>
 			)}
@@ -167,6 +171,25 @@ function PictureAnswer({
 				<Button className={lg} onClick={stop} variant="outline">
 					<Square aria-hidden />
 					Stop
+				</Button>
+			</>
+		);
+	if (result.kind === "cleared")
+		return (
+			<>
+				<p className="win95-raised flex items-start gap-3 p-4 text-[20px]">
+					<Info aria-hidden className="mt-0.5 size-6 shrink-0" />
+					{result.reason === "moved"
+						? "The camera moved, so I took the marker away."
+						: "That picture is more than a minute old, so I took the marker away."}
+				</p>
+				<Button
+					className={`win95-primary ${xl}`}
+					disabled={!live}
+					onClick={look}
+				>
+					<Camera aria-hidden />
+					Look again
 				</Button>
 			</>
 		);

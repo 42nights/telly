@@ -1,4 +1,5 @@
 import type { HealthSample } from "@health/contracts";
+import { urgentRequest } from "@health/contracts/ask";
 
 /** A heart-rate reading older than this is not shown as current. */
 // ponytail: fixed 10 min window; read it from the family's alert threshold if they ever differ.
@@ -19,6 +20,28 @@ export const currentHeartRate = (
 	samples: readonly HealthSample[],
 	familyId: string,
 	now: number,
+): HealthSample | null =>
+	newestFreshHeartRate(
+		samples,
+		familyId,
+		now,
+		(s) => s.quality === "validated",
+	);
+
+export const whoopHeartRate = (
+	samples: readonly HealthSample[],
+	familyId: string,
+	now: number,
+): HealthSample | null =>
+	newestFreshHeartRate(samples, familyId, now, (s) =>
+		s.source.startsWith("noop:"),
+	);
+
+const newestFreshHeartRate = (
+	samples: readonly HealthSample[],
+	familyId: string,
+	now: number,
+	accept: (sample: HealthSample) => boolean,
 ): HealthSample | null => {
 	let newest: HealthSample | null = null;
 	for (const s of samples)
@@ -26,7 +49,7 @@ export const currentHeartRate = (
 			s.familyId === familyId &&
 			s.metric === "heart_rate" &&
 			s.unit === "bpm" &&
-			s.quality === "validated" &&
+			accept(s) &&
 			!s.synthetic &&
 			(newest === null || s.sourceTime > newest.sourceTime)
 		)
@@ -54,13 +77,19 @@ export const evidenceLine = (
 		readonly source: string;
 		readonly sourceTime: string;
 		readonly stale: boolean;
+		readonly synthetic: boolean;
 	},
 	now: number,
 ): string => {
 	const metric = sample.metric.replaceAll("_", " ");
 	const name = `${metric.charAt(0).toUpperCase()}${metric.slice(1)}`;
 	const age = ago(now - Date.parse(sample.sourceTime));
-	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${sample.stale ? " (old)" : ""}`;
+	const flag = sample.synthetic
+		? " (demo, not real)"
+		: sample.stale
+			? " (old)"
+			: "";
+	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${flag}`;
 };
 
 /** Where `bpm` sits on the range bar, as a percentage clamped to the bar. */
@@ -91,6 +120,20 @@ export const itemFromRequest = (request: string): string => {
 	const named = MY_MEDICINE.exec(request)?.[1] ?? MEDICINE.exec(request)?.[0];
 	if (named === undefined) return "your medicine";
 	return `your ${named.toLowerCase().replace(/\bmeds?\b/, "medicine")}`;
+};
+
+// "Ouch" and the like: maybe hurt, maybe not. Not urgent by itself, so it gets a check-in.
+const OUCH = /\b(ouch|ow|owie|ay)\b/i;
+
+export type EmergencyIntent = "help" | "ouch";
+
+/**
+ * What a request means for emergencies. An urgent request (`urgentRequest`, the same rule as the
+ * server's) dispatches at once; an "ouch" starts a check-in; null is an ordinary request.
+ */
+export const emergencyIntent = (request: string): EmergencyIntent | null => {
+	if (urgentRequest(request) !== null) return "help";
+	return OUCH.test(request) ? "ouch" : null;
 };
 
 type Box = {
@@ -129,7 +172,47 @@ export const marker = (
 	const head = fromTop ? -gap * 1.5 : gap * 1.5;
 	return {
 		rect,
+		/** The arrow comes down from the frame's top edge (else up from the bottom). */
+		fromTop,
 		arrow: `M${startX} ${startY} C ${startX} ${midY}, ${cx} ${midY}, ${cx} ${endY + head * 0.5}`,
 		head: `${cx},${endY} ${cx - gap},${endY + head} ${cx + gap},${endY + head}`,
 	};
+};
+
+/** A sighting older than this is shown as old. */
+// ponytail: fixed 12 h; make it a family setting if containers move on another rhythm.
+export const SIGHTING_OLD_MS = 12 * 3600_000;
+/** Same limit as the vision route: below it, a detection asks the person to check the label. */
+const SURE_CONFIDENCE = 0.7;
+
+/**
+ * How to qualify a remembered sighting. It is only ever "last seen", never a current place: it is
+ * `outdated` once the person did not find it there, `old` after `SIGHTING_OLD_MS`, and `unsure`
+ * when the label was not read or the detection had low confidence.
+ */
+export const sightingState = (
+	sighting: {
+		readonly seenAt: string;
+		readonly notFoundAt: string | null;
+		readonly confidence: number;
+		readonly labelRead: boolean;
+	},
+	now: number,
+) => ({
+	outdated: sighting.notFoundAt !== null,
+	old: now - Date.parse(sighting.seenAt) > SIGHTING_OLD_MS,
+	unsure: !sighting.labelRead || sighting.confidence < SURE_CONFIDENCE,
+});
+
+/** A short direction to a box in the picture: "Look to the left, low down." */
+export const direction = (
+	box: Box,
+	frame: { readonly width: number; readonly height: number },
+): string => {
+	const x = (box.x + box.width / 2) / frame.width;
+	const y = (box.y + box.height / 2) / frame.height;
+	const side =
+		x < 1 / 3 ? "to the left" : x > 2 / 3 ? "to the right" : "straight ahead";
+	const height = y < 1 / 3 ? ", high up" : y > 2 / 3 ? ", low down" : "";
+	return `Look ${side}${height}.`;
 };

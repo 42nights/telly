@@ -1,13 +1,21 @@
+// The phone's signed-in session (issue #4): the OIDC ID token that the sign-in screen stores. It
+// lives only in Expo SecureStore (iOS Keychain, Android Keystore), never in AsyncStorage or logs.
+// The server checks the signature, issuer, audience, and expiry; the app only drops a passed `exp`.
+import { tokenExpired } from "@health/contracts/session";
 import * as SecureStore from "expo-secure-store";
 
-export type Session = { readonly url: string; readonly token: string };
+const KEY = "telly.session.token";
 
-const KEY = "telly.session";
-
-export const loadSession = async (): Promise<Session | null> => {
-	const saved = await SecureStore.getItemAsync(KEY);
-	return saved === null ? null : (JSON.parse(saved) as Session);
+export const readSessionToken = async (): Promise<string | null> => {
+	const token = await SecureStore.getItemAsync(KEY);
+	if (token === null || !tokenExpired(token)) return token;
+	await SecureStore.deleteItemAsync(KEY);
+	return null;
 };
 
-export const saveSession = (session: Session) =>
-	SecureStore.setItemAsync(KEY, JSON.stringify(session));
+export const writeSessionToken = (token: string | null) =>
+	token === null
+		? SecureStore.deleteItemAsync(KEY)
+		: SecureStore.setItemAsync(KEY, token, {
+				keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+			});

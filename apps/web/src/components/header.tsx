@@ -1,17 +1,34 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+
+import {
+	getSessionToken,
+	onSessionChange,
+	setSessionToken,
+} from "@/lib/session";
 
 const links = [
 	{ to: "/hud", label: "Home" },
 	{ to: "/medicine", label: "Medicine" },
+	{ to: "/bedtime", label: "Bedtime" },
+	{ to: "/trip", label: "Going out" },
 	{ to: "/family", label: "Family" },
+	{ to: "/care-profile", label: "Care plan" },
 	{ to: "/chat", label: "Chat" },
+	{ to: "/care", label: "Care" },
 	{ to: "/dashboard", label: "Dashboard" },
 	{ to: "/reports", label: "Reports" },
+	{ to: "/appointments", label: "Visits" },
 	{ to: "/settings", label: "Settings" },
 ] as const;
 
 /** The app's taskbar: one raised button per screen; the current screen shows pressed. */
 export default function Header() {
+	const [signedIn, setSignedIn] = useState(() => getSessionToken() !== null);
+	useEffect(
+		() => onSessionChange(() => setSignedIn(getSessionToken() !== null)),
+		[],
+	);
 	return (
 		<nav
 			aria-label="Screens"
@@ -27,6 +44,23 @@ export default function Header() {
 					{label}
 				</Link>
 			))}
+			{signedIn ? (
+				<button
+					type="button"
+					className="win95-tab ml-auto"
+					onClick={() => setSessionToken(null)}
+				>
+					Sign out
+				</button>
+			) : (
+				<Link
+					to="/sign-in"
+					className="win95-tab ml-auto"
+					activeProps={{ "aria-current": "page" }}
+				>
+					Sign in
+				</Link>
+			)}
 		</nav>
 	);
 }

@@ -3,7 +3,8 @@ import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users } from "lucide-react";
-
+import { CookingAbilities } from "@/components/cooking/abilities";
+import { ExerciseSection } from "@/components/exercise/plans";
 import { type FamilyData, useFamilyData } from "@/components/family/data";
 import {
 	AlertSection,
@@ -13,8 +14,10 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
+import { ReminderHistorySection } from "@/components/reminders/history";
+import { FamilyLocationSection } from "@/components/trip/location";
 import { ApiNotice } from "@/components/win95";
-import { memberLabel } from "@/lib/members";
+import { senderLabel } from "@/lib/members";
 
 export const Route = createFileRoute("/family")({
 	component: FamilyPhone,
@@ -56,6 +59,8 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 
 			<AlertSection data={data} now={now} />
 
+			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
+
 			<section aria-labelledby="glance" className="grid gap-2">
 				<h3 id="glance" className="font-bold">
 					Today at a glance
@@ -67,8 +72,15 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				<h3 id="monitoring" className="font-bold">
 					Monitoring
 				</h3>
-				<MonitoringList state={data.monitoring} />
+				<MonitoringList
+					state={data.monitoring}
+					records={data.records}
+					familyId={family.id}
+					now={now}
+				/>
 			</section>
+
+			<ReminderHistorySection familyId={family.id} me={data.me} />
 
 			<section aria-labelledby="chat" className="grid gap-2">
 				<h3 id="chat" className="font-bold">
@@ -94,6 +106,22 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 					</Link>
 				</div>
 			</section>
+
+			<section aria-labelledby="exercise" className="grid gap-2">
+				<h3 id="exercise" className="font-bold">
+					Guided exercise
+				</h3>
+				<ExerciseSection familyId={family.id} />
+			</section>
+
+			<section aria-labelledby="cooking" className="grid gap-2">
+				<h3 id="cooking" className="font-bold">
+					Cooking abilities
+				</h3>
+				<div className="win95-inset grid gap-2 bg-card p-2">
+					<CookingAbilities familyId={family.id} />
+				</div>
+			</section>
 		</div>
 	);
 }
@@ -102,7 +130,12 @@ function ChatPreview({
 	messages,
 	me,
 }: {
-	messages: readonly { sender: string; body: string; sentAt: string }[];
+	messages: readonly {
+		sender: string;
+		clientId: string;
+		body: string;
+		sentAt: string;
+	}[];
 	me: string | null;
 }) {
 	const newest = messages.reduce<(typeof messages)[number] | null>(
@@ -115,7 +148,7 @@ function ChatPreview({
 	if (newest === null) return <p>No messages yet.</p>;
 	return (
 		<p className="line-clamp-3 break-words">
-			<b>{memberLabel(newest.sender, me)}</b>
+			<b>{senderLabel(newest, me)}</b>
 			{": "}
 			{newest.body}
 		</p>

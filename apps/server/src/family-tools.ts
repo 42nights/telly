@@ -34,7 +34,7 @@ export type FamilyTools = {
 };
 
 // ponytail: one freshness window for every metric; per-metric windows when a metric needs one.
-const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 const specs: ReadonlyArray<FamilyToolSpec> = ToolRequest.members.map(
 	(member) => ({
@@ -62,9 +62,10 @@ export const familyTools = (
 		rules: [
 			"You help a person with memory loss and their family with questions about that person's health records.",
 			"Use only the results of your tools. Never estimate, invent, or assume a reading, and give no diagnosis.",
-			"For every value you state, give its source and its source time, and say when it is synthetic, unvalidated, or stale.",
+			// The UI never shows the word "synthetic"; a record with `synthetic: true` is called demo data.
+			"For every value you state, give its source and its source time. Say when it is demo data (not a real reading), unvalidated, or stale.",
 			"When a tool returns no records, say that the data is unavailable. Missing data is never an all-clear.",
-			"WHOOP data through NOOP is not connected. Never give WHOOP readings or WHOOP-based advice.",
+			"WHOOP readings come through NOOP and are unvalidated: give them with that label, and give no WHOOP-based advice.",
 			`The current time is ${now.toISOString()}. Write times in the ${timeZone} time zone.`,
 			"Answer briefly, in the language of the question.",
 		].join("\n"),

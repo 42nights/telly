@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect } from "react";
 
-import { saveSession } from "@/lib/session";
+import { saveWebSession } from "@/lib/web-session";
 
 export default function SignIn() {
 	const { url, token } = useLocalSearchParams();
@@ -11,8 +11,8 @@ export default function SignIn() {
 			url.startsWith("https://") &&
 			typeof token === "string" &&
 			token !== "";
-		void (valid ? saveSession({ url, token }) : Promise.resolve()).then(() =>
-			router.replace("/"),
+		void (valid ? saveWebSession({ url, token }) : Promise.resolve()).then(() =>
+			router.replace("/web"),
 		);
 	}, [url, token]);
 	return null;

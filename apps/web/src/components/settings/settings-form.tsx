@@ -18,7 +18,7 @@ export function SettingsForm() {
 	// Remount when the saved numbers change, so the boxes start from what this device stored.
 	return (
 		<NumbersForm
-			key={`${contacts.savedAt}:${contacts.momPhone}:${contacts.emergency}`}
+			key={`${contacts.savedAt}:${contacts.momPhone}:${contacts.familyPhone}:${contacts.emergency}`}
 			contacts={contacts}
 			save={save}
 		/>
@@ -71,6 +71,25 @@ function PersonGroup() {
 	);
 }
 
+/** One number box. Blank is valid only with `blankNote`, which then says what stays off. */
+function useNumber(saved: string | null, blankNote?: string) {
+	const [value, setValue] = useState(saved ?? "");
+	const trimmed = value.trim();
+	const blank = trimmed === "";
+	const valid = (blank && blankNote !== undefined) || isFullPhoneNumber(value);
+	return {
+		valid,
+		changed: trimmed !== (saved ?? ""),
+		next: blank ? null : trimmed,
+		field: {
+			value,
+			onChange: setValue,
+			error: valid ? null : INVALID,
+			note: blank ? (blankNote ?? null) : null,
+		},
+	};
+}
+
 function NumbersForm({
 	contacts,
 	save,
@@ -78,14 +97,17 @@ function NumbersForm({
 	contacts: Contacts;
 	save: (next: Contacts) => void;
 }) {
-	const [mom, setMom] = useState(contacts.momPhone ?? "");
-	const [emergency, setEmergency] = useState(contacts.emergency);
-	const momValid = mom.trim() === "" || isFullPhoneNumber(mom);
-	const emergencyValid = isFullPhoneNumber(emergency);
-	const changed =
-		mom.trim() !== (contacts.momPhone ?? "") ||
-		emergency.trim() !== contacts.emergency;
-	const valid = momValid && emergencyValid;
+	const mom = useNumber(
+		contacts.momPhone,
+		"Call Mom stays off until you add a number.",
+	);
+	const family = useNumber(
+		contacts.familyPhone,
+		"Call family stays off until you add a number.",
+	);
+	const emergency = useNumber(contacts.emergency);
+	const changed = mom.changed || family.changed || emergency.changed;
+	const valid = mom.valid && family.valid && emergency.valid;
 
 	const status = numbersStatus(valid, changed, contacts.savedAt);
 
@@ -98,8 +120,9 @@ function NumbersForm({
 					event.preventDefault();
 					if (changed && valid)
 						save({
-							momPhone: mom.trim() === "" ? null : mom.trim(),
-							emergency: emergency.trim(),
+							momPhone: mom.next,
+							familyPhone: family.next,
+							emergency: emergency.next ?? contacts.emergency,
 							savedAt: contacts.savedAt,
 						});
 				}}
@@ -111,23 +134,19 @@ function NumbersForm({
 					<NumberField
 						id="settings-mom"
 						label="Mom's phone number"
-						value={mom}
-						onChange={setMom}
-						error={momValid ? null : INVALID}
-						note={
-							mom.trim() === ""
-								? "Call Mom stays off until you add a number."
-								: null
-						}
+						{...mom.field}
+					/>
+					<NumberField
+						id="settings-family"
+						label="Family phone number"
+						tip="The person's Home screen calls this number with Call family."
+						{...family.field}
 					/>
 					<NumberField
 						id="settings-emergency"
 						label="Emergency number"
 						tip="911 is the US number. Outside the US, enter your local emergency number, for example 112 or 999."
-						value={emergency}
-						onChange={setEmergency}
-						error={emergencyValid ? null : INVALID}
-						note={null}
+						{...emergency.field}
 					/>
 					<p className="flex items-center gap-1">
 						Calls start from your phone's dialer.
