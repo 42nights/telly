@@ -1,7 +1,11 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`). Every
 // connection is a separate identity issued by that database; all coordinates are synthetic.
 import { describe, expect, test } from "bun:test";
-import { FamilyLocations, SharedLocation } from "@health/contracts/location";
+import {
+	FamilyLocations,
+	HomeWatch,
+	SharedLocation,
+} from "@health/contracts/location";
 import { Effect, Schema } from "effect";
 import { Identity } from "spacetimedb";
 import { openFamilyDb } from "../db";
@@ -147,7 +151,7 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					`/location/shares/${shared.identity}`,
 				);
 				expect(Schema.decodeUnknownSync(FamilyLocations)(revoked.json)).toEqual(
-					{ locations: [], shares: [], seesShared: false },
+					{ locations: [], shares: [], seesShared: false, events: [] },
 				);
 				expect(yield* seenBy(shared)).toEqual([]);
 				const late = yield* send(app, "POST", "/location", {
@@ -172,7 +176,70 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					locations: [],
 					shares: [],
 					seesShared: false,
+					events: [],
 				});
+			}),
+		));
+
+	test("the home stays private, and a trip start reaches the people the wearer shares with", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const wearer = yield* openFamily(config, "Home family");
+				const viewer = yield* openFamilyDb(config);
+				const familyId = BigInt(wearer.familyId);
+				yield* Effect.promise(async () => {
+					const { reducers } = wearer.db.connection;
+					const member = Identity.fromString(viewer.identity);
+					await reducers.addFamilyMember({ familyId, member });
+					await reducers.shareLocation({ familyId, viewer: member });
+					await reducers.setCareGrant({
+						familyId,
+						member,
+						scope: "location",
+						granted: true,
+					});
+				});
+				const app = familyApp(wearer.db, wearer.familyId, locationRoutes());
+				const home = { latitude: 37.7749, longitude: -122.4194 };
+
+				const saved = yield* send(app, "PUT", "/location/home", {
+					home,
+					radiusMeters: 200,
+					autoTrip: true,
+				});
+				expect(Schema.decodeUnknownSync(HomeWatch)(saved.json)).toEqual({
+					home,
+					radiusMeters: 200,
+					autoTrip: true,
+					awaySince: null,
+					distanceMeters: null,
+					sharing: true,
+				});
+				const tooSmall = yield* send(app, "PUT", "/location/home", {
+					home,
+					radiusMeters: 50,
+					autoTrip: true,
+				});
+				expect(failure(tooSmall)).toEqual([400, "invalid_request"]);
+
+				const out = yield* send(app, "POST", "/location/away", { away: true });
+				expect(
+					Schema.decodeUnknownSync(HomeWatch)(out.json).awaySince,
+				).not.toBeNull();
+
+				const fresh = yield* openFamilyDb({ ...config, token: viewer.token });
+				const viewerApp = familyApp(fresh, wearer.familyId, locationRoutes());
+				// The viewer reads only their own (default) home, never the wearer's.
+				const theirs = yield* send(viewerApp, "GET", "/location/home");
+				expect(
+					Schema.decodeUnknownSync(HomeWatch)(theirs.json).home,
+				).toBeNull();
+				const seen = yield* send(viewerApp, "GET", "/location");
+				expect(
+					Schema.decodeUnknownSync(FamilyLocations)(seen.json).events,
+				).toMatchObject([
+					{ sharer: wearer.db.identity, kind: "left", manual: true, fix: null },
+				]);
 			}),
 		));
 });

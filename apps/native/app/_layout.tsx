@@ -10,6 +10,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { NAV_THEME } from "@/lib/constants";
 import { useColorScheme } from "@/lib/use-color-scheme";
+// Defines the background location task at startup, as iOS needs when it wakes the app (#302).
+import "@/lib/location-watch";
 
 const LIGHT_THEME = {
 	...DefaultTheme,

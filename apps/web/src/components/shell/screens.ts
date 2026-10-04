@@ -69,6 +69,7 @@ export const settingsScreen = {
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
 		{ to: "/settings/speaker", label: "Home speaker" },
+		{ to: "/settings/going-out", label: "Going out" },
 		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
