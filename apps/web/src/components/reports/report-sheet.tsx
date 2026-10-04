@@ -37,7 +37,14 @@ export function ReportScreen() {
 				/>
 			</Frame>
 		);
-	return <FamilyReports familyId={family.id} familyName={family.name} />;
+	// A new key per person drops the picked report and any error from the previous person.
+	return (
+		<FamilyReports
+			key={family.id}
+			familyId={family.id}
+			familyName={family.name}
+		/>
+	);
 }
 
 /** The selected family's reports: the newest, or the one picked, and a way to create one. */

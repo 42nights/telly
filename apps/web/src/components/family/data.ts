@@ -56,6 +56,12 @@ export function useFamilyData(): FamilyData {
 		if (demo !== null)
 			console.error(`Family records contain ${demo}. They are not shown.`);
 	}, [demo]);
+	// A "Mark as seen" failure belongs to the person it was for.
+	const familyId = family?.id;
+	useEffect(() => {
+		void familyId;
+		setSeenError(null);
+	}, [familyId]);
 
 	const markSeen = async (alertId: string) => {
 		const alertsPath = path(

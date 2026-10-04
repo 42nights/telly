@@ -70,7 +70,9 @@ function Dashboard() {
 							<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
 						</header>
 						<FamilyGate data={data} emptyClassName="win95-inset bg-card p-3">
-							{(family) => <DashboardBody data={data} family={family} />}
+							{(family) => (
+								<DashboardBody key={family.id} data={data} family={family} />
+							)}
 						</FamilyGate>
 					</div>
 				</div>
