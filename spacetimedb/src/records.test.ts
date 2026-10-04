@@ -264,8 +264,15 @@ describe("location sharing", () => {
 			status: { tag },
 			fix: f,
 		});
+	const grantLocation = (member: typeof bob) =>
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member,
+			scope: "location",
+			granted: true,
+		});
 
-	test("share once; viewer sees the location; revoke deletes it", () => {
+	test("share once; viewer sees the location only with the location scope; revoke deletes it", () => {
 		expect(() => report("Fix", fix())).toThrow(
 			"location is not shared with anyone",
 		);
@@ -279,6 +286,9 @@ describe("location sharing", () => {
 		h.advance(60);
 		report("NoFix");
 		expect(h.rows("location")).toHaveLength(1);
+		// A share without the viewer's `location` scope (#26) shows nothing.
+		expect(h.view(mod.myLocations, bob)).toEqual([]);
+		grantLocation(bob);
 		expect(h.view(mod.myLocations, bob)).toMatchObject([
 			{
 				status: { tag: "NoFix" },
@@ -299,6 +309,8 @@ describe("location sharing", () => {
 		h.call(mod.shareLocation, alice, { familyId: 1n, viewer: bob });
 		h.call(mod.shareLocation, alice, { familyId: 1n, viewer: carol });
 		report("GpsDenied");
+		grantLocation(bob);
+		grantLocation(carol);
 		h.call(mod.revokeLocationShare, alice, { familyId: 1n, viewer: bob });
 		expect(h.view(mod.myLocations, bob)).toEqual([]);
 		expect(h.view(mod.myLocations, carol)).toHaveLength(1);
