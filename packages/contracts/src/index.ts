@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 
+export * from "./voice";
+
 /** `GET /health`: process liveness only, not provider or data availability. */
 export const Health = Schema.Struct({
 	status: Schema.Literal("ok"),
@@ -25,7 +27,13 @@ export type Sources = typeof Sources.Type;
 
 /** Every non-2xx JSON response from the server. */
 export const ApiError = Schema.Struct({
-	error: Schema.Literals(["not_found", "internal"]),
+	error: Schema.Literals([
+		"not_found",
+		"internal",
+		"invalid_request",
+		"unavailable",
+		"upstream_error",
+	]),
 	message: Schema.String,
 });
 export type ApiError = typeof ApiError.Type;
