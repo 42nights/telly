@@ -43,7 +43,11 @@ test("a family without a ladder starts with me as the first contact", () => {
 	expect(view.getByRole("status").textContent).toBe(
 		"No ladder yet: alerts contact nobody.",
 	);
-	expect(view.getByText(ME).tagName).toBe("CODE");
+	// The member's own identity is in a tooltip, not on the page.
+	expect(view.queryByText(ME)).toBeNull();
+	expect(
+		view.getByRole("button", { name: new RegExp(`Yours is ${ME}`) }),
+	).toBeDefined();
 	const first = within(view.getByRole("group", { name: "Contact 1" }));
 	expect(
 		(first.getByLabelText("Member identity") as HTMLInputElement).value,
@@ -62,7 +66,7 @@ test("a family without a ladder starts with me as the first contact", () => {
 
 test("while my identity loads the form says so and leaves the member blank", () => {
 	const view = render(<LadderForm path={PATH} ladder={null} me={null} />);
-	expect(view.getByText("loading…")).toBeDefined();
+	expect(view.getByRole("button", { name: /Yours is loading…/ })).toBeDefined();
 	expect(
 		(view.getByLabelText("Member identity") as HTMLInputElement).value,
 	).toBe("");
@@ -97,18 +101,12 @@ test("an edited ladder is saved as typed", async () => {
 	const backup = within(view.getByRole("group", { name: "Backup" }));
 	fireEvent.change(backup.getByLabelText("Name"), { target: { value: "Cy" } });
 
-	fireEvent.change(
-		view.getByLabelText("Seconds to accept before the next contact"),
-		{
-			target: { value: "90" },
-		},
-	);
-	fireEvent.change(
-		view.getByLabelText("Seconds to confirm help after accepting"),
-		{
-			target: { value: "3600" },
-		},
-	);
+	fireEvent.change(view.getByLabelText("Seconds to accept"), {
+		target: { value: "90" },
+	});
+	fireEvent.change(view.getByLabelText("Seconds to confirm"), {
+		target: { value: "3600" },
+	});
 	fireEvent.click(view.getByRole("button", { name: "Save ladder" }));
 	expect(view.getByRole("status").textContent).toBe("Saving…");
 	expect(await view.findByText("Saved")).toBeDefined();
@@ -151,11 +149,7 @@ test("the ladder holds one to five contacts, and the backup can be removed", () 
 	const view = render(<LadderForm path={PATH} ladder={saved} me={ME} />);
 	expect(view.getByRole("status").textContent).toBe("Saved");
 	expect(
-		(
-			view.getByLabelText(
-				"Seconds to accept before the next contact",
-			) as HTMLInputElement
-		).value,
+		(view.getByLabelText("Seconds to accept") as HTMLInputElement).value,
 	).toBe("60");
 	const add = view.getByRole("button", { name: "Add contact" });
 	for (let i = 0; i < 4; i++) fireEvent.click(add);

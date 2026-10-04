@@ -150,7 +150,7 @@ test("an answer shows its model, cited sources, missing records, and follow-ups"
 	const sources = within(view.getByRole("list", { name: "Sources" }));
 	expect(
 		sources.getByText(
-			/^heart_rate 72 bpm · Watch · .* · demo, not real · stale$/,
+			/^Heart rate 72 bpm · Watch · .* · demo, not real · stale$/,
 		),
 	).toBeDefined();
 	expect(sources.getByText("No records: steps")).toBeDefined();

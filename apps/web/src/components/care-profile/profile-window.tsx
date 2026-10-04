@@ -4,6 +4,7 @@ import { ClipboardList } from "lucide-react";
 import { useState } from "react";
 
 import { Window } from "@/components/hud/window";
+import { Tip } from "@/components/win95";
 import { memberLabel } from "@/lib/members";
 
 import type { CareData } from "./data";
@@ -77,11 +78,12 @@ export function ProfileWindow({
 		<Window
 			title="Care profile"
 			icon={ClipboardList}
+			className="min-h-0 flex-1"
 			status={message ?? savedText(record, care.me)}
 		>
 			<form
 				aria-label="Care profile"
-				className="grid gap-2 p-2 text-sm"
+				className="flex min-h-0 flex-1 flex-col gap-2 p-2 text-sm"
 				onSubmit={async (event) => {
 					event.preventDefault();
 					if (profile === null) return;
@@ -90,50 +92,58 @@ export function ProfileWindow({
 					setMessage(refused ?? "Saved.");
 				}}
 			>
-				<p>
-					Leave a box empty when the fact is unknown. Write <b>none</b> when
-					there are none.
-				</p>
-				{fields.map(({ key, label, hint, multiline }) => {
-					const id = `care-${key}`;
-					const props = {
-						id,
-						value: form[key],
-						readOnly: !canEdit,
-						"aria-describedby": hint === undefined ? undefined : `${id}-hint`,
-						className: "win95-inset win95-field w-full bg-card px-2 py-1",
-						onChange: (
-							event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-						) => setForm({ ...form, [key]: event.target.value }),
-					};
-					return (
-						<div key={key} className="grid gap-1">
-							<label htmlFor={id} className="font-bold">
-								{label}
-							</label>
-							{multiline ? (
-								<textarea rows={2} {...props} />
-							) : (
-								<input {...props} className={`${props.className} h-11`} />
-							)}
-							{hint !== undefined && <small id={`${id}-hint`}>{hint}</small>}
-						</div>
-					);
-				})}
+				{/* ponytail: the facts scroll in their own box on a phone; 14 facts do not fit one screen. */}
+				<div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+					{fields.map(({ key, label, hint, multiline }) => {
+						const id = `care-${key}`;
+						const props = {
+							id,
+							value: form[key],
+							readOnly: !canEdit,
+							className: "win95-inset win95-field w-full bg-card px-2 py-1",
+							onChange: (
+								event: React.ChangeEvent<
+									HTMLInputElement | HTMLTextAreaElement
+								>,
+							) => setForm({ ...form, [key]: event.target.value }),
+						};
+						return (
+							<div key={key} className="grid content-start gap-1">
+								<span className="flex items-center gap-1">
+									<label htmlFor={id} className="font-bold">
+										{label}
+									</label>
+									{hint !== undefined && <Tip text={hint} />}
+								</span>
+								{multiline ? (
+									<textarea rows={2} {...props} />
+								) : (
+									<input {...props} className={`${props.className} h-11`} />
+								)}
+							</div>
+						);
+					})}
+				</div>
 				{profile === null && (
 					<p role="alert">A box does not match its format.</p>
 				)}
-				{canEdit ? (
-					<Button
-						type="submit"
-						className="win95-primary h-11 justify-self-end px-6 text-sm"
-						disabled={profile === null}
-					>
-						Save profile
-					</Button>
-				) : (
-					<p>Your access does not include editing the care plan.</p>
-				)}
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<p className="flex items-center gap-1">
+						An empty box is unknown.
+						<Tip text="Write none when there are none." />
+					</p>
+					{canEdit ? (
+						<Button
+							type="submit"
+							className="win95-primary h-11 px-6 text-sm"
+							disabled={profile === null}
+						>
+							Save profile
+						</Button>
+					) : (
+						<p>Your access does not include editing the care plan.</p>
+					)}
+				</div>
 			</form>
 		</Window>
 	);

@@ -107,7 +107,8 @@ hr {
 .win95-tip:focus-visible {
 	outline: 2px dotted #000000;
 }
-.win95-tip::after {
+.win95-tip::after,
+.win95-hint-body {
 	content: attr(data-tip);
 	position: absolute;
 	z-index: 20;
@@ -137,6 +138,52 @@ hr {
 .win95-tip:hover::after,
 .win95-tip:focus-visible::after {
 	display: block;
+}
+/* Text with a hint (`Hint`): the yellow tip sits under the text, opened by hover, tap, or focus. */
+.win95-hint {
+	position: relative;
+	text-align: inherit;
+	cursor: help;
+}
+.win95-hint:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: 1px;
+}
+.win95-hint-body {
+	top: calc(100% + 4px);
+	left: 0;
+	max-width: max(100%, 10rem);
+	transform: none;
+}
+.win95-hint[data-align="end"] > .win95-hint-body {
+	left: auto;
+	right: 0;
+}
+.win95-hint[data-side="above"] > .win95-hint-body {
+	top: auto;
+	bottom: calc(100% + 4px);
+}
+.win95-hint:hover > .win95-hint-body,
+.win95-hint:focus > .win95-hint-body {
+	display: block;
+}
+/* A small raised button in a window title bar, such as Back. Utilities set its display. */
+.win95-title-button {
+	height: 1.375rem;
+	padding: 0 0.5rem;
+	background-color: var(--win95-face);
+	color: #000000;
+	font-size: 0.75rem;
+	font-weight: 400;
+	box-shadow:
+		inset -1px -1px 0 var(--win95-dark-shadow),
+		inset 1px 1px 0 var(--win95-highlight),
+		inset -2px -2px 0 var(--win95-shadow),
+		inset 2px 2px 0 var(--win95-light);
+}
+.win95-title-button:focus-visible {
+	outline: 1px dotted #000000;
+	outline-offset: -4px;
 }
 /* Text fields and selects sit in a sunken well; the focus ring stays visible on the white face. */
 .win95-field:focus-visible {
@@ -394,4 +441,19 @@ body {
 	.win95-desktop {
 		background-color: var(--win95-desktop);
 	}
+}
+
+/*
+ * Each screen fills the desktop area with one even 8 px gap, and its last window stretches to the
+ * bottom (captain: no page scroll). Unlayered, so it wins over each screen's own padding.
+ */
+.win95-desktop > main {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	height: 100%;
+	padding: 0.5rem;
+}
+.win95-desktop > main > .win95-window:last-child {
+	flex-grow: 1;
 }

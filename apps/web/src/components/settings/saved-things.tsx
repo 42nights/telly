@@ -11,7 +11,7 @@ import { Window } from "@/components/hud/window";
 import { Thumb } from "@/components/wearer/last-seen";
 import { ago, objectName } from "@/components/wearer/logic";
 import { useNow } from "@/components/wearer/use-now";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import type { ApiResult } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 import {
@@ -114,22 +114,21 @@ function ThingList({
 	const { sightings } = memory;
 	return (
 		<div className="grid gap-3 p-2 text-sm">
-			<p>
-				Telly remembers where each saved thing was last seen, with a small
-				picture. Only this member, family admins, and caregivers can see them.
-			</p>
-			<Link
-				className={buttonVariants({
-					variant: "outline",
-					className: "h-11 justify-self-start px-4 text-sm",
-				})}
-				data-slot="button"
-				search={{ mode: "add", member: memory.personId }}
-				to="/find"
-			>
-				<Plus aria-hidden />
-				Add a thing
-			</Link>
+			<div className="flex items-center gap-2">
+				<Link
+					className={buttonVariants({
+						variant: "outline",
+						className: "h-11 px-4 text-sm",
+					})}
+					data-slot="button"
+					search={{ mode: "add", member: memory.personId }}
+					to="/find"
+				>
+					<Plus aria-hidden />
+					Add a thing
+				</Link>
+				<Tip text="Telly remembers where each saved thing was last seen, with a small picture. Only this member, family admins, and caregivers can see them." />
+			</div>
 			{sightings.length === 0 ? (
 				<p className="font-bold">No saved things yet.</p>
 			) : (

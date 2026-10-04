@@ -10,7 +10,7 @@ import {
 import { useState } from "react";
 
 import { clock } from "@/components/family/logic";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 import { useMemberNames } from "@/lib/members";
 
@@ -229,9 +229,9 @@ export function FamilyLocationSection({
 			{state.kind !== "ready" ? (
 				<ApiNotice state={state} what="location" />
 			) : !state.value.seesShared ? (
-				<p role="status">
-					Location sharing is off for you. Someone with family access can turn
-					on Location for you in Sharing.
+				<p role="status" className="flex items-center gap-1">
+					Location sharing is off for you.
+					<Tip text="Someone with family access can turn on Location for you in Sharing." />
 				</p>
 			) : shared.length === 0 ? (
 				<p>Nobody shares a location with you.</p>

@@ -198,16 +198,9 @@ describe("MarkersTab", () => {
 				"72 bpmDemo value, not measured",
 				"Demo watch",
 				formatTime("2026-10-01T08:00:00.000Z"),
-				"Validated",
 			],
-			[
-				"Weight",
-				"60 kg",
-				"Scale",
-				formatTime("2026-10-01T08:00:00.000Z"),
-				"Not validated",
-			],
-			["Blood pressure", "Unavailable", "No source", "—", "—"],
+			["Weight", "60 kg", "Scale", formatTime("2026-10-01T08:00:00.000Z")],
+			["Blood pressure", "Unavailable", "No source", "—"],
 		]);
 	});
 

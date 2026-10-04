@@ -1,148 +1,19 @@
-// The family screen's parts from the old dashboard (#209): key numbers, health sources, the
-// recent-alerts table, the newest messages, and the alert thresholds. Each shows only what the
-// server returned.
-import {
-	type Family,
-	type Loaded,
-	loadDecoded,
-	type NoopConnection,
-	Sources,
-} from "@health/contracts";
+// The family screen's tables from the old dashboard (#209): the recent alerts and the alert
+// thresholds. Each shows only what the server returned.
 import type {
 	AlertThreshold,
 	FamilyAlert,
 	Monitoring,
 } from "@health/contracts/alerts";
 import { cn } from "@health/ui/lib/utils";
-import { useEffect, useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
-import { ENV } from "@/env";
 import type { ApiState } from "@/lib/api";
-import { memberLabel, senderLabel } from "@/lib/members";
+import { memberLabel } from "@/lib/members";
+import { metricLabel } from "@/lib/readings";
 
 import type { FamilyData } from "./data";
-import { clock, deliveryText, metricLabel } from "./logic";
-
-export function KeyNumbers({
-	data,
-	family,
-}: {
-	data: FamilyData;
-	family: Family;
-}) {
-	const { alerts, readings } = data;
-	// The readings glance below says "Not shared with you".
-	if (readings.kind === "forbidden") return null;
-	const hrv =
-		readings.kind === "ready" &&
-		readings.value.samples.some(
-			(s) => s.familyId === family.id && s.metric === "hrv" && !s.synthetic,
-		);
-	return (
-		<div className="grid gap-2 sm:grid-cols-2">
-			{!hrv && (
-				<div className="win95-inset grid gap-0.5 bg-card p-2">
-					<span>HRV</span>
-					<b className="text-muted-foreground text-xl">Unavailable</b>
-					<span className="text-muted-foreground text-xs">
-						No real reading stored
-					</span>
-				</div>
-			)}
-			<div className="win95-inset grid gap-0.5 bg-card p-2">
-				<span>Open alerts</span>
-				<b className="text-xl">
-					{alerts.kind === "ready"
-						? alerts.value.alerts.filter((a) => a.acknowledgements.length === 0)
-								.length
-						: "Unavailable"}
-				</b>
-				<span className="text-muted-foreground text-xs">
-					Not seen by anyone yet
-				</span>
-			</div>
-		</div>
-	);
-}
-
-// Typed by the contract: a new source or status fails type-checking here until it has its words.
-const sourceName = { noop: "WHOOP via NOOP" } satisfies Record<
-	NoopConnection["source"],
-	string
->;
-const statusText = {
-	not_connected: "Unavailable: not connected",
-	connected: "Connected · readings unvalidated",
-} satisfies Record<NoopConnection["status"], string>;
-
-/** Every health source from `/api/sources`, as the server reports it. */
-export function SourceList() {
-	const [sources, setSources] = useState<Loaded<Sources>>();
-	useEffect(
-		() =>
-			loadDecoded(Sources, `${ENV.VITE_SERVER_URL}/api/sources`, setSources),
-		[],
-	);
-	if (sources === undefined || sources.kind === "error")
-		return (
-			<div className="win95-inset bg-card">
-				<ApiNotice state={sources ?? { kind: "loading" }} what="sources" />
-			</div>
-		);
-	return (
-		<ul
-			aria-label="Health sources"
-			className="win95-inset grid divide-y divide-border bg-card"
-		>
-			{sources.value.sources.length === 0 && (
-				<li className="p-2">No health source configured.</li>
-			)}
-			{sources.value.sources.map(({ source, status }) => (
-				<li key={source} className="flex flex-wrap justify-between gap-x-2 p-2">
-					<span>{sourceName[source]}</span>
-					<span className="bg-[#ffffe1] px-1">{statusText[status]}</span>
-				</li>
-			))}
-		</ul>
-	);
-}
-
-/** The family's newest messages, read-only. Replying happens in the chat. */
-export function RecentMessages({
-	data,
-	familyId,
-}: {
-	data: FamilyData;
-	familyId: string;
-}) {
-	const { records, me } = data;
-	if (records.kind !== "ready")
-		return (
-			<div className="win95-inset bg-card">
-				<ApiNotice state={records} what="messages" />
-			</div>
-		);
-	const messages = records.value.messages
-		.filter((m) => m.familyId === familyId)
-		.toSorted((a, b) => b.sentAt.localeCompare(a.sentAt))
-		.slice(0, 5);
-	if (messages.length === 0)
-		return <p className="win95-inset bg-card p-2">No messages yet.</p>;
-	return (
-		<ul className="win95-inset grid divide-y divide-border bg-card">
-			{messages.map((m) => (
-				<li key={m.id} className="grid gap-0.5 p-2">
-					<span className="flex justify-between gap-2 text-xs">
-						<b>{senderLabel(m, me)}</b>
-						<time dateTime={m.sentAt}>{clock(m.sentAt)}</time>
-					</span>
-					<span className="line-clamp-2 break-words">{m.body}</span>
-				</li>
-			))}
-		</ul>
-	);
-}
+import { clock, deliveryText } from "./logic";
 
 export function RecentAlerts({ data }: { data: FamilyData }) {
 	const { alerts } = data;
@@ -193,7 +64,7 @@ function AlertRow({ item, me }: { item: FamilyAlert; me: string | null }) {
 	);
 }
 
-/** Each alert rule and its state now. A rule without a fresh validated reading is unavailable. */
+/** Each alert rule and its state now. A rule without a fresh reading is unavailable. */
 export function Thresholds({
 	state,
 	monitoring,
@@ -234,7 +105,7 @@ export function Thresholds({
 									? "In range"
 									: row.state === "out_of_range"
 										? "Out of range"
-										: `Unavailable: ${row.reason === "stale" ? "stale reading" : "no validated reading"}`}
+										: `Unavailable: ${row.reason === "stale" ? "no recent reading" : "no reading"}`}
 						</span>
 					</li>
 				);
