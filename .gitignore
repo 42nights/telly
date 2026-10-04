@@ -69,3 +69,12 @@ deploy.env.*
 __pycache__/
 *.pyc
 .venv/
+
+# Gemma training: datasets, run manifests, and model weights stay outside Git
+training/gemma/data/
+training/gemma/runs/
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.bin
