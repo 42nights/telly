@@ -84,15 +84,22 @@ jobs:
             run: bun run check:quality
           - name: build-smoke
             run: bun run --filter server build && bun run smoke && bun run --filter web build
-          # Fails when packages/db is stale against spacetimedb/, then runs the family-access,
-          # connection-recovery, and server-lifecycle tests (the built server under Node) against an
-          # isolated in-memory local database, then the crash-restart and backup/restore drill.
+          # Headless Chromium against the built web app with a faked server and sign-in.
+          - name: web-smoke
+            run: >-
+              (cd apps/web && bunx playwright install --with-deps chromium) &&
+              bun run --filter web smoke
+          # Fails when packages/db is stale against spacetimedb/, then `bun run coverage`: the unit
+          # tests, then the family-access, connection-recovery, server-lifecycle (the built server
+          # under Node), and integration tests (real sign-in and user paths, fake providers) against
+          # an isolated in-memory local database, then per-package coverage of both. Last, the
+          # crash-restart and backup/restore drill.
           - name: db
             run: >-
               bun run db:generate &&
               git diff --exit-code -- packages/db &&
               test -z "$(git status --porcelain -- packages/db)" &&
-              bun run db:test &&
+              bun run coverage &&
               bun run db:drill
           # Fails when agents/fetch/contract.json is stale against the shared schemas, then runs the
           # Python worker's tests with its pinned requirements.
@@ -134,6 +141,17 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: ${{ matrix.run }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && matrix.name == 'db'
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: warn
+      # Report-only for now: remove continue-on-error to make 95% per package a required gate.
+      - name: Coverage gate (95% lines and functions per package, report-only)
+        if: matrix.name == 'db'
+        continue-on-error: true
+        run: bun scripts/coverage-summary.ts --min 95 coverage/unit/lcov.info coverage/db/lcov.info
 
   structure:
     needs: changes

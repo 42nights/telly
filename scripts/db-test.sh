@@ -33,8 +33,10 @@ spacetime --config-path "$data/cli.toml" login --token "$token" >/dev/null
 spacetime --config-path "$data/cli.toml" publish --server "$server" --module-path spacetimedb --yes health-test
 # reliability.test.ts runs the built server under Node.
 bun run --filter server build >/dev/null
+# Writes coverage/db/lcov.info; `bun run coverage` merges it with the unit tests' report.
 SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIMEDB_OPERATOR_TOKEN="$token" \
-	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
+	bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/db \
+	apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
 	apps/server/src/routes/alerts.test.ts apps/server/src/reliability.test.ts \
 	apps/server/src/routes/reports.test.ts apps/server/src/routes/finchnode.test.ts \
 	apps/server/src/routes/tools.test.ts apps/server/src/routes/healthkit.test.ts \
@@ -51,4 +53,5 @@ SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIM
 	apps/server/src/routes/location.test.ts \
 	apps/server/src/routes/ask.test.ts \
 	apps/server/src/routes/cooking.test.ts \
-	apps/server/src/routes/meal-check-ins.test.ts
+	apps/server/src/routes/meal-check-ins.test.ts \
+	apps/server/src/integration/
