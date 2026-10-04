@@ -26,6 +26,8 @@ const views = [
 	"SELECT * FROM my_acknowledgements",
 	"SELECT * FROM my_reports",
 	"SELECT * FROM my_finchnode_links",
+	"SELECT * FROM my_exercise_plans",
+	"SELECT * FROM my_exercise_events",
 	"SELECT * FROM my_alert_thresholds",
 	"SELECT * FROM my_alert_deliveries",
 	"SELECT * FROM my_care_profiles",
