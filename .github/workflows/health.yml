@@ -42,16 +42,22 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      # JSON list of the checks to run, for example ["lint","db"]; every check on a manual run.
-      checks: ${{ github.event_name == 'workflow_dispatch' && '["lint","types","test","quality","build-smoke","web-smoke","db","fetch-agent","structure"]' || steps.filter.outputs.changes }}
+      # JSON lists, for example ["lint","db"] and ["apps/web"]; everything on a manual run.
+      checks: ${{ steps.pick.outputs.checks }}
+      workspaces: ${{ steps.pick.outputs.workspaces }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request'
-      # Each filter name is a check. `lint` and `structure` have the same files, so the `check`
-      # matrix is never empty when `structure` runs.
+      # A pull request is compared with its base. A push is compared with the commit before the push
+      # (github.event.before..github.sha), because base is the pushed branch itself, so a UI-only
+      # merge runs only the UI checks on main.
+      # A filter name without `./` is a check. `lint` and `structure` have the same files, so the
+      # `check` matrix is never empty when `structure` runs. A filter name with `./` is a workspace:
+      # its `check-types` and `bun test` run when it or a workspace it imports changed.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.ref_name || '' }}
           filters: |
             lint: &source
               - &all
@@ -74,13 +80,34 @@ jobs:
               - '.gitignore'
             quality: *source
             structure: *source
-            # The workspaces, which `check-types` and `bun test` cover.
-            types: &workspaces
+            ./apps/web:
               - *all
-              - 'apps/**'
-              - 'packages/**'
+              - 'apps/web/**'
+              - 'packages/ui/**'
+              - 'packages/contracts/**'
+            ./apps/server:
+              - *all
+              - 'apps/server/**'
+              - 'packages/contracts/**'
+              - 'packages/db/**'
+            ./apps/native:
+              - *all
+              - 'apps/native/**'
+              - 'packages/contracts/**'
+            ./packages/ui:
+              - *all
+              - 'packages/ui/**'
+            ./packages/contracts:
+              - *all
+              - 'packages/contracts/**'
+            # Generated from the module.
+            ./packages/db:
+              - *all
+              - 'packages/db/**'
               - 'spacetimedb/**'
-            test: *workspaces
+            ./spacetimedb:
+              - *all
+              - 'spacetimedb/**'
             build-smoke:
               - *all
               - 'apps/server/**'
@@ -105,6 +132,15 @@ jobs:
               - *all
               - 'agents/fetch/**'
               - 'packages/contracts/**'
+      # `types` and `test` run when a workspace changed.
+      - id: pick
+        env:
+          CHANGED: ${{ github.event_name == 'workflow_dispatch' && '["lint","quality","structure","build-smoke","web-smoke","db","fetch-agent","./apps/web","./apps/server","./apps/native","./packages/ui","./packages/contracts","./packages/db","./spacetimedb"]' || steps.filter.outputs.changes }}
+        run: |
+          echo "$CHANGED" | jq -c 'map(select(startswith("./")))' | sed 's/^/workspaces=/' >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" | jq -c 'map(select(startswith("./") | not)) + (if any(startswith("./")) then ["types","test"] else [] end)' |
+            sed 's/^/checks=/' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
 
   check:
     needs: changes
@@ -164,10 +200,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - if: matrix.name == 'lint'
         run: bun run lint
+      # Only the workspaces that `changes` picked.
       - if: matrix.name == 'types'
-        run: bun run check-types
+        env:
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bun run $(echo "$WORKSPACES" | jq -r '.[] | "--filter " + .') check-types
       - if: matrix.name == 'test'
-        run: bun run test
+        env:
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bun test $(echo "$WORKSPACES" | jq -r '.[]')
       - if: matrix.name == 'quality'
         run: bun run check:quality
       # The web build runs in `types` (apps/web check-types) and in `web-smoke`.
