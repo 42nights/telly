@@ -142,10 +142,9 @@ describe("Emergency", () => {
 		expect(
 			view.getByRole("button", { name: "Call emergency help" }),
 		).toHaveProperty("disabled", true);
-		expect(view.getByRole("button", { name: "Call my family" })).toHaveProperty(
-			"disabled",
-			true,
-		);
+		expect(
+			view.getByRole("link", { name: "Call my family" }).getAttribute("href"),
+		).toBe("tel:+19197170390");
 		view.getByText("Emergency calls need a paired person and sign-in.");
 		fireEvent.click(view.getByRole("button", { name: "Say ouch" }));
 		expect((await view.findByRole("alert")).textContent).toBe(
@@ -169,7 +168,7 @@ describe("Emergency", () => {
 		expect(helpButton.querySelector(".animate-spin")).not.toBeNull();
 		expect(
 			view
-				.getByRole("button", { name: "Call my family" })
+				.getByRole("link", { name: "Call my family" })
 				.querySelector(".animate-spin"),
 		).toBeNull();
 		await waitFor(() => expect(calls).toHaveLength(1));
@@ -310,11 +309,11 @@ describe("Emergency", () => {
 		const reply = held();
 		const calls = serve({ [EMERGENCY]: reply.route });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		fireEvent.click(view.getByRole("link", { name: "Call my family" }));
 		expect(view.getByRole("status").textContent).toBe("Telling your family…");
 		expect(
 			view
-				.getByRole("button", { name: "Call my family" })
+				.getByRole("link", { name: "Call my family" })
 				.querySelector(".animate-spin"),
 		).not.toBeNull();
 		reply.release({ json: { action: "family", family: raised } });
@@ -334,7 +333,7 @@ describe("Emergency", () => {
 			[EMERGENCY]: { status, body: { error: "unavailable", message } },
 		});
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		fireEvent.click(view.getByRole("link", { name: "Call my family" }));
 		expect((await view.findByRole("alert")).textContent).toBe(
 			`The request did not go through: ${message} Get help another way.`,
 		);
@@ -433,7 +432,7 @@ describe("Emergency", () => {
 	test("an unexpected reply is an error, not a result", async () => {
 		serve({ [EMERGENCY]: { json: { action: "maybe" } } });
 		const view = render(<Home familyId="1" />);
-		fireEvent.click(view.getByRole("button", { name: "Call my family" }));
+		fireEvent.click(view.getByRole("link", { name: "Call my family" }));
 		expect((await view.findByRole("alert")).textContent).toContain(
 			"The server sent an unexpected reply",
 		);

@@ -54,9 +54,7 @@ describe("SettingsForm", () => {
 		expect(field("Mom's phone number").placeholder).toBe(
 			"Call Mom is off until you add one",
 		);
-		expect(field("Family phone number").placeholder).toBe(
-			"Call family is off until you add one",
-		);
+		expect(text()).toContain("always call +1 919 717 0390");
 		expect(text()).not.toContain("Paired manually");
 		expect(field("Emergency number").value).toBe("911");
 		expect(
@@ -96,16 +94,13 @@ describe("SettingsForm", () => {
 		fireEvent.change(field("Mom's phone number"), {
 			target: { value: " (555) 010-0123 " },
 		});
-		fireEvent.change(field("Family phone number"), {
-			target: { value: "+44 20 7946 0958" },
-		});
 		fireEvent.change(field("Emergency number"), { target: { value: "112" } });
 		expect(text()).toContain("Changes not saved");
 		expect(save()).toHaveProperty("disabled", false);
 		fireEvent.click(save());
 		expect(stored()).toMatchObject({
 			momPhone: "(555) 010-0123",
-			familyPhone: "+44 20 7946 0958",
+			familyPhone: "+1 919 717 0390",
 			emergency: "112",
 		});
 		await waitFor(() => expect(text()).toContain("Saved on this device · "));
@@ -135,7 +130,7 @@ describe("SettingsForm", () => {
 		fireEvent.click(save());
 		expect(stored()).toMatchObject({
 			momPhone: null,
-			familyPhone: "555-010-0456",
+			familyPhone: "+1 919 717 0390",
 			emergency: "999",
 		});
 	});

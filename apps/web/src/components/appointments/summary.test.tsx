@@ -18,7 +18,11 @@ import {
 	waitFor,
 	within,
 } from "../test/dom-routed";
+import { formatVisitTime } from "./logic";
+
 import { SummaryPanel } from "./summary";
+
+const at = (iso: string) => formatVisitTime(iso, "Europe/London");
 
 setupDom();
 
@@ -248,7 +252,7 @@ test("a reviewed summary stays readable and a new one can be prepared", async ()
 	serve({ ...NO_SHARES, [`GET ${BASE}/summary`]: { json: SUMMARY } });
 	const { view } = show(REVIEWED);
 	expect(
-		view.getByText("Summary reviewed Sat, 5 Sept 2026, 09:00 BST."),
+		view.getByText(`Summary reviewed ${at("2026-09-05T08:00:00Z")}.`),
 	).toBeDefined();
 	const details = view.getByText("Show the reviewed summary")
 		.parentElement as HTMLElement;
@@ -315,7 +319,7 @@ test("each consent shows its recipient, sections, sends, and whether a send is a
 	).toBeDefined();
 	expect(
 		weekly.getByText(
-			"Sent 2× (simulated) · last Sun, 6 Sept 2026, 09:00 BST · not known to be read · next allowed Thu, 1 Jan 2099, 12:00 GMT",
+			`Sent 2× (simulated) · last ${at("2026-09-06T08:00:00Z")} · not known to be read · next allowed ${at("2099-01-01T12:00:00Z")}`,
 		),
 	).toBeDefined();
 	expect(

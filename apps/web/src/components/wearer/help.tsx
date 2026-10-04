@@ -2,7 +2,6 @@
 // through `tel:` links; the app never calls anyone by itself and simulates no dispatch.
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
-import { Link } from "@tanstack/react-router";
 import { Phone, TriangleAlert } from "lucide-react";
 
 import { telHref, useContacts } from "@/lib/contacts";
@@ -13,20 +12,6 @@ const big = "h-14 w-full text-[20px] [&_svg]:size-6";
 
 function CallFamily() {
 	const [{ familyPhone }] = useContacts();
-	if (familyPhone === null)
-		return (
-			<div className="grid gap-1">
-				<Button className={big} disabled variant="outline">
-					<Phone aria-hidden /> Call family
-				</Button>
-				<p className="text-[16px]">
-					No family number is saved.{" "}
-					<Link className="font-bold text-primary underline" to="/settings">
-						Add it in Settings
-					</Link>
-				</p>
-			</div>
-		);
 	return (
 		<a
 			className={cn(buttonVariants({ variant: "outline" }), big)}
