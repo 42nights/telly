@@ -52,24 +52,28 @@ const text = (value: string, status = "completed") => ({
 		],
 	},
 });
-const echo = {
-	name: "echo",
-	description: "Echoes its arguments",
-	parameters: { type: "object", properties: {} },
-	run: (args: unknown) => ({ got: args }),
-};
+const tools = [
+	{
+		name: "echo",
+		description: "Echoes its arguments",
+		parameters: { type: "object", properties: {} },
+		run: (args: unknown) => Effect.succeed({ got: args }),
+	},
+	{
+		name: "down",
+		description: "Its data source is down",
+		parameters: { type: "object", properties: {} },
+		run: () => Effect.fail("source down"),
+	},
+];
 const ask = async (...queued: typeof replies) => {
 	replies = queued;
 	requests.length = 0;
 	return Effect.runPromiseExit(
-		askGrokbot(config, {
-			instructions: "be brief",
-			question: "hi?",
-			tools: [echo],
-		}),
+		askGrokbot(config, { instructions: "be brief", question: "hi?", tools }),
 	);
 };
-const failure = (exit: Exit.Exit<unknown, GrokbotError>) =>
+const failure = (exit: Exit.Exit<unknown, unknown>) =>
 	Exit.isFailure(exit)
 		? exit.cause.reasons.map((r) => (r._tag === "Fail" ? r.error : r._tag))
 		: [];
@@ -127,6 +131,12 @@ describe("Grokbot adapter (local protocol server)", () => {
 		const loop = call("echo", "{}");
 		expect(failure(await ask(loop, loop, loop, loop))).toEqual([
 			new GrokbotError({ reason: "turn_limit" }),
+		]);
+	});
+
+	test("a failing tool ends the answer with its error", async () => {
+		expect(failure(await ask(call("down", "{}"), text("ok")))).toEqual([
+			"source down",
 		]);
 	});
 

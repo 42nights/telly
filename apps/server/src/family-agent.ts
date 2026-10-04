@@ -1,106 +1,96 @@
-// Answers a family member's question with the Grokbot agent, using only the family's own records.
-// The tools read a snapshot of records that the database already scoped to the caller's family.
-// The server, not the model, reports which records the answer used and which metrics had none.
-import type { HealthSample } from "@health/contracts";
+// Answers a family member's question with the Grokbot agent. The agent's data tools are the closed
+// Fetch.ai tool set (`@health/contracts/tools`), and every tool call goes through Fetch.ai
+// Agentverse to the family-scoped tool route. The server, not the model, reports which records the
+// answer used and what had no records.
+import type { Alert } from "@health/contracts";
 import type {
 	Evidence,
 	FamilyAnswer,
 	FamilyQuestion,
-} from "@health/contracts/family";
-import { Effect, Schema } from "effect";
+} from "@health/contracts/chat";
+import { ToolRequest, type ToolResponse } from "@health/contracts/tools";
+import { Data, Effect, Schema, SchemaAST } from "effect";
 import { askGrokbot, type GrokbotConfig } from "./integrations/grokbot";
+
+/** The Fetch.ai Agentverse path failed or is not configured. Carries no records or credentials. */
+export class AgentToolError extends Data.TaggedError("AgentToolError")<{
+	readonly reason: "unavailable" | "upstream_error";
+	readonly message: string;
+}> {}
+
+/** Sends one tool request for one family through Fetch.ai Agentverse and returns the tool reply. */
+export type AgentToolCaller = (
+	familyId: bigint,
+	request: ToolRequest,
+) => Effect.Effect<ToolResponse, AgentToolError>;
 
 // ponytail: one freshness window for every metric; per-metric windows when a metric needs one.
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
-const SampleQuery = Schema.Struct({
-	metric: Schema.String,
-	limit: Schema.optionalKey(
-		Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 })),
-	),
-});
-
 const instructions = (now: Date, timeZone: string) =>
 	[
-		"You answer questions from family members of a person with memory loss about that person's health records.",
+		"You help a person with memory loss and their family with questions about that person's health records.",
 		"Use only the results of your tools. Never estimate, invent, or assume a reading, and give no diagnosis.",
 		"For every value you state, give its source and its source time, and say when it is synthetic, unvalidated, or stale.",
-		"When a tool reports a metric as unavailable or there are no records, say that the data is unavailable. Missing data is never an all-clear.",
+		"When a tool returns no records, say that the data is unavailable. Missing data is never an all-clear.",
 		"WHOOP data through NOOP is not connected. Never give WHOOP readings or WHOOP-based advice.",
 		`The current time is ${now.toISOString()}. Write times in the ${timeZone} time zone.`,
 		"Answer briefly, in the language of the question.",
 	].join("\n");
 
-/** Runs one question against the family's records and collects the records the agent read. */
+/** Runs one question for one family and collects the records the agent's tool calls returned. */
 export const answerQuestion = (
 	config: GrokbotConfig,
-	samples: ReadonlyArray<HealthSample>,
+	callTool: AgentToolCaller,
+	familyId: bigint,
 	{ question, timeZone = "UTC" }: FamilyQuestion,
 	now: Date,
 ) => {
 	const evidence = new Map<string, Evidence>();
+	const alerts = new Map<string, Alert>();
 	const unavailable = new Set<string>();
-	const tools = [
-		{
-			name: "list_health_metrics",
-			description:
-				"Lists every metric the family has records for, with unit, record count, sources, and the latest source time.",
-			parameters: { type: "object", properties: {} },
-			run: () => ({
-				metrics: [...Map.groupBy(samples, (s) => s.metric)].map(
-					([metric, rows]) => ({
-						metric,
-						units: [...new Set(rows.map((r) => r.unit))],
-						records: rows.length,
-						sources: [...new Set(rows.map((r) => r.source))],
-						latestSourceTime: rows
-							.map((r) => r.sourceTime)
-							.sort()
-							.at(-1),
+	const tools = ToolRequest.members.map((member) => {
+		const name = member.fields.tool.literal;
+		return {
+			name,
+			description: SchemaAST.resolveDescription(member.ast) ?? name,
+			parameters: Schema.toJsonSchemaDocument(member.fields.input).schema,
+			run: (input: unknown) => {
+				const request = Schema.decodeUnknownOption(ToolRequest)(
+					{ tool: name, input },
+					{ onExcessProperty: "error" },
+				);
+				if (request._tag === "None")
+					return Effect.succeed({
+						error: "arguments do not match the tool schema",
+					});
+				return callTool(familyId, request.value).pipe(
+					Effect.map((response) => {
+						if (response.tool === "alerts") {
+							for (const alert of response.alerts) alerts.set(alert.id, alert);
+							return response;
+						}
+						const samples = response.samples.map(
+							(sample): Evidence => ({
+								...sample,
+								stale:
+									now.getTime() - Date.parse(sample.sourceTime) >
+									STALE_AFTER_MS,
+							}),
+						);
+						if (samples.length === 0) {
+							const { input } = request.value;
+							unavailable.add(
+								("metric" in input && input.metric) || "health_samples",
+							);
+						}
+						for (const sample of samples) evidence.set(sample.id, sample);
+						return { ...response, samples };
 					}),
-				),
-				noop: { status: "not_connected", readings: "none" },
-			}),
-		},
-		{
-			name: "read_health_samples",
-			description:
-				"Reads the newest records of one metric, newest first, with value, unit, source, source time, receive time, quality, synthetic flag, and stale flag.",
-			parameters: {
-				type: "object",
-				properties: {
-					metric: {
-						type: "string",
-						description: "A metric name from list_health_metrics",
-					},
-					limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
-				},
-				required: ["metric"],
+				);
 			},
-			run: (args: unknown) => {
-				const query = Schema.decodeUnknownOption(SampleQuery)(args);
-				if (query._tag === "None") return { error: "invalid arguments" };
-				const { metric, limit = 20 } = query.value;
-				const rows = samples
-					.filter((s) => s.metric === metric)
-					.sort((a, b) => b.sourceTime.localeCompare(a.sourceTime))
-					.slice(0, limit)
-					.map(
-						(sample): Evidence => ({
-							...sample,
-							stale:
-								now.getTime() - Date.parse(sample.sourceTime) > STALE_AFTER_MS,
-						}),
-					);
-				if (rows.length === 0) {
-					unavailable.add(metric);
-					return { metric, status: "unavailable", reason: "no records" };
-				}
-				for (const row of rows) evidence.set(row.id, row);
-				return { metric, status: "ok", records: rows };
-			},
-		},
-	];
+		};
+	});
 	return askGrokbot(config, {
 		instructions: instructions(now, timeZone),
 		question,
@@ -110,6 +100,7 @@ export const answerQuestion = (
 			({ text, model }): FamilyAnswer => ({
 				answer: text,
 				evidence: [...evidence.values()],
+				alerts: [...alerts.values()],
 				unavailable: [...unavailable],
 				model,
 				answeredAt: now.toISOString(),

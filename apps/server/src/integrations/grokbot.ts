@@ -23,13 +23,16 @@ export class GrokbotError extends Data.TaggedError("GrokbotError")<{
 	readonly status?: number;
 }> {}
 
-/** A function the model may call. `run` gets the model's raw arguments and returns JSON-safe data. */
-export type GrokbotTool = {
+/**
+ * A function the model may call. `run` gets the model's parsed arguments and returns JSON-safe
+ * data; data the model must see as a tool error is a normal result, and a failure ends the answer.
+ */
+export type GrokbotTool<E> = {
 	readonly name: string;
 	readonly description: string;
 	/** JSON Schema of the arguments; its root must be an object. */
 	readonly parameters: Readonly<Record<string, unknown>>;
-	readonly run: (args: unknown) => unknown;
+	readonly run: (args: unknown) => Effect.Effect<unknown, E>;
 };
 
 const FunctionCall = Schema.Struct({
@@ -104,31 +107,33 @@ const respond = (config: GrokbotConfig, body: unknown) =>
 		),
 	);
 
-const callTool = (
-	tools: ReadonlyArray<GrokbotTool>,
+const callTool = <E>(
+	tools: ReadonlyArray<GrokbotTool<E>>,
 	name: string,
 	raw: string,
-) => {
+): Effect.Effect<unknown, E> => {
 	const tool = tools.find((t) => t.name === name);
-	if (tool === undefined) return { error: `unknown tool ${name}` };
+	if (tool === undefined)
+		return Effect.succeed({ error: `unknown tool ${name}` });
 	let args: unknown;
 	try {
 		args = JSON.parse(raw);
 	} catch {
-		return { error: "arguments are not valid JSON" };
+		return Effect.succeed({ error: "arguments are not valid JSON" });
 	}
 	return tool.run(args);
 };
+
 /**
  * Asks the model one question and runs the tools it calls until it answers in text. Fails when the
  * reply is empty, incomplete, or still calling tools after the turn limit; it never makes up an answer.
  */
-export const askGrokbot = (
+export const askGrokbot = <E>(
 	config: GrokbotConfig,
 	request: {
 		readonly instructions: string;
 		readonly question: string;
-		readonly tools: ReadonlyArray<GrokbotTool>;
+		readonly tools: ReadonlyArray<GrokbotTool<E>>;
 	},
 ) =>
 	Effect.gen(function* () {
@@ -146,6 +151,8 @@ export const askGrokbot = (
 				input,
 				tools,
 				store: false,
+				// About 2000 characters: short enough to read on a phone and to speak.
+				max_output_tokens: 600,
 			});
 			if (reply.status !== "completed")
 				return yield* new GrokbotError({ reason: "incomplete" });
@@ -161,12 +168,15 @@ export const askGrokbot = (
 				return { text, model: reply.model };
 			}
 			for (const call of calls) {
+				const output = yield* callTool(
+					request.tools,
+					call.name,
+					call.arguments,
+				);
 				input.push(call, {
 					type: "function_call_output",
 					call_id: call.call_id,
-					output: JSON.stringify(
-						callTool(request.tools, call.name, call.arguments),
-					),
+					output: JSON.stringify(output),
 				});
 			}
 		}

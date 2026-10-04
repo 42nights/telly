@@ -7,7 +7,7 @@
 		".": "./src/index.ts",
 		"./families": "./src/families.ts",
 		"./tools": "./src/tools.ts",
-		"./family": "./src/family.ts"
+		"./chat": "./src/chat.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

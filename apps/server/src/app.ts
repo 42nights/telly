@@ -11,14 +11,27 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
+import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
+import { chatRoutes } from "./routes/chat";
 import { accountRoutes, familyRoutes } from "./routes/families";
 
 export const createApp = (config: ServerConfig) => {
+	const voice = elevenLabsVoice(
+		config.elevenLabs ?? { apiKey: undefined, voiceId: "" },
+	);
 	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes());
+		.route("/", familyRoutes())
+		.route(
+			"/",
+			chatRoutes({
+				grokbot: config.grokbot,
+				callTool: config.callTool,
+				voice,
+			}),
+		);
 
 	const app = new Hono()
 		.use(logger())
