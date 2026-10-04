@@ -109,6 +109,52 @@ The setup record is in [#21](https://github.com/ayaangazali/telly/issues/21).
 
 ## Architecture
 
+This diagram follows the system diagram in the [approved plan](docs/board.html). Solid boxes exist today. Dashed boxes are planned.
+
+```mermaid
+flowchart TB
+    person(["Person with memory loss"])
+    family(["Family"])
+    glasses["Meta Ray-Ban Display glasses<br/>optional adapter"]
+
+    subgraph clients ["Phone and web"]
+        phone["Phone app<br/>camera · microphone · screen markers"]
+        web["Web HUD and family dashboard"]
+    end
+
+    subgraph server ["Server · Node, Hono, Effect 4"]
+        api["HTTP API<br/>@health/contracts"]
+        stub["NOOP connection stub<br/>not_connected"]
+    end
+    noop["NOOP WHOOP app<br/>separate project"]
+
+    subgraph services ["Cloud services"]
+        ai["Cloud inference<br/>Gemini vision · Gemma cues · ElevenLabs voice"]
+        agents["Grokbot family agents<br/>tools via Fetch.ai Agentverse"]
+        db[("SpacetimeDB<br/>health data · alerts · messages")]
+        rules["Threshold rules<br/>fall · breathing · heart"]
+        reports["Lab report generator"]
+        river["Gemma training<br/>River AI"]
+    end
+
+    finch["Finchnode handoff"]
+    hospital(["Hospital"])
+
+    person & family --> clients
+    glasses -. "optional" .- phone
+    phone & web <-- "requests · replies · alerts" --> api
+    stub -. "not connected" .- noop
+    api --> ai & agents & db
+    river -. "trained model" .-> ai
+    agents -- "data tools" --> db
+    db --> rules & reports
+    rules -- "alert" --> api
+    reports --> finch --> hospital
+
+    classDef planned stroke-dasharray: 5 5
+    class glasses,ai,agents,db,rules,reports,river,finch planned
+```
+
 | Part | Technology |
 | --- | --- |
 | Web HUD and family dashboard | React, Vite, TanStack Router |
