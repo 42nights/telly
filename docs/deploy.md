@@ -33,6 +33,16 @@ node apps/server/scripts/smoke.ts https://telly.jerry-2c0.workers.dev
 
 Each deploy restarts the container with the new image and settings. The first request after a deploy can take about 35 seconds.
 
+## Care grants backfill (#188)
+
+Families created before #188 have no care grants, so their routes answer 403. After you publish the module with #188, run this once with the login that first published database `telly` (the module's operator):
+
+```bash
+spacetime call --server maincloud telly backfill_founder_care_grants
+```
+
+It gives the founder of each family that has no grant event every care scope. It deletes nothing, and a second call changes nothing.
+
 ## Rollback
 
 Re-run the deploy and smoke jobs of the last good workflow run. They redeploy that run's artifact. Its image tag is the artifact digest, so it is the same image.
