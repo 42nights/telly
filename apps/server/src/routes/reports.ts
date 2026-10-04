@@ -2,7 +2,7 @@
 // reducers check membership and the review lock again, so these handlers add no access rule.
 import type { HealthSample } from "@health/contracts";
 import {
-	type Report,
+	Report,
 	ReportFields,
 	ReportMarker,
 	type ReportPdf,
@@ -16,7 +16,10 @@ import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
+import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
+import { readAccess } from "./care-profile";
+import { readMeals } from "./meal-facts";
 
 /** The marker rows of the board's lab report (docs/board.html#lab-table), always listed. */
 const layout = [
@@ -28,7 +31,22 @@ const layout = [
 	"falls",
 ];
 
-const Markers = Schema.fromJsonString(Schema.Array(ReportMarker));
+/** The evidence fixed at creation, kept in the `markers` column. Older reports hold only markers. */
+const Snapshot = Schema.Struct({
+	markers: Report.fields.markers,
+	meals: Report.fields.meals,
+	unresolved: Report.fields.unresolved,
+});
+type Snapshot = typeof Snapshot.Type;
+const Evidence = Schema.fromJsonString(
+	Schema.Union([Schema.Array(ReportMarker), Snapshot]),
+);
+const readSnapshot = (json: string): Snapshot => {
+	const evidence = Schema.decodeUnknownSync(Evidence)(json);
+	return "markers" in evidence
+		? evidence
+		: { markers: evidence, meals: null, unresolved: null };
+};
 const Fields = Schema.fromJsonString(ReportFields);
 const emptyFields: ReportFields = {
 	patientName: null,
@@ -68,7 +86,7 @@ export const readReports = (c: Context<FamilyEnv>): Report[] =>
 			familyId: row.familyId.toString(),
 			createdBy: row.createdBy.toHexString(),
 			createdAt: row.createdAt.toISOString(),
-			markers: Schema.decodeUnknownSync(Markers)(row.markers),
+			...readSnapshot(row.markers),
 			fields: Schema.decodeUnknownSync(Fields)(row.fields),
 			review:
 				row.reviewedBy === undefined || row.reviewedAt === undefined
@@ -115,11 +133,21 @@ export const reportRoutes = (storage?: R2Bucket) =>
 			const samples = readFamilyRecords(db).samples.filter(
 				(sample) => sample.familyId === familyId.toString(),
 			);
+			const snapshot: Snapshot = {
+				markers: generateMarkers(samples),
+				// Meal facts are health records (#26): without the scope the report leaves them out.
+				meals: readAccess(c).mine.includes("health_records")
+					? readMeals(c)
+					: null,
+				unresolved: readReminderHistory(db, familyId.toString()).filter(
+					({ occurrence }) => occurrence.state === "unresolved",
+				),
+			};
 			await callReducer(db, (connection) =>
 				connection.reducers.createReport({
 					id,
 					familyId,
-					markers: Schema.encodeSync(Markers)(generateMarkers(samples)),
+					markers: Schema.encodeSync(Evidence)(snapshot),
 					fields: Schema.encodeSync(Fields)(emptyFields),
 				}),
 			);

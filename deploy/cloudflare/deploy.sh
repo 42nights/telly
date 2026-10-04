@@ -22,6 +22,7 @@ export DOCKER_CONFIG="$tmp/docker"
 tar -xzf "$artifact" -C "$tmp"
 cp "$here/entrypoint.sh" "$tmp/server/"
 cp "$here/worker.js" "$tmp/"
+cp -R "$here/landing" "$tmp/web/landing"
 
 $wrangler containers registries credentials registry.cloudflare.com --push --pull --json >"$tmp/registry.json"
 jq -j .password "$tmp/registry.json" |
@@ -36,6 +37,9 @@ crane mutate --entrypoint /bin/sh,/app/entrypoint.sh --workdir /app --user node 
 
 # TELLY_DEPLOY_ID changes on every deploy, so the Worker starts a new container with new settings.
 # max_instances 2: the new deploy's container starts while the previous one is still stopping.
+# run_worker_first: every request runs the Worker first, so it can serve the landing page on
+# LANDING_HOST. ponytail: each asset request then counts against the Workers request quota; move the
+# landing to an assets-only Worker if traffic nears it.
 jq -n --arg image "$image" --arg web "$tmp/web" --arg id "$(date -u +%Y%m%dT%H%M%SZ)" '{
 	name: "telly",
 	main: "worker.js",
@@ -44,12 +48,12 @@ jq -n --arg image "$image" --arg web "$tmp/web" --arg id "$(date -u +%Y%m%dT%H%M
 	preview_urls: false,
 	observability: { enabled: true },
 	assets: { directory: $web, binding: "ASSETS", not_found_handling: "single-page-application",
-		run_worker_first: ["/api/*", "/health"] },
+		run_worker_first: true },
 	containers: [{ class_name: "Api", image: $image, max_instances: 2, instance_type: "basic" }],
 	durable_objects: { bindings: [{ name: "API", class_name: "Api" }] },
 	migrations: [{ tag: "v1", new_sqlite_classes: ["Api"] }],
-	vars: (env | {CORS_ORIGIN: .HEALTH_SERVER_URL, TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
-		"TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
+	vars: (env | {TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
+		"CORS_ORIGIN", "LANDING_HOST", "TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
 		"SPACETIMEDB_DATABASE", "FINCHNODE_MODE", "TELLY_R2_ACCOUNT_ID", "TELLY_R2_BUCKET",
 		"TELLY_R2_ACCESS_KEY_ID")))),
 }' >"$tmp/wrangler.json"

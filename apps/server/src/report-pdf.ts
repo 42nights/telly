@@ -1,6 +1,10 @@
-// A lab report as a PDF (docs/board.html#wf-lab), layout version 1. Text only, in the PDF standard
+// A lab report as a PDF (docs/board.html#wf-lab), layout version 2. Text only, in the PDF standard
 // fonts, so the file needs no font data and no library. US Letter, 0.75 in margins.
-import type { Report } from "@health/contracts/reports";
+import {
+	mealFactText,
+	type Report,
+	unresolvedText,
+} from "@health/contracts/reports";
 
 type Line = {
 	readonly text: string;
@@ -109,7 +113,7 @@ export const reportPdf = (report: Report, madeAt: Date): Uint8Array => {
 					},
 				]
 			: []),
-		{ text: `Layout version 1 - report ${report.id}` },
+		{ text: `Layout version 2 - report ${report.id}` },
 		{
 			text: `Generated ${report.createdAt}. PDF made ${madeAt.toISOString()}.`,
 		},
@@ -146,6 +150,22 @@ export const reportPdf = (report: Report, madeAt: Date): Uint8Array => {
 			];
 		}),
 		{ text: "Markers have no ranges or flags." },
+		section("Nutrition estimates and intake reports"),
+		...(report.meals === null
+			? [{ text: "Not included in this report." }]
+			: report.meals.length === 0
+				? [{ text: "None saved." }]
+				: report.meals.flatMap((meal) =>
+						meal.facts.map((record) => ({ text: mealFactText(record) })),
+					)),
+		section("Unresolved events"),
+		...(report.unresolved === null
+			? [{ text: "Not included in this report." }]
+			: report.unresolved.length === 0
+				? [{ text: "None." }]
+				: report.unresolved.map((detail) => ({
+						text: unresolvedText(detail),
+					}))),
 		section("Caregiver observations"),
 		{ text: fields.observations ?? "None" },
 		section("Questions for a clinician"),
