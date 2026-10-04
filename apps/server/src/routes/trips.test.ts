@@ -107,20 +107,22 @@ const newFamily = async (subject: string) => {
 	return `/api/families/${Schema.decodeUnknownSync(Family)(await created.json()).id}`;
 };
 
-test("essentials follow the purpose and a low battery only", () => {
-	expect(essentials("groceries", null)).toEqual(["keys", "phone"]);
-	expect(essentials("Doctor at 3", 0.8)).toEqual([
+test("essentials follow the saved aids, the purpose, and a low battery only", () => {
+	expect(essentials("groceries", null, [])).toEqual(["keys", "phone"]);
+	expect(
+		essentials("Doctor at 3", 0.8, [
+			"Uses a Walker outdoors",
+			"large text",
+			"walker at night",
+		]),
+	).toEqual(["keys", "phone", "walker", "appointment letter", "medicine list"]);
+	expect(essentials("walk", 0.25, ["hearing aids"])).toEqual([
 		"keys",
 		"phone",
-		"appointment letter",
-		"medicine list",
-	]);
-	expect(essentials("walk", 0.25)).toEqual([
-		"keys",
-		"phone",
+		"hearing aids",
 		"phone charger (battery at 25%)",
 	]);
-	expect(essentials("walk", 0.3)).toEqual(["keys", "phone"]);
+	expect(essentials("walk", 0.3, [])).toEqual(["keys", "phone"]);
 });
 
 describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
@@ -137,6 +139,39 @@ describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
 		expect(
 			await read(CurrentTrip, call(wearer, "GET", `${path}/trips/current`)),
 		).toEqual({ trip: null });
+		// The founder grants themself the care scopes and saves a synthetic profile (#26).
+		for (const scope of ["family_access", "health_records", "care_plan_edit"])
+			expect(
+				(
+					await call(wearer, "POST", `${path}/care-access`, {
+						identity: Schema.decodeUnknownSync(Me)(
+							await (await call(wearer, "GET", "/api/me")).json(),
+						).identity,
+						scope,
+						granted: true,
+					})
+				).status,
+			).toBe(204);
+		expect(
+			(
+				await call(wearer, "PUT", `${path}/care-profile`, {
+					preferredName: "Synthetic Sam",
+					language: "en",
+					timeZone: null,
+					accessibilityNeeds: ["Uses a cane outdoors", "large text"],
+					diagnoses: null,
+					allergies: null,
+					dietaryRestrictions: null,
+					fluidRestrictions: null,
+					activityRestrictions: null,
+					routines: null,
+					contacts: null,
+					familiarDestinations: null,
+					devices: null,
+					declinedPrompts: [],
+				})
+			).status,
+		).toBe(204);
 
 		const asked = await read(
 			TripCheckIn,
@@ -174,12 +209,13 @@ describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
 		expect(left.essentials).toEqual([
 			"keys",
 			"phone",
+			"cane",
 			"appointment letter",
 			"medicine list",
 			"phone charger (battery at 20%)",
 		]);
 		expect(left.prompt).toBe(
-			"Before you go, check: keys, phone, appointment letter, medicine list, phone charger (battery at 20%).",
+			"Before you go, check: keys, phone, cane, appointment letter, medicine list, phone charger (battery at 20%).",
 		);
 
 		// Plans change: the later plan wins, the earlier one stays in the history.

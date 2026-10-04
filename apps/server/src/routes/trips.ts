@@ -1,5 +1,6 @@
 // Leaving-home check-in routes, relative to `/api/families/:familyId`. The module's reducer checks
 // membership, the step order, and the debounce again, and writes the chosen family messages.
+import { CareProfile } from "@health/contracts/care-profile";
 import {
 	type CurrentTrip,
 	StartTrip,
@@ -9,6 +10,7 @@ import {
 	type TripCheckIn,
 	type TripReply,
 } from "@health/contracts/trips";
+import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
@@ -71,15 +73,38 @@ const readTrips = (c: Context<FamilyEnv>): Trip[] => {
 
 const APPOINTMENT =
 	/\b(doctor|appointment|clinic|hospital|dentist|check-?up|therapy|surgery)\b/i;
+const AID =
+	/\b(walker|rollator|cane|walking stick|wheelchair|crutch(?:es)?|hearing aids?)\b/i;
 const LOW_BATTERY = 0.3;
 
+const ProfileJson = Schema.fromJsonString(CareProfile);
+
 /**
- * The items to check before leaving, from the stated purpose and the device battery. Items from
- * the care profile (such as a mobility aid) need the saved profile of issue #26.
+ * The accessibility needs in the family's latest saved care profile (#26). The module's view shows
+ * the profile only to members who hold `health_records`, so without that grant this is empty.
  */
-export const essentials = (purpose: string, battery: number | null) => [
+const savedNeeds = (c: Context<FamilyEnv>): readonly string[] => {
+	const latest = [...c.var.db.connection.db.myCareProfiles.iter()]
+		.filter((row) => row.familyId === c.var.familyId)
+		.sort((a, b) => (a.id < b.id ? 1 : -1))[0];
+	return latest === undefined
+		? []
+		: (Schema.decodeUnknownSync(ProfileJson)(latest.profile)
+				.accessibilityNeeds ?? []);
+};
+
+/**
+ * The items to check before leaving: keys and phone, the mobility aids named in the saved
+ * accessibility needs, appointment items when the purpose names one, and a charger on low battery.
+ */
+export const essentials = (
+	purpose: string,
+	battery: number | null,
+	needs: readonly string[],
+) => [
 	"keys",
 	"phone",
+	...new Set(needs.flatMap((need) => need.match(AID)?.[0].toLowerCase() ?? [])),
 	...(APPOINTMENT.test(purpose) ? ["appointment letter", "medicine list"] : []),
 	...(battery !== null && battery < LOW_BATTERY
 		? [`phone charger (battery at ${Math.round(battery * 100)}%)`]
@@ -146,7 +171,9 @@ export const tripRoutes = () =>
 			if (trip === undefined)
 				throw new Error("the trip is not visible to its sender");
 			const items =
-				leaving === null ? [] : essentials(leaving.purpose, leaving.battery);
+				leaving === null
+					? []
+					: essentials(leaving.purpose, leaving.battery, savedNeeds(c));
 			return c.json({
 				trip,
 				essentials: items,
