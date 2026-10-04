@@ -15,7 +15,8 @@
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
 		"./care": "./src/care.ts",
-		"./reminders": "./src/reminders.ts"
+		"./reminders": "./src/reminders.ts",
+		"./trends": "./src/trends.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

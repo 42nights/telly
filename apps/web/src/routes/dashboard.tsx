@@ -20,6 +20,7 @@ import {
 	LayoutDashboard,
 	MessageCircle,
 	SlidersHorizontal,
+	TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -70,7 +71,9 @@ function Dashboard() {
 							<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
 						</header>
 						<FamilyGate data={data} emptyClassName="win95-inset bg-card p-3">
-							{(family) => <DashboardBody data={data} family={family} />}
+							{(family) => (
+								<DashboardBody key={family.id} data={data} family={family} />
+							)}
 						</FamilyGate>
 					</div>
 				</div>
@@ -96,6 +99,9 @@ function DashboardNav() {
 			</Link>
 			<Link to="/reports" className={navClass}>
 				<FileText aria-hidden className="size-4" /> Reports
+			</Link>
+			<Link to="/trends" className={navClass}>
+				<TrendingUp aria-hidden className="size-4" /> Trends
 			</Link>
 			<a href="#thresholds" className={navClass}>
 				<SlidersHorizontal aria-hidden className="size-4" /> Thresholds
