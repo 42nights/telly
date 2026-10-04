@@ -236,7 +236,7 @@ describe.skipIf(fixtures === undefined)(
 			link.setMode("pass");
 		});
 
-		test("a queued alert delivery survives an operator outage and a server crash, then the worker processes it", async () => {
+		test("a queued alert delivery survives an operator outage and a server crash, then reaches the family thread", async () => {
 			if (uri === undefined || !operatorToken)
 				throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
 			// Cut the outbox worker off: drop its connection and refuse new ones.
@@ -258,18 +258,29 @@ describe.skipIf(fixtures === undefined)(
 						expect(delivery()?.status).toBe("queued");
 						link.setMode("pass");
 
-						// The worker reopens its connection every 5 s. Without a transport it marks the
-						// delivery `unavailable`. Poll: the SDK has no event for another identity's write.
+						// The worker reopens its connection every 5 s, then posts the alert to the family
+						// thread. Poll: the SDK has no event for another identity's write.
 						for (
 							const end = Date.now() + 15_000;
 							delivery()?.status === "queued" && Date.now() < end;
 						)
 							yield* Effect.promise(() => Bun.sleep(100));
-						expect(delivery()).toMatchObject({
-							status: "unavailable",
-							attempts: 0,
-							lastError: "No family delivery transport is configured",
+						const [alert] = readAlerts(member, familyId);
+						expect(alert?.delivery).toMatchObject({
+							status: "sent",
+							attempts: 1,
+							lastError: null,
 						});
+						expect(
+							readFamilyRecords(member).messages.filter(
+								(m) => m.familyId === familyId,
+							),
+						).toMatchObject([
+							{
+								body: alert?.alert.summary,
+								clientId: `alert-${alert?.alert.id}`,
+							},
+						]);
 						expect(readAlerts(member, familyId)).toHaveLength(1);
 					}),
 				),
