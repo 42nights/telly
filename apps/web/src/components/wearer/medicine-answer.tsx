@@ -1,14 +1,14 @@
-import type { MedicineDetection } from "@health/contracts/vision";
+import type { ObjectDetection } from "@health/contracts/vision";
 import { Button, buttonVariants } from "@health/ui/components/button";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { Camera, Check, CloudOff, Info, Square, Volume2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Camera, CloudOff, Info, Save, Square, Volume2, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ApiFailure } from "@/lib/api";
 import { signInConfig } from "@/lib/sign-in";
 
-import { direction } from "./logic";
-import type { PictureCheck } from "./medicine-check";
+import { direction, objectName } from "./logic";
+import type { Choice, PictureCheck } from "./medicine-check";
 import { SpeechLine, useSpeech } from "./speech";
 
 const xl = "h-16 w-full text-[22px] [&_svg]:size-7";
@@ -26,84 +26,77 @@ const failureText: Record<ApiFailure["kind"], string> = {
 
 type Look = () => void;
 
+/** "Looks like: your keys". Medicine says what its label reads, or that it could not read it. */
+const looksLike = (best: ObjectDetection) =>
+	best.category !== "medicine"
+		? `your ${objectName(best.category, best.label)}`
+		: best.label === null
+			? "medicine. I can't read the label"
+			: `medicine. The label looks like “${best.label}”`;
+
 function Found({
 	check,
-	detections,
 	best,
-	name,
-	item,
 	familyId,
 	live,
 	look,
+	choice,
 }: {
 	check: PictureCheck;
-	detections: readonly MedicineDetection[];
-	best: MedicineDetection;
-	name: ReactNode;
-	item: string;
+	best: ObjectDetection;
 	familyId: string | null;
 	live: boolean;
 	look: Look;
+	choice: Choice;
 }) {
-	const navigate = useNavigate();
 	const { speech, say } = useSpeech(familyId);
-	const single = detections.length === 1;
+	const medicine = best.category === "medicine";
 	const way = direction(best.box, check.frame);
-	const spoken = [
-		single
-			? `I marked ${item} in the picture.`
-			: `I marked ${detections.length} medicine containers. The arrow points to the most likely one.`,
-		way,
-		best.label === null ? "" : `The label looks like “${best.label}”.`,
-		best.needsVerification
+	const unsure = best.needsVerification
+		? medicine
 			? "I'm not sure about this one. Look closely at the label."
-			: "",
-		"Check the label on the box before you take anything.",
-	]
+			: "I'm not sure about this one. Check that it is yours."
+		: "";
+	const labelRule = medicine
+		? "Check the label on the box before you take anything."
+		: "";
+	const spoken = [`Looks like ${looksLike(best)}.`, way, unsure, labelRule]
 		.filter(Boolean)
 		.join(" ");
-	const saidThis = speech.key === check.id;
+	const saidThis = speech.key === `${check.id}:${choice.skipped}`;
 	return (
 		<>
-			<p className="text-[22px]">
-				{single ? (
-					<>I marked {name} in the picture.</>
-				) : (
-					<>
-						I marked {detections.length} medicine containers. The arrow points
-						to the most likely one.
-					</>
-				)}
+			<p className="break-words text-[22px]">
+				Looks like: <b>{looksLike(best)}</b>
 			</p>
 			<p className="font-semibold">{way}</p>
-			{best.label !== null && (
-				<p className="break-words">The label looks like “{best.label}”.</p>
-			)}
-			{best.needsVerification && (
-				<p className="font-semibold">
-					I'm not sure about this one. Look closely at the label.
+			{unsure !== "" && <p className="font-semibold">{unsure}</p>}
+			{medicine && (
+				<p className="win95-raised flex items-start gap-3 p-4 text-[18px]">
+					<Info aria-hidden className="mt-0.5 size-6 shrink-0" />
+					{labelRule}
 				</p>
 			)}
-			<p className="win95-raised flex items-start gap-3 p-4 text-[18px]">
-				<Info aria-hidden className="mt-0.5 size-6 shrink-0" />
-				Check the label on the box before you take anything.
-			</p>
+			<div className="grid gap-2 sm:grid-cols-2">
+				<Button className={`win95-primary ${xl}`} onClick={choice.save}>
+					<Save aria-hidden />
+					Save
+				</Button>
+				<Button className={xl} onClick={choice.notThis} variant="outline">
+					<X aria-hidden />
+					Not this
+				</Button>
+			</div>
 			<Button
 				className={lg}
 				disabled={speech.kind === "loading"}
-				onClick={() => void say(check.id, spoken)}
+				onClick={() => void say(`${check.id}:${choice.skipped}`, spoken)}
 				variant="outline"
 			>
 				<Volume2 aria-hidden />
 				{saidThis ? "Say it again" : "Read it aloud"}
 			</Button>
 			{saidThis && <SpeechLine speech={speech} />}
-			<Button
-				className={`win95-primary ${xl}`}
-				onClick={() => void navigate({ to: "/hud" })}
-			>
-				<Check aria-hidden />I found it
-			</Button>
 			<Button className={lg} disabled={!live} onClick={look} variant="outline">
 				<Camera aria-hidden />
 				Look again
@@ -151,20 +144,20 @@ function PictureAnswer({
 	check,
 	best,
 	name,
-	item,
 	familyId,
 	live,
 	look,
 	stop,
+	choice,
 }: {
 	check: PictureCheck;
-	best: MedicineDetection | null;
+	best: ObjectDetection | null;
 	name: ReactNode;
-	item: string;
 	familyId: string | null;
 	live: boolean;
 	look: Look;
 	stop: () => void;
+	choice: Choice;
 }) {
 	const { result } = check;
 	if (result.kind === "looking")
@@ -203,20 +196,23 @@ function PictureAnswer({
 			<Found
 				best={best}
 				check={check}
-				detections={result.detections}
+				choice={choice}
 				familyId={familyId}
-				item={item}
 				live={live}
 				look={look}
-				name={name}
 			/>
 		);
 	return (
 		<>
-			<p className="text-[22px]">I can't see {name} in this picture.</p>
+			{choice.skipped > 0 ? (
+				<p className="text-[22px]">That was everything I found here.</p>
+			) : (
+				<p className="text-[22px]">
+					I could not see anything to save. Try again.
+				</p>
+			)}
 			<p className="text-[18px] text-muted-foreground">
-				None found in this picture. Point the phone at the counter or shelf and
-				try again.
+				Point the camera at {name} on a counter or shelf.
 			</p>
 			<Button className={`win95-primary ${xl}`} disabled={!live} onClick={look}>
 				<Camera aria-hidden />
@@ -227,26 +223,26 @@ function PictureAnswer({
 }
 
 /** The answer column: what the wearer can do for the camera and the current picture check. */
-export function MedicineAnswer({
+export function ObjectAnswer({
 	check,
 	best,
 	name,
-	item,
 	familyId,
 	live,
 	look,
 	stop,
 	startCamera,
+	choice,
 }: {
 	check: PictureCheck | null;
-	best: MedicineDetection | null;
+	best: ObjectDetection | null;
 	name: ReactNode;
-	item: string;
 	familyId: string | null;
 	live: boolean;
 	look: Look;
 	stop: () => void;
 	startCamera: () => void;
+	choice: Choice;
 }) {
 	if (check === null)
 		return live ? (
@@ -276,8 +272,8 @@ export function MedicineAnswer({
 			<PictureAnswer
 				best={best}
 				check={check}
+				choice={choice}
 				familyId={familyId}
-				item={item}
 				live={live}
 				look={look}
 				name={name}

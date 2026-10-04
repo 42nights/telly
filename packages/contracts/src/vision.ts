@@ -40,8 +40,26 @@ export const VisionFrame = Schema.Struct({
 });
 export type VisionFrame = typeof VisionFrame.Type;
 
-/** `POST /api/families/:familyId/vision/medicine-detections` body. */
-export const MedicineDetectionRequest = Schema.Struct({
+/**
+ * What kind of personal object a detection is (#301). Medicine keeps its own extra checks: its
+ * label is only ever the printed name, and an unread label must be checked by the person.
+ */
+export const OBJECT_CATEGORIES = [
+	"keys",
+	"glasses",
+	"wallet",
+	"phone",
+	"remote",
+	"medicine",
+	"hearing aid",
+	"bag",
+	"other",
+] as const;
+export const ObjectCategory = Schema.Literals(OBJECT_CATEGORIES);
+export type ObjectCategory = typeof ObjectCategory.Type;
+
+/** `POST /api/families/:familyId/vision/object-detections` body. */
+export const ObjectDetectionRequest = Schema.Struct({
 	frame: VisionFrame,
 	image: Schema.Struct({
 		type: Schema.Literals(["image/jpeg", "image/png"]),
@@ -49,15 +67,19 @@ export const MedicineDetectionRequest = Schema.Struct({
 		data: Schema.String.check(Schema.isMinLength(1), Schema.isBase64()),
 	}),
 });
-export type MedicineDetectionRequest = typeof MedicineDetectionRequest.Type;
+export type ObjectDetectionRequest = typeof ObjectDetectionRequest.Type;
 
-/** One medicine container found in the frame. */
-export const MedicineDetection = Schema.Struct({
-	/** Name printed on the container, or `null` when the model could not read it. */
+/** One personal object found in the frame. */
+export const ObjectDetection = Schema.Struct({
+	category: ObjectCategory,
+	/**
+	 * A short everyday name ("keys", "reading glasses"). For medicine only the name printed on the
+	 * container; `null` when the model could not read it.
+	 */
 	label: Schema.NullOr(Schema.String),
-	/** Model-reported confidence (0–1) that this is a medicine container; not calibrated. */
+	/** Model-reported confidence (0–1) in the category; not calibrated. */
 	confidence: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 })),
-	/** The label is unreadable or confidence is low: the user must check the label before relying on it. */
+	/** No label or a low confidence: the person must check the object before relying on it. */
 	needsVerification: Schema.Boolean,
 	/** Bounding box in camera-frame pixels (same space as `frame.width` × `frame.height`). */
 	box: Schema.Struct({
@@ -67,17 +89,17 @@ export const MedicineDetection = Schema.Struct({
 		height: Schema.Finite,
 	}),
 });
-export type MedicineDetection = typeof MedicineDetection.Type;
+export type ObjectDetection = typeof ObjectDetection.Type;
 
 /**
- * Detections for exactly one frame. A found box does not confirm a dose was taken, and an empty
- * list means "none found in this frame", not "no medicine nearby".
+ * Detections for exactly one frame, the main object in view first. A found box does not confirm a
+ * dose was taken, and an empty list means "none found in this frame", not "nothing nearby".
  */
-export const MedicineDetections = Schema.Struct({
+export const ObjectDetections = Schema.Struct({
 	frame: VisionFrame,
-	detections: Schema.Array(MedicineDetection),
+	detections: Schema.Array(ObjectDetection),
 	/** Provider model that produced the detections. */
 	model: Schema.String,
 	analyzedAt: UtcTime,
 });
-export type MedicineDetections = typeof MedicineDetections.Type;
+export type ObjectDetections = typeof ObjectDetections.Type;

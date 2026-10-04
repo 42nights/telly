@@ -20,7 +20,7 @@ const sighting = {
 	container: "Lisinopril bottle",
 } as MedicineSighting;
 const pinUrl =
-	"http://server.test/api/families/1/medicine-memory/containers/7/ar-pin";
+	"http://server.test/api/families/1/medicine-memory/objects/7/ar-pin";
 
 type Call = { url: string; method: string; body: unknown };
 
@@ -81,14 +81,14 @@ describe("pin it in AR", () => {
 		signIn();
 		fakeShell({
 			type: "ar.pinSaved",
-			containerId: "7",
+			objectId: "7",
 			anchorId: "telly-pin-7",
 			worldMap: "bWFw",
 			mapBytes: 3,
 		});
 		const calls = fakeServer(200, {
 			familyId: "1",
-			containerId: "7",
+			objectId: "7",
 			anchorId: "telly-pin-7",
 			mapBytes: 3,
 			createdAt: "2026-10-04T12:00:00Z",
@@ -131,10 +131,10 @@ describe("pin it in AR", () => {
 describe("show me in AR", () => {
 	test("reads the stored pin and sends its world map to the shell", async () => {
 		signIn();
-		const sent = fakeShell({ type: "ar.pinFound", containerId: "7" });
+		const sent = fakeShell({ type: "ar.pinFound", objectId: "7" });
 		const calls = fakeServer(200, {
 			familyId: "1",
-			containerId: "7",
+			objectId: "7",
 			anchorId: "telly-pin-7",
 			mapBytes: 3,
 			createdAt: "2026-10-04T12:00:00Z",
@@ -145,7 +145,7 @@ describe("show me in AR", () => {
 		expect(calls).toEqual([{ url: pinUrl, method: "GET", body: undefined }]);
 		expect(sent[0]).toMatchObject({
 			type: "ar.findPin",
-			containerId: "7",
+			objectId: "7",
 			label: "Lisinopril bottle",
 			anchorId: "telly-pin-7",
 			worldMap: "bWFw",
@@ -154,7 +154,7 @@ describe("show me in AR", () => {
 
 	test("without a stored pin, asks to pin first and opens no AR", async () => {
 		signIn();
-		const sent = fakeShell({ type: "ar.pinFound", containerId: "7" });
+		const sent = fakeShell({ type: "ar.pinFound", objectId: "7" });
 		fakeServer(404, { error: "not_found", message: "No AR pin" });
 		expect(await showInAr("1", sighting)).toMatchObject({
 			kind: "failed",

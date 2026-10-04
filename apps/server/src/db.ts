@@ -33,6 +33,8 @@ const views = [
 	"SELECT * FROM my_trip_events",
 	"SELECT * FROM my_locations",
 	"SELECT * FROM my_location_shares",
+	"SELECT * FROM my_home_watch",
+	"SELECT * FROM my_away_events",
 	"SELECT * FROM my_medicine_places",
 	"SELECT * FROM my_medicine_sightings",
 	"SELECT * FROM my_medicine_ar_pins",
@@ -60,6 +62,8 @@ const views = [
 	"SELECT * FROM my_family_people",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
+	"SELECT * FROM pending_wearer_texts",
+	"SELECT * FROM finder_links",
 ];
 
 const quality = { Validated: "validated", Unvalidated: "unvalidated" } as const;

@@ -147,14 +147,14 @@ export const Family = Schema.Struct({
 });
 export type Family = typeof Family.Type;
 
-/** Only `validated` samples may drive monitoring (see `drivesMonitoring`); `unvalidated` ones stay visibly unvalidated. */
+/** Only `validated` samples, and real WHOOP readings, may drive monitoring (see `drivesMonitoring`). */
 export const SampleQuality = Schema.Literals(["validated", "unvalidated"]);
 export type SampleQuality = typeof SampleQuality.Type;
 
 /**
  * Whether a sample may drive monitoring and alerts: a validated sample, or a real WHOOP reading
- * through NOOP (a `noop:` source), a captain decision for the demo. Such a reading still shows as
- * unvalidated. The database module applies the same rule when it raises an alert.
+ * through NOOP (a `noop:` source), which the product treats as accurate (a captain decision). The
+ * database module applies the same rule when it raises an alert.
  */
 export const drivesMonitoring = (sample: {
 	readonly quality: SampleQuality;
@@ -223,3 +223,9 @@ export const FamilyRecords = Schema.Struct({
 	acknowledgements: Schema.Array(AlertAcknowledgement),
 });
 export type FamilyRecords = typeof FamilyRecords.Type;
+
+/** The source of every demo data copy (#334). Demo data is on while a family has such a sample. */
+export const DEMO_SOURCE = "noop:demo";
+
+/** `PUT /api/families/:familyId/demo-data`: replay a real WHOOP recording as live, or stop. */
+export const DemoDataInput = Schema.Struct({ on: Schema.Boolean });

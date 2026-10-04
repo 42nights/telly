@@ -1,6 +1,8 @@
 // The AR pin requests from the web app (contract: telly-ar-pin) and their answers. The shell
 // (app/(drawer)/web.tsx) decodes a request, calls `answerArRequest`, and sends the answer back as
-// a "telly-ar" event. The native module answers without `requestId`; this adds it.
+// a "telly-ar" event. The native module answers without `requestId`; this adds it. `objectId` is the
+// remembered object's sighting id (#301); the web app also sends it as `containerId` for shells
+// built before #301, so the pin's anchor name `telly-pin-<id>` is the same either way.
 import { Schema } from "effect";
 
 import type { TellyArModule } from "@/modules/telly-ar";
@@ -14,13 +16,13 @@ export const ArRequest = Schema.Union([
 		type: Schema.Literal("ar.savePin"),
 		requestId: Schema.String,
 		familyId: Schema.String,
-		containerId: Schema.String,
+		objectId: Schema.String,
 		label: Schema.String,
 	}),
 	Schema.Struct({
 		type: Schema.Literal("ar.findPin"),
 		requestId: Schema.String,
-		containerId: Schema.String,
+		objectId: Schema.String,
 		label: Schema.String,
 		anchorId: Schema.String,
 		worldMap: Schema.String,
@@ -38,12 +40,12 @@ export type ArReply =
 	| {
 			type: "ar.pinSaved";
 			requestId: string;
-			containerId: string;
+			objectId: string;
 			anchorId: string;
 			worldMap: string;
 			mapBytes: number;
 	  }
-	| { type: "ar.pinFound"; requestId: string; containerId: string }
+	| { type: "ar.pinFound"; requestId: string; objectId: string }
 	| { type: "ar.error"; requestId: string; code: string; message: string };
 
 // `native` is null where the module is not built in; `os` is `Platform.OS`.
@@ -77,16 +79,16 @@ export const answerArRequest = async (
 	try {
 		const answer =
 			request.type === "ar.savePin"
-				? await native.savePin(request.containerId, request.label)
+				? await native.savePin(request.objectId, request.label)
 				: await native.findPin(
-						request.containerId,
+						request.objectId,
 						request.label,
 						request.anchorId,
 						request.worldMap,
 					);
 		return answer.type === "ar.error"
 			? { ...answer, requestId }
-			: { ...answer, requestId, containerId: request.containerId };
+			: { ...answer, requestId, objectId: request.objectId };
 	} catch (error) {
 		return {
 			type: "ar.error",

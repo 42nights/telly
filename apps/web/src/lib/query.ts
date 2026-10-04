@@ -100,6 +100,7 @@ const ALSO_CHANGES: Readonly<Record<string, readonly string[]>> = {
 	// A meal check-in answered with "help" opens a care need.
 	"reminder-occurrences": ["", "care", "messages"],
 	samples: ["", "alerts", "monitoring"],
+	"demo-data": ["", "alerts", "monitoring"],
 	"alert-thresholds": ["monitoring"],
 	"care-access": ["care-profile", "care-instructions"],
 	"care-instructions": ["care-profile"],

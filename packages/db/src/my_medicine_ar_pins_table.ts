@@ -18,4 +18,5 @@ export default __t.row({
   savedBy: __t.identity().name("saved_by"),
   createdAt: __t.timestamp().name("created_at"),
   updatedAt: __t.timestamp().name("updated_at"),
+  personId: __t.identity().name("person_id"),
 });

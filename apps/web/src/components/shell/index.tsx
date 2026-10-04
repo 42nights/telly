@@ -1,12 +1,14 @@
 // The signed-in app's frame (docs: the approved navigation redesign, issue linked in the PR).
-// 900 px and wider: one Explorer window with the screen tree on the left, Back and the path on a
-// toolbar, and a status bar. Narrower: the same window full screen, with a taskbar at the bottom
-// and a Start menu that lists the same screens as the tree, in the same order.
+// 900 px and wider: one Explorer window with the screen tree on the left and Back in the title bar.
+// Narrower: the same window full screen, with Close in the title bar, a taskbar at the bottom, and
+// a Start menu that lists the same screens as the tree, in the same order. Both sizes end with the
+// same status bar.
 import { Button } from "@health/ui/components/button";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, LogOut, Monitor, Users, X } from "lucide-react";
-import { useRef } from "react";
+import { type RefObject, useRef } from "react";
 
+import { StatusBar } from "@/components/hud/status-footer";
 import { useFamily } from "@/lib/family";
 import { setSessionToken } from "@/lib/session";
 import { setView, useView, type View } from "@/lib/view";
@@ -47,7 +49,7 @@ export function Shell() {
 			data-view={view}
 			className="win95-raised win95-window flex h-[calc(100svh-var(--win95-top-band))] flex-col gap-1"
 		>
-			<h1 className="win95-titlebar flex min-h-12 items-center gap-2 py-0.5 pr-0.5 pl-3 text-lg min-[900px]:min-h-7 min-[900px]:pl-1.5 min-[900px]:text-sm">
+			<h1 className="win95-titlebar flex min-h-12 items-center gap-2 py-0.5 pr-0.5 pl-3 text-lg min-[900px]:min-h-7 min-[900px]:pr-1 min-[900px]:pl-1.5 min-[900px]:text-sm">
 				<Icon aria-hidden className="size-5 shrink-0 min-[900px]:size-4" />
 				<span className="min-w-0 flex-1 truncate">
 					<span className="hidden min-[900px]:inline">Telly · </span>
@@ -55,47 +57,23 @@ export function Shell() {
 					{tab !== undefined && tab.to !== screen?.to && ` · ${tab.label}`}
 				</span>
 				{up !== null && (
-					<Link
-						to={up}
-						aria-label={`Close ${title}`}
-						className="win95-close grid shrink-0 place-items-center min-[900px]:hidden"
-					>
-						<X aria-hidden className="size-6" />
-					</Link>
+					<>
+						<Link
+							to={up}
+							className="win95-title-button hidden items-center gap-1 min-[900px]:inline-flex"
+						>
+							<ArrowLeft aria-hidden className="size-3.5" /> Back
+						</Link>
+						<Link
+							to={up}
+							aria-label={`Close ${title}`}
+							className="win95-close grid shrink-0 place-items-center min-[900px]:hidden"
+						>
+							<X aria-hidden className="size-6" />
+						</Link>
+					</>
 				)}
 			</h1>
-
-			<div className="hidden items-center gap-1 min-[900px]:flex">
-				{up === null ? (
-					<button type="button" className="win95-tab" disabled>
-						<ArrowLeft aria-hidden className="size-4" /> Back
-					</button>
-				) : (
-					<Link to={up} className="win95-tab gap-1.5">
-						<ArrowLeft aria-hidden className="size-4" /> Back
-					</Link>
-				)}
-				<nav
-					aria-label="Path"
-					className="win95-inset flex min-h-11 min-w-0 flex-1 items-center gap-1.5 bg-card px-3 text-sm"
-				>
-					<span>Telly</span>
-					{screen !== undefined && (
-						<>
-							<span aria-hidden>›</span>
-							<Link to={screen.to} activeOptions={{ exact: true }}>
-								{screen.label}
-							</Link>
-						</>
-					)}
-					{tab !== undefined && tab.to !== screen?.to && (
-						<>
-							<span aria-hidden>›</span>
-							<span aria-current="page">{tab.label}</span>
-						</>
-					)}
-				</nav>
-			</div>
 
 			<div className="flex min-h-0 flex-1 gap-1">
 				<nav
@@ -108,7 +86,7 @@ export function Shell() {
 					{screen?.tabs !== undefined && (
 						<nav
 							aria-label={`${screen.label} pages`}
-							className="flex shrink-0 flex-wrap px-1 pt-1"
+							className="flex shrink-0 overflow-x-auto px-1 pt-1"
 						>
 							{screen.tabs.map((t) => (
 								<Link
@@ -128,14 +106,7 @@ export function Shell() {
 				</div>
 			</div>
 
-			<div className="hidden gap-1 text-sm min-[900px]:flex">
-				<p className="win95-status flex-1 px-2 py-0.5">
-					{family?.name ?? "No person"}
-				</p>
-				<p className="win95-status px-2 py-0.5">
-					{view === "wearer" ? "Wearer view" : "Family view"}
-				</p>
-			</div>
+			<StatusBar familyId={family?.id ?? null} />
 
 			<nav
 				aria-label="Taskbar"
@@ -170,38 +141,52 @@ export function Shell() {
 				<div className="min-w-0 flex-1 overflow-y-auto p-1">{menu}</div>
 			</div>
 
-			<dialog
-				ref={signOut}
-				aria-labelledby="sign-out-title"
-				className="win95-raised win95-window m-auto w-[min(22rem,calc(100vw-2rem))] border-0 p-1.5 text-foreground backdrop:bg-black/30"
-			>
-				<h2
-					id="sign-out-title"
-					className="win95-titlebar flex items-center gap-1.5 px-1.5 py-1 text-sm"
-				>
-					<LogOut aria-hidden className="size-4" /> Sign out
-				</h2>
-				<form method="dialog" className="grid gap-3 p-3 text-sm">
-					<p>Sign out of Telly on this device?</p>
-					<div className="grid grid-cols-2 gap-2">
-						<Button
-							type="submit"
-							className="win95-primary"
-							onClick={() => setSessionToken(null)}
-						>
-							Sign out
-						</Button>
-						<Button type="submit" autoFocus>
-							Cancel
-						</Button>
-					</div>
-				</form>
-			</dialog>
+			<SignOutDialog ref={signOut} />
 		</div>
 	);
 }
 
-/** The screen list: the desktop tree and the phone Start menu. */
+/** Asks before it signs out of Telly on this device. Open it with `ref.current.showModal()`. */
+export function SignOutDialog({
+	ref,
+}: {
+	ref: RefObject<HTMLDialogElement | null>;
+}) {
+	return (
+		<dialog
+			ref={ref}
+			aria-labelledby="sign-out-title"
+			className="win95-raised win95-window m-auto w-[min(22rem,calc(100vw-2rem))] border-0 p-1.5 text-foreground backdrop:bg-black/30"
+		>
+			<h2
+				id="sign-out-title"
+				className="win95-titlebar flex items-center gap-1.5 px-1.5 py-1 text-sm"
+			>
+				<LogOut aria-hidden className="size-4" /> Sign out
+			</h2>
+			<form method="dialog" className="grid gap-3 p-3 text-sm">
+				<p>Sign out of Telly on this device?</p>
+				<div className="grid grid-cols-2 gap-2">
+					<Button
+						type="submit"
+						className="win95-primary"
+						onClick={() => setSessionToken(null)}
+					>
+						Sign out
+					</Button>
+					<Button type="submit" autoFocus>
+						Cancel
+					</Button>
+				</div>
+			</form>
+		</dialog>
+	);
+}
+
+/**
+ * The screen list: the desktop tree and the phone Start menu. In the wearer view, the view switch
+ * and Sign out are in Settings instead (captain), so the wearer cannot leave by accident.
+ */
 function Menu({
 	view,
 	onPick,
@@ -211,17 +196,33 @@ function Menu({
 	onPick: () => void;
 	onSignOut: () => void;
 }) {
-	const groups: ReadonlyArray<readonly [string, readonly Screen[]]> =
-		view === "wearer"
-			? [["For me", wearerScreens]]
-			: [
-					["Family", familyScreens],
-					["For me", wearerScreens],
-				];
-	const other: View = view === "wearer" ? "family" : "wearer";
+	if (view === "wearer")
+		return (
+			<ul className="grid">
+				<li>
+					<p className="win95-menu-head">For me</p>
+					<ul>
+						{wearerScreens.map((s) => (
+							<li key={s.to}>
+								<MenuLink screen={s} onPick={onPick} />
+							</li>
+						))}
+					</ul>
+					<hr />
+				</li>
+				<li>
+					<MenuLink screen={settingsScreen} onPick={onPick} />
+				</li>
+			</ul>
+		);
 	return (
 		<ul className="grid">
-			{groups.map(([label, screens]) => (
+			{(
+				[
+					["Family", familyScreens],
+					["For me", wearerScreens],
+				] as const
+			).map(([label, screens]) => (
 				<li key={label}>
 					<p className="win95-menu-head">{label}</p>
 					<ul>
@@ -239,14 +240,12 @@ function Menu({
 					type="button"
 					className="win95-menu-item w-full"
 					onClick={() => {
-						setView(other);
+						setView("wearer");
 						onPick();
 					}}
 				>
 					<Users aria-hidden className="size-5" />
-					{other === "family"
-						? "Switch to family view"
-						: "Switch to wearer view"}
+					Switch to wearer view
 				</button>
 			</li>
 			<li>

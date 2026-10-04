@@ -6,43 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { apiRequest, familyPath } from "@/lib/api";
 
-import { errorReport, fixReport, type Trip } from "./logic";
-
-const KEY = "telly.trip";
-
-const read = (): Trip | null => {
-	try {
-		const stored: unknown = JSON.parse(localStorage.getItem(KEY) ?? "null");
-		if (
-			typeof stored === "object" &&
-			stored !== null &&
-			"destination" in stored &&
-			typeof stored.destination === "string" &&
-			"purpose" in stored &&
-			typeof stored.purpose === "string" &&
-			"setAt" in stored &&
-			typeof stored.setAt === "number"
-		)
-			return {
-				destination: stored.destination,
-				purpose: stored.purpose,
-				setAt: stored.setAt,
-			};
-	} catch {}
-	return null;
-};
-
-/** The active trip on this device, and a setter; `null` cancels the trip. */
-export function useTrip(): [Trip | null, (next: Trip | null) => void] {
-	const [trip, setTrip] = useState<Trip | null>(null);
-	useEffect(() => setTrip(read()), []);
-	const save = (next: Trip | null) => {
-		if (next === null) localStorage.removeItem(KEY);
-		else localStorage.setItem(KEY, JSON.stringify(next));
-		setTrip(next);
-	};
-	return [trip, save];
-}
+import { errorReport, fixReport } from "./logic";
 
 export type Reporting =
 	| { readonly kind: "off" }
