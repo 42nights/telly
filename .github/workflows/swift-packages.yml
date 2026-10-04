@@ -11,29 +11,29 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Packages/**'
-      - 'Tools/SleepBench/**'
-      - 'Tools/SleepPSG/**'
-      - 'Tools/Backfill/**'
+      - 'noop/Packages/**'
+      - 'noop/Tools/SleepBench/**'
+      - 'noop/Tools/SleepPSG/**'
+      - 'noop/Tools/Backfill/**'
       - '.github/workflows/swift-packages.yml'
       # Mirror of the note in android.yml: package tests read the ANDROID oracles to catch a one-sided
-      # edit, and one reads Strand/Liquid/LiquidCore.swift. Editing only that side would otherwise skip
+      # edit, and one reads noop/Strand/Liquid/LiquidCore.swift. Editing only that side would otherwise skip
       # the guard written for exactly that case. Keep in step with what the tests read.
-      - 'android/app/src/test/resources/**'
-      - 'Strand/Liquid/LiquidCore.swift'
+      - 'noop/android/app/src/test/resources/**'
+      - 'noop/Strand/Liquid/LiquidCore.swift'
   push:
     branches: [main]
     paths:
-      - 'Packages/**'
-      - 'Tools/SleepBench/**'
-      - 'Tools/SleepPSG/**'
-      - 'Tools/Backfill/**'
+      - 'noop/Packages/**'
+      - 'noop/Tools/SleepBench/**'
+      - 'noop/Tools/SleepPSG/**'
+      - 'noop/Tools/Backfill/**'
       - '.github/workflows/swift-packages.yml'
       # Mirror of the note in android.yml: package tests read the ANDROID oracles to catch a one-sided
-      # edit, and one reads Strand/Liquid/LiquidCore.swift. Editing only that side would otherwise skip
+      # edit, and one reads noop/Strand/Liquid/LiquidCore.swift. Editing only that side would otherwise skip
       # the guard written for exactly that case. Keep in step with what the tests read.
-      - 'android/app/src/test/resources/**'
-      - 'Strand/Liquid/LiquidCore.swift'
+      - 'noop/android/app/src/test/resources/**'
+      - 'noop/Strand/Liquid/LiquidCore.swift'
   workflow_dispatch:
 
 concurrency:
@@ -61,11 +61,11 @@ jobs:
 
       - name: Build ${{ matrix.package }}
         run: swift build
-        working-directory: Packages/${{ matrix.package }}
+        working-directory: noop/Packages/${{ matrix.package }}
 
       - name: Test ${{ matrix.package }}
         run: swift test
-        working-directory: Packages/${{ matrix.package }}
+        working-directory: noop/Packages/${{ matrix.package }}
 
   # The Tools/ SwiftPM packages, which path-depend on Packages/ above and were built by nothing.
   #
@@ -93,7 +93,7 @@ jobs:
 
       - name: Build ${{ matrix.tool }}
         run: swift build
-        working-directory: Tools/${{ matrix.tool }}
+        working-directory: noop/Tools/${{ matrix.tool }}
 
       # Only SleepBench has a test target; `swift test` on a package without one fails, so it is guarded.
       - name: Test ${{ matrix.tool }}
@@ -103,4 +103,4 @@ jobs:
           else
             echo "no test target in Tools/${{ matrix.tool }} — build-only"
           fi
-        working-directory: Tools/${{ matrix.tool }}
+        working-directory: noop/Tools/${{ matrix.tool }}

@@ -3,7 +3,7 @@
 # points at this fork.
 #
 # The `bump` input (patch / minor / major / none) increments the version IN SOURCE — both
-# android/app/build.gradle.kts (versionName + versionCode) and project.yml (MARKETING_VERSION +
+# noop/android/app/build.gradle.kts (versionName + versionCode) and noop/project.yml (MARKETING_VERSION +
 # CURRENT_PROJECT_VERSION) — and commits that to the dispatched branch, so the built app actually
 # REPORTS the new version. Then it publishes a fixed, non-prerelease `v<VERSION>` release with the
 # version-stamped artifacts. releases/latest returns it, so UpdateCheck finds it (isNewer strips the
@@ -49,6 +49,10 @@ jobs:
       tag: ${{ steps.b.outputs.tag }}
       sha: ${{ steps.b.outputs.sha }}
       buildVersion: ${{ steps.b.outputs.buildVersion }}
+    # Every path below is relative to noop/; git and gh work from that subdirectory.
+    defaults:
+      run:
+        working-directory: noop
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - id: b
@@ -164,7 +168,7 @@ jobs:
       contents: write
     defaults:
       run:
-        working-directory: android
+        working-directory: noop/android
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -196,6 +200,9 @@ jobs:
     # Uploads the built .app zip to the release created by the `bump` job.
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: noop
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -264,6 +271,9 @@ jobs:
     # Uploads the built .ipa to the release created by the `bump` job.
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: noop
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -308,7 +318,7 @@ jobs:
           gh release upload "${{ needs.bump.outputs.tag }}" "NOOP-ios-unsigned-v${VER}.ipa" --repo "$GITHUB_REPOSITORY" --clobber
 
   # Prepend this release to the AltStore / SideStore source manifest — the one AltStore reads from
-  # raw.githubusercontent.com/<repo>/main/altstore-source.json (docs/IOS.md) — so a sideload user is
+  # raw.githubusercontent.com/<repo>/main/noop/altstore-source.json (noop/docs/IOS.md) — so a sideload user is
   # offered this version automatically. Replaces the manual per-release altstore-source.json PR (#19).
   # Best-effort: a missing manifest / IPA asset / push conflict WARNS and skips, never failing the release.
   altstore:
@@ -317,6 +327,9 @@ jobs:
     # Pushes the altstore-source.json update commit directly to main.
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: noop
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:

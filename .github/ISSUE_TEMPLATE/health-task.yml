@@ -1,12 +1,12 @@
 name: Health task
-description: One bounded task for the health app (health/). Claim it in a comment before you edit.
+description: One bounded task for the health app (apps/ and packages/ at the repository root). Claim it in a comment before you edit.
 title: "[health] "
 labels: ["health"]
 body:
   - type: markdown
     attributes:
       value: |
-        Coordination rules: `health/CONTRIBUTING.md`. Plan: `docs/plan.md`.
+        Coordination rules: `CONTRIBUTING.md`. Plan: `docs/plan.md`. NOOP lives in `noop/`.
         Never paste secret values, real health records, or personal data here.
   - type: input
     id: owner
@@ -28,7 +28,7 @@ body:
     attributes:
       label: Affected paths
       description: Files and folders this task may edit. Others must not edit them while it is claimed.
-      placeholder: "health/apps/web/src/routes/hud.tsx"
+      placeholder: "apps/web/src/routes/hud.tsx"
     validations:
       required: true
   - type: textarea
@@ -51,6 +51,6 @@ body:
       label: Verification
       description: Commands to run and what to observe. Post the actual results here before closing.
       placeholder: |
-        cd health && bun run check-types && bun run test
+        bun run check-types && bun run test
     validations:
       required: true
