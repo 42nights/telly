@@ -7,6 +7,7 @@ import * as http from "../http";
 import {
 	type NoopSample,
 	noopRoutes,
+	noopTableSamples,
 	recordNoopSamples,
 	unstoredSamples,
 } from "./noop-ingest";
@@ -79,24 +80,6 @@ describe("recordNoopSamples", () => {
 				quality: { tag: "Unvalidated" },
 			},
 		]);
-	});
-
-	test("a newer heart rate in a stored minute replaces it; an older one is skipped", async () => {
-		const minute = 1_700_000_040_000; // a whole minute
-		const { db, recorded } = fakeDb([
-			stored("heart_rate", 60, minute + 5_000, 1),
-		]);
-		await recordNoopSamples(
-			db,
-			7n,
-		)([
-			sample("heart_rate", 58, minute + 2_000), // older than the stored reading: skipped
-			sample("heart_rate", 99, minute + 50_000), // newer, same minute as stored: kept
-			sample("heart_rate", 70, minute + 60_000), // next minute: new
-			sample("heart_rate", 71, minute + 61_000), // newer in that minute: kept
-			sample("heart_rate", 70, minute + 60_000), // repeat of an older one: skipped
-		]);
-		expect(recorded.map((row) => row.value)).toEqual([99, 70, 71]);
 	});
 
 	test("records a daily value again only when it changed since the latest stored one", async () => {
@@ -192,7 +175,7 @@ describe("noopRoutes ingest", () => {
 		expect(batches).toEqual([]);
 	});
 
-	test("decodes heart rate per minute, wrist events, and scaled daily values", async () => {
+	test("decodes heart rate per 30 s, wrist events, and scaled daily values", async () => {
 		const { hono, batches } = app();
 		const response = await post(
 			hono,
@@ -200,7 +183,7 @@ describe("noopRoutes ingest", () => {
 				tables: {
 					hrSample: [
 						{ deviceId: "d1", ts: 120, bpm: 60 },
-						{ deviceId: "d1", ts: 150, bpm: 99 }, // same minute, newer: replaces 60
+						{ deviceId: "d1", ts: 130, bpm: 99 },
 						{ deviceId: "d2", ts: 150, bpm: 70 }, // other device: kept
 					],
 					event: [
@@ -231,7 +214,7 @@ describe("noopRoutes ingest", () => {
 					metric: "heart_rate",
 					value: 99,
 					unit: "bpm",
-					time: 150_000,
+					time: 130_000,
 					source: "noop:d1",
 				},
 				{
@@ -324,6 +307,25 @@ describe("unstoredSamples", () => {
 		expect(unstoredSamples(stored, [hr(64, 35)])).toEqual([hr(64, 35)]);
 		expect(unstoredSamples(stored, [hr(61, 5), hr(58, 2)])).toEqual([]);
 		expect(unstoredSamples([...stored, hr(64, 35)], [hr(64, 35)])).toEqual([]);
+	});
+
+	test("pushes inside one 30 s bucket store one heart rate; the next bucket stores its newest", () => {
+		const stored: NoopSample[] = [];
+		for (const push of [
+			[1, 4],
+			[14, 29],
+			[31, 44],
+		]) {
+			const batch = noopTableSamples({
+				hrSample: push.map((seconds) => ({
+					deviceId: "my-whoop",
+					ts: minute / 1000 + seconds,
+					bpm: 60 + seconds,
+				})),
+			});
+			stored.push(...unstoredSamples(stored, batch));
+		}
+		expect(stored).toEqual([hr(64, 4), hr(104, 44)]);
 	});
 
 	test("another metric is stored again only when its value changed", () => {

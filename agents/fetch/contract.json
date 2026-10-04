@@ -7,6 +7,9 @@
 			},
 			{
 				"$ref": "#/$defs/AlertsTool"
+			},
+			{
+				"$ref": "#/$defs/SavedThingsTool"
 			}
 		],
 		"$defs": {
@@ -62,6 +65,30 @@
 				"required": ["tool", "input"],
 				"additionalProperties": false,
 				"description": "The family's newest alerts and the acknowledgements of those alerts."
+			},
+			"SavedThingsTool": {
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["saved_things"]
+					},
+					"input": {
+						"type": "object",
+						"properties": {
+							"limit": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 100,
+								"description": "Most records to return (default 20)."
+							}
+						},
+						"additionalProperties": false
+					}
+				},
+				"required": ["tool", "input"],
+				"additionalProperties": false,
+				"description": "Where the asking person saved each of their things, such as pills or keys, newest first. A place is where it was saved, not proof that it is still there. A place can name a landmark, such as a dish rack or a cabinet."
 			}
 		}
 	},
@@ -216,6 +243,72 @@
 					}
 				},
 				"required": ["tool", "alerts", "acknowledgements"],
+				"additionalProperties": false
+			},
+			{
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["saved_things"]
+					},
+					"things": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"container": {
+									"type": "string",
+									"maxLength": 120
+								},
+								"place": {
+									"type": "string",
+									"maxLength": 120
+								},
+								"seenAt": {
+									"type": "string"
+								},
+								"category": {
+									"type": "string",
+									"enum": [
+										"keys",
+										"glasses",
+										"wallet",
+										"phone",
+										"remote",
+										"medicine",
+										"hearing aid",
+										"bag",
+										"other"
+									]
+								},
+								"id": {
+									"type": "string"
+								},
+								"notFoundAt": {
+									"anyOf": [
+										{
+											"type": "string"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							},
+							"required": [
+								"container",
+								"place",
+								"seenAt",
+								"category",
+								"id",
+								"notFoundAt"
+							],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["tool", "things"],
 				"additionalProperties": false
 			}
 		],

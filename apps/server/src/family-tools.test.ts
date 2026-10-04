@@ -44,7 +44,11 @@ const now = new Date("2026-01-02T12:00:00.000Z");
 describe("family tools (local Fetch.ai bridge stand-in)", () => {
 	test("offers the closed tool set as JSON Schema functions", () => {
 		const { tools } = familyTools(fetchAgent, 7n, now);
-		expect(tools.map((t) => t.name)).toEqual(["health_samples", "alerts"]);
+		expect(tools.map((t) => t.name)).toEqual([
+			"health_samples",
+			"alerts",
+			"saved_things",
+		]);
 		for (const tool of tools) expect(tool.parameters.type).toBe("object");
 	});
 

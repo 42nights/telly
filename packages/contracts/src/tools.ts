@@ -1,5 +1,6 @@
-import { Schema } from "effect";
+import { Schema, Struct } from "effect";
 import { Alert, AlertAcknowledgement, HealthSample } from "./index";
+import { MedicineSighting } from "./medicine-memory";
 import { whoopCatalog } from "./whoop-catalog";
 
 // The metric names the WHOOP band stores. A model that does not know them guesses ("sleep"), gets
@@ -39,7 +40,20 @@ const AlertsTool = Schema.Struct({
 		"The family's newest alerts and the acknowledgements of those alerts.",
 });
 
-export const ToolRequest = Schema.Union([HealthSamplesTool, AlertsTool]);
+const SavedThingsTool = Schema.Struct({
+	tool: Schema.Literal("saved_things"),
+	input: Schema.Struct({ limit: Schema.optionalKey(Limit) }),
+}).annotate({
+	identifier: "SavedThingsTool",
+	description:
+		"Where the asking person saved each of their things, such as pills or keys, newest first. A place is where it was saved, not proof that it is still there. A place can name a landmark, such as a dish rack or a cabinet.",
+});
+
+export const ToolRequest = Schema.Union([
+	HealthSamplesTool,
+	AlertsTool,
+	SavedThingsTool,
+]);
 export type ToolRequest = typeof ToolRequest.Type;
 
 export const ToolResponse = Schema.Union([
@@ -51,6 +65,21 @@ export const ToolResponse = Schema.Union([
 		tool: Schema.Literal("alerts"),
 		alerts: Schema.Array(Alert),
 		acknowledgements: Schema.Array(AlertAcknowledgement),
+	}),
+	Schema.Struct({
+		tool: Schema.Literal("saved_things"),
+		things: Schema.Array(
+			MedicineSighting.mapFields(
+				Struct.pick([
+					"id",
+					"container",
+					"category",
+					"place",
+					"seenAt",
+					"notFoundAt",
+				]),
+			),
+		),
 	}),
 ]);
 export type ToolResponse = typeof ToolResponse.Type;

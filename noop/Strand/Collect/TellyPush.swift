@@ -19,6 +19,7 @@ final class TellyPush {
 
     private var busy = false
     private var sent: [String: Data] = [:]
+    private var sentTo: URL?
 
     func kick(_ store: WhoopStore) {
         guard !busy, let url = UserDefaults.standard.string(forKey: Self.urlKey).flatMap(URL.init(string:)) else { return }
@@ -30,6 +31,7 @@ final class TellyPush {
     }
 
     func push(_ store: WhoopStore, to url: URL) async throws {
+        if url != sentTo { sent = [:]; sentTo = url }
         var tables: [String: [[String: Any]]] = [:]
         var cursors: [String: Int64] = [:]
         for t in Self.streams {

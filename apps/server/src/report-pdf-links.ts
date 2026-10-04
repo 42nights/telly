@@ -28,10 +28,9 @@ export const issuePdfLink = (
 	const token = crypto.randomUUID();
 	const expires = now + PDF_LINK_SECONDS * 1000;
 	links.set(token, { pdf, filename, expires });
-	return {
-		url: `/api/report-pdf-links/${token}`,
-		expiresAt: new Date(expires).toISOString(),
-	};
+	const url = `/api/report-pdf-links/${token}`;
+	// One link answers once, so the view link is the same one: it opens inline unless `?download`.
+	return { url, viewUrl: url, expiresAt: new Date(expires).toISOString() };
 };
 
 export const reportPdfLinkRoutes = () =>

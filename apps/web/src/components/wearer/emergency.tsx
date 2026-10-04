@@ -248,6 +248,7 @@ export function useEmergency(familyId: string | null): EmergencyFlow {
 	};
 
 	const family = () => {
+		if (familyId === null || step.kind === "calling") return;
 		setStep({ kind: "calling", what: "family" });
 		void post("/emergency", { kind: "family", report: null }, 0);
 	};
