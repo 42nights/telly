@@ -1,6 +1,6 @@
 # Deployment
 
-Issue #2. Target (captain decision `telly-cd-target`): the 42nights Cloudflare account.
+Issue #2. Target (owner decision `telly-cd-target`): the 42nights Cloudflare account.
 
 | Part | Where |
 | --- | --- |
@@ -8,7 +8,7 @@ Issue #2. Target (captain decision `telly-cd-target`): the 42nights Cloudflare a
 | Landing page | `https://saintess.tech`, also a custom domain of the Worker `telly`. On `LANDING_HOST` the Worker serves the static files in `deploy/cloudflare/landing/`, including `/privacy` and `/terms` for the Google OAuth consent screen, and sends any other path (an app route) to `https://app.saintess.tech`. |
 | Domain | Zone `saintess.tech` on 42nights (Free plan), registered at get.tech with the zone's Cloudflare nameservers. A zone redirect rule sends `www.saintess.tech` to `https://saintess.tech` (301). |
 | Fetch.ai tools | The live worker and bridge run on the team host ([agents/fetch/README.md](../agents/fetch/README.md#live-api)). The API calls the bridge at `TELLY_FETCH_BRIDGE_URL`, the host's Tailscale Funnel, which exposes only `POST /tool-call`. The bridge reaches the worker through Agentverse mailboxes. |
-| Database | SpacetimeDB Maincloud, database `telly` (`wss://maincloud.spacetimedb.com`), published by the captain's SpacetimeDB login. |
+| Database | SpacetimeDB Maincloud, database `telly` (`wss://maincloud.spacetimedb.com`), published by the owner's SpacetimeDB login. |
 | Sign-in | Google (`https://accounts.google.com`), OAuth client `telly-web` in the Google Cloud project `Telly`. Its redirect URIs are `/sign-in` on each web host and `/api/sign-in/callback` on each API host. The consent screen is in production (External): any Google account can sign in. |
 | Keys | The shared key store (docs/cloudflare-keys.md). The container pulls only the keys in `TELLY_PULL_KEYS` at start. |
 | Reports bucket | R2 bucket `telly-reports` on 42nights, private. Its bucket-only token is `TELLY_R2_*` in the shared key store. |
