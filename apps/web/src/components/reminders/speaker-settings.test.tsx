@@ -87,8 +87,8 @@ describe("SpeakerSettingsWindow", () => {
 			[`GET ${FAMILY}/speaker-settings`]: failure(403, "Not your family"),
 		});
 		await waitFor(() =>
-			expect(view.getByRole("alert").textContent).toContain(
-				"Not a member of this familyNot your family",
+			expect(view.getByRole("status").textContent).toContain(
+				"Not shared with you",
 			),
 		);
 		expect(view.queryByRole("form")).toBeNull();
@@ -103,7 +103,11 @@ describe("SpeakerSettingsWindow", () => {
 		expect(
 			within(form).getByRole("checkbox", { name: /Say due reminders/ }),
 		).toHaveProperty("checked", false);
-		expect(form.textContent).toContain("It says only “You have a reminder.");
+		expect(
+			within(form).getByRole("button", {
+				name: /It says only “You have a reminder\./,
+			}),
+		).toBeDefined();
 		expect(
 			within(form).getByRole("group", { name: /shared room/ }),
 		).toHaveProperty("disabled", false);
@@ -143,9 +147,11 @@ describe("SpeakerSettingsWindow", () => {
 		fireEvent.change(box.getByRole("combobox", { name: /Where is/ }), {
 			target: { value: "private" },
 		});
-		expect(form.textContent).toContain(
-			"It says the reminder name, such as the medicine.",
-		);
+		expect(
+			box.getByRole("button", {
+				name: "It says the reminder name, such as the medicine.",
+			}),
+		).toBeDefined();
 		expect(box.getByRole("group", { name: /shared room/ })).toHaveProperty(
 			"disabled",
 			true,

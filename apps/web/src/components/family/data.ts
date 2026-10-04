@@ -29,6 +29,8 @@ export type FamilyData = {
 	readonly monitoring: ApiState<Monitoring>;
 	readonly thresholds: ApiState<AlertThresholds>;
 	readonly records: ApiState<FamilyRecords>;
+	/** `records` for its readings: `forbidden` when health records are not shared with the caller. */
+	readonly readings: ApiState<FamilyRecords>;
 	/** The caller's identity, or null until `/api/me` answers. */
 	readonly me: string | null;
 	readonly markSeen: (alertId: string) => Promise<void>;
@@ -95,6 +97,9 @@ export function useFamilyData(): FamilyData {
 		monitoring,
 		thresholds,
 		records,
+		// Records keep family chat for every member; their samples need `health_records` (#26),
+		// which `/monitoring` checks.
+		readings: monitoring.kind === "forbidden" ? monitoring : records,
 		me: me.kind === "ready" ? me.value.identity : null,
 		markSeen,
 		busyId,

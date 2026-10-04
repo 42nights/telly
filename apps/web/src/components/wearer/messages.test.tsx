@@ -101,9 +101,9 @@ describe("Messages", () => {
 				records={{ kind: "forbidden", message: "Not yours" }}
 			/>,
 		);
-		const alert = view.getByRole("alert");
-		expect(alert.textContent).toContain("Not a member of this family");
-		expect(alert.textContent).toContain("Not yours");
+		const notice = view.getByRole("status");
+		expect(notice.textContent).toContain("Not shared with you");
+		expect(notice.textContent).not.toContain("Not yours");
 		expect(view.queryByRole("list")).toBeNull();
 	});
 

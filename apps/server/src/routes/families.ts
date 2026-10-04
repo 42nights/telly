@@ -6,6 +6,7 @@ import {
 	DeleteFamily,
 	type FamilyInvite,
 	type FamilyList,
+	type FamilyMembers,
 	type JoinedFamily,
 	type Me,
 	NewFamily,
@@ -47,9 +48,22 @@ const added = <T extends { id: string }>(
 /** Signed-in routes outside one family, mounted at `/api`. */
 export const accountRoutes = () =>
 	new Hono<AuthEnv>()
-		.get("/me", (c) =>
-			c.json({ ...c.var.identity, identity: c.var.db.identity } satisfies Me),
-		)
+		// Stores the caller's sign-in name for their family members when it changed. A failed save
+		// is logged and does not fail sign-in; the next `/me` tries again.
+		.get("/me", async (c) => {
+			const { db, identity } = c.var;
+			const name = identity.name?.trim();
+			const stored = [...db.connection.db.myFamilyPeople.iter()].some(
+				(row) => row.member.toHexString() === db.identity && row.name === name,
+			);
+			if (name !== undefined && name !== "" && !stored)
+				await callReducer(db, (connection) =>
+					connection.reducers.setMyName({ name }),
+				).catch((error: unknown) =>
+					console.warn("saving my name failed", error),
+				);
+			return c.json({ ...identity, identity: db.identity } satisfies Me);
+		})
 		.get("/families", (c) => {
 			const { families, samples } = readFamilyRecords(c.var.db);
 			const newest = new Map<string, string>();
@@ -140,6 +154,17 @@ export const familyRoutes = (storage?: R2Bucket) =>
 				}),
 			);
 			return c.body(null, 204);
+		})
+		.get("/members", (c) => {
+			const id = c.var.familyId;
+			return c.json({
+				members: [...c.var.db.connection.db.myFamilyPeople.iter()]
+					.filter((row) => row.familyId === id)
+					.map((row) => ({
+						identity: row.member.toHexString(),
+						name: row.name ?? null,
+					})),
+			} satisfies FamilyMembers);
 		})
 		.post("/invites", async (c) => {
 			const { secret: code, hash: codeHash } = newSecret();

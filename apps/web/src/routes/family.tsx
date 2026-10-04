@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
 import { useFamilyData } from "@/components/family/data";
+import { FamilyPeople } from "@/components/family/invite";
 import {
 	AlertSection,
 	FamilyGate,
@@ -32,6 +33,11 @@ function FamilyOverview() {
 			<FamilyGate data={data} emptyClassName="p-3 text-sm">
 				{(family) => (
 					<div className="flex min-h-0 flex-1 flex-col gap-2 p-2 text-sm">
+						<FamilyPeople
+							familyId={family.id}
+							familyName={family.name}
+							me={data.me}
+						/>
 						<AlertSection data={data} now={Date.now()} />
 						<section
 							aria-labelledby="glance"

@@ -20,6 +20,7 @@ import {
 	difference,
 	MARKER_MIN_CONFIDENCE,
 	MOTION_EVERY_MS,
+	MOVED_ABOVE,
 	sample,
 } from "./stale-marker";
 
@@ -47,8 +48,6 @@ type Frame = {
 	readonly data: string;
 	readonly width: number;
 	readonly height: number;
-	/** The encoded pixels, so motion is measured against exactly what was sent. */
-	readonly canvas: HTMLCanvasElement;
 };
 
 /** Encodes the video's current frame as JPEG, scaled down until it fits the vision limit. */
@@ -66,7 +65,7 @@ export const capture = (video: HTMLVideoElement): Frame | null => {
 		const picture = canvas.toDataURL("image/jpeg", 0.85);
 		const data = picture.slice(picture.indexOf(",") + 1);
 		if ((data.length * 3) / 4 <= MAX_VISION_IMAGE_BYTES)
-			return { picture, data, width, height, canvas };
+			return { picture, data, width, height };
 		scale *= 0.7;
 	}
 };
@@ -119,7 +118,8 @@ export const bestDetection = (detections: readonly MedicineDetection[]) =>
 /**
  * Captures the video frame and asks `POST /vision/medicine-detections` about it. A new look or
  * `stop` aborts the pending one, and a reply for another frame is never shown. Shown markers are
- * cleared once the live video moves away from the checked frame or the frame gets old.
+ * cleared once the live video keeps moving away from how it looked when the answer arrived, or the
+ * frame gets old. Motion while the answer is pending does not count.
  */
 export function usePictureCheck(
 	familyId: string | null,
@@ -132,20 +132,24 @@ export function usePictureCheck(
 		readonly id: string;
 		readonly capturedAt: number;
 		readonly video: HTMLVideoElement | null;
-		readonly signature: Float32Array | null;
 	} | null>(null);
 
 	const doneId = check?.result.kind === "done" ? check.id : null;
 	useEffect(() => {
 		const shown = sent.current;
 		if (doneId === null || shown?.id !== doneId) return;
+		// The reference is the live frame at answer time, drawn the same way as every check.
+		let reference: Float32Array | null = null;
+		let movedChecks = 0;
 		const tick = () => {
 			const live = sample(shown.video);
-			const change =
-				live === null || shown.signature === null
-					? null
-					: difference(shown.signature, live);
-			const reason = clearedReason(shown.capturedAt, Date.now(), change);
+			reference ??= live;
+			const moved =
+				live !== null &&
+				reference !== null &&
+				difference(reference, live) > MOVED_ABOVE;
+			movedChecks = moved ? movedChecks + 1 : 0;
+			const reason = clearedReason(shown.capturedAt, Date.now(), movedChecks);
 			if (reason !== null)
 				setCheck((c) =>
 					c?.id === doneId ? { ...c, result: { kind: "cleared", reason } } : c,
@@ -168,7 +172,7 @@ export function usePictureCheck(
 		if (frame === null) return setCheck(null);
 		const id = crypto.randomUUID();
 		const capturedAt = Date.now();
-		sent.current = { id, capturedAt, video, signature: sample(frame.canvas) };
+		sent.current = { id, capturedAt, video };
 		const base = {
 			id,
 			picture: frame.picture,

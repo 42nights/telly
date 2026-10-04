@@ -32,12 +32,12 @@ test("when visits cannot load, says why", async () => {
 		"GET /api/families": { families: [FAMILY] },
 		"GET /api/families/fam-1/appointments": json(403, {
 			error: "forbidden",
-			message: "Not a member of this family.",
+			message: "Not shared with you.",
 		}),
 	});
 	renderRoute("/appointments");
 
-	expect(await screen.findByText("Not a member of this family.")).toBeTruthy();
+	expect(await screen.findByText("Not shared with you")).toBeTruthy();
 	expect(screen.queryByText("No upcoming visits recorded.")).toBeNull();
 });
 

@@ -124,6 +124,7 @@ const data = (fields: Partial<FamilyData> = {}): FamilyData => ({
 	monitoring: monitoring(),
 	thresholds: ready({ thresholds: [] }),
 	records: records([]),
+	readings: records([]),
 	me: ME,
 	markSeen: async () => {},
 	busyId: null,
@@ -154,8 +155,8 @@ describe("FamilyGate", () => {
 				family: null,
 			}),
 		);
-		expect(view.getByRole("alert").textContent).toContain(
-			"Not a member of this family",
+		expect(view.getByRole("status").textContent).toContain(
+			"Not shared with you",
 		);
 		expect(view.queryByRole("heading")).toBeNull();
 	});
@@ -360,7 +361,7 @@ describe("ReadingsGlance", () => {
 	test("a failed records read shows the failure", () => {
 		const view = render(
 			<ReadingsGlance
-				data={data({ records: { kind: "error", message: "HTTP 500" } })}
+				data={data({ readings: { kind: "error", message: "HTTP 500" } })}
 				familyId="f1"
 				now={NOW}
 			/>,
@@ -373,7 +374,7 @@ describe("ReadingsGlance", () => {
 	test("with no readings for this person, it says they are unavailable", () => {
 		const view = render(
 			<ReadingsGlance
-				data={data({ records: records([sample({ familyId: "f2" })]) })}
+				data={data({ readings: records([sample({ familyId: "f2" })]) })}
 				familyId="f1"
 				now={NOW}
 			/>,
@@ -385,7 +386,7 @@ describe("ReadingsGlance", () => {
 		const view = render(
 			<ReadingsGlance
 				data={data({
-					records: records([
+					readings: records([
 						sample({ id: "hr", value: 72, sourceTime: minutesAgo(3) }),
 						sample({
 							id: "spo2",

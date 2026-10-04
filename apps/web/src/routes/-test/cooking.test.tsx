@@ -248,8 +248,7 @@ test("a 403 says the person is not a member", async () => {
 	});
 	renderRoute("/cooking");
 	await ask(calls);
-	expect(await screen.findByText("Not a member of this family")).toBeTruthy();
-	expect(screen.getByText("Not yours.")).toBeTruthy();
+	expect(await screen.findByText("Not shared with you")).toBeTruthy();
 });
 
 test("a malformed reply or a lost network shows an error, never meals", async () => {

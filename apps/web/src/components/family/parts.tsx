@@ -85,14 +85,14 @@ export function ReadingsGlance({
 	familyId: string;
 	now: number;
 }) {
-	const { records } = data;
-	if (records.kind !== "ready")
-		return <ApiNotice state={records} what="readings" />;
+	const { readings } = data;
+	if (readings.kind !== "ready")
+		return <ApiNotice state={readings} what="readings" />;
 	return (
 		<GlanceList
 			now={now}
 			glance={newestPerMetric(
-				records.value.samples.filter((s) => s.familyId === familyId),
+				readings.value.samples.filter((s) => s.familyId === familyId),
 			)}
 		/>
 	);

@@ -46,7 +46,7 @@ export function SpeakerSettingsWindow() {
 		<Window
 			title="Settings · Home speaker (simulated)"
 			icon={Speaker}
-			status="No real speaker is connected. The simulator plays no sound."
+			status="No real speaker: the simulator plays no sound."
 		>
 			{path === null ? (
 				<p className="p-3 text-sm">No person is paired yet.</p>
@@ -118,7 +118,13 @@ function SpeakerForm({
 			<div className="grid gap-1">
 				<span className="flex items-center gap-1">
 					<label htmlFor="speaker-room">Where is the speaker?</label>
-					<Tip text="Other people can hear a speaker in a shared room." />
+					<Tip
+						text={
+							draft.room === "shared"
+								? "Other people can hear a speaker in a shared room. It says only “You have a reminder. Please check your phone.” It says the name only for the kinds below."
+								: "It says the reminder name, such as the medicine."
+						}
+					/>
 				</span>
 				<select
 					id="speaker-room"
@@ -131,11 +137,6 @@ function SpeakerForm({
 					<option value="shared">A shared room</option>
 					<option value="private">A private room</option>
 				</select>
-				<p>
-					{draft.room === "shared"
-						? "It says only “You have a reminder. Please check your phone.” It says the name only for the kinds below."
-						: "It says the reminder name, such as the medicine."}
-				</p>
 			</div>
 			<fieldset
 				className="grid gap-1 border border-border p-2"
@@ -232,7 +233,7 @@ function SimulatorGroup({ path }: { path: string }) {
 					{speaker.value.announcements.length === 0 ? (
 						<p>Nothing yet.</p>
 					) : (
-						<ol className="win95-inset grid gap-1 bg-card p-2">
+						<ol className="win95-inset grid max-h-40 gap-1 overflow-y-auto bg-card p-2">
 							{speaker.value.announcements.map((a) => (
 								<li key={`${a.occurrenceId}-${a.at}`}>
 									<time dateTime={a.at}>

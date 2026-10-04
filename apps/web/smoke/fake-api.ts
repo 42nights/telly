@@ -1,7 +1,7 @@
 // The fake server for the browser smoke tests: the session (an unsigned JWT-shaped ID token with a
 // future `exp`, stored where the sign-in screen stores it) and the whole server API (`page.route` on
 // VITE_SERVER_URL). Every other non-app request is blocked and reported as a problem.
-import type { FamilyList, Me } from "@health/contracts/families";
+import type { FamilyList, FamilyMembers, Me } from "@health/contracts/families";
 import type { Page } from "@playwright/test";
 
 import { SERVER_URL } from "../playwright.config";
@@ -33,6 +33,9 @@ export const replies: Record<string, unknown> = {
 		messages: [],
 		acknowledgements: [],
 	},
+	"/api/families/1/members": {
+		members: [{ identity: "a".repeat(64), name: null }],
+	} satisfies FamilyMembers,
 	"/api/families/1/alerts": { alerts: [] },
 	"/api/families/1/alert-thresholds": { thresholds: [] },
 	"/api/families/1/monitoring": {

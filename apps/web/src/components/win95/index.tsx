@@ -86,10 +86,11 @@ const notice = {
 		title: () => "Sign-in required",
 		problem: false,
 	},
+	// A missing care scope (#26) or another family: calm, not an error.
 	forbidden: {
 		icon: ShieldOff,
-		title: () => "Not a member of this family",
-		problem: true,
+		title: () => "Not shared with you",
+		problem: false,
 	},
 	unavailable: {
 		icon: CloudOff,
@@ -127,15 +128,19 @@ export function ApiNotice({
 					<Icon aria-hidden />
 				</EmptyMedia>
 				<EmptyTitle>{title(what)}</EmptyTitle>
-				<EmptyDescription>
-					{description}
-					{state.kind === "signed_out" && (
-						<>
-							{" "}
-							<Link to="/sign-in">Go to Sign in</Link>
-						</>
-					)}
-				</EmptyDescription>
+				{state.kind === "forbidden" ? (
+					<Tip text="A family member with sharing access can share it with you." />
+				) : (
+					<EmptyDescription>
+						{description}
+						{state.kind === "signed_out" && (
+							<>
+								{" "}
+								<Link to="/sign-in">Go to Sign in</Link>
+							</>
+						)}
+					</EmptyDescription>
+				)}
 			</EmptyHeader>
 		</Empty>
 	);
