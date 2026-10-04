@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { ENV } from "@/env";
 
-import { getSessionToken, onSessionChange } from "./session";
+import { freshSessionToken, onSessionChange } from "./session";
 
 export type ApiFailure =
 	/** No sign-in token, or the server rejected it (401). */
@@ -65,7 +65,7 @@ export const apiRequest = async <T>(
 	path: string,
 	options: RequestOptions = {},
 ): Promise<ApiResult<T>> => {
-	const token = getSessionToken();
+	const token = await freshSessionToken();
 	if (token === null) return { kind: "signed_out" };
 	const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 	let body: BodyInit | undefined;
@@ -116,7 +116,7 @@ export const apiBlob = async (
 	path: string,
 	options: RequestOptions = {},
 ): Promise<ApiResult<Blob>> => {
-	const token = getSessionToken();
+	const token = await freshSessionToken();
 	if (token === null) return { kind: "signed_out" };
 	try {
 		const response = await fetch(`${ENV.VITE_SERVER_URL}${path}`, {
