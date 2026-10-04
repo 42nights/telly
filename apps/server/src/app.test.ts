@@ -4,6 +4,7 @@ import { ApiError, Sources } from "@health/contracts";
 import { Exit, Schema } from "effect";
 import { createApp } from "./app";
 import { serverConfig } from "./config";
+import { DbUnavailable } from "./db";
 import type { NoopSample } from "./integrations/noop-ingest";
 
 // Sign-in is not configured, as in a fresh checkout.
@@ -169,6 +170,62 @@ describe("server boundaries", () => {
 		expect(
 			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
 		).toBe("not_found");
+	});
+
+	test("an unexpected failure answers a generic 500 and logs it, unless the client left", async () => {
+		const failing = createApp(config, {
+			key: "relay-key",
+			record: async () => {
+				throw new Error("row 7 of family 42 is corrupt");
+			},
+		});
+		const batch = deflateRawSync(JSON.stringify({ tables: {} }));
+		const errors = spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const response = await failing.request("/api/noop/ingest", {
+				method: "POST",
+				body: batch,
+				headers: { Authorization: "Bearer relay-key" },
+			});
+			expect(response.status).toBe(500);
+			expect(
+				Schema.decodeUnknownSync(ApiError)(await response.json(), strict),
+			).toEqual({ error: "internal", message: "Internal server error" });
+			expect(errors).toHaveBeenCalledTimes(1);
+
+			const gone = new AbortController();
+			gone.abort();
+			const cancelled = await failing.request(
+				new Request("http://localhost/api/noop/ingest", {
+					method: "POST",
+					body: batch,
+					headers: { Authorization: "Bearer relay-key" },
+					signal: gone.signal,
+				}),
+			);
+			expect(cancelled.status).toBe(500);
+			expect(errors).toHaveBeenCalledTimes(1);
+		} finally {
+			errors.mockRestore();
+		}
+	});
+
+	test("a closed database connection reads as an outage, not a server bug", async () => {
+		const outage = createApp(config, {
+			key: "relay-key",
+			record: async () => {
+				throw new DbUnavailable({ reason: "connection closed" });
+			},
+		});
+		const response = await outage.request("/api/noop/ingest", {
+			method: "POST",
+			body: deflateRawSync(JSON.stringify({ tables: {} })),
+			headers: { Authorization: "Bearer relay-key" },
+		});
+		expect(response.status).toBe(503);
+		expect(
+			Schema.decodeUnknownSync(ApiError)(await response.json(), strict).error,
+		).toBe("unavailable");
 	});
 
 	test("without sign-in configuration, protected routes are unavailable, not open", async () => {
