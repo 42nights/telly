@@ -50,6 +50,8 @@ struct StrandiOSApp: App {
     /// kg vs lb for the Lift Log Live Activity's "8 x 30 kg" line — the app formats it, because the
     /// unit preference lives here and not in the widget extension.
     @AppStorage(UnitPrefs.systemKey) private var unitSystemRaw = UnitSystem.metric.rawValue
+    @State private var tellyPushLink = TellyPushLink.invalid
+    @State private var tellyPushAsking = false
 
     init() {
         // #1008: pin the pre-change Overnight-only default for existing installs before
@@ -216,6 +218,55 @@ struct StrandiOSApp: App {
         }
     }
 
+    private enum TellyPushLink {
+        case send(String, host: String)
+        case stop
+        case invalid
+
+        init(_ link: URL) {
+            guard let value = URLComponents(url: link, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "url" })?.value else {
+                self = .stop
+                return
+            }
+            guard let target = URL(string: value), target.scheme == "https",
+                  let host = target.host, !host.isEmpty else {
+                self = .invalid
+                return
+            }
+            self = .send(value, host: host)
+        }
+    }
+
+    private var tellyPushAlertTitle: Text {
+        switch tellyPushLink {
+        case .send(_, let host): Text("Send this strap's data to \(host)?")
+        case .stop: Text("Stop sending this strap's data?")
+        case .invalid: Text("Can't use this link")
+        }
+    }
+
+    @ViewBuilder
+    private var tellyPushAlertButtons: some View {
+        switch tellyPushLink {
+        case .send(let value, _):
+            Button("Send") { UserDefaults.standard.set(value, forKey: TellyPush.urlKey) }
+            Button("Cancel", role: .cancel) {}
+        case .stop:
+            Button("Stop") { UserDefaults.standard.removeObject(forKey: TellyPush.urlKey) }
+            Button("Cancel", role: .cancel) {}
+        case .invalid:
+            Button("OK") {}
+        }
+    }
+
+    @ViewBuilder
+    private var tellyPushAlertMessage: some View {
+        if case .invalid = tellyPushLink {
+            Text("Healer S.I. only sends strap data to an https address.")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             iOSRootView()
@@ -323,14 +374,19 @@ struct StrandiOSApp: App {
                         model.handleHealthImportURL(url)
                     }
                     if url.host == "telly-push" {
-                        UserDefaults.standard.set(URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                            .queryItems?.first { $0.name == "url" }?.value, forKey: TellyPush.urlKey)
+                        tellyPushLink = TellyPushLink(url)
+                        tellyPushAsking = true
                     }
                 }
                 .alert("Import Apple Health data?", isPresented: healthImportAlertPresented) {
                     healthImportAlertButtons
                 } message: {
                     healthImportAlertMessage
+                }
+                .alert(tellyPushAlertTitle, isPresented: $tellyPushAsking) {
+                    tellyPushAlertButtons
+                } message: {
+                    tellyPushAlertMessage
                 }
                 // Bring the watch link up once at launch (WCSession ignores a redundant activate), then
                 // push the first snapshot so a watch that's already on-wrist gets current scores without
