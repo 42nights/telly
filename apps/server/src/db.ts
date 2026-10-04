@@ -199,6 +199,7 @@ export const readFamilyRecords = ({ connection }: FamilyDb): FamilyRecords => {
 			sender: row.sender.toHexString(),
 			body: row.body,
 			sentAt: row.sentAt.toISOString(),
+			clientId: row.clientId,
 		})),
 		acknowledgements: [...db.myAcknowledgements.iter()].map((row) => ({
 			id: row.id.toString(),

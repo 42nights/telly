@@ -77,13 +77,24 @@ const alert = table(
 );
 
 const message = table(
-	{ name: "message" },
+	{
+		name: "message",
+		indexes: [
+			{
+				accessor: "bySenderClientId",
+				algorithm: "btree",
+				columns: ["familyId", "sender", "clientId"],
+			},
+		],
+	},
 	{
 		id: t.u64().primaryKey().autoInc(),
 		familyId: t.u64().index("btree"),
 		sender: t.identity(),
 		body: t.string(),
 		sentAt: t.timestamp(),
+		// The sender's own id for the message, so a retried send stores it once.
+		clientId: t.string(),
 	},
 );
 
@@ -391,16 +402,28 @@ export const raiseAlert = spacetimedb.reducer(
 );
 
 export const sendMessage = spacetimedb.reducer(
-	{ familyId: t.u64(), body: t.string() },
-	(ctx, { familyId, body }) => {
+	{ familyId: t.u64(), clientId: t.string(), body: t.string() },
+	(ctx, { familyId, clientId, body }) => {
 		requireMember(ctx, familyId);
+		requireText("clientId", clientId);
 		requireText("body", body);
+		// A client resends after a lost reply; the first stored copy stands.
+		for (const sent of ctx.db.message.bySenderClientId.filter([
+			familyId,
+			ctx.sender,
+			clientId,
+		])) {
+			if (sent.body !== body)
+				throw new SenderError("clientId is already used for another message");
+			return;
+		}
 		ctx.db.message.insert({
 			id: 0n,
 			familyId,
 			sender: ctx.sender,
 			body,
 			sentAt: ctx.timestamp,
+			clientId,
 		});
 	},
 );

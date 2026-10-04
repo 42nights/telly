@@ -106,7 +106,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 						}),
 					);
 					yield* Effect.promise(() =>
-						mine.sendMessage({ familyId, body: "On my way" }),
+						mine.sendMessage({ familyId, clientId: "m1", body: "On my way" }),
 					);
 					const before = readFamilyRecords(owner);
 					const [alert] = before.alerts;
@@ -136,7 +136,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 							quality: { tag: "Validated" },
 						}),
 						theirs.raiseAlert({ familyId, sampleId: undefined, summary: "x" }),
-						theirs.sendMessage({ familyId, body: "x" }),
+						theirs.sendMessage({ familyId, clientId: "m1", body: "x" }),
 						theirs.acknowledgeAlert({ alertId: BigInt(alert.id) }),
 						theirs.addFamilyMember({
 							familyId,

@@ -143,6 +143,8 @@ export const FamilyMessage = Schema.Struct({
 	sender: Schema.String,
 	body: Schema.String,
 	sentAt: Schema.String,
+	/** The sender's own id for the message; a resend with the same id returns this message. */
+	clientId: Schema.String,
 });
 export type FamilyMessage = typeof FamilyMessage.Type;
 
