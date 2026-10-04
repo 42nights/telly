@@ -33,10 +33,19 @@ for run in $(gh api "repos/$repo/actions/workflows/health-deploy.yml/runs?head_s
 		--jq '.jobs[] | select(.name == "deploy") | .conclusion')" != success ] || mode=module
 done
 echo "autodeploy: releasing $new${mode:+ (module only; CI deployed the Worker)}"
-if TELLY_RELEASE_MODULE_ONLY=${mode:+1} sh deploy/cloudflare/release.sh; then
+if TELLY_RELEASE_PART=$mode TELLY_RELEASE_KEEP="$state/good.tar.gz.new" sh deploy/cloudflare/release.sh; then
+	[ ! -f "$state/good.tar.gz.new" ] || mv "$state/good.tar.gz.new" "$state/good.tar.gz"
 	echo "$new" >"$state/deployed"
-else
-	echo "$new" >"$state/failed"
-	echo "autodeploy: RELEASE OF $new FAILED; live keeps $(cat "$state/deployed" 2>/dev/null || echo 'the previous deploy')" >&2
-	exit 1
+	exit 0
 fi
+echo "$new" >"$state/failed"
+echo "autodeploy: RELEASE OF $new FAILED" >&2
+# A failed release that left the API unhealthy goes back to the last healthy artifact.
+url=$(sed -n 's/^HEALTH_SERVER_URL=//p' deploy/cloudflare/settings.env)
+if [ "$(curl -s -m 70 -o /dev/null -w '%{http_code}' "$url/health")" != 200 ] && [ -f "$state/good.tar.gz" ]; then
+	echo "autodeploy: $url/health is down; ROLLING BACK to $(cat "$state/deployed" 2>/dev/null)" >&2
+	CLOUDFLARE_API_TOKEN=$(sed -n 's/^CLOUDFLARE_API_TOKEN=//p' "$HOME/.config/telly/deploy-42nights.env") \
+		TELLY_SECRETS_PULL_TOKEN=$(sed -n 's/^TELLY_SECRETS_PULL_TOKEN=//p' "$HOME/.config/telly/secrets-pull.env") \
+		sh deploy/cloudflare/deploy.sh "$state/good.tar.gz"
+fi
+exit 1

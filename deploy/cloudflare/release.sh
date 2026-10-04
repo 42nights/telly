@@ -8,7 +8,10 @@
 #   $TELLY_SPACETIME_CONFIG               a SpacetimeDB CLI login that owns the database `telly`
 #                                         (default ~/.config/telly/spacetime/cli.toml)
 # The module publish never deletes data. If it needs a wipe or breaks clients, it stops at its
-# prompt (stdin is closed), and this script stops before the Worker deploy.
+# prompt (stdin is closed), and this script stops before the Worker deploy. deploy.sh fails when
+# /health is not 200 within 2 minutes of the container rollout.
+# TELLY_RELEASE_PART=module publishes only the module. TELLY_RELEASE_KEEP=<path> keeps a copy of
+# the deployed artifact there after a healthy deploy (autodeploy.sh rolls back to it).
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
@@ -21,8 +24,7 @@ bun install --frozen-lockfile
 spacetime --config-path "${TELLY_SPACETIME_CONFIG:-$config/spacetime/cli.toml}" \
 	publish telly -s maincloud --module-path spacetimedb --yes=remote </dev/null ||
 	{ echo "release: module publish refused (needs a data wipe or breaks clients?); Worker not deployed" >&2; exit 1; }
-
-if [ "${TELLY_RELEASE_MODULE_ONLY:-}" = 1 ]; then
+if [ "${TELLY_RELEASE_PART:-}" = module ]; then
 	echo "release: module published; Worker left to CI"
 	exit 0
 fi
@@ -37,4 +39,5 @@ CLOUDFLARE_API_TOKEN=$(value CLOUDFLARE_API_TOKEN "$config/deploy-42nights.env")
 	TELLY_SECRETS_PULL_TOKEN=$(value TELLY_SECRETS_PULL_TOKEN "$config/secrets-pull.env") \
 	sh deploy/cloudflare/deploy.sh "$tmp/health.tar.gz"
 node apps/server/scripts/smoke.ts "$(value HEALTH_SERVER_URL deploy/cloudflare/settings.env)"
+[ -z "${TELLY_RELEASE_KEEP:-}" ] || cp "$tmp/health.tar.gz" "$TELLY_RELEASE_KEEP"
 echo "released $(git rev-parse HEAD)"
