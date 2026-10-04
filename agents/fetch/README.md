@@ -113,6 +113,30 @@ The browser asks to let agentverse.ai reach the local network for step 1. Allow 
 
 Published agent: `telly-fetch`, address `agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6` ([Agentverse profile](https://agentverse.ai/agents/details/agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6/profile), [ASI:One page](https://asi1.ai/ai/agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6)). It answers only while its worker runs. On 2026-10-04, ASI:One chats got the synthetic alerts and heart rate samples of a synthetic demo family through the mailbox (issue #170).
 
+### Keep the published agent running
+
+The published worker runs as systemd user services on the team host, so it keeps answering after any login session ends (lingering is on for the user). It uses its own synthetic demo backend, not the live API: a local SpacetimeDB with one synthetic family, the server on `127.0.0.1:43312`, and a local demo sign-in issuer on `127.0.0.1:43311`. The worker's identity in that backend is a member of the synthetic family only.
+
+| Unit (`~/.config/systemd/user/`) | Runs |
+| --- | --- |
+| `telly-fetch.target` | All units below. Stop or start this one. |
+| `telly-fetch-stdb.service` | SpacetimeDB, data in `~/.local/share/telly-fetch/stdb` |
+| `telly-fetch-issuer.service` | The demo sign-in issuer (`issuer.ts`) |
+| `telly-fetch-server.service` | The bundled server (`server/index.mjs`), settings in `server.env` |
+| `telly-fetch-worker.service` | `worker.sh`: mints a demo token, then runs `agent/main.py` with `worker.env` |
+
+Files are in `~/.local/share/telly-fetch/` (mode 700). `worker.env` holds the seed and the grants, and `server.env` holds the database operator token; both are mode 600. Each service restarts 3 s after it stops.
+
+```sh
+systemctl --user start telly-fetch.target     # start everything
+systemctl --user stop telly-fetch.target      # stop everything; the agent stops answering
+systemctl --user restart telly-fetch-worker    # after a change to worker.env (for example, a new grant)
+systemctl --user list-units 'telly-fetch*'     # status
+journalctl --user -u telly-fetch-worker -f     # chat sender, family, tool, and status
+```
+
+To update the worker code, copy `agents/fetch/` to `~/.local/share/telly-fetch/agent/` (keep `.venv/`), then restart the worker. To use the live API instead, the worker needs a sign-in token for the live issuer (a Google ID token for the `telly-fetch-worker` service account, which expires after one hour) and a synthetic family on the live database; change only `worker.env` and `worker.sh`.
+
 ## Run locally without Agentverse
 
 This proves the protocol only. It is not a live Agentverse round trip.
