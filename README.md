@@ -1,0 +1,94 @@
+# telly
+
+telly is an application for a person with memory loss and their family. Alzheimer's care is the first focus. The product name is not decided yet.
+
+The repository has two separate projects:
+
+- The **health application** at the repository root: a web HUD and family dashboard, an Expo phone app, and a Node server (Hono for HTTP, Effect 4 for service logic).
+- **NOOP**, an existing WHOOP companion app, in [`noop/`](noop). Read [`noop/README.md`](noop/README.md) for NOOP itself. The health application does not use NOOP source code.
+
+This software is not a medical device. It makes no medical safety claims.
+
+## Status
+
+The repository has a runnable workspace and contracts. The product features are not built yet.
+
+Done:
+
+- A Bun workspace with a web app, a phone app, a server, and shared packages.
+- Shared Effect Schema API contracts in `@health/contracts`.
+- The server answers `GET /health` and `GET /api/sources`.
+- A stub for the NOOP-to-server connection. `GET /api/sources` reports NOOP as `not_connected`, and the clients show "NOOP not connected". The stub has no transport, ingestion, or database write. It returns no readings and no WHOOP-based nudges.
+- CI checks: lint, types, tests, Fallow, Sentrux, and a build and runtime smoke test of the server.
+
+Not done (each item has a GitHub issue):
+
+- Database (SpacetimeDB) and generated server bindings.
+- Medicine markers, voice and text requests, family messages and alerts, lab reports, and fall and breathing detection.
+- Provider integrations: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, and Gemma on River AI. No provider is connected.
+- Deployment. No hosted instance exists.
+- The optional Meta Ray-Ban Display glasses adapter.
+- Namespace CI runners ([#21](https://github.com/ayaangazali/telly/issues/21)). The Namespace Runners app is not installed on the repository yet, so CI runs on GitHub-hosted runners.
+
+The product scope, owners, and build order are in [`docs/plan.md`](docs/plan.md). Open work is in the [GitHub issues](https://github.com/ayaangazali/telly/issues).
+
+## Requirements
+
+- [Bun](https://bun.sh) 1.4.2 (the version in `package.json`).
+- Node.js 24 for the server build and the smoke test.
+- [Sentrux](https://github.com/sentrux/sentrux) only for `bun run check:structure`.
+- Expo Go on a phone, or an iOS or Android simulator, for the phone app.
+
+## Run
+
+Run all commands from the repository root.
+
+```bash
+bun install
+bun run dev
+```
+
+- Web app: <http://localhost:3001>
+- Server: <http://localhost:3000> (`GET /health`, `GET /api/sources`)
+- Phone app: open it in Expo Go. On a physical phone, set `EXPO_PUBLIC_SERVER_URL` in `apps/native/.env` to the LAN address of your computer (for example `http://192.168.1.20:3000`). Then start the server with `HOST=0.0.0.0`.
+
+To start one app only, use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native`.
+
+Each app keeps its environment schema in `.env.schema`. Varlock generates `src/env.ts` during `bun install`. Run `bun run env:generate` after you change a schema. Keep secrets in ignored env files, never in Git.
+
+## Check
+
+```bash
+bun run lint              # Biome, no writes
+bun run check-types       # TypeScript in every package
+bun run test              # Behavior tests
+bun run check:quality     # Fallow: unused code, duplication, complexity, import boundaries
+bun run check:structure   # Sentrux rules and regression gate
+bun run --filter server build && bun run smoke   # Real server responses under Node
+bun run build             # Production build of every app
+```
+
+`bun run check` runs Biome and writes fixes.
+
+## Layout
+
+```text
+apps/
+  web/          Web HUD and family dashboard (React, Vite, TanStack Router)
+  native/       Phone app (Expo, React Native)
+  server/       Server (Node, Hono, Effect); src/integrations/noop.ts is the NOOP stub
+packages/
+  contracts/    Shared Effect Schema API contracts
+  config/       Shared strict TypeScript configuration
+  ui/           shadcn/ui components for the web app
+docs/           Plan and planning board
+noop/           NOOP, a separate project (see noop/README.md)
+```
+
+Clients import only `@health/contracts`, and the web app also imports `@health/ui`. Only the server can import database code. Fallow and Sentrux enforce these rules in CI.
+
+## Contributing
+
+Work is issue-first. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the claim, progress, and handoff rules.
+
+NOOP keeps its own license and contributor rules. See [`noop/README.md`](noop/README.md).

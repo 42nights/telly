@@ -38,7 +38,7 @@ A 3D home map is not required.
 
 ### NOOP boundary
 
-NOOP is the existing WHOOP app in this repository. A teammate owns its integration.
+NOOP is the existing WHOOP app. Its source and documentation are in [`noop/`](../noop), separate from the new application. A teammate owns its integration.
 The new server stubs only the NOOP-to-server connection. It returns `{"status":"not_connected","source":"noop"}`.
 The stub does no transport, ingestion, or database write. It supplies no readings and no WHOOP-derived nudges.
 Clients show "NOOP not connected". Other data sources stay available with their own provenance.
@@ -54,20 +54,20 @@ Clients show "NOOP not connected". Other data sources stay available with their 
 
 ## Repository layout
 
-The new application lives in [`health/`](../health), generated with Better-T-Stack.
-It is not at the repository root for two reasons. A root `packages/` folder collides with NOOP's `Packages/` on case-insensitive file systems (macOS). Sentrux cannot exclude paths, so one folder keeps its gate on the new app only.
+The new application is the Bun workspace at the repository root, generated with Better-T-Stack.
+NOOP is a separate project in `noop/`. The new application does not import or build NOOP source.
 
 ```text
-health/
-  apps/web/             Web HUD and family dashboard
-  apps/native/          Expo phone app
-  apps/server/          Node + Hono + Effect service
-  packages/contracts/   Shared Effect Schema contracts
-  packages/config/      Shared strict TypeScript configuration
-  packages/ui/          Generated shadcn/ui components for the web app
+apps/web/             Web HUD and family dashboard
+apps/native/          Expo phone app
+apps/server/          Node + Hono + Effect service
+packages/contracts/   Shared Effect Schema contracts
+packages/config/      Shared strict TypeScript configuration
+packages/ui/          Generated shadcn/ui components for the web app
+noop/                 NOOP (separate project)
 ```
 
-Issues add `health/spacetimedb/` (database module), `health/packages/db/` (generated bindings, server-only), `health/agents/fetch/` (Python Agentverse worker), and `health/training/gemma/` (Python training).
+Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings, server-only), `agents/fetch/` (Python Agentverse worker), and `training/gemma/` (Python training).
 
 ## Owners
 
@@ -88,4 +88,4 @@ Issues add `health/spacetimedb/` (database module), `health/packages/db/` (gener
 
 ## Coordination
 
-Work is issue-first. See [`health/CONTRIBUTING.md`](../health/CONTRIBUTING.md) for the claim, progress, and handoff rules.
+Work is issue-first. See [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the claim, progress, and handoff rules.
