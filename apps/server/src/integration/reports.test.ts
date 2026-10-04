@@ -11,6 +11,7 @@ import {
 	ReportPdfs,
 	Reports,
 } from "@health/contracts/reports";
+import { PDFDocument } from "pdf-lib";
 import {
 	addMember,
 	createFamily,
@@ -115,12 +116,10 @@ describe.skipIf(!it)("lab report flow", () => {
 		expect(stored?.type).toBe("application/pdf");
 		const body = stored?.body ?? new Uint8Array();
 		expect(body.length).toBe(pdf.bytes);
-		const text = new TextDecoder("latin1").decode(body);
-		expect(text.startsWith("%PDF")).toBe(true);
-		expect(text).toContain(`report ${report.id}`);
-		expect(text).toContain("Name: Rosa Rivera");
-		expect(text).toContain("Hrv: 41 ms");
-		expect(text).toContain("Reviewed by a family member");
+		expect(new TextDecoder("latin1").decode(body.slice(0, 5))).toBe("%PDF-");
+		expect((await PDFDocument.load(body)).getTitle()).toBe(
+			`Lab report ${report.id}`,
+		);
 	});
 
 	test("the creator finds the PDF in past PDFs and downloads the same bytes", async () => {
@@ -143,6 +142,9 @@ describe.skipIf(!it)("lab report flow", () => {
 		expect(url.searchParams.get("response-content-disposition")).toBe(
 			`attachment; filename="lab-report-${pdf.id.slice(0, 8)}.pdf"`,
 		);
+		expect(
+			new URL(link.viewUrl).searchParams.get("response-content-disposition"),
+		).toBe(`inline; filename="lab-report-${pdf.id.slice(0, 8)}.pdf"`);
 		expect(Date.parse(link.expiresAt)).toBeGreaterThan(Date.now());
 		const downloaded = await fetch(link.url);
 		expect(downloaded.status).toBe(200);

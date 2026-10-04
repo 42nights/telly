@@ -42,6 +42,7 @@ const report = (over: Partial<Report> = {}): Report => ({
 	markers: [],
 	meals: null,
 	unresolved: null,
+	restingHeartRate: null,
 	fields: {
 		patientName: "Ada Lovelace",
 		dateOfBirth: null,

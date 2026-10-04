@@ -34,6 +34,7 @@ const report: Report = {
 	markers: [],
 	meals: null,
 	unresolved: null,
+	restingHeartRate: null,
 	fields: {
 		patientName: null,
 		dateOfBirth: null,
@@ -200,7 +201,11 @@ describe("Past PDFs", () => {
 		expect(assign).not.toHaveBeenCalled();
 
 		link = {
-			json: { url: "https://files.test/p1", expiresAt: "2026-03-02T10:05:00Z" },
+			json: {
+				url: "https://files.test/p1",
+				viewUrl: "https://files.test/p1?inline",
+				expiresAt: "2026-03-02T10:05:00Z",
+			},
 		};
 		fireEvent.click(download);
 		await waitFor(() =>
