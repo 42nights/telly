@@ -1,5 +1,6 @@
 import {
 	type Report,
+	type ReportEmail,
 	ReportFields,
 	type ReportReview,
 } from "@health/contracts/reports";
@@ -26,13 +27,14 @@ const sheetStatus = (sheet: {
 	busy: string | null;
 	failure: ApiFailure | null;
 	review: ReportReview | null;
+	email: ReportEmail | null;
 	dirty: boolean;
 	savedAt: number | null;
 }): string => {
 	if (sheet.busy !== null) return sheet.busy;
 	if (sheet.failure !== null) return failureText(sheet.failure);
 	if (sheet.review !== null)
-		return `Reviewed ${formatTime(sheet.review.reviewedAt)} · read-only · not sent`;
+		return `Reviewed ${formatTime(sheet.review.reviewedAt)} · read-only · ${sheet.email === null ? "not sent" : `email ${sheet.email.status}`}`;
 	if (sheet.dirty) return "Draft · changes not saved";
 	return sheet.savedAt !== null
 		? `Draft · saved ${formatTime(sheet.savedAt)}`
@@ -55,6 +57,8 @@ export type ReportSheetState = {
 	readonly save: () => Promise<void>;
 	readonly review: () => Promise<void>;
 	readonly submit: () => Promise<void>;
+	/** Emails the reviewed report to the family's report email address. */
+	readonly email: () => Promise<void>;
 	readonly status: string;
 };
 
@@ -103,6 +107,12 @@ export function useReportSheet(
 		onChanged();
 	};
 
+	const email = async () => {
+		if (!(await post("/email", "Sending email…"))) return;
+		setFailure(null);
+		onChanged();
+	};
+
 	const submit = async () => {
 		setBusy("Sending…");
 		const result = await apiRequest(null, `${base}/submit`, {
@@ -135,10 +145,12 @@ export function useReportSheet(
 		save,
 		review,
 		submit,
+		email,
 		status: sheetStatus({
 			busy,
 			failure: sendFailure ?? failure,
 			review: report.review,
+			email: report.email,
 			dirty,
 			savedAt,
 		}),

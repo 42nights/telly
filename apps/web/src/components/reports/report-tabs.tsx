@@ -305,6 +305,7 @@ export function SendTab({
 	onAsk: () => void;
 }) {
 	const { reviewed, sendFailure } = sheet;
+	const { email } = report;
 	return (
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
@@ -312,7 +313,7 @@ export function SendTab({
 				<legend className="px-1">Send and PDF</legend>
 				{sendFailure === null ? (
 					<p>
-						Not sent.
+						Hospital: not sent.
 						{!reviewed && " Mark the report as reviewed first."}
 					</p>
 				) : (
@@ -322,6 +323,16 @@ export function SendTab({
 							: `Not sent: ${failureText(sendFailure)}`}
 					</p>
 				)}
+				<p role="status">
+					Email:{" "}
+					{email === null
+						? "not emailed."
+						: email.status === "queued"
+							? `sending to ${email.recipient}…`
+							: email.status === "sent"
+								? `sent to ${email.recipient} ${formatTime(email.updatedAt)}${email.automatic ? " (automatic)" : ""}.`
+								: `failed to ${email.recipient} ${formatTime(email.updatedAt)}: ${email.reason ?? "no reason given"}`}
+				</p>
 				<p>
 					A family review is not a clinician review. Sending a report does not
 					mean that a clinician has read it.
@@ -334,6 +345,14 @@ export function SendTab({
 						onClick={onAsk}
 					>
 						Send to hospital…
+					</Button>
+					<Button
+						type="button"
+						className="h-11 px-4 text-sm"
+						disabled={!reviewed || sheet.busy !== null}
+						onClick={() => void sheet.email()}
+					>
+						Send by email
 					</Button>
 					<PdfActions
 						familyId={familyId}

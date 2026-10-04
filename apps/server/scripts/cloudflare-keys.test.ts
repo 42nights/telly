@@ -97,6 +97,7 @@ describe("TELLY_REQUIRED_KEYS", () => {
 		ELEVENLABS_VOICE_ID: "voice",
 		ELEVENLABS_API_URL: "https://api.elevenlabs.io",
 		GEMINI_BASE_URL: "https://generativelanguage.googleapis.com",
+		REPORT_EMAIL_FROM: "Telly <onboarding@resend.dev>",
 	};
 
 	test("startup fails with each missing or empty key name", () => {

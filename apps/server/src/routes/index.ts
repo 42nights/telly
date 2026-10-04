@@ -4,6 +4,7 @@ import type { FamilyEnv, FamilyRoutes } from "../http";
 import { simulatedDelivery } from "../integrations/delivery";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { r2Bucket } from "../integrations/r2";
+import { resendMailer } from "../integrations/resend";
 import { alertRoutes } from "./alerts";
 import { appointmentRoutes } from "./appointments";
 import { askRoutes } from "./ask";
@@ -53,7 +54,12 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", mealRoutes(config.gemini))
 		.route(
 			"/",
-			reportRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+			reportRoutes(
+				config.r2 === undefined ? undefined : r2Bucket(config.r2),
+				config.reportEmail === undefined
+					? undefined
+					: resendMailer(config.reportEmail),
+			),
 		)
 		.route("/", reminderRoutes())
 		.route("/", speakerRoutes())
