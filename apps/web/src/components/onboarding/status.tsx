@@ -12,13 +12,10 @@ import { liveAge, newestHeartRate, whoopSamples } from "./logic";
 const invitedKey = (familyId: string) => `telly.invited.${familyId}`;
 
 export function useSetupStatus(familyId: string) {
-	const [refreshKey, setRefreshKey] = useState(0);
 	const records = useApi(FamilyRecords, familyPath(familyId), {
 		pollMs: 30_000,
 	});
-	const reminders = useApi(Reminders, familyPath(familyId, "/reminders"), {
-		refreshKey,
-	});
+	const reminders = useApi(Reminders, familyPath(familyId, "/reminders"));
 	const [invited, setInvited] = useState(false);
 	useEffect(
 		() => setInvited(localStorage.getItem(invitedKey(familyId)) !== null),
@@ -37,7 +34,6 @@ export function useSetupStatus(familyId: string) {
 			localStorage.setItem(invitedKey(familyId), new Date().toISOString());
 			setInvited(true);
 		},
-		refreshReminders: () => setRefreshKey((key) => key + 1),
 	};
 }
 

@@ -31,10 +31,8 @@ const ANSWERS: readonly [ReminderResponse, string][] = [
 export function DueReminders({ familyId }: { familyId: string | null }) {
 	const base =
 		familyId === null ? null : familyPath(familyId, "/reminder-occurrences");
-	const [refreshKey, setRefreshKey] = useState(0);
 	const history = useApi(ReminderHistory, base, {
 		pollMs: 15_000,
-		refreshKey,
 	});
 	// No glasses state reaches the app yet, so the wearer sets it here for the demonstration.
 	const [charging, setCharging] = useState(false);
@@ -43,7 +41,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 
 	useEffect(() => {
 		if (base === null || history.kind !== "ready") return;
-		const refresh = () => setRefreshKey((k) => k + 1);
 		const give = async (id: string, clientId: string) => {
 			const path = `${base}/${encodeURIComponent(id)}`;
 			if (charging) {
@@ -53,7 +50,7 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 					{ method: "POST", body: { clientId } },
 				);
 				if (handoff.kind === "ready" && handoff.value.outcome !== "use_phone")
-					return refresh();
+					return;
 				const why =
 					handoff.kind === "ready" && handoff.value.reason !== null
 						? REASON_TEXT[handoff.value.reason]
@@ -64,7 +61,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 				method: "POST",
 				body: { clientId, source: "web" },
 			});
-			refresh();
 		};
 		for (const { occurrence, events } of history.value.occurrences) {
 			if (!occurrence.promptDue) continue;
@@ -104,7 +100,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 						? "Sign in to answer."
 						: `Not saved: ${result.message}`,
 			}));
-		setRefreshKey((k) => k + 1);
 	};
 	const open =
 		history.kind === "ready"

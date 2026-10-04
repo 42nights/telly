@@ -5,7 +5,7 @@
 // Bun runs every test file in one process with one module cache, so this module's body runs once
 // and each file calls `setupDom` for its own hooks. The globals are removed after the file: happy-dom
 // replaces `fetch`, `Response`, and other globals that later server tests need from Bun.
-import { afterAll, afterEach, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, mock } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 // React's scheduler keeps the timer functions it finds when it first loads, for the whole run.
@@ -43,10 +43,18 @@ export function setupDom() {
 		if (String(args[0]).includes("not wrapped in act(")) return;
 		consoleError(...args);
 	};
+	beforeAll(async () => {
+		// Dynamic like the app modules: the cache module reads `@/env`, which this file mocks.
+		const { prepareQueryCache } = await import("./query");
+		prepareQueryCache();
+	});
 	afterEach(async () => {
 		await cleanup();
 		localStorage.clear();
 		sessionStorage.clear();
+		// Dynamic like the app modules: the cache module reads `@/env`, which `setupDom` mocks.
+		const { queryClient } = await import("@/lib/query");
+		queryClient.clear();
 	});
 	afterAll(async () => {
 		await cleanup();

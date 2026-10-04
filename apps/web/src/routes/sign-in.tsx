@@ -5,7 +5,8 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
-import { apiRequest } from "@/lib/api";
+import { apiQuery } from "@/lib/api";
+import { queryClient } from "@/lib/query";
 import { getSessionToken, returnPath } from "@/lib/session";
 import { finishSignIn, signInConfig, startSignIn } from "@/lib/sign-in";
 
@@ -45,15 +46,19 @@ const failure = (error: unknown): Step => {
 	};
 };
 
-/** A first-time user with no family starts onboarding, unless they came to join a family by invite. */
+/**
+ * A first-time user with no family starts onboarding, unless they came to join a family by invite.
+ * The list it reads stays cached for the first screen.
+ */
 const landing = async (returnTo: string) => {
 	const path = returnPath(returnTo);
-	const families = await apiRequest(FamilyList, "/api/families");
-	return families.kind === "ready" &&
-		families.value.families.length === 0 &&
-		!path.startsWith("/join/")
-		? "/welcome"
-		: path;
+	const none = await queryClient
+		.fetchQuery(apiQuery(FamilyList, "/api/families"))
+		.then(
+			(list) => list.families.length === 0,
+			() => false,
+		);
+	return none && !path.startsWith("/join/") ? "/welcome" : path;
 };
 
 function SignIn() {

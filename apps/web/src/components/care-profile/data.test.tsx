@@ -80,7 +80,10 @@ test("a kept write resolves to null and reads the plan again", async () => {
 	});
 	const { result } = renderHook(() => useCare("f1"));
 	await waitFor(() => expect(result.current.prompt.kind).toBe("ready"));
-	const before = calls.filter((c) => c.path === `${BASE}/care-access`).length;
+	const profileReads = () =>
+		calls.filter((c) => c.method === "GET" && c.path === `${BASE}/care-profile`)
+			.length;
+	const before = profileReads();
 	const refused = await act(() =>
 		result.current.write("PUT", "/care-profile", { x: 1 }),
 	);
@@ -90,11 +93,7 @@ test("a kept write resolves to null and reads the plan again", async () => {
 		path: `${BASE}/care-profile`,
 		body: { x: 1 },
 	});
-	await waitFor(() =>
-		expect(
-			calls.filter((c) => c.path === `${BASE}/care-access`).length,
-		).toBeGreaterThan(before),
-	);
+	await waitFor(() => expect(profileReads()).toBeGreaterThan(before));
 });
 
 test("a refused write resolves to the server's message", async () => {

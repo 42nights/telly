@@ -12,9 +12,8 @@ import { useFamily } from "@/lib/family";
 /** The family's report email (#8): one address, and whether a review emails the report to it. */
 export function ReportEmailSettingsWindow() {
 	const { family } = useFamily();
-	const [refreshKey, setRefreshKey] = useState(0);
 	const path = family === null ? null : familyPath(family.id, "/report-email");
-	const settings = useApi(ReportEmailSettings, path, { refreshKey });
+	const settings = useApi(ReportEmailSettings, path);
 	return (
 		<Window
 			icon={Mail}
@@ -34,12 +33,10 @@ export function ReportEmailSettingsWindow() {
 					save={async (value) => {
 						if (path === null)
 							return { kind: "error", message: "No person is paired yet." };
-						const result = await apiRequest(ReportEmailSettings, path, {
+						return apiRequest(ReportEmailSettings, path, {
 							method: "PUT",
 							body: value,
 						});
-						if (result.kind === "ready") setRefreshKey((key) => key + 1);
-						return result;
 					}}
 				/>
 			) : (

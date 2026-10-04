@@ -12,7 +12,7 @@ import { DoorOpen, Volume2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
-import { apiRequest, familyPath, useApi } from "@/lib/api";
+import { apiRequest, familyPath, reread, useApi } from "@/lib/api";
 
 import { type Speech, SpeechLine, useSpeech } from "./speech";
 
@@ -183,7 +183,6 @@ function ActiveTrip({
 
 /** The family's current trip and the check-in actions. A failed send shows as `problem`. */
 function useTrip(familyId: string | null) {
-	const [refresh, setRefresh] = useState(0);
 	const [reply, setReply] = useState<TripReply | null>(null);
 	const [editing, setEditing] = useState(false);
 	const [problem, setProblem] = useState<string | null>(null);
@@ -192,7 +191,7 @@ function useTrip(familyId: string | null) {
 		CurrentTrip,
 		familyId === null ? null : familyPath(familyId, "/trips/current"),
 		// Polls like the HUD's records, so another device's step or a recovered server shows up.
-		{ pollMs: 30_000, refreshKey: refresh },
+		{ pollMs: 30_000 },
 	);
 	const send = async <T,>(
 		schema: Schema.Decoder<T>,
@@ -205,8 +204,9 @@ function useTrip(familyId: string | null) {
 			method: "POST",
 			body,
 		});
-		setRefresh((n) => n + 1);
 		if (result.kind === "ready") return result.value;
+		// A refused write changes no cache, but another device may have moved the trip on.
+		reread(familyPath(familyId, "/trips/current"));
 		setProblem(
 			"message" in result ? result.message : "Sign in to save your trip.",
 		);

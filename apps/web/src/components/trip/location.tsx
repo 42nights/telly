@@ -75,13 +75,11 @@ export function SharingControls({
 	me,
 	locations,
 	records,
-	onChange,
 }: {
 	familyId: string;
 	me: string;
 	locations: FamilyLocations;
 	records: ApiState<FamilyRecords>;
-	onChange: () => void;
 }) {
 	const [typed, setTyped] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -107,10 +105,8 @@ export function SharingControls({
 			{ method },
 		);
 		setBusy(false);
-		if (result.kind === "ready") {
-			onChange();
-			setTyped("");
-		} else
+		if (result.kind === "ready") setTyped("");
+		else
 			setError(
 				result.kind === "signed_out"
 					? "Sign in again to change sharing."

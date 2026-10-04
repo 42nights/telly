@@ -1,4 +1,5 @@
 import { Toaster } from "@health/ui/components/sonner";
+import type { QueryClient } from "@tanstack/react-query";
 import {
 	createRootRouteWithContext,
 	HeadContent,
@@ -15,7 +16,8 @@ import { requireSession } from "@/lib/session";
 
 import "../index.css";
 
-type RouterAppContext = Record<string, never>;
+/** Route loaders warm the query cache before a screen opens (see `loadFamilyReads`). */
+type RouterAppContext = { readonly queryClient: QueryClient };
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
 	// No app page, nav tab, or family data shows before sign-in.

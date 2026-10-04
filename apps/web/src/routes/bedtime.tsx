@@ -1,4 +1,8 @@
 import { Health } from "@health/contracts";
+import {
+	ReminderHistory,
+	SavedReminderSettings,
+} from "@health/contracts/reminders";
 import { SavedSpeakerSettings, SpeakerStatus } from "@health/contracts/speaker";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
@@ -26,9 +30,15 @@ import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
 import { useNow } from "@/components/wearer/use-now";
 import { familyPath, useApi } from "@/lib/api";
-import { useFamily } from "@/lib/family";
+import { loadFamilyReads, useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/bedtime")({
+	loader: loadFamilyReads((familyId) => [
+		[SavedSpeakerSettings, familyPath(familyId, "/speaker-settings")],
+		[SpeakerStatus, familyPath(familyId, "/speaker")],
+		[ReminderHistory, familyPath(familyId, "/reminder-occurrences")],
+		[SavedReminderSettings, familyPath(familyId, "/reminder-settings")],
+	]),
 	component: Bedtime,
 });
 

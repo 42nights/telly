@@ -2,17 +2,19 @@
 // and every failure keeps its meaning: signed out, not a member, provider unavailable, or an error.
 // A failure is never turned into empty data.
 import { ApiError } from "@health/contracts";
+import { onlineManager, queryOptions, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { ENV } from "@/env";
 
 import {
-	freshSessionToken,
-	getSessionToken,
-	onSessionChange,
-	setSessionToken,
-} from "./session";
+	apiKey,
+	invalidateAfterWrite,
+	queryClient,
+	staleTimeFor,
+} from "./query";
+import { freshSessionToken, getSessionToken, setSessionToken } from "./session";
 
 export type ApiFailure =
 	/** No sign-in token, or the server rejected it (401). */
@@ -113,6 +115,8 @@ export const apiRequest = async <T>(
 		};
 	}
 	if (!response.ok) return replyFailure(response, token);
+	// The write is stored even when its reply does not decode.
+	if ((options.method ?? "GET") !== "GET") invalidateAfterWrite(path);
 	if (schema === null) return { kind: "ready", value: undefined as T };
 	try {
 		return {
@@ -156,109 +160,111 @@ export const apiBlob = async (
 	}
 };
 
+/** A failed read, kept as its query's error. */
+export class ApiReadError extends Error {
+	constructor(readonly failure: ApiFailure) {
+		super(failure.kind === "signed_out" ? "Signed out" : failure.message);
+	}
+}
+
+/** The failure a query's error stands for. */
+export const failureOf = (error: unknown): ApiFailure =>
+	error instanceof ApiReadError
+		? error.failure
+		: { kind: "error", message: String(error) };
+
 /**
- * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
- * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
- * its failure visible: the last good value is not shown as current. A new `path` (such as another
- * selected person) shows loading until its own reply: one person's data never shows as another's.
+ * The cached read of `path` with `schema`: one query per path, current for `staleTimeFor`, and
+ * read again every `pollMs` when given. A polled read that takes longer than `pollMs` fails. Route
+ * loaders pass it to `ensureQueryData`; screens read it with `useApi`.
+ */
+export const apiQuery = <T>(
+	schema: Schema.Decoder<T>,
+	path: string,
+	pollMs?: number,
+) => {
+	const queryKey = apiKey(path);
+	return queryOptions({
+		queryKey,
+		queryFn: async ({ signal }): Promise<T> => {
+			let result: ApiResult<T>;
+			try {
+				result = await apiRequest(schema, path, {
+					signal:
+						pollMs === undefined
+							? signal
+							: AbortSignal.any([signal, AbortSignal.timeout(pollMs)]),
+				});
+			} catch (error) {
+				// Only the timeout gets here without the query being cancelled.
+				if (signal.aborted) throw error;
+				result = {
+					kind: "error",
+					message: "The server did not answer in time.",
+					unreachable: true,
+				};
+			}
+			if (result.kind !== "ready") throw new ApiReadError(result);
+			return result.value;
+		},
+		staleTime: staleTimeFor(queryKey, pollMs),
+		refetchInterval: pollMs ?? false,
+		refetchOnWindowFocus: pollMs !== undefined,
+	});
+};
+
+// Stable, so `useSyncExternalStore` subscribes once.
+const subscribeOnline = (listener: () => void) =>
+	onlineManager.subscribe(listener);
+
+/**
+ * Reads `path` with `schema` from the cache (see `apiQuery`). `path === null` skips the read (for
+ * example, no family is selected yet). A cached value shows at once and reads again in the
+ * background when it is no longer current. A failed re-read keeps its failure visible: the last
+ * good value is not shown as current. A new `path` (such as another selected person) shows loading
+ * until its own reply: one person's data never shows as another's.
  *
  * On a phone the screen can come back from the background, or lose its network, with an old value
- * still on it. So a lost network shows a failure at once, a polled read that takes longer than
- * `pollMs` fails, and a return to the screen or to the network reads again. A value older than two
- * polls is not shown while that read runs.
+ * still on it. So a lost network shows a failure at once, and a return to the network reads again.
+ * A polled value older than two polls is not shown while its re-read runs.
  */
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
 	path: string | null,
-	options: { readonly pollMs?: number; readonly refreshKey?: unknown } = {},
+	options: { readonly pollMs?: number } = {},
 ): ApiState<T> {
-	const [read, setRead] = useState<{
-		readonly path: string;
-		readonly state: ApiState<T>;
-	} | null>(null);
-	const { pollMs, refreshKey } = options;
-	useEffect(() => {
-		void refreshKey;
-		if (path === null) return;
-		let controller = new AbortController();
-		// A poll waits for the read in flight, so a slow read can finish and a hung one can time out.
-		let pending = false;
-		// Both local failures (no network, no answer in time) mean the server was not reached.
-		const fail = (message: string) =>
-			setRead({ path, state: { kind: "error", message, unreachable: true } });
-		const load = () => {
-			controller.abort();
-			controller = new AbortController();
-			const { signal } = controller;
-			pending = true;
-			apiRequest(schema, path, {
-				signal:
-					pollMs === undefined
-						? signal
-						: AbortSignal.any([signal, AbortSignal.timeout(pollMs)]),
-			})
-				.then((result) => {
-					if (signal.aborted) return;
-					setRead({
-						path,
-						state:
-							result.kind === "ready" ? { ...result, at: Date.now() } : result,
-					});
-				})
-				.catch(() => {
-					// Only the timeout gets here without this read being replaced or unmounted.
-					if (signal.aborted) return;
-					fail("The server did not answer in time.");
-				})
-				.finally(() => {
-					if (!signal.aborted) pending = false;
-				});
-		};
-		const offline = () =>
-			fail(
+	const { pollMs } = options;
+	const online = useSyncExternalStore(subscribeOnline, () =>
+		onlineManager.isOnline(),
+	);
+	const query = useQuery(
+		{ ...apiQuery(schema, path ?? "", pollMs), enabled: path !== null },
+		queryClient,
+	);
+	if (path === null || query.status === "pending") return { kind: "loading" };
+	if (!online)
+		return {
+			kind: "error",
+			message:
 				"This phone has no network connection, so the last values may not be current.",
-			);
-		const resume = () => {
-			if (document.visibilityState !== "visible") return;
-			setRead((current) =>
-				current !== null &&
-				current.state.kind === "ready" &&
-				pollMs !== undefined &&
-				Date.now() - current.state.at > 2 * pollMs
-					? {
-							path,
-							state: {
-								kind: "error",
-								message:
-									"The app was in the background. Checking for current values.",
-							},
-						}
-					: current,
-			);
-			load();
+			unreachable: true,
 		};
-		load();
-		const stop = onSessionChange(load);
-		const timer =
-			pollMs === undefined
-				? undefined
-				: setInterval(() => {
-						if (!pending) load();
-					}, pollMs);
-		window.addEventListener("offline", offline);
-		window.addEventListener("online", load);
-		document.addEventListener("visibilitychange", resume);
-		return () => {
-			stop();
-			clearInterval(timer);
-			window.removeEventListener("offline", offline);
-			window.removeEventListener("online", load);
-			document.removeEventListener("visibilitychange", resume);
-			controller.abort();
+	if (query.status === "error") return failureOf(query.error);
+	if (
+		pollMs !== undefined &&
+		query.isFetching &&
+		Date.now() - query.dataUpdatedAt > 2 * pollMs
+	)
+		return {
+			kind: "error",
+			message: "These values are old. Checking for current values.",
 		};
-	}, [schema, path, pollMs, refreshKey]);
-	return read !== null && read.path === path ? read.state : { kind: "loading" };
+	return { kind: "ready", value: query.data, at: query.dataUpdatedAt };
 }
+
+/** Reads `path` again now, for a "Try again" button. */
+export const reread = (path: string) =>
+	queryClient.invalidateQueries({ queryKey: apiKey(path), exact: true });
 
 /** A path inside one family: `familyPath("123", "/alerts")` is `/api/families/123/alerts`. */
 export const familyPath = (familyId: string, path = "") =>

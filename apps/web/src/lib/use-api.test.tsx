@@ -8,7 +8,8 @@ setupDom();
 // Static imports load before `dom` registers `document` and mocks `@/env`, so these wait for it.
 const { act, renderHook, waitFor } = await import("@testing-library/react");
 const { FAMILY, json, serve, signIn } = await import("@/lib/test/app");
-const { useApi } = await import("./api");
+const { apiRequest, familyPath, useApi } = await import("./api");
+const { queryClient } = await import("./query");
 
 const OTHER = { ...FAMILY, id: "fam-2", name: "Grandpa Joe" };
 
@@ -171,19 +172,73 @@ test("unmounting cancels the read in flight", async () => {
 	expect(held[0]?.signal?.aborted).toBe(true);
 });
 
-test("a new refreshKey reads again", async () => {
+test("a second screen within staleTime shows the cached value without reading again", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [FAMILY] } });
-	const { result, rerender } = renderHook(
-		({ refreshKey }: { refreshKey: number }) =>
-			useApi(FamilyList, "/api/families", { refreshKey }),
-		{ initialProps: { refreshKey: 1 } },
+	const first = renderHook(() => useApi(FamilyList, "/api/families"));
+	await waitFor(() => expect(first.result.current.kind).toBe("ready"));
+	first.unmount();
+	const second = renderHook(() => useApi(FamilyList, "/api/families"));
+	expect(second.result.current).toMatchObject({
+		kind: "ready",
+		value: { families: [FAMILY] },
+	});
+	await Bun.sleep(20);
+	expect(calls).toHaveLength(1);
+});
+
+test("a kept write reads its resource and the family record again, and nothing else", async () => {
+	signIn();
+	const records = familyPath(FAMILY.id);
+	const alerts = familyPath(FAMILY.id, "/alerts");
+	const reports = familyPath(FAMILY.id, "/reports");
+	const calls = serve({
+		[`GET ${records}`]: { families: [FAMILY] },
+		[`GET ${alerts}`]: { families: [FAMILY] },
+		[`GET ${reports}`]: { families: [FAMILY] },
+		[`POST ${alerts}/a-1/acknowledgements`]: json(204, null),
+	});
+	const { result } = renderHook(() => [
+		useApi(FamilyList, records),
+		useApi(FamilyList, alerts),
+		useApi(FamilyList, reports),
+	]);
+	await waitFor(() =>
+		expect(result.current.every((read) => read.kind === "ready")).toBe(true),
+	);
+	expect(calls).toHaveLength(3);
+	await apiRequest(null, `${alerts}/a-1/acknowledgements`, { method: "POST" });
+	await waitFor(() => expect(calls).toHaveLength(6));
+	await Bun.sleep(20);
+	expect(calls.slice(3).map((call) => `${call.method} ${call.path}`)).toEqual([
+		`POST ${alerts}/a-1/acknowledgements`,
+		`GET ${alerts}`,
+		`GET ${records}`,
+	]);
+});
+
+test("a failed write reads nothing again", async () => {
+	signIn();
+	const alerts = familyPath(FAMILY.id, "/alerts");
+	const calls = serve({ [`GET ${alerts}`]: { families: [FAMILY] } });
+	const { result } = renderHook(() => useApi(FamilyList, alerts));
+	await waitFor(() => expect(result.current.kind).toBe("ready"));
+	await apiRequest(null, `${alerts}/a-1/acknowledgements`, { method: "POST" });
+	await Bun.sleep(20);
+	expect(calls).toHaveLength(2);
+});
+
+test("signing out removes every cached reply", async () => {
+	signIn();
+	serve({ "GET /api/families": { families: [FAMILY] } });
+	const { result, unmount } = renderHook(() =>
+		useApi(FamilyList, "/api/families"),
 	);
 	await waitFor(() => expect(result.current.kind).toBe("ready"));
-	expect(calls).toHaveLength(1);
-	rerender({ refreshKey: 1 });
-	rerender({ refreshKey: 2 });
-	await waitFor(() => expect(calls).toHaveLength(2));
+	unmount();
+	expect(queryClient.getQueryData(["api", "families"])).toBeDefined();
+	setSessionToken(null);
+	expect(queryClient.getQueryCache().getAll()).toEqual([]);
 });
 
 test("a session change reads again, and signing out shows signed out", async () => {
@@ -248,32 +303,22 @@ test("losing the network fails at once, and getting it back reads again", async 
 	act(() => {
 		window.dispatchEvent(new Event("online"));
 	});
-	await waitFor(() => expect(result.current.kind).toBe("ready"));
-	expect(calls).toHaveLength(2);
+	await waitFor(() => expect(calls).toHaveLength(2));
+	expect(result.current.kind).toBe("ready");
 });
 
-test("coming back to the screen reads again; hiding it does not", async () => {
+test("coming back to the screen does not read a value that is not polled again", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [FAMILY] } });
 	const { result } = renderHook(() => useApi(FamilyList, "/api/families"));
 	await waitFor(() => expect(result.current.kind).toBe("ready"));
-	Object.defineProperty(document, "visibilityState", {
-		value: "hidden",
-		configurable: true,
-	});
-	document.dispatchEvent(new Event("visibilitychange"));
-	await Bun.sleep(20);
-	expect(calls).toHaveLength(1);
-	Object.defineProperty(document, "visibilityState", {
-		value: "visible",
-		configurable: true,
-	});
+	setSystemTime(new Date(Date.now() + 10 * 60_000));
 	act(() => {
 		document.dispatchEvent(new Event("visibilitychange"));
 	});
-	// Without polling the last value stays while the new read runs.
+	await Bun.sleep(20);
+	expect(calls).toHaveLength(1);
 	expect(result.current.kind).toBe("ready");
-	await waitFor(() => expect(calls).toHaveLength(2));
 });
 
 test("a value older than two polls is not shown after coming back", async () => {
@@ -288,10 +333,12 @@ test("a value older than two polls is not shown after coming back", async () => 
 	act(() => {
 		document.dispatchEvent(new Event("visibilitychange"));
 	});
-	expect(result.current).toEqual({
-		kind: "error",
-		message: "The app was in the background. Checking for current values.",
-	});
+	await waitFor(() =>
+		expect(result.current).toEqual({
+			kind: "error",
+			message: "These values are old. Checking for current values.",
+		}),
+	);
 	await waitFor(() => expect(held).toHaveLength(1));
 	act(() => held[0]?.answer(families(OTHER)));
 	await waitFor(() =>
