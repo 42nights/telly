@@ -16,6 +16,7 @@
 	--win95-dark-shadow: #000000;
 	--win95-title: #000080;
 	--win95-title-end: #1084d0;
+	--win95-top-band: 10px;
 
 	--background: var(--win95-face);
 	--foreground: #000000;
@@ -209,10 +210,17 @@ input[type="checkbox"]:focus-visible {
 	text-shadow: 1px 1px 0 var(--win95-highlight);
 }
 
-/* The page behind the app window: teal, so an overscroll or a browser toolbar tint is never gray. */
+/*
+ * The page behind the app window: teal, so an overscroll is never gray. A solid teal band above
+ * the window is the first painted row, because browsers such as Dia tint their toolbar from the
+ * top edge of the page, not from theme-color.
+ */
 html,
 body {
 	background-color: var(--win95-desktop);
+}
+#app {
+	padding-top: var(--win95-top-band);
 }
 
 /* Close button in a phone title bar: a raised face at touch size. Layout utilities place it. */

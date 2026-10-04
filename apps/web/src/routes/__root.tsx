@@ -55,7 +55,7 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				{signingIn ? (
-					<div className="win95-desktop h-svh overflow-y-auto">
+					<div className="win95-desktop h-[calc(100svh-var(--win95-top-band))] overflow-y-auto">
 						<Outlet />
 					</div>
 				) : (

@@ -45,7 +45,7 @@ export function Shell() {
 	return (
 		<div
 			data-view={view}
-			className="win95-raised win95-window flex h-svh flex-col gap-1"
+			className="win95-raised win95-window flex h-[calc(100svh-var(--win95-top-band))] flex-col gap-1"
 		>
 			<h1 className="win95-titlebar flex min-h-12 items-center gap-2 py-0.5 pr-0.5 pl-3 text-lg min-[900px]:min-h-7 min-[900px]:pl-1.5 min-[900px]:text-sm">
 				<Icon aria-hidden className="size-5 shrink-0 min-[900px]:size-4" />
