@@ -7,8 +7,8 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@health/ui/components/empty";
-import { Camera, CameraOff, ScanSearch } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Camera, CameraOff } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { type CameraFailure, type CameraState, openCamera } from "./camera";
 
@@ -66,11 +66,17 @@ const idleText: Record<
 	},
 };
 
-/** HUD region 3: the live camera scene that object markers will draw on. */
-export function CameraPreview() {
+export type CameraControl = {
+	readonly state: CameraState;
+	readonly start: () => void;
+	readonly stop: () => void;
+};
+
+/** The camera's state and controls. `autoStart` asks for the camera on mount. */
+export function useCamera(autoStart = false): CameraControl {
 	const [state, setState] = useState<CameraState>({ kind: "off" });
 	// 0 = camera off; each start or retry increments it, so the effect reopens the camera.
-	const [session, setSession] = useState(0);
+	const [session, setSession] = useState(autoStart ? 1 : 0);
 
 	// Cleanup stops every track on stop, retry, route exit, and unmount.
 	useEffect(
@@ -78,31 +84,47 @@ export function CameraPreview() {
 			session === 0 ? undefined : openCamera(navigator.mediaDevices, setState),
 		[session],
 	);
+	return {
+		state,
+		start: () => setSession((n) => n + 1),
+		stop: () => {
+			setSession(0);
+			setState({ kind: "off" });
+		},
+	};
+}
 
+/**
+ * The live camera scene. `onVideo` receives the video element once it shows a frame, so a caller
+ * can capture it; `children` are extra controls next to "Stop camera".
+ */
+export function CameraPreview({
+	camera: { state, start, stop },
+	onVideo,
+	children,
+}: {
+	camera: CameraControl;
+	onVideo?: (video: HTMLVideoElement) => void;
+	children?: ReactNode;
+}) {
 	if (state.kind === "live")
 		return (
 			<>
 				<video
 					aria-label="Live camera preview"
 					autoPlay
-					className="absolute inset-0 size-full object-cover"
+					className="absolute inset-0 size-full bg-black object-contain"
 					muted
+					onLoadedData={(event) => onVideo?.(event.currentTarget)}
 					playsInline
 					ref={(video) => {
-						if (video) video.srcObject = state.stream;
+						if (video && video.srcObject !== state.stream)
+							video.srcObject = state.stream;
 					}}
 				/>
-				<div className="absolute inset-x-2 bottom-2 flex flex-wrap items-end justify-between gap-2">
-					<p className="win95-raised flex items-center gap-1.5 px-2 py-1 text-sm">
-						<ScanSearch aria-hidden className="size-4" />
-						Medicine markers are not available yet
-					</p>
-					<Button
-						onClick={() => {
-							setSession(0);
-							setState({ kind: "off" });
-						}}
-					>
+				<div className="absolute inset-x-2 bottom-2 flex flex-wrap items-end justify-end gap-2">
+					{children}
+					<Button onClick={stop}>
 						<CameraOff aria-hidden />
 						Stop camera
 					</Button>
@@ -124,9 +146,12 @@ export function CameraPreview() {
 			</EmptyHeader>
 			{state.kind !== "starting" && (
 				<EmptyContent>
-					<Button onClick={() => setSession((n) => n + 1)}>
+					<Button
+						className="win95-primary h-14 px-5 text-[18px]"
+						onClick={start}
+					>
 						<Camera aria-hidden />
-						{state.kind === "off" ? "Start camera" : "Try again"}
+						{state.kind === "off" ? "Turn on camera" : "Try again"}
 					</Button>
 				</EmptyContent>
 			)}
