@@ -23,7 +23,7 @@ describe("reports", () => {
 
 	test("a member creates a report that only members see", () => {
 		h.call(mod.createReport, alice, draft);
-		expect(h.view(mod.myReports, bob)).toMatchObject([
+		expect(h.view(mod.myReports, alice)).toMatchObject([
 			{ id: "r1", createdBy: alice, reviewedAt: undefined },
 		]);
 		expect(h.view(mod.myReports, mallory)).toEqual([]);
@@ -783,5 +783,107 @@ describe("medicine memory", () => {
 		h.call(mod.migrateMedicineMembers, op, {});
 		expect(h.rows("medicinePlaces")).toEqual(places);
 		expect(h.rows("medicineSighting")).toEqual(sightings);
+	});
+});
+
+describe("health records need health_records (#26)", () => {
+	const carol = identity(4);
+	const views = [
+		mod.myHealthSamples,
+		mod.myAlerts,
+		mod.myAlertDeliveries,
+		mod.myReports,
+		mod.myReminderOccurrences,
+		mod.myReminderEvents,
+	];
+	const seen = (who: Identity) => views.map((v) => h.view(v, who).length);
+	const none = views.map(() => 0);
+	const setGrant = (member: Identity, granted: boolean) =>
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member,
+			scope: "health_records",
+			granted,
+		});
+	const sample = (who: Identity) =>
+		h.call(mod.recordSample, who, {
+			familyId: 1n,
+			metric: "heart_rate",
+			value: 70,
+			unit: "bpm",
+			sourceTime: at("2026-01-05T11:59:00Z"),
+			source: "watch",
+			synthetic: false,
+			quality: { tag: "Validated" },
+		});
+
+	beforeEach(() => {
+		sample(alice);
+		h.call(mod.raiseAlert, alice, {
+			familyId: 1n,
+			sampleId: undefined,
+			summary: "dizzy",
+		});
+		h.call(mod.createReport, alice, {
+			id: "r1",
+			familyId: 1n,
+			markers: "[]",
+			fields: "{}",
+		});
+		h.call(mod.setReminderSettings, alice, {
+			familyId: 1n,
+			timeZone: "UTC",
+			quietStart: undefined,
+			quietEnd: undefined,
+			repeatEveryMinutes: 10,
+			maxPrompts: 2,
+			snoozeMinutes: 30,
+		});
+		h.call(mod.createReminder, alice, {
+			familyId: 1n,
+			clientId: "pills",
+			kind: "medication",
+			subjectId: undefined,
+			title: "Pills",
+			times: [13 * 60],
+		});
+		expect(seen(alice).every((n) => n > 0)).toBe(true);
+	});
+
+	test("an invited relative reads them only while granted; chat needs no grant", () => {
+		const codeHash = "a".repeat(64);
+		h.call(mod.createFamilyInvite, alice, {
+			familyId: 1n,
+			codeHash,
+			expiresAt: at("2026-01-06T12:00:00Z"),
+		});
+		h.call(mod.joinFamilyByInvite, carol, { codeHash });
+		h.call(mod.sendMessage, alice, {
+			familyId: 1n,
+			clientId: "m1",
+			body: "hi",
+		});
+		expect(seen(carol)).toEqual(none);
+		expect(h.view(mod.myMessages, carol)).toMatchObject([{ body: "hi" }]);
+
+		setGrant(carol, true);
+		expect(seen(carol)).toEqual(seen(alice));
+		setGrant(carol, false);
+		expect(seen(carol)).toEqual(none);
+	});
+
+	test("another family sees none; the wearer keeps hers after a revoke", () => {
+		expect(seen(mallory)).toEqual(none);
+		const before = seen(alice);
+		setGrant(alice, false);
+		expect(seen(alice)).toEqual(before);
+	});
+
+	test("a recorder without the grant sees only the samples it recorded", () => {
+		sample(bob);
+		expect(h.view(mod.myHealthSamples, bob)).toMatchObject([
+			{ recordedBy: bob },
+		]);
+		expect(seen(bob).slice(1)).toEqual(none.slice(1));
 	});
 });

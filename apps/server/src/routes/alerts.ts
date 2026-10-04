@@ -13,11 +13,15 @@ import { Hono } from "hono";
 import { monitor, readAlerts, readThresholds } from "../alerts/records";
 import { readFamilyRecords } from "../db";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
+import { requireHealthRecords } from "./care-profile";
 
 const directionTag = { above: "Above", below: "Below" } as const;
 
 export const alertRoutes = () =>
 	new Hono<FamilyEnv>()
+		// Alerts and monitoring are health records (#26); thresholds are settings.
+		.use("/alerts/*", requireHealthRecords)
+		.use("/monitoring", requireHealthRecords)
 		.get("/alerts", (c) =>
 			c.json({
 				alerts: readAlerts(c.var.db, c.var.familyId.toString()),

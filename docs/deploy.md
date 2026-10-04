@@ -39,7 +39,9 @@ If the module change needs a data wipe or breaks clients, the publish stops at i
 
 A build that fails the candidate check never reaches `telly`, so live traffic stays on the current version and nothing needs a rollback. `wrangler versions upload` cannot do this here: it publishes no container image, and Workers with containers get no version URLs. The rollbacks below stay as a last-resort guard for a build that passes the candidate and fails live.
 
-`https://app.saintess.tech/version.txt` shows the live commit. Each deploy restarts the container with the new image and settings, and the container pulls its keys again. The first request after a deploy can take about 35 seconds.
+`https://app.saintess.tech/version.txt` shows the live commit. Each deploy restarts the container with the new image and settings, and the container pulls its keys again. The first request after a deploy can take about 35 seconds; the deploy's own smoke check makes that request.
+
+The live API stays warm: a Cron Trigger on `telly` (not on the candidate) requests `/health` every 5 minutes, and the container stops only after 10 minutes without a request. So an iMessage or app request after a quiet hour does not wait about 35 seconds for a cold start. One `basic` instance (1 GiB, 1/4 vCPU, 4 GB disk) that runs all month costs about $6.60 for memory and $0.75 for disk at the [Containers rates](https://developers.cloudflare.com/containers/platform/pricing/), plus active CPU at $0.00002 per vCPU-second (about $0.50 at 1% of a vCPU), before the Workers Paid included usage: about $8 a month.
 
 ### Auto-deploy from the operator host
 

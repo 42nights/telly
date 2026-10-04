@@ -86,7 +86,7 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList
 					state={data.monitoring}
-					records={data.records}
+					records={data.readings}
 					familyId={family.id}
 					now={now}
 				/>
