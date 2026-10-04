@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { deflateRawSync } from "node:zlib";
 import { ApiError, Sources } from "@health/contracts";
 import { Exit, Schema } from "effect";
@@ -83,7 +83,13 @@ describe("server boundaries", () => {
 			target: typeof app,
 			query: string,
 			body: Uint8Array | string,
-		) => target.request(`/api/noop/ingest${query}`, { method: "POST", body });
+			authorization?: string,
+		) =>
+			target.request(`/api/noop/ingest${query}`, {
+				method: "POST",
+				body,
+				headers: authorization ? { Authorization: authorization } : {},
+			});
 		const fractionalTs = deflateRawSync(
 			JSON.stringify({
 				tables: { hrSample: [{ deviceId: "my-whoop", ts: 1.5, bpm: 60 }] },
@@ -93,6 +99,7 @@ describe("server boundaries", () => {
 		expect((await post(app, "?k=relay-key", batch)).status).toBe(503);
 		expect((await post(ingest, "?k=wrong", batch)).status).toBe(401);
 		expect((await post(ingest, "", batch)).status).toBe(401);
+		expect((await post(ingest, "", batch, "Bearer wrong")).status).toBe(401);
 		expect((await post(ingest, "?k=relay-key", "not deflate")).status).toBe(
 			400,
 		);
@@ -134,6 +141,25 @@ describe("server boundaries", () => {
 				),
 			],
 		]);
+		recorded.length = 0;
+		expect((await post(ingest, "", batch, "Bearer relay-key")).status).toBe(
+			204,
+		);
+		expect(recorded).toHaveLength(1);
+	});
+
+	test("the request log never prints the NOOP ingest key", async () => {
+		const log = spyOn(console, "log").mockImplementation(() => {});
+		try {
+			await app.request("/api/noop/ingest?x=1&k=relay-key", {
+				method: "POST",
+			});
+			const lines = log.mock.calls.flat().join("\n");
+			expect(lines).toContain("/api/noop/ingest?x=1&k=***");
+			expect(lines).not.toContain("relay-key");
+		} finally {
+			log.mockRestore();
+		}
 	});
 
 	test("unknown routes return the typed error body", async () => {

@@ -162,7 +162,9 @@ export const noopRoutes = (noop: NoopIngest | undefined) => {
 	const ingest = async (c: Context) => {
 		if (noop === undefined)
 			throw new ApiFailure("unavailable", "NOOP ingest is not configured");
-		if (!noopKeyMatches(c.req.query("k"), noop.key))
+		// The relay should send `Authorization: Bearer <key>`; `?k=` stays accepted until the Mac relay switches.
+		const bearer = c.req.header("authorization")?.match(/^Bearer (.+)$/i)?.[1];
+		if (!noopKeyMatches(bearer ?? c.req.query("k"), noop.key))
 			throw new ApiFailure("unauthorized", "Missing or wrong NOOP ingest key");
 		let samples: NoopSample[];
 		try {

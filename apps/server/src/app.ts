@@ -24,7 +24,10 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 		.route("/", familyDomainRoutes(config));
 
 	const app = new Hono()
-		.use(logger())
+		// Redact the NOOP ingest key from logged URLs.
+		.use(
+			logger((line) => console.log(line.replace(/([?&]k=)[^&\s]*/g, "$1***"))),
+		)
 		.use(
 			"/*",
 			cors({
