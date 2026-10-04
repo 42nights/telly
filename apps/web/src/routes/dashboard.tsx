@@ -234,6 +234,7 @@ const sourceName = { noop: "WHOOP via NOOP" } satisfies Record<
 >;
 const statusText = {
 	not_connected: "Unavailable: not connected",
+	connected: "Connected · readings unvalidated",
 } satisfies Record<NoopConnection["status"], string>;
 
 /** Every health source from `/api/sources`, as the server reports it. */
