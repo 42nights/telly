@@ -73,6 +73,12 @@ bun run db:drill       # crash-restart and backup/restore drill on isolated loca
 CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single required status is
 `health / required`. It fails if any check fails, is cancelled, or is skipped while the app changed.
 
+For work that depends on an open pull request, use a stack (`gh stack`). Run `gh stack init`, then
+`gh stack add <branch>` for each next branch, and `gh stack submit` to open the pull requests. Health
+CI runs on each pull request in the stack. To update the stack, run `gh stack sync`. Do not rebase,
+retarget, or force-push stack branches by hand. Only firstmate merges a stack, with
+`gh stack merge --merge --yes`. Never squash a stack.
+
 ## Rules the gates enforce
 
 - **Types:** `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes` are on. Do not use
