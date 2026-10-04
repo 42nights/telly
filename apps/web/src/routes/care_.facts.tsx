@@ -2,10 +2,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { CareScreen } from "@/components/care/screen";
+import { careReads } from "@/components/care-profile/data";
 import { ProfileWindow } from "@/components/care-profile/profile-window";
 import { CareParts, Part } from "@/components/care-profile/screen";
+import { loadFamilyReads } from "@/lib/family";
 
 export const Route = createFileRoute("/care_/facts")({
+	loader: loadFamilyReads(careReads),
 	component: () => (
 		<CareScreen>
 			{(familyId) => (

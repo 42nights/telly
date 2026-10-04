@@ -3,11 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChefHat } from "lucide-react";
 
 import { CookingAbilities } from "@/components/cooking/abilities";
-import { useFamilyData } from "@/components/family/data";
+import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyGate } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
+import { loadFamilyReads } from "@/lib/family";
 
 export const Route = createFileRoute("/family_/cooking")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyCooking,
 });
 

@@ -44,13 +44,10 @@ export function ReportScreen() {
 
 /** The selected family's reports: the newest, or the one picked, and a way to create one. */
 function FamilyReports({ familyId }: { familyId: string }) {
-	const [refreshKey, setRefreshKey] = useState(0);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [failure, setFailure] = useState<ApiFailure | null>(null);
-	const state = useApi(Reports, familyPath(familyId, "/reports"), {
-		refreshKey,
-	});
+	const state = useApi(Reports, familyPath(familyId, "/reports"));
 
 	if (state.kind !== "ready")
 		return (
@@ -68,7 +65,6 @@ function FamilyReports({ familyId }: { familyId: string }) {
 		if (created.kind !== "ready") return setFailure(created);
 		setFailure(null);
 		setSelected(created.value.id);
-		setRefreshKey((key) => key + 1);
 	};
 
 	const { reports } = state.value;
@@ -103,7 +99,6 @@ function FamilyReports({ familyId }: { familyId: string }) {
 			reports={reports}
 			familyId={familyId}
 			onSelect={setSelected}
-			onChanged={() => setRefreshKey((key) => key + 1)}
 			createButton={createButton(false)}
 			createFailure={failure}
 		/>
@@ -195,7 +190,6 @@ function ReportSheet({
 	reports,
 	familyId,
 	onSelect,
-	onChanged,
 	createButton,
 	createFailure,
 }: {
@@ -203,11 +197,10 @@ function ReportSheet({
 	reports: readonly Report[];
 	familyId: string;
 	onSelect: (id: string) => void;
-	onChanged: () => void;
 	createButton: ReactNode;
 	createFailure: ApiFailure | null;
 }) {
-	const sheet = useReportSheet(report, familyId, onChanged, createFailure);
+	const sheet = useReportSheet(report, familyId, createFailure);
 	const [tab, setTab] = useState<Tab>(sheet.reviewed ? "Send" : "Patient");
 	const [asking, setAsking] = useState(false);
 

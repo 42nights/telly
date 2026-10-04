@@ -1,4 +1,8 @@
 import { Health } from "@health/contracts";
+import {
+	ReminderHistory,
+	SavedReminderSettings,
+} from "@health/contracts/reminders";
 import { SavedSpeakerSettings, SpeakerStatus } from "@health/contracts/speaker";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
@@ -25,10 +29,17 @@ import { Window } from "@/components/hud/window";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
 import { useNow } from "@/components/wearer/use-now";
+import { Hint, Tip } from "@/components/win95";
 import { familyPath, useApi } from "@/lib/api";
-import { useFamily } from "@/lib/family";
+import { loadFamilyReads, useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/bedtime")({
+	loader: loadFamilyReads((familyId) => [
+		[SavedSpeakerSettings, familyPath(familyId, "/speaker-settings")],
+		[SpeakerStatus, familyPath(familyId, "/speaker")],
+		[ReminderHistory, familyPath(familyId, "/reminder-occurrences")],
+		[SavedReminderSettings, familyPath(familyId, "/reminder-settings")],
+	]),
 	component: Bedtime,
 });
 
@@ -57,12 +68,7 @@ function OvernightCheck({
 	);
 	// What the app can and cannot do tonight. Missing pieces stay visible, never "all set".
 	const lines: readonly Line[] = [
-		soundAllowed
-			? { ok: true, text: "Reminder sound on." }
-			: {
-					ok: false,
-					text: "Reminder sound blocked by the browser · tap this screen once to allow it.",
-				},
+		...(soundAllowed ? [{ ok: true, text: "Reminder sound on." }] : []),
 		chargeLine(battery),
 		connectionLine(online, serverLive),
 		{
@@ -75,20 +81,37 @@ function OvernightCheck({
 		),
 		{
 			ok: false,
-			text: "WHOOP buzz off · not verified on the strap (issue #38).",
+			text: "WHOOP buzz off · the strap does not buzz for reminders yet.",
 		},
 	];
 	return (
-		<fieldset className="border border-border p-2">
+		<fieldset className="grid gap-2 border border-border p-2">
 			<legend className="px-1 font-bold">Tonight</legend>
-			<ul className="grid gap-2 text-[18px]">
+			{/* The one thing the wearer must act on stays a full sentence. */}
+			{!soundAllowed && (
+				<p className="flex items-start gap-2 font-bold text-[18px] text-destructive">
+					<span
+						aria-hidden
+						className="mt-1.5 size-3 shrink-0 border border-black bg-destructive"
+					/>
+					Reminder sound blocked by the browser · tap this screen once to allow
+					it.
+				</p>
+			)}
+			<ul className="flex flex-wrap gap-1.5 text-[16px]">
 				{lines.map(({ ok, text }) => (
-					<li key={text} className="flex items-start gap-2">
-						<span
-							aria-hidden
-							className={`win95-inset mt-1.5 size-3 shrink-0 ${ok ? "bg-[#008000]" : "bg-destructive"}`}
-						/>
-						<span>{text}</span>
+					<li key={text}>
+						<Hint
+							text={text}
+							className="win95-inset flex items-center gap-1.5 bg-card px-2 py-1"
+						>
+							<span
+								aria-hidden
+								className={`size-3 shrink-0 border border-black ${ok ? "bg-[#008000]" : "bg-destructive"}`}
+							/>
+							{/* The short phrase; the whole line is the tooltip. */}
+							{text.split(" · ")[0]?.split(". ")[0]?.replace(/\.$/, "")}
+						</Hint>
 					</li>
 				))}
 			</ul>
@@ -112,81 +135,90 @@ function Bedtime() {
 	}, [pause, chime]);
 
 	return (
-		<main className="mx-auto w-full max-w-3xl p-2 md:p-4">
-			<Window icon={Moon} title="Bedtime">
-				<div className="grid gap-4 p-2 md:p-4">
-					<fieldset className="grid gap-2 border border-border p-2">
-						<legend className="px-1 font-bold">Reminders tonight</legend>
-						<OvernightReminders familyId={familyId} onPrompt={onPrompt} />
-					</fieldset>
+		<main>
+			<Window icon={Moon} title="Bedtime" className="mx-auto w-full max-w-6xl">
+				<div className="grid content-start gap-3 p-1 lg:grid-cols-2">
+					<div className="grid content-start gap-3">
+						<fieldset className="grid gap-2 border border-border p-2">
+							<legend className="px-1 font-bold">Reminders tonight</legend>
+							<OvernightReminders familyId={familyId} onPrompt={onPrompt} />
+						</fieldset>
 
-					<OvernightCheck
-						familyId={familyId}
-						now={now}
-						soundAllowed={allowed}
-					/>
+						<OvernightCheck
+							familyId={familyId}
+							now={now}
+							soundAllowed={allowed}
+						/>
 
-					<fieldset className="grid gap-3 border border-border p-2 text-[18px]">
-						<legend className="px-1 font-bold">Sleep sound · optional</legend>
-						<p>
-							Soft noise made on this phone. It stops when you ask for help.
-						</p>
-						<Button
-							className="win95-primary h-14 text-[20px] [&_svg]:size-6"
-							onClick={() =>
-								sound.playing ? sound.pause() : sound.play(timer)
-							}
-						>
-							{sound.playing ? <Pause aria-hidden /> : <Play aria-hidden />}
-							{sound.playing ? "Pause sound" : "Play sound"}
-						</Button>
-						<label className="grid gap-1">
-							Volume
-							<input
-								type="range"
-								min={0}
-								max={1}
-								step={0.05}
-								value={sound.volume}
-								onChange={(e) => sound.setVolume(Number(e.target.value))}
-							/>
-						</label>
-						<label className="grid gap-1">
-							Sleep timer
-							<select
-								className="win95-inset win95-field bg-card p-2"
-								value={timer ?? "off"}
-								onChange={(e) => {
-									const next =
-										e.target.value === "off" ? null : Number(e.target.value);
-									setTimer(next);
-									if (sound.playing) sound.play(next);
-								}}
-							>
-								{SLEEP_TIMERS.map((minutes) => (
-									<option key={minutes ?? "off"} value={minutes ?? "off"}>
-										{minutes === null ? "No timer" : `${minutes} minutes`}
-									</option>
-								))}
-							</select>
-						</label>
-						<p aria-live="polite">
-							{sound.playing
-								? left === null
-									? "Playing until you pause it."
-									: `Stops in ${left}.`
-								: "Sound is off."}
-						</p>
-					</fieldset>
+						{/* Folded so the screen fits a phone; it opens with one tap. */}
+						<details className="border border-border p-2 text-[18px]">
+							<summary className="min-h-11 cursor-pointer content-center font-bold">
+								Sleep sound · optional
+							</summary>
+							<div className="grid gap-3 pt-2">
+								<Button
+									className="win95-primary h-14 text-[20px] [&_svg]:size-6"
+									onClick={() =>
+										sound.playing ? sound.pause() : sound.play(timer)
+									}
+								>
+									{sound.playing ? <Pause aria-hidden /> : <Play aria-hidden />}
+									{sound.playing ? "Pause sound" : "Play sound"}
+								</Button>
+								<div className="grid grid-cols-2 gap-2">
+									<label className="grid gap-1">
+										Volume
+										<input
+											type="range"
+											min={0}
+											max={1}
+											step={0.05}
+											value={sound.volume}
+											onChange={(e) => sound.setVolume(Number(e.target.value))}
+										/>
+									</label>
+									<label className="grid gap-1">
+										Sleep timer
+										<select
+											className="win95-inset win95-field bg-card p-2"
+											value={timer ?? "off"}
+											onChange={(e) => {
+												const next =
+													e.target.value === "off"
+														? null
+														: Number(e.target.value);
+												setTimer(next);
+												if (sound.playing) sound.play(next);
+											}}
+										>
+											{SLEEP_TIMERS.map((minutes) => (
+												<option key={minutes ?? "off"} value={minutes ?? "off"}>
+													{minutes === null ? "No timer" : `${minutes} minutes`}
+												</option>
+											))}
+										</select>
+									</label>
+								</div>
+								<p aria-live="polite" className="flex items-center gap-1">
+									{sound.playing
+										? left === null
+											? "Playing until you pause it."
+											: `Stops in ${left}.`
+										: "Sound is off."}
+									<Tip text="Soft noise made on this phone. It stops when you ask for help." />
+								</p>
+							</div>
+						</details>
+					</div>
 
 					{/* A request for help always wins over the sleep sound. */}
 					<section
 						aria-label="Ask for help"
-						className="grid gap-2"
+						className="grid content-start gap-2"
 						onPointerDownCapture={sound.pause}
 						onKeyDownCapture={sound.pause}
 					>
-						<h2 className="font-bold text-[16px]">Need something?</h2>
+						<h2 className="sr-only">Need something?</h2>
 						<Request
 							familyId={familyId}
 							onEmergency={emergency.start}

@@ -101,11 +101,21 @@ test("lists what works tonight and what does not", async () => {
 	serve({ ...base, ...speakerOn });
 	renderRoute("/bedtime");
 
+	// Each check is a short chip; its whole line is the chip's tooltip.
 	expect(await screen.findByText("Reminder sound on.")).toBeTruthy();
 	expect(await screen.findByText("Connected to the server.")).toBeTruthy();
-	expect(await screen.findByText(/Home speaker on \(simulated/)).toBeTruthy();
-	expect(screen.getByText(/Charge unknown/)).toBeTruthy();
-	expect(screen.getByText(/WHOOP buzz off/)).toBeTruthy();
+	const tips = () =>
+		screen.getAllByRole("tooltip").map((tip) => tip.textContent ?? "");
+	await waitFor(() =>
+		expect(tips().some((tip) => /^Home speaker on \(simulated/.test(tip))).toBe(
+			true,
+		),
+	);
+	expect(tips().some((tip) => /^Charge unknown/.test(tip))).toBe(true);
+	expect(tips()).toContain(
+		"WHOOP buzz off · the strap does not buzz for reminders yet.",
+	);
+	expect(screen.getByText("WHOOP buzz off")).toBeTruthy();
 });
 
 test("shows the speaker as unknown and the server as silent when they fail", async () => {

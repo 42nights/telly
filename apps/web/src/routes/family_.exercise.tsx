@@ -3,11 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Dumbbell } from "lucide-react";
 
 import { ExerciseSection } from "@/components/exercise/plans";
-import { useFamilyData } from "@/components/family/data";
+import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyGate } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
+import { loadFamilyReads } from "@/lib/family";
 
 export const Route = createFileRoute("/family_/exercise")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyExercise,
 });
 

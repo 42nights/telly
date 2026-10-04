@@ -4,7 +4,7 @@ This folder trains and serves the model that turns health readings into one shor
 River AI runs the training and the inference. The model never runs on the glasses.
 Plan: [`docs/board.html`](../../docs/board.html) (`sys-training`, `sys-models`). Issues: [#9](https://github.com/ayaangazali/telly/issues/9) (River access) and [#10](https://github.com/ayaangazali/telly/issues/10) (training and inference).
 
-The base model is `Qwen/Qwen3.5-9B`, a multimodal (text and image) Qwen model. River does not offer Gemma for our key, so the captain chose Qwen.
+The base model is `Qwen/Qwen3.5-9B`, a multimodal (text and image) Qwen model. River does not offer Gemma for our key, so the owner chose Qwen.
 
 ## What is here
 

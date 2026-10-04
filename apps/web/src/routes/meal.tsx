@@ -12,6 +12,7 @@ import {
 	IntakeReport,
 } from "@/components/meal/parts";
 import { useMeal } from "@/components/meal/use-meal";
+import { Tip } from "@/components/win95";
 import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/meal")({
@@ -53,8 +54,9 @@ function MealScreen({ familyId }: { familyId: string | null }) {
 							<ArrowLeft aria-hidden />
 							Home
 						</Link>
+						<Tip text="The photo is used once for the estimate and is not saved." />
 						<Button
-							className="h-12 text-[18px] [&_svg]:size-5"
+							className="ml-auto h-12 text-[18px] [&_svg]:size-5"
 							onClick={() => {
 								meal.newMeal();
 								video.current = null;
@@ -91,9 +93,6 @@ function MealScreen({ familyId }: { familyId: string | null }) {
 								/>
 							)}
 						</div>
-						<p className="text-[16px] text-muted-foreground">
-							The photo is used once for the estimate and is not saved.
-						</p>
 						<DescribeMeal
 							familyId={familyId}
 							initialText={dish ?? ""}

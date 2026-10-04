@@ -13,7 +13,7 @@ import { Button } from "@health/ui/components/button";
 import { BellRing } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { ANSWERED, awaitsAnswer, fallbackText, tonight } from "./logic";
 
@@ -109,12 +109,15 @@ function Tonight({
 					))}
 				</ul>
 			)}
-			<p className="text-[16px]">
-				Saved reminders only, from your family. Keep this screen open and the
-				phone plugged in: a closed tab cannot wake you.{" "}
-				{settings.kind === "ready" && settings.value.settings !== null
-					? fallbackText(settings.value.settings)
-					: "Nobody calls 911 when a reminder goes unanswered."}
+			<p className="flex items-center gap-1 text-[16px]">
+				Keep this screen open and the phone plugged in.
+				<Tip
+					text={`Saved reminders only, from your family. A closed tab cannot wake you. ${
+						settings.kind === "ready" && settings.value.settings !== null
+							? fallbackText(settings.value.settings)
+							: "Nobody calls 911 when a reminder goes unanswered."
+					}`}
+				/>
 			</p>
 		</>
 	);
@@ -128,13 +131,12 @@ export function OvernightReminders({
 	familyId: string | null;
 	onPrompt: () => void;
 }) {
-	const [refresh, setRefresh] = useState(0);
 	const [answered, setAnswered] = useState<string | null>(null);
 	const path = familyId === null ? null : familyPath(familyId, "");
 	const history = useApi(
 		ReminderHistory,
 		path === null ? null : `${path}/reminder-occurrences`,
-		{ pollMs: POLL_MS, refreshKey: refresh },
+		{ pollMs: POLL_MS },
 	);
 	const settings = useApi(
 		SavedReminderSettings,
@@ -173,7 +175,6 @@ export function OvernightReminders({
 					method: "POST",
 					body: { ...body, source: "web" },
 				});
-			setRefresh((n) => n + 1);
 		})();
 	}, [freshKey, familyId, onPrompt]);
 
@@ -188,10 +189,7 @@ export function OvernightReminders({
 					key={showing.id}
 					familyId={familyId}
 					occurrence={showing}
-					onAnswered={(text) => {
-						setAnswered(text);
-						setRefresh((n) => n + 1);
-					}}
+					onAnswered={setAnswered}
 				/>
 			)}
 			{answered !== null && (

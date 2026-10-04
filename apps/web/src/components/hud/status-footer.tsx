@@ -92,16 +92,7 @@ function serverLine(health: Polled<Health>, now: number): Pane {
 }
 
 /** The monitoring pane for the selected person; never "on" without a fresh reading for each rule. */
-function monitoringLine(
-	familyId: string | null,
-	state: ApiState<Monitoring>,
-): Pane {
-	if (familyId === null)
-		return {
-			text: "Monitoring off",
-			detail: "No person is selected.",
-			state: "bad",
-		};
+function monitoringLine(state: ApiState<Monitoring>): Pane {
 	if (state.kind === "loading")
 		return {
 			text: "Monitoring…",
@@ -136,6 +127,16 @@ function monitoringLine(
 							: "No threshold has a fresh reading.",
 					state: "bad",
 				};
+}
+
+/** Reads the person's monitoring only while a person is selected. */
+function MonitoringPane({ familyId }: { familyId: string }) {
+	const state = useApi(Monitoring, familyPath(familyId, "/monitoring"), {
+		pollMs: 60_000,
+	});
+	return (
+		<StatusPane icon={Activity} pane={monitoringLine(state)} align="end" />
+	);
 }
 
 const dot: Record<Pane["state"], string> = {
@@ -187,11 +188,6 @@ export function StatusBar({ familyId }: { familyId: string | null }) {
 	const pending = usePendingCount();
 	const health = usePolled(Health, "/health");
 	const sources = usePolled(Sources, "/api/sources");
-	const monitoring = useApi(
-		Monitoring,
-		familyId === null ? null : familyPath(familyId, "/monitoring"),
-		{ pollMs: 60_000 },
-	);
 	return (
 		<footer className="flex shrink-0 flex-wrap gap-1 max-[899px]:justify-around">
 			<StatusPane icon={Smartphone} pane={phoneLine(online, battery)} />
@@ -202,11 +198,19 @@ export function StatusBar({ familyId }: { familyId: string | null }) {
 					now,
 				)}
 			/>
-			<StatusPane
-				icon={Activity}
-				pane={monitoringLine(familyId, monitoring)}
-				align="end"
-			/>
+			{familyId === null ? (
+				<StatusPane
+					icon={Activity}
+					align="end"
+					pane={{
+						text: "Monitoring off",
+						detail: "No person is selected.",
+						state: "bad",
+					}}
+				/>
+			) : (
+				<MonitoringPane familyId={familyId} />
+			)}
 			<StatusPane icon={Server} pane={serverLine(health, now)} align="end" />
 			{pending > 0 && (
 				<span role="status" className="contents">

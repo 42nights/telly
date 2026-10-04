@@ -194,12 +194,10 @@ function PlanForm({
 
 /** Agreed activities and the wearer's session history for one family. */
 export function ExerciseSection({ familyId }: { familyId: string }) {
-	const [refresh, setRefresh] = useState(0);
 	const [adding, setAdding] = useState(false);
 	const [problem, setProblem] = useState<string | null>(null);
 	const records = useApi(ExerciseRecords, familyPath(familyId, "/exercise"), {
 		pollMs: 30_000,
-		refreshKey: refresh,
 	});
 	if (records.kind !== "ready")
 		return <ApiNotice state={records} what="exercise" />;
@@ -225,8 +223,7 @@ export function ExerciseSection({ familyId }: { familyId: string }) {
 										familyPath(familyId, `/exercise/plans/${plan.id}/verify`),
 										{ method: "POST" },
 									);
-									if (result.kind === "ready") setRefresh((n) => n + 1);
-									else
+									if (result.kind !== "ready")
 										setProblem(
 											result.kind === "signed_out"
 												? "Sign in to confirm the activity."
@@ -268,13 +265,7 @@ export function ExerciseSection({ familyId }: { familyId: string }) {
 				</ul>
 			)}
 			{adding ? (
-				<PlanForm
-					familyId={familyId}
-					onSaved={() => {
-						setAdding(false);
-						setRefresh((n) => n + 1);
-					}}
-				/>
+				<PlanForm familyId={familyId} onSaved={() => setAdding(false)} />
 			) : (
 				<Button
 					className="h-11 justify-self-start"

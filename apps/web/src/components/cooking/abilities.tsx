@@ -38,11 +38,9 @@ const unknown: CookingProfile = {
 function Editor({
 	familyId,
 	saved,
-	onSaved,
 }: {
 	familyId: string;
 	saved: CookingProfileRecord;
-	onSaved: () => void;
 }) {
 	const [profile, setProfile] = useState(saved.profile ?? unknown);
 	const [dislikes, setDislikes] = useState(profile.dislikes.join(", "));
@@ -64,10 +62,8 @@ function Editor({
 				} satisfies CookingProfile,
 			},
 		);
-		if (result.kind === "ready") {
-			setStatus("Saved.");
-			onSaved();
-		} else
+		if (result.kind === "ready") setStatus("Saved.");
+		else
 			setStatus(
 				result.kind === "signed_out"
 					? "Sign in to save."
@@ -134,11 +130,9 @@ function Editor({
 
 /** What the wearer agreed to do alone in the kitchen. Needs care access (#26) to read or change. */
 export function CookingAbilities({ familyId }: { familyId: string }) {
-	const [refresh, setRefresh] = useState(0);
 	const record = useApi(
 		CookingProfileRecord,
 		familyPath(familyId, "/cooking/profile"),
-		{ refreshKey: refresh },
 	);
 	if (record.kind !== "ready")
 		return <ApiNotice state={record} what="cooking abilities" />;
@@ -146,7 +140,6 @@ export function CookingAbilities({ familyId }: { familyId: string }) {
 		<Editor
 			familyId={familyId}
 			key={record.value.editedAt ?? "none"}
-			onSaved={() => setRefresh((n) => n + 1)}
 			saved={record.value}
 		/>
 	);

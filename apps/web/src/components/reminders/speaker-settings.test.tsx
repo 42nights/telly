@@ -111,7 +111,7 @@ describe("SpeakerSettingsWindow", () => {
 		expect(
 			within(form).getByRole("group", { name: /shared room/ }),
 		).toHaveProperty("disabled", false);
-		expect(await view.findByText("Nothing yet.")).toBeDefined();
+		expect(await view.findByText(/nothing yet\./)).toBeDefined();
 		expect(
 			view.getByRole("combobox", { name: "Speaker state" }),
 		).toHaveProperty("value", "online");

@@ -316,14 +316,12 @@ const PREP_STEP: Opener = ["prep", "Edit preparation…"];
 export function VisitCard({
 	appointment,
 	familyId,
-	onChanged,
 }: {
 	appointment: Appointment;
 	familyId: string;
-	onChanged: () => void;
 }) {
 	const [panel, setPanel] = useState<PanelName | null>(null);
-	const { busy, failure, run } = useAction(onChanged);
+	const { busy, failure, run } = useAction();
 	const base = familyPath(
 		familyId,
 		`/appointments/${encodeURIComponent(appointment.id)}`,
@@ -388,13 +386,7 @@ export function VisitCard({
 				/>
 			)}
 			{busy !== null && <p role="status">{busy}</p>}
-			{open && (
-				<SummaryPanel
-					appointment={appointment}
-					base={base}
-					onChanged={onChanged}
-				/>
-			)}
+			{open && <SummaryPanel appointment={appointment} base={base} />}
 		</article>
 	);
 }

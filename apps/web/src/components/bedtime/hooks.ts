@@ -1,6 +1,7 @@
 import {
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 	useSyncExternalStore,
@@ -134,7 +135,9 @@ export function useSleepSound() {
 export function useChime() {
 	const context = useRef<AudioContext | null>(null);
 	const [allowed, setAllowed] = useState(false);
-	useEffect(() => {
+	// A layout effect, so the context exists before the screen's own effects run: a reminder that
+	// is cached and due on the first render chimes at once.
+	useLayoutEffect(() => {
 		const c = new AudioContext();
 		context.current = c;
 		const update = () => setAllowed(c.state === "running");

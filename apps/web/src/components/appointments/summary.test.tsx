@@ -82,19 +82,9 @@ const share = (over: Partial<ClinicianShare> = {}): ClinicianShare => ({
 	...over,
 });
 
-const show = (value: Appointment) => {
-	let changes = 0;
-	const view = render(
-		<SummaryPanel
-			appointment={value}
-			base={BASE}
-			onChanged={() => {
-				changes += 1;
-			}}
-		/>,
-	);
-	return { view, changes: () => changes };
-};
+const show = (value: Appointment) => ({
+	view: render(<SummaryPanel appointment={value} base={BASE} />),
+});
 
 /** Each summary heading with the text under it. */
 const sections = (root: HTMLElement) =>
@@ -112,7 +102,7 @@ test("an unreviewed summary is prepared, read, and marked reviewed; nothing can 
 		[`GET ${BASE}/summary`]: { json: SUMMARY },
 		[`POST ${BASE}/summary`]: { status: 204 },
 	});
-	const { view, changes } = show(appointment());
+	const { view } = show(appointment());
 	expect(
 		view.getByText("Summary not reviewed. Nothing can be shared yet."),
 	).toBeDefined();
@@ -139,7 +129,6 @@ test("an unreviewed summary is prepared, read, and marked reviewed; nothing can 
 		path: `${BASE}/summary`,
 		body: SUMMARY,
 	});
-	expect(changes()).toBe(1);
 	await waitFor(() =>
 		expect(calls.filter((call) => call.path === `${BASE}/shares`)).toHaveLength(
 			2,
@@ -355,7 +344,7 @@ test("a simulated send shows progress, then reloads the consents and the screen"
 				finish = resolve;
 			}),
 	});
-	const { view, changes } = show(appointment());
+	const { view } = show(appointment());
 	fireEvent.click(
 		await view.findByRole("button", { name: "Send (simulated)" }),
 	);
@@ -368,17 +357,16 @@ test("a simulated send shows progress, then reloads the consents and the screen"
 			.hasAttribute("disabled"),
 	).toBe(true);
 	finish({ status: 204 });
-	// The send reports the change, then reads the consents again.
-	await waitFor(() => {
-		expect(changes()).toBe(1);
+	// The send marks the consents stale, so they are read again.
+	await waitFor(() =>
 		expect(calls.filter((call) => call.path === `${BASE}/shares`)).toHaveLength(
 			2,
-		);
-	});
+		),
+	);
 	expect(view.queryByRole("status")).toBeNull();
 });
 
-test("a refused revoke stays visible and the screen is not reloaded", async () => {
+test("a refused revoke stays visible and the consents are not read again", async () => {
 	signIn();
 	const calls = serve({
 		[`GET ${BASE}/shares`]: { json: { shares: [share()] } },
@@ -387,13 +375,15 @@ test("a refused revoke stays visible and the screen is not reloaded", async () =
 			json: { error: "forbidden", message: "Only the approver can revoke." },
 		},
 	});
-	const { view, changes } = show(appointment());
+	const { view } = show(appointment());
 	fireEvent.click(await view.findByRole("button", { name: "Revoke consent" }));
 	expect((await view.findByRole("alert")).textContent).toBe(
 		"Only the approver can revoke.",
 	);
 	expect(calls.at(-1)?.path).toBe(`${BASE}/shares/s1/revoke`);
-	expect(changes()).toBe(0);
+	expect(calls.filter((call) => call.path === `${BASE}/shares`)).toHaveLength(
+		1,
+	);
 });
 
 test("consents that cannot be read say so", async () => {
@@ -416,7 +406,7 @@ test("approving an update needs a recipient, a section, and explicit agreement",
 		...NO_SHARES,
 		[`POST ${BASE}/shares`]: { status: 201, json: {} },
 	});
-	const { view, changes } = show(REVIEWED);
+	const { view } = show(REVIEWED);
 	const form = within(
 		view.getByRole("group", { name: "Approve a clinician update" }),
 	);
@@ -444,7 +434,9 @@ test("approving an update needs a recipient, a section, and explicit agreement",
 	expect(approve.hasAttribute("disabled")).toBe(false);
 	fireEvent.click(approve);
 
-	await waitFor(() => expect(changes()).toBe(1));
+	await waitFor(() =>
+		expect(calls.some((call) => call.method === "POST")).toBe(true),
+	);
 	expect(calls.find((call) => call.method === "POST")?.body).toEqual({
 		recipient: { name: "Dr Lee", role: null, address: "lee@clinic.test" },
 		sections: ["symptoms"],

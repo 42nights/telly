@@ -23,11 +23,7 @@ const ANSWERS: readonly [ReminderResponse, string][] = [
 export function DueReminders({ familyId }: { familyId: string | null }) {
 	const base =
 		familyId === null ? null : familyPath(familyId, "/reminder-occurrences");
-	const [refreshKey, setRefreshKey] = useState(0);
-	const history = useApi(ReminderHistory, base, {
-		pollMs: 15_000,
-		refreshKey,
-	});
+	const history = useApi(ReminderHistory, base, { pollMs: 15_000 });
 	const [notes, setNotes] = useState<Record<string, string>>({});
 	const given = useRef(new Set<string>());
 
@@ -39,7 +35,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 				`${base}/${encodeURIComponent(id)}/deliveries`,
 				{ method: "POST", body: { clientId, source: "web" } },
 			);
-			setRefreshKey((k) => k + 1);
 		};
 		for (const { occurrence, events } of history.value.occurrences) {
 			if (!occurrence.promptDue) continue;
@@ -79,7 +74,6 @@ export function DueReminders({ familyId }: { familyId: string | null }) {
 						? "Sign in to answer."
 						: `Not saved: ${result.message}`,
 			}));
-		setRefreshKey((k) => k + 1);
 	};
 	const open =
 		history.kind === "ready"

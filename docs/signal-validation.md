@@ -7,7 +7,7 @@ Plan: [`docs/plan.md`](plan.md) (Product: Monitoring) and the "Monitoring", "Bre
 
 No non-glasses signal is validated for fall or breathing detection.
 Every fall and breathing sample from a phone or a WHOOP strap stays `quality: unvalidated`.
-By the rule in `packages/contracts/src/index.ts` (`drivesMonitoring`), an `unvalidated` sample does not drive monitoring, with one exception. A real WHOOP reading through NOOP (a `noop:` source) drives threshold monitoring and alerts: a captain decision for the demo (2026-10-04). Screens and Gemini answers treat it as accurate and show no quality label. It is still not validated for fall or breathing detection.
+By the rule in `packages/contracts/src/index.ts` (`drivesMonitoring`), an `unvalidated` sample does not drive monitoring, with one exception. A real WHOOP reading through NOOP (a `noop:` source) drives threshold monitoring and alerts: an owner decision for the demo (2026-10-04). Screens and Gemini answers treat it as accurate and show no quality label. It is still not validated for fall or breathing detection.
 `GET /api/families/:familyId/monitoring` therefore shows these thresholds as `unavailable`, never in range.
 
 Synthetic tests and the committed WHOOP export below do not prove detection.

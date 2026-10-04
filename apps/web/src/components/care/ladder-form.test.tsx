@@ -38,12 +38,8 @@ const saved: ContactLadder = {
 	updatedAt: "2026-10-04T03:00:00.000Z",
 };
 
-const noop = () => {};
-
 test("a family without a ladder starts with me as the first contact", () => {
-	const view = render(
-		<LadderForm path={PATH} ladder={null} me={ME} onSaved={noop} />,
-	);
+	const view = render(<LadderForm path={PATH} ladder={null} me={ME} />);
 	expect(view.getByRole("status").textContent).toBe(
 		"No ladder yet: alerts contact nobody.",
 	);
@@ -69,29 +65,17 @@ test("a family without a ladder starts with me as the first contact", () => {
 });
 
 test("while my identity loads the form says so and leaves the member blank", () => {
-	const view = render(
-		<LadderForm path={PATH} ladder={null} me={null} onSaved={noop} />,
-	);
+	const view = render(<LadderForm path={PATH} ladder={null} me={null} />);
 	expect(view.getByRole("button", { name: /Yours is loading…/ })).toBeDefined();
 	expect(
 		(view.getByLabelText("Member identity") as HTMLInputElement).value,
 	).toBe("");
 });
 
-test("an edited ladder is saved as typed, and the caller hears about it", async () => {
+test("an edited ladder is saved as typed", async () => {
 	signIn();
 	const calls = serve({ [`PUT ${PATH}`]: { json: { ladder: null } } });
-	let savedCount = 0;
-	const view = render(
-		<LadderForm
-			path={PATH}
-			ladder={null}
-			me={ME}
-			onSaved={() => {
-				savedCount++;
-			}}
-		/>,
-	);
+	const view = render(<LadderForm path={PATH} ladder={null} me={ME} />);
 	const first = within(view.getByRole("group", { name: "Contact 1" }));
 	fireEvent.change(first.getByLabelText("Name"), { target: { value: "Ann" } });
 	fireEvent.change(first.getByLabelText("Time zone"), {
@@ -126,7 +110,6 @@ test("an edited ladder is saved as typed, and the caller hears about it", async 
 	fireEvent.click(view.getByRole("button", { name: "Save ladder" }));
 	expect(view.getByRole("status").textContent).toBe("Saving…");
 	expect(await view.findByText("Saved")).toBeDefined();
-	expect(savedCount).toBe(1);
 	expect(calls).toEqual([
 		{
 			method: "PUT",
@@ -163,9 +146,7 @@ test("an edited ladder is saved as typed, and the caller hears about it", async 
 });
 
 test("the ladder holds one to five contacts, and the backup can be removed", () => {
-	const view = render(
-		<LadderForm path={PATH} ladder={saved} me={ME} onSaved={noop} />,
-	);
+	const view = render(<LadderForm path={PATH} ladder={saved} me={ME} />);
 	expect(view.getByRole("status").textContent).toBe("Saved");
 	expect(
 		(view.getByLabelText("Seconds to accept") as HTMLInputElement).value,
@@ -201,29 +182,16 @@ test("a refused save shows the server's reason and does not report saved", async
 			},
 		},
 	});
-	let savedCount = 0;
-	const view = render(
-		<LadderForm
-			path={PATH}
-			ladder={saved}
-			me={ME}
-			onSaved={() => {
-				savedCount++;
-			}}
-		/>,
-	);
+	const view = render(<LadderForm path={PATH} ladder={saved} me={ME} />);
 	fireEvent.click(view.getByRole("button", { name: "Save ladder" }));
 	expect(
 		await view.findByText("Not saved: Contacts must be family members"),
 	).toBeDefined();
-	expect(savedCount).toBe(0);
 });
 
 test("signed out, saving asks to sign in and sends nothing", async () => {
 	const calls = serve({});
-	const view = render(
-		<LadderForm path={PATH} ladder={saved} me={ME} onSaved={noop} />,
-	);
+	const view = render(<LadderForm path={PATH} ladder={saved} me={ME} />);
 	fireEvent.submit(view.getByRole("button", { name: "Save ladder" }));
 	expect(await view.findByText("Sign in to save the ladder.")).toBeDefined();
 	expect(calls).toEqual([]);

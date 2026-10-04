@@ -11,6 +11,7 @@ import {
 } from "@tanstack/react-router";
 import { render, type screen as Screen, within } from "@testing-library/react";
 
+import { queryClient } from "@/lib/query";
 import { setSessionToken } from "@/lib/session";
 import { Route as rootRoute } from "@/routes/__root";
 
@@ -125,6 +126,8 @@ export function renderRoute(path: string) {
 	const router = createRouter({
 		routeTree,
 		history: createMemoryHistory({ initialEntries: [path] }),
+		defaultPreloadStaleTime: 0,
+		context: { queryClient },
 	});
 	return { router, ...render(<RouterProvider router={router} />) };
 }

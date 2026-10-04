@@ -83,7 +83,7 @@ function Sheet({
 	tab: (sheet: ReportSheetState) => ReactNode;
 	patch?: Partial<ReportSheetState>;
 }) {
-	const sheet = useReportSheet(value, "1", () => {}, null);
+	const sheet = useReportSheet(value, "1", null);
 	return <>{tab({ ...sheet, ...patch })}</>;
 }
 

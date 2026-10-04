@@ -12,7 +12,8 @@ import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
 import { useFamily } from "@/lib/family";
 
 export function DeleteFamilySettings() {
-	const { family, reload } = useFamily();
+	// A kept delete resets the family list (`invalidateAfterWrite`), so the screen moves on.
+	const { family } = useFamily();
 	const access = useApi(
 		CareAccess,
 		family === null ? null : familyPath(family.id, "/care-access"),
@@ -55,10 +56,7 @@ export function DeleteFamilySettings() {
 					familyId={family.id}
 					name={family.name}
 					onClose={() => setOpen(false)}
-					onDeleted={() => {
-						setOpen(false);
-						reload();
-					}}
+					onDeleted={() => setOpen(false)}
 				/>
 			)}
 		</Window>

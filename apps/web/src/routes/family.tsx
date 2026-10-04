@@ -3,7 +3,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
-import { useFamilyData } from "@/components/family/data";
+import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyPeople } from "@/components/family/invite";
 import {
 	AlertSection,
@@ -11,9 +11,10 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
-import { PersonPicker } from "@/lib/family";
+import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyOverview,
 });
 

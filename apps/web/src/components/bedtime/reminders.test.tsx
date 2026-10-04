@@ -110,7 +110,9 @@ test("a quiet night says nothing will wake the wearer and that nobody calls 911"
 		),
 	).toBeDefined();
 	expect(
-		view.getByText(/Nobody calls 911 when a reminder goes unanswered\./),
+		view.getByRole("button", {
+			name: /Nobody calls 911 when a reminder goes unanswered\./,
+		}),
 	).toBeDefined();
 	expect(view.queryByRole("alert")).toBeNull();
 });
@@ -144,7 +146,9 @@ test("tonight's saved reminders list soonest first with the saved repeat routine
 		expect.stringMatching(/Brush teeth$/),
 	]);
 	expect(
-		await view.findByText(/I ask again every 5 minutes, up to 3 times\./),
+		await view.findByRole("button", {
+			name: /I ask again every 5 minutes, up to 3 times\./,
+		}),
 	).toBeDefined();
 });
 
@@ -176,11 +180,11 @@ test("a due prompt sounds once, hands off to the phone when the speaker cannot s
 		clientId: "bedtime-3-1",
 		source: "web",
 	});
-	// The refresh after delivery reads the same prompt again; it is not sounded twice.
+	// Each write (handoff, delivery) reads the same prompt again; it is not sounded twice.
 	await waitFor(() =>
 		expect(
 			calls.filter((c) => c.path.endsWith("/reminder-occurrences")),
-		).toHaveLength(2),
+		).toHaveLength(3),
 	);
 	expect(prompts).toBe(1);
 });

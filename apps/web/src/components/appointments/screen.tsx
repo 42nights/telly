@@ -40,11 +40,7 @@ export function AppointmentsScreen() {
 }
 
 function FamilyAppointments({ familyId }: { familyId: string }) {
-	const [refreshKey, setRefreshKey] = useState(0);
-	const refresh = () => setRefreshKey((key) => key + 1);
-	const state = useApi(Appointments, familyPath(familyId, "/appointments"), {
-		refreshKey,
-	});
+	const state = useApi(Appointments, familyPath(familyId, "/appointments"));
 	const now = useNow();
 	if (state.kind !== "ready")
 		return (
@@ -63,7 +59,6 @@ function FamilyAppointments({ familyId }: { familyId: string }) {
 				key={appointment.id}
 				appointment={appointment}
 				familyId={familyId}
-				onChanged={refresh}
 			/>
 		));
 	return (
@@ -95,7 +90,7 @@ function FamilyAppointments({ familyId }: { familyId: string }) {
 					</Window>
 				)}
 			</div>
-			<NewVisit familyId={familyId} onCreated={refresh} />
+			<NewVisit familyId={familyId} />
 		</div>
 	);
 }
@@ -104,13 +99,7 @@ const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 // Some engines list neither `UTC` nor the device's alias zone, so the device zone is added first.
 const zones = [...new Set([localZone, ...Intl.supportedValuesOf("timeZone")])];
 
-function NewVisit({
-	familyId,
-	onCreated,
-}: {
-	familyId: string;
-	onCreated: () => void;
-}) {
+function NewVisit({ familyId }: { familyId: string }) {
 	const [visit, setVisit] = useState({
 		title: "",
 		clinician: "",
@@ -119,7 +108,7 @@ function NewVisit({
 		timeZone: localZone,
 	});
 	const [prep, setPrep] = useState(emptyPrep);
-	const { busy, failure, run } = useAction(onCreated);
+	const { busy, failure, run } = useAction();
 	let startsAt: string | null = null;
 	try {
 		startsAt = localToUtc(visit.local, visit.timeZone);

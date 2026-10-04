@@ -13,9 +13,13 @@ import { MedicationReminders } from "@/components/wearer/medication-reminder";
 import { Request } from "@/components/wearer/request";
 import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
-import { useWearerRecords } from "@/components/wearer/use-wearer-records";
+import {
+	loadWearerHome,
+	useWearerRecords,
+} from "@/components/wearer/use-wearer-records";
 
 export const Route = createFileRoute("/hud")({
+	loader: loadWearerHome,
 	component: HudComponent,
 });
 

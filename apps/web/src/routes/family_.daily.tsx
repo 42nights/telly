@@ -2,14 +2,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarCheck } from "lucide-react";
 
-import { useFamilyData } from "@/components/family/data";
+import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyGate } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
+import { loadFamilyReads } from "@/lib/family";
 
 export const Route = createFileRoute("/family_/daily")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyDaily,
 });
 

@@ -1,6 +1,6 @@
 import "../test/setup";
 
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { FamilyRecords } from "@health/contracts";
 import type {
 	FamilyLocations,
@@ -150,7 +150,6 @@ describe("SharingControls", () => {
 				familyId="1"
 				locations={locations([])}
 				me={me}
-				onChange={() => {}}
 				records={{ kind: "loading" }}
 			/>,
 		);
@@ -164,7 +163,6 @@ describe("SharingControls", () => {
 
 	test("lists each of my shares and stops one on request", async () => {
 		const calls = serve({ [`DELETE ${sharesPath(sister)}`]: ok });
-		const onChange = mock(() => {});
 		const view = render(
 			<SharingControls
 				familyId="1"
@@ -174,7 +172,6 @@ describe("SharingControls", () => {
 					seesShared: true,
 				}}
 				me={me}
-				onChange={onChange}
 				records={{ kind: "loading" }}
 			/>,
 		);
@@ -191,18 +188,15 @@ describe("SharingControls", () => {
 		expect(calls).toEqual([
 			{ method: "DELETE", path: sharesPath(sister), body: undefined },
 		]);
-		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
 	test("offers members seen in the records, except me and those already shared with", async () => {
 		const calls = serve({ [`PUT ${sharesPath(cousin)}`]: ok });
-		const onChange = mock(() => {});
 		const view = render(
 			<SharingControls
 				familyId="1"
 				locations={locations([share(sister)])}
 				me={me}
-				onChange={onChange}
 				records={records([me, sister, cousin, cousin], [brother, cousin])}
 			/>,
 		);
@@ -218,18 +212,15 @@ describe("SharingControls", () => {
 		expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
 			`PUT ${sharesPath(cousin)}`,
 		]);
-		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
 	test("shares by a typed sharing ID only when it is a valid identity, then clears the field", async () => {
 		const calls = serve({ [`PUT ${sharesPath(cousin)}`]: ok });
-		const onChange = mock(() => {});
 		const view = render(
 			<SharingControls
 				familyId="1"
 				locations={locations([])}
 				me={me}
-				onChange={onChange}
 				records={{ kind: "loading" }}
 			/>,
 		);
@@ -253,7 +244,6 @@ describe("SharingControls", () => {
 		expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
 			`PUT ${sharesPath(cousin)}`,
 		]);
-		expect(onChange).toHaveBeenCalledTimes(1);
 		expect(field).toHaveProperty("value", "");
 	});
 
@@ -265,7 +255,6 @@ describe("SharingControls", () => {
 				familyId="1"
 				locations={locations([share(sister)])}
 				me={me}
-				onChange={() => {}}
 				records={records([cousin], [])}
 			/>,
 		);
@@ -298,13 +287,11 @@ describe("SharingControls", () => {
 		],
 	])("a refused change shows why and changes nothing", async (reply, text) => {
 		serve({ [`DELETE ${sharesPath(sister)}`]: reply });
-		const onChange = mock(() => {});
 		const view = render(
 			<SharingControls
 				familyId="1"
 				locations={locations([share(sister)])}
 				me={me}
-				onChange={onChange}
 				records={{ kind: "loading" }}
 			/>,
 		);
@@ -314,7 +301,6 @@ describe("SharingControls", () => {
 				.click(),
 		);
 		expect(view.getByRole("alert").textContent).toBe(text);
-		expect(onChange).not.toHaveBeenCalled();
 	});
 });
 
@@ -393,7 +379,7 @@ describe("FamilyLocationSection", () => {
 				body: { error: "unavailable", message: "Location is off." },
 			}),
 		);
-		const alert = view.getByRole("alert");
+		const alert = await view.findByRole("alert");
 		expect(alert.textContent).toContain("Location unavailable");
 		expect(alert.textContent).toContain("Location is off.");
 		expect(view.queryByRole("article")).toBeNull();

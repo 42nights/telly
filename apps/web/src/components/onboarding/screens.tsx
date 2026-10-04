@@ -273,7 +273,7 @@ export function WhoScreen({
 	mode: Mode;
 	onDone: (family: Family) => void;
 }) {
-	const { select, reload } = useFamily();
+	const { select } = useFamily();
 	const seeded = mode === "seeded";
 	const [seed] = useState(() =>
 		seeded
@@ -306,7 +306,6 @@ export function WhoScreen({
 			setCreated(made);
 			localStorage.setItem(checklistKey(made.id), new Date().toISOString());
 			select(made.id);
-			reload();
 		}
 		const refused =
 			(await grantFounderScopes(made.id, me.identity)) ??

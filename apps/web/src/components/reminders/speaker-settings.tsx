@@ -35,12 +35,10 @@ const MODE_TEXT: Record<SimulatedSpeakerMode, string> = {
 
 export function SpeakerSettingsWindow() {
 	const { family } = useFamily();
-	const [refreshKey, setRefreshKey] = useState(0);
 	const path = family === null ? null : familyPath(family.id);
 	const saved = useApi(
 		SavedSpeakerSettings,
 		path === null ? null : `${path}/speaker-settings`,
-		{ refreshKey },
 	);
 	return (
 		<Window
@@ -59,7 +57,6 @@ export function SpeakerSettingsWindow() {
 						path={path}
 						saved={saved.value.settings}
 						savedAt={saved.value.updatedAt}
-						onSaved={() => setRefreshKey((k) => k + 1)}
 					/>
 					<SimulatorGroup path={path} />
 				</div>
@@ -72,12 +69,10 @@ function SpeakerForm({
 	path,
 	saved,
 	savedAt,
-	onSaved,
 }: {
 	path: string;
 	saved: SpeakerSettings;
 	savedAt: string | null;
-	onSaved: () => void;
 }) {
 	const [draft, setDraft] = useState(saved);
 	const [status, setStatus] = useState<string | null>(null);
@@ -90,8 +85,7 @@ function SpeakerForm({
 			`${path}/speaker-settings`,
 			{ method: "PUT", body: draft },
 		);
-		if (result.kind === "ready") onSaved();
-		else
+		if (result.kind !== "ready")
 			setStatus(
 				result.kind === "signed_out"
 					? "Sign in to save."
@@ -179,10 +173,8 @@ function SpeakerForm({
 
 /** The simulator's state and what it said, newest first. */
 function SimulatorGroup({ path }: { path: string }) {
-	const [refreshKey, setRefreshKey] = useState(0);
 	const speaker = useApi(SpeakerStatus, `${path}/speaker`, {
 		pollMs: 15_000,
-		refreshKey,
 	});
 	const [error, setError] = useState<string | null>(null);
 	const setMode = async (mode: SimulatedSpeakerMode) => {
@@ -199,7 +191,6 @@ function SimulatorGroup({ path }: { path: string }) {
 				? null
 				: result.message,
 		);
-		setRefreshKey((k) => k + 1);
 	};
 	return (
 		<fieldset className="grid gap-2 border border-border p-2">
@@ -208,10 +199,10 @@ function SimulatorGroup({ path }: { path: string }) {
 				<ApiNotice state={speaker} what="the simulated speaker" />
 			) : (
 				<>
-					<label className="grid gap-1">
+					<label className="flex items-center gap-2">
 						Speaker state
 						<select
-							className="win95-inset win95-field h-11 bg-card px-2 text-sm"
+							className="win95-inset win95-field h-11 min-w-0 flex-1 bg-card px-2 text-sm"
 							value={speaker.value.mode}
 							onChange={(e) =>
 								void setMode(e.target.value as SimulatedSpeakerMode)
@@ -229,22 +220,26 @@ function SimulatorGroup({ path }: { path: string }) {
 							Not changed: {error}
 						</p>
 					)}
-					<h3 className="font-bold">What it said</h3>
 					{speaker.value.announcements.length === 0 ? (
-						<p>Nothing yet.</p>
+						<p>
+							<b>What it said:</b> nothing yet.
+						</p>
 					) : (
-						<ol className="win95-inset grid max-h-40 gap-1 overflow-y-auto bg-card p-2">
-							{speaker.value.announcements.map((a) => (
-								<li key={`${a.occurrenceId}-${a.at}`}>
-									<time dateTime={a.at}>
-										{new Date(a.at).toLocaleTimeString([], {
-											timeStyle: "short",
-										})}
-									</time>
-									{" · "}“{a.text}”
-								</li>
-							))}
-						</ol>
+						<>
+							<h3 className="font-bold">What it said</h3>
+							<ol className="win95-inset grid max-h-40 gap-1 overflow-y-auto bg-card p-2">
+								{speaker.value.announcements.map((a) => (
+									<li key={`${a.occurrenceId}-${a.at}`}>
+										<time dateTime={a.at}>
+											{new Date(a.at).toLocaleTimeString([], {
+												timeStyle: "short",
+											})}
+										</time>
+										{" · "}“{a.text}”
+									</li>
+								))}
+							</ol>
+						</>
 					)}
 				</>
 			)}
