@@ -35,6 +35,52 @@ type ProviderHandler = (
 	body: string,
 ) => Response | Promise<Response> | undefined;
 
+type Bucket = Map<
+	string,
+	{ body: Uint8Array; type: string; lastModified: string }
+>;
+
+/** The S3 calls `integrations/r2.ts` makes: PUT, HEAD, presigned GET, and a ListObjectsV2 page. */
+const fakeR2 = (
+	bucket: Bucket,
+	request: Request,
+	url: URL,
+	raw: Uint8Array,
+) => {
+	// The server signs with a header; a presigned download link signs in its query.
+	const signed =
+		request.headers.get("authorization")?.startsWith("AWS4-HMAC") ||
+		url.searchParams.has("X-Amz-Signature");
+	if (!signed) return new Response(null, { status: 403 });
+	if (url.pathname === `/${R2_BUCKET}`) {
+		const prefix = url.searchParams.get("prefix") ?? "";
+		const contents = [...bucket]
+			.filter(([key]) => key.startsWith(prefix))
+			.map(
+				([key, object]) =>
+					`<Contents><Key>${key}</Key><Size>${object.body.length}</Size><LastModified>${object.lastModified}</LastModified></Contents>`,
+			);
+		return new Response(
+			`<ListBucketResult><IsTruncated>false</IsTruncated>${contents.join("")}</ListBucketResult>`,
+			{ headers: { "Content-Type": "application/xml" } },
+		);
+	}
+	const key = decodeURIComponent(url.pathname.slice(R2_BUCKET.length + 2));
+	if (request.method === "PUT") {
+		bucket.set(key, {
+			body: raw,
+			type: request.headers.get("content-type") ?? "",
+			lastModified: new Date().toISOString(),
+		});
+		return new Response(null, { status: 200 });
+	}
+	const object = bucket.get(key);
+	if (object === undefined) return new Response(null, { status: 404 });
+	return new Response(request.method === "HEAD" ? null : object.body, {
+		headers: { "Content-Type": object.type },
+	});
+};
+
 /**
  * Starts the fake providers and the real server for one test file; both stop after the file.
  * `providers.gemini` and `providers.elevenlabs` start empty: a test sets the reply it needs, and an
@@ -66,10 +112,7 @@ export const startIntegration = async (env: Partial<Env> = {}) => {
 	const calls: ProviderCall[] = [];
 	const providers: { gemini?: ProviderHandler; elevenlabs?: ProviderHandler } =
 		{};
-	const bucket = new Map<
-		string,
-		{ body: Uint8Array; type: string; lastModified: string }
-	>();
+	const bucket: Bucket = new Map();
 
 	const fake = Bun.serve({
 		hostname: "127.0.0.1",
@@ -105,47 +148,8 @@ export const startIntegration = async (env: Partial<Env> = {}) => {
 					(await providers.elevenlabs?.(request, body)) ??
 					Response.json({ detail: "overloaded" }, { status: 503 })
 				);
-			if (
-				pathname === `/${R2_BUCKET}` ||
-				pathname.startsWith(`/${R2_BUCKET}/`)
-			) {
-				// The server signs with a header; a presigned download link signs in its query.
-				const signed =
-					request.headers.get("authorization")?.startsWith("AWS4-HMAC") ||
-					url.searchParams.has("X-Amz-Signature");
-				if (!signed) return new Response(null, { status: 403 });
-				if (pathname === `/${R2_BUCKET}`) {
-					const prefix = url.searchParams.get("prefix") ?? "";
-					const contents = [...bucket]
-						.filter(([key]) => key.startsWith(prefix))
-						.map(
-							([key, object]) =>
-								`<Contents><Key>${key}</Key><Size>${object.body.length}</Size><LastModified>${object.lastModified}</LastModified></Contents>`,
-						);
-					return new Response(
-						`<ListBucketResult><IsTruncated>false</IsTruncated>${contents.join("")}</ListBucketResult>`,
-						{ headers: { "Content-Type": "application/xml" } },
-					);
-				}
-				const key = decodeURIComponent(pathname.slice(R2_BUCKET.length + 2));
-				if (request.method === "PUT") {
-					bucket.set(key, {
-						body: raw,
-						type: request.headers.get("content-type") ?? "",
-						lastModified: new Date().toISOString(),
-					});
-					return new Response(null, { status: 200 });
-				}
-				const object = bucket.get(key);
-				if (object === undefined) return new Response(null, { status: 404 });
-				if (request.method === "DELETE") {
-					bucket.delete(key);
-					return new Response(null, { status: 204 });
-				}
-				return new Response(request.method === "HEAD" ? null : object.body, {
-					headers: { "Content-Type": object.type },
-				});
-			}
+			if (pathname === `/${R2_BUCKET}` || pathname.startsWith(`/${R2_BUCKET}/`))
+				return fakeR2(bucket, request, url, raw);
 			return new Response(null, { status: 404 });
 		},
 	});

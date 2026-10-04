@@ -139,7 +139,7 @@ const tabs = [
 	{ name: "Care", path: "/care", heading: "Care · Smoke Family" },
 	{ name: "Dashboard", path: "/dashboard", heading: "Family dashboard" },
 	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
-	{ name: "Visits", path: "/appointments", heading: "Appointments" },
+	{ name: "Visits", path: "/appointments", heading: "Upcoming visits" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },
 ] as const;
 
@@ -167,10 +167,11 @@ test("a signed-in user opens every tab without a page error", async ({
 			await link.click();
 			await expect(page).toHaveURL(new RegExp(`${tab.path}$`));
 			await expect(link).toHaveAttribute("aria-current", "page");
+			// Loading ends first: some screens show another heading while they wait.
+			await expect(page.getByText("Waiting for the server.")).toHaveCount(0);
 			await expect(
 				page.getByRole("heading", { level: 2, name: tab.heading, exact: true }),
 			).toBeVisible();
-			await expect(page.getByText("Waiting for the server.")).toHaveCount(0);
 			await expect(
 				page.getByText("The server sent an unexpected reply"),
 			).toHaveCount(0);

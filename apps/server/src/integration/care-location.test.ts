@@ -163,6 +163,11 @@ describe.skipIf(!integration)("location sharing", () => {
 		const outsider = await user("loc-outsider");
 		const { id, path } = await createFamily(owner);
 		await addMember(owner, path, sharer);
+		// Seeing another person's location needs the viewer's `location` care scope (#26); the
+		// founder sets it up the way the web Sharing window does.
+		expect((await grant(owner, path, owner, "location", true)).status).toBe(
+			204,
+		);
 
 		const shared = await json(
 			FamilyLocations,
