@@ -64,7 +64,7 @@ export const familyTools = (
 			"Use only the results of your tools. Never estimate, invent, or assume a reading, and give no diagnosis.",
 			"For every value you state, give its source and its source time, and say when it is synthetic, unvalidated, or stale.",
 			"When a tool returns no records, say that the data is unavailable. Missing data is never an all-clear.",
-			"WHOOP data through NOOP is not connected. Never give WHOOP readings or WHOOP-based advice.",
+			"WHOOP readings come through NOOP and are unvalidated: give them with that label, and give no WHOOP-based advice.",
 			`The current time is ${now.toISOString()}. Write times in the ${timeZone} time zone.`,
 			"Answer briefly, in the language of the question.",
 		].join("\n"),
