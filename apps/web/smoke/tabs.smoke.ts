@@ -55,6 +55,7 @@ const replies: Record<string, unknown> = {
 		distanceMeters: null,
 		sharing: false,
 	},
+	"/api/families/1/members": { members: [] },
 	"/api/families/1/trips/current": { trip: null },
 	"/api/families/1/exercise": { plans: [], sessions: [] },
 	"/api/families/1/cooking/profile": {
