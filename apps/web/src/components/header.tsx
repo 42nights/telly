@@ -3,7 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { ModeToggle } from "./mode-toggle";
 
 export default function Header() {
-	const links = [{ to: "/", label: "Home" }] as const;
+	const links = [
+		{ to: "/", label: "Home" },
+		{ to: "/hud", label: "HUD" },
+	] as const;
 
 	return (
 		<div>

@@ -1,1 +1,112 @@
 @import "@health/ui/globals.css";
+
+/*
+ * Windows 95 theme for the web app. Original styles that follow the visual direction of
+ * github.com/undeemed/windows-95-web-designer; no source or assets are copied.
+ * Win95 has one look, so light and dark share it. Text stays at a readable size and every
+ * text color pair keeps WCAG AA contrast (muted text uses #404040, not the #808080 shadow).
+ */
+:root,
+.dark {
+	--win95-desktop: #008080;
+	--win95-face: #c0c0c0;
+	--win95-light: #dfdfdf;
+	--win95-highlight: #ffffff;
+	--win95-shadow: #808080;
+	--win95-dark-shadow: #000000;
+	--win95-title: #000080;
+	--win95-title-end: #1084d0;
+
+	--background: var(--win95-face);
+	--foreground: #000000;
+	--card: #ffffff;
+	--card-foreground: #000000;
+	--popover: var(--win95-face);
+	--popover-foreground: #000000;
+	--primary: var(--win95-title);
+	--primary-foreground: #ffffff;
+	--secondary: var(--win95-face);
+	--secondary-foreground: #000000;
+	--muted: var(--win95-face);
+	--muted-foreground: #404040;
+	--accent: var(--win95-title);
+	--accent-foreground: #ffffff;
+	--destructive: #800000;
+	--border: var(--win95-shadow);
+	--input: var(--win95-shadow);
+	--ring: #000000;
+	--radius: 0;
+}
+
+@theme inline {
+	--font-sans: Tahoma, "Segoe UI", Arial, sans-serif;
+}
+
+/* Unlayered, so every shadcn button variant gets the raised Win95 face over its utilities. */
+[data-slot="button"] {
+	background-color: var(--win95-face);
+	color: #000000;
+	/* The bevel draws the edge; the variants' transparent 1px border would show a gap around it. */
+	border: 0;
+	min-height: 2.75rem;
+	/* Win95 chrome switches state instantly; an animated bevel reads as a broken edge. */
+	transition: none;
+	box-shadow:
+		inset -1px -1px 0 var(--win95-dark-shadow),
+		inset 1px 1px 0 var(--win95-highlight),
+		inset -2px -2px 0 var(--win95-shadow),
+		inset 2px 2px 0 var(--win95-light);
+}
+[data-slot="button"]:active:not(:disabled) {
+	box-shadow:
+		inset 1px 1px 0 var(--win95-dark-shadow),
+		inset -1px -1px 0 var(--win95-highlight),
+		inset 2px 2px 0 var(--win95-shadow);
+}
+[data-slot="button"]:focus-visible {
+	outline: 1px dotted #000000;
+	outline-offset: -4px;
+}
+
+/* Etched separator: a shadow line over a highlight line, never a flat one-pixel border. */
+hr {
+	border: 0;
+	border-top: 1px solid var(--win95-shadow);
+	border-bottom: 1px solid var(--win95-highlight);
+}
+
+@layer components {
+	/* Raised 3D chrome for window frames. Hard pixel bevels, never blurred. */
+	.win95-raised {
+		background-color: var(--win95-face);
+		box-shadow:
+			inset -1px -1px 0 var(--win95-dark-shadow),
+			inset 1px 1px 0 var(--win95-highlight),
+			inset -2px -2px 0 var(--win95-shadow),
+			inset 2px 2px 0 var(--win95-light),
+			2px 2px 0 var(--win95-dark-shadow);
+	}
+	/* Sunken wells: inputs, lists, and the camera viewport. */
+	.win95-inset {
+		box-shadow:
+			inset 1px 1px 0 var(--win95-shadow),
+			inset -1px -1px 0 var(--win95-highlight),
+			inset 2px 2px 0 var(--win95-dark-shadow),
+			inset -2px -2px 0 var(--win95-light);
+	}
+	.win95-window {
+		padding: 3px;
+	}
+	.win95-titlebar {
+		background: linear-gradient(
+			90deg,
+			var(--win95-title) 0%,
+			var(--win95-title-end) 100%
+		);
+		color: #ffffff;
+		font-weight: 700;
+	}
+	.win95-desktop {
+		background-color: var(--win95-desktop);
+	}
+}
