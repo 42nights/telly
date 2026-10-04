@@ -129,3 +129,22 @@ for (const [width, height] of [
 			}
 			expect(overflow).toEqual([]);
 		});
+
+// Wearer Home on a phone (captain, 2026-10-04: "i cant scroll down here"): Request and Emergency
+// fill the screen, so the window body scrolls and Today keeps a box a finger can scroll. 390x664 is
+// an iPhone 13 in Safari, after its address and tool bars.
+test("wearer Home scrolls on a phone, and Today stays usable", async ({
+	page,
+	baseURL,
+}) => {
+	await page.setViewportSize({ width: 390, height: 664 });
+	await signIn(page);
+	await page.addInitScript(() => localStorage.setItem("telly.view", "wearer"));
+	await watch(page, baseURL, routes);
+	await page.goto("/hud");
+	await page.waitForLoadState("networkidle");
+	const today = page.getByRole("region", { name: /^Today/ });
+	await today.scrollIntoViewIfNeeded();
+	await expect(today).toBeInViewport({ ratio: 1 });
+	expect((await today.boundingBox())?.height).toBeGreaterThanOrEqual(190);
+});
