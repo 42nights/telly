@@ -3,6 +3,7 @@ import { deflateRawSync } from "node:zlib";
 import { ApiError, Sources } from "@health/contracts";
 import { Exit, Schema } from "effect";
 import { createApp } from "./app";
+import { serverConfig } from "./config";
 import type { NoopSample } from "./integrations/noop-ingest";
 
 // Sign-in is not configured, as in a fresh checkout.
@@ -178,5 +179,28 @@ describe("server boundaries", () => {
 		expect(
 			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
 		).toBe("unavailable");
+	});
+
+	test("each listed CORS origin is allowed, and no other", async () => {
+		const app = createApp(
+			serverConfig({
+				CORS_ORIGIN:
+					"https://app.saintess.tech,https://telly.example.workers.dev",
+				ELEVENLABS_VOICE_ID: "voice",
+				ELEVENLABS_API_URL: "http://127.0.0.1:1",
+				GEMINI_BASE_URL: "http://127.0.0.1:1",
+			}),
+		);
+		const allowed = async (origin: string) =>
+			(
+				await app.request("/health", { headers: { Origin: origin } })
+			).headers.get("Access-Control-Allow-Origin");
+		expect(await allowed("https://app.saintess.tech")).toBe(
+			"https://app.saintess.tech",
+		);
+		expect(await allowed("https://telly.example.workers.dev")).toBe(
+			"https://telly.example.workers.dev",
+		);
+		expect(await allowed("https://evil.test")).toBeNull();
 	});
 });

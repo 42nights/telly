@@ -4,8 +4,8 @@
 # Target (captain decision `telly-cd-target`): the 42nights Cloudflare account. `deploy` runs
 # deploy/cloudflare/deploy.sh: the Worker `telly` serves web/ as static assets and runs server/ in a
 # Cloudflare Container. Public settings are in deploy/cloudflare/settings.env. Every job runs only
-# when the repository variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set (both
-# https://telly.jerry-2c0.workers.dev), and `deploy` needs the repository secrets
+# when the repository variables HEALTH_SERVER_URL and HEALTH_WEB_URL are set
+# (https://api.saintess.tech and https://app.saintess.tech), and `deploy` needs the repository secrets
 # TELLY_DEPLOY_CLOUDFLARE_API_TOKEN and TELLY_SECRETS_PULL_TOKEN (docs/deploy.md).
 #
 # Secrets: only push and workflow_dispatch start this workflow, never pull_request, so pull-request
