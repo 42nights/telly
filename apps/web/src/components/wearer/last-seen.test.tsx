@@ -20,6 +20,7 @@ import {
 
 import { RememberPlace, SavedThings } from "./last-seen";
 import type { PictureCheck } from "./medicine-check";
+import { whenSeen } from "./logic";
 
 installDom();
 
@@ -158,9 +159,9 @@ describe("SavedThings", () => {
 		);
 		const list = view.getByRole("region", { name: "Where is my…?" });
 		expect(view.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-			"Lisinopril bottleKitchen counter · 3 min ago",
-			"keysHall table · 1 h ago",
-			"GlassesDesk · 13 h ago",
+			`Lisinopril bottleKitchen counter · ${whenSeen(minutesAgo(3), now)}`,
+			`keysHall table · ${whenSeen(minutesAgo(60), now)}`,
+			`GlassesDesk · ${whenSeen(minutesAgo(13 * 60), now)}`,
 		]);
 		// Only a thing saved with a picture shows one.
 		expect(list.querySelectorAll("img")).toHaveLength(1);
@@ -170,7 +171,9 @@ describe("SavedThings", () => {
 		expect(
 			view.getByRole("button", { name: /^keys/ }).getAttribute("aria-pressed"),
 		).toBe("true");
-		expect(list.textContent).toContain("Last seen 1 h ago at Hall table.");
+		expect(list.textContent).toContain(
+			`Last seen ${whenSeen(minutesAgo(60), now)} at Hall table.`,
+		);
 		expect(list.textContent).toContain("Usually kept at Hall table.");
 		view.getByText(
 			"This is where it was seen before, not where it is now. Go there and check with the camera.",
@@ -192,7 +195,7 @@ describe("SavedThings", () => {
 			/>,
 		);
 		expect(view.container.textContent).toContain(
-			"Last seen 1 h ago at Hall table.",
+			`Last seen ${whenSeen(minutesAgo(60), now)} at Hall table.`,
 		);
 		expect(view.container.textContent).not.toContain("at Kitchen counter.");
 	});
@@ -234,7 +237,7 @@ describe("SavedThings", () => {
 				/>,
 			);
 			expect(view.container.textContent).toContain(
-				"Last seen 1 h ago at Hall table.",
+				`Last seen ${whenSeen(minutesAgo(60), now)} at Hall table.`,
 			);
 			await view.findByText("The marker showed where you pinned keys.");
 			expect(calls.map((c) => c.path)).toEqual([
@@ -296,7 +299,7 @@ describe("SavedThings", () => {
 				})}
 			/>,
 		);
-		view.getByText("It was not there 2 min ago. This place is out of date.");
+		view.getByText("It was not there 2 minutes ago. This place is out of date.");
 		expect(view.queryByRole("button", { name: "It's not there" })).toBeNull();
 		view.getByText("Other places to look:");
 		expect(

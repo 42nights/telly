@@ -16,6 +16,7 @@ import {
 	SIGHTING_OLD_MS,
 	sightingState,
 	USUAL_BPM,
+	whenSeen,
 	whoopHeartRate,
 } from "./logic";
 
@@ -187,5 +188,23 @@ test("a direction names the side and the height of the box centre", () => {
 	);
 	expect(direction({ x: 400, y: 400, width: 100, height: 100 }, frame)).toBe(
 		"Look straight ahead.",
+	);
+});
+
+test("a last-seen time reads in the words of the person's own day", () => {
+	const now = Date.parse("2026-10-04T18:00:00");
+	expect(whenSeen("2026-10-04T18:01:00", now)).toBe("just now");
+	expect(whenSeen("2026-10-04T17:48:00", now)).toBe("12 minutes ago");
+	expect(whenSeen("2026-10-04T09:00:00", now)).toBe("this morning");
+	expect(whenSeen("2026-10-04T15:00:00", now)).toBe("this afternoon");
+	expect(whenSeen("2026-10-04T17:00:00", now)).toBe("this evening");
+	expect(whenSeen("2026-10-03T19:00:00", now)).toBe("yesterday evening");
+	const weekday = "2026-10-01T10:00:00";
+	expect(whenSeen(weekday, now)).toBe(
+		`${new Date(weekday).toLocaleDateString([], { weekday: "long" })} morning`,
+	);
+	const older = "2026-09-14T10:00:00";
+	expect(whenSeen(older, now)).toBe(
+		new Date(older).toLocaleDateString([], { month: "long", day: "numeric" }),
 	);
 });
