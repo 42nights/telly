@@ -86,11 +86,14 @@ describe.skipIf(!integration)("care access", () => {
 			"care_plan_edit",
 		] as const)
 			expect((await grant(owner, path, owner, scope, true)).status).toBe(204);
-		expect([...(await accessOf(owner, path)).mine].sort()).toEqual([
-			"care_plan_edit",
-			"family_access",
-			"health_records",
-		]);
+		// At least these; after #188 the founder also holds every other scope.
+		expect((await accessOf(owner, path)).mine).toEqual(
+			expect.arrayContaining([
+				"care_plan_edit",
+				"family_access",
+				"health_records",
+			]),
+		);
 		// With health_records the creator can read the care profile.
 		await json(
 			CareProfileRecord,
@@ -139,6 +142,7 @@ describe.skipIf(!integration)("care access", () => {
 		const owner = await user("owner");
 		const outsider = await user("outsider");
 		const { path } = await createFamily(owner);
+		const before = await accessOf(owner, path);
 		expect(
 			await errorOf(await outsider.call("GET", `${path}/care-access`)),
 		).toEqual([403, "forbidden"]);
@@ -147,7 +151,8 @@ describe.skipIf(!integration)("care access", () => {
 				await grant(outsider, path, outsider, "family_access", true),
 			),
 		).toEqual([403, "forbidden"]);
-		expect((await accessOf(owner, path)).history).toEqual([]);
+		// The refused grant changed nothing.
+		expect(await accessOf(owner, path)).toEqual(before);
 	});
 });
 

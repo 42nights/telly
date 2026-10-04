@@ -211,18 +211,22 @@ describe.skipIf(!integration)("medication reminders", () => {
 	});
 
 	// #188: a new family has no care grants; flip to test() when #188 merges.
-	test.failing("the creator adds the medication instruction to the family's plan", async () => {
+	test.failing("the creator adds a medication instruction to the family's plan", async () => {
+		// Its own name, so the instruction the reminder uses below never depends on this test.
+		const first = { ...instruction, name: "Synthetic Metformin" };
 		const added = await owner.call(
 			"POST",
 			`${family.path}/care-instructions`,
-			instruction,
+			first,
 		);
 		expect(added.status).toBe(204);
 		const plan = await json(
 			CareInstructions,
 			await owner.call("GET", `${family.path}/care-instructions`),
 		);
-		expect(plan.instructions[0]).toMatchObject(instruction);
+		expect(plan.instructions.find((i) => i.name === first.name)).toMatchObject(
+			first,
+		);
 	});
 
 	test("after the founder grants their own care scopes, they add and verify the instruction", async () => {
@@ -238,10 +242,9 @@ describe.skipIf(!integration)("medication reminders", () => {
 			CareAccess,
 			await owner.call("GET", `${family.path}/care-access`),
 		);
-		expect([...access.mine].sort()).toEqual([
-			"care_plan_edit",
-			"health_records",
-		]);
+		expect(access.mine).toEqual(
+			expect.arrayContaining(["care_plan_edit", "health_records"]),
+		);
 
 		const added = await owner.call(
 			"POST",
@@ -249,12 +252,12 @@ describe.skipIf(!integration)("medication reminders", () => {
 			instruction,
 		);
 		expect(added.status).toBe(204);
-		const [unverified] = (
+		const unverified = (
 			await json(
 				CareInstructions,
 				await owner.call("GET", `${family.path}/care-instructions`),
 			)
-		).instructions;
+		).instructions.find((i) => i.name === instruction.name);
 		expect(unverified).toMatchObject({
 			...instruction,
 			verification: "unverified",
