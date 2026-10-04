@@ -36,6 +36,7 @@ export const errorStatus = {
 	unauthorized: 401,
 	forbidden: 403,
 	not_found: 404,
+	conflict: 409,
 	internal: 500,
 	upstream_error: 502,
 	unavailable: 503,

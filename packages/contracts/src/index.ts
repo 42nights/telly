@@ -26,8 +26,9 @@ export type Sources = typeof Sources.Type;
 /**
  * Every non-2xx JSON response from the server. `unauthorized` (401): no valid sign-in.
  * `forbidden` (403): signed in, but not a member of the family. `invalid_request` (400): the body or
- * path failed its schema. `unavailable` (503): a provider or the database is not configured or not
- * reachable; never a substitute result. `upstream_error` (502): a provider replied with an error.
+ * path failed its schema. `conflict` (409): the resource's state forbids the change. `unavailable`
+ * (503): a provider or the database is not configured or not reachable; never a substitute result.
+ * `upstream_error` (502): a provider replied with an error.
  */
 export const ApiErrorCode = Schema.Literals([
 	"not_found",
@@ -35,6 +36,7 @@ export const ApiErrorCode = Schema.Literals([
 	"unauthorized",
 	"forbidden",
 	"invalid_request",
+	"conflict",
 	"unavailable",
 	"upstream_error",
 ]);

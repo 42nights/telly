@@ -1,5 +1,6 @@
 import type { AuthConfig } from "./auth";
 import type { ElevenLabsConfig } from "./integrations/elevenlabs";
+import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 
 export type ServerConfig = {
@@ -10,6 +11,8 @@ export type ServerConfig = {
 	readonly voice: ElevenLabsConfig;
 	/** Undefined without `GEMINI_API_KEY`: vision routes then answer `unavailable`. */
 	readonly gemini?: GeminiConfig | undefined;
+	/** Undefined when FinchNode is off: its routes then answer `unavailable`. */
+	readonly finchnode?: Finchnode;
 };
 
 type Env = {
@@ -23,6 +26,8 @@ type Env = {
 	readonly ELEVENLABS_API_URL: string;
 	readonly GEMINI_API_KEY?: string | undefined;
 	readonly GEMINI_BASE_URL: string;
+	readonly FINCHNODE_MODE?: "off" | "demo" | "api" | undefined;
+	readonly FINCHNODE_API_KEY?: string | undefined;
 };
 
 /** Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. */
@@ -33,24 +38,31 @@ export const serverConfig = (env: Env): ServerConfig => {
 		SPACETIMEDB_URI: uri,
 		SPACETIMEDB_DATABASE: database,
 	} = env;
-	const voice = {
-		apiKey: env.ELEVENLABS_API_KEY,
-		voiceId: env.ELEVENLABS_VOICE_ID,
-		baseUrl: env.ELEVENLABS_API_URL,
+	const finchnode = finchnodeFromEnv(
+		env.FINCHNODE_MODE ?? "off",
+		env.FINCHNODE_API_KEY,
+	);
+	const base = {
+		corsOrigin: env.CORS_ORIGIN,
+		voice: {
+			apiKey: env.ELEVENLABS_API_KEY,
+			voiceId: env.ELEVENLABS_VOICE_ID,
+			baseUrl: env.ELEVENLABS_API_URL,
+		},
+		...(finchnode === undefined ? {} : { finchnode }),
 	};
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 		: undefined;
 	if (issuer && audience && uri && database)
 		return {
-			corsOrigin: env.CORS_ORIGIN,
-			auth: { issuer, audience, db: { uri, database } },
-			voice,
+			...base,
 			gemini,
+			auth: { issuer, audience, db: { uri, database } },
 		};
 	if (issuer || audience || uri || database)
 		throw new Error(
 			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none",
 		);
-	return { corsOrigin: env.CORS_ORIGIN, auth: undefined, voice, gemini };
+	return { ...base, gemini, auth: undefined };
 };

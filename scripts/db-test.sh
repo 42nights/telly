@@ -35,4 +35,5 @@ spacetime --config-path "$data/cli.toml" publish --server "$server" --module-pat
 bun run --filter server build >/dev/null
 SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIMEDB_OPERATOR_TOKEN="$token" \
 	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
-	apps/server/src/routes/alerts.test.ts apps/server/src/reliability.test.ts
+	apps/server/src/routes/alerts.test.ts apps/server/src/reliability.test.ts \
+	apps/server/src/routes/reports.test.ts apps/server/src/routes/finchnode.test.ts
