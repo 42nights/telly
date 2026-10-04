@@ -29,6 +29,7 @@ import {
 import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
+import { UseDemoData } from "@/components/settings/demo-data";
 import { FamilyLocationSection } from "@/components/trip/location";
 import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
@@ -88,6 +89,10 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<KeyNumbers data={data} family={family} />
 				<ReadingsGlance data={data} familyId={family.id} now={now} />
+				{data.readings.kind === "ready" &&
+					!data.readings.value.samples.some(
+						(s) => s.familyId === family.id && s.source.startsWith("noop:"),
+					) && <UseDemoData familyId={family.id} />}
 				<SourceList />
 			</section>
 

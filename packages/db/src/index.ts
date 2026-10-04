@@ -86,6 +86,7 @@ import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
+import SetDemoDataReducer from "./set_demo_data_reducer";
 import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetMyNameReducer from "./set_my_name_reducer";
@@ -94,6 +95,7 @@ import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
 import SettleReportEmailReducer from "./settle_report_email_reducer";
 import ShareLocationReducer from "./share_location_reducer";
+import ShowDemoAlertReducer from "./show_demo_alert_reducer";
 import SuggestAppointmentReducer from "./suggest_appointment_reducer";
 import UpdateAppointmentPrepReducer from "./update_appointment_prep_reducer";
 import UpdateReportReducer from "./update_report_reducer";
@@ -484,6 +486,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
+  __reducerSchema("set_demo_data", SetDemoDataReducer),
   __reducerSchema("set_family_push_token", SetFamilyPushTokenReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_my_name", SetMyNameReducer),
@@ -492,6 +495,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
   __reducerSchema("settle_report_email", SettleReportEmailReducer),
   __reducerSchema("share_location", ShareLocationReducer),
+  __reducerSchema("show_demo_alert", ShowDemoAlertReducer),
   __reducerSchema("suggest_appointment", SuggestAppointmentReducer),
   __reducerSchema("update_appointment_prep", UpdateAppointmentPrepReducer),
   __reducerSchema("update_report", UpdateReportReducer),

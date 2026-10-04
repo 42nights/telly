@@ -6,7 +6,7 @@ import { Button } from "@health/ui/components/button";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, LogOut, Monitor, Users, X } from "lucide-react";
 import { useRef } from "react";
-
+import { useDemoData } from "@/components/settings/demo-data";
 import { useFamily } from "@/lib/family";
 import { setSessionToken } from "@/lib/session";
 import { setView, useView, type View } from "@/lib/view";
@@ -27,6 +27,7 @@ export function Shell() {
 	const pathname = useLocation({ select: (location) => location.pathname });
 	const { screen, tab, up } = locate(pathname, view);
 	const { family } = useFamily();
+	const demoOn = useDemoData()?.on === true;
 	const startMenu = useRef<HTMLDivElement>(null);
 	const signOut = useRef<HTMLDialogElement>(null);
 	const Icon = screen?.icon ?? Monitor;
@@ -132,6 +133,14 @@ export function Shell() {
 				<p className="win95-status flex-1 px-2 py-0.5">
 					{family?.name ?? "No person"}
 				</p>
+				{demoOn && (
+					<p
+						className="win95-status px-2 py-0.5"
+						title="Replaying a real WHOOP recording"
+					>
+						Demo
+					</p>
+				)}
 				<p className="win95-status px-2 py-0.5">
 					{view === "wearer" ? "Wearer view" : "Family view"}
 				</p>

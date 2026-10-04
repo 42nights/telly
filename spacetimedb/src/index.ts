@@ -962,6 +962,32 @@ const memberName = table(
 	},
 );
 
+// Demo data (#334): the captain's exception to "real data only", for the demo video. While a family
+// has a `demoReplay` row, the database replays a real WHOOP recording as live (`setDemoData`).
+const demoReplay = table(
+	{ name: "demo_replay" },
+	{
+		familyId: t.u64().primaryKey(),
+		// The family whose WHOOP recording is replayed: this one, or `DEMO_RECORDING_FAMILY`.
+		recordingFamilyId: t.u64(),
+		// The index of the next heart rate of the recording to record.
+		next: t.u32(),
+		lastAlertAt: t.option(t.timestamp()),
+		startedBy: t.identity(),
+		startedAt: t.timestamp(),
+	},
+);
+
+// One repeating timer per replaying family; each run records the next heart rate.
+const demoTimer = table(
+	{ name: "demo_timer" },
+	{
+		scheduledId: t.u64().primaryKey().autoInc(),
+		scheduledAt: t.scheduleAt(),
+		familyId: t.u64().index("btree"),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -1009,6 +1035,8 @@ const spacetimedb = schema({
 	familyPushToken,
 	familyDeletion,
 	memberName,
+	demoReplay,
+	demoTimer,
 });
 export default spacetimedb;
 
@@ -3443,10 +3471,21 @@ export const myHealthSamples = spacetimedb.view(
 	{ name: "my_health_samples", public: true },
 	t.array(healthSample.rowType),
 	(ctx) =>
-		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones.
+		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones. While
+		// demo data replays, its copies stand in for the recording they copy (#334), for everyone but
+		// the family's push-token ingest identity.
+		// ponytail: the legacy NOOP_INGEST_KEY identity is not exempt; a push to a replaying legacy family
+		// may store a reading twice.
 		healthReader(
 			ctx,
-			(familyId) => ctx.db.healthSample.familyId.filter(familyId),
+			(familyId) => {
+				const rows = ctx.db.healthSample.familyId.filter(familyId);
+				const ingest = ctx.db.familyPushToken.familyId.find(familyId)?.ingest;
+				return ctx.db.demoReplay.familyId.find(familyId) === null ||
+					ingest?.isEqual(ctx.sender) === true
+					? rows
+					: [...rows].filter((s) => !isRecorded(s));
+			},
 			(s) => s.recordedBy.isEqual(ctx.sender),
 		),
 );
@@ -4174,6 +4213,8 @@ export const deleteFamily = spacetimedb.reducer(
 			db.reportEmail.familyId,
 			db.familyInvite.familyId,
 			db.familyPushToken.familyId,
+			db.demoReplay.familyId,
+			db.demoTimer.familyId,
 		])
 			index.delete(familyId);
 		db.family.id.delete(familyId);
@@ -4223,4 +4264,174 @@ export const myFamilyPeople = spacetimedb.view(
 					}));
 			},
 		),
+);
+
+// Demo data (#334). `setDemoData` copies a real WHOOP recording into the family with every time
+// moved so its newest sample is now, then `runDemoTimer` records the recording's next heart rate
+// every `DEMO_TICK_MICROS`, as if the strap were live. Every copy has the source `DEMO_SOURCE`, so
+// turning demo data off deletes exactly the copies. Any member may: the captain wants every login,
+// including a judge's new family, to see it.
+const DEMO_SOURCE = "noop:demo";
+// Telly's Family, which holds the WHOOP recording in data/whoop/. A family with no recording of its
+// own replays this one (captain's call).
+const DEMO_RECORDING_FAMILY = 3n;
+const DEMO_TICK_MICROS = 15_000_000n;
+const DEMO_ALERT_GAP_MICROS = 60_000_000n;
+// How far above the family's heart-rate threshold the demo alert's spike goes.
+const DEMO_SPIKE_BPM = 15;
+
+type Sample = Infer<typeof healthSample.rowType>;
+
+/** A real WHOOP reading pushed through NOOP: never synthetic, never a demo copy. */
+const isRecorded = (s: Sample) =>
+	!s.synthetic && s.source.startsWith("noop:") && s.source !== DEMO_SOURCE;
+
+const recordingOf = (ctx: Ctx, familyId: bigint) =>
+	[...ctx.db.healthSample.familyId.filter(familyId)].filter(isRecorded);
+
+const insertDemoSample = (
+	ctx: Ctx,
+	familyId: bigint,
+	{
+		metric,
+		value,
+		unit,
+		quality,
+	}: Pick<Sample, "metric" | "value" | "unit" | "quality">,
+	sourceTime: Timestamp,
+) =>
+	ctx.db.healthSample.insert({
+		id: 0n,
+		familyId,
+		metric,
+		value,
+		unit,
+		sourceTime,
+		receivedAt: ctx.timestamp,
+		source: DEMO_SOURCE,
+		synthetic: false,
+		quality,
+		recordedBy: ctx.databaseIdentity,
+	});
+
+export const setDemoData = spacetimedb.reducer(
+	{ familyId: t.u64(), on: t.bool() },
+	(ctx, { familyId, on }) => {
+		requireMember(ctx, familyId);
+		if (!on) {
+			ctx.db.demoReplay.familyId.delete(familyId);
+			ctx.db.demoTimer.familyId.delete(familyId);
+			for (const s of [...ctx.db.healthSample.familyId.filter(familyId)])
+				if (s.source === DEMO_SOURCE) ctx.db.healthSample.id.delete(s.id);
+			return;
+		}
+		if (ctx.db.demoReplay.familyId.find(familyId) !== null) return;
+		let recordingFamilyId = familyId;
+		let recording = recordingOf(ctx, familyId);
+		if (recording.length === 0) {
+			recordingFamilyId = DEMO_RECORDING_FAMILY;
+			recording = recordingOf(ctx, DEMO_RECORDING_FAMILY);
+		}
+		if (!recording.some((s) => s.metric === "heart_rate"))
+			throw new SenderError("there is no WHOOP recording to replay");
+		let newest = 0n;
+		for (const s of recording)
+			if (s.sourceTime.microsSinceUnixEpoch > newest)
+				newest = s.sourceTime.microsSinceUnixEpoch;
+		const shift = ctx.timestamp.microsSinceUnixEpoch - newest;
+		for (const s of recording)
+			insertDemoSample(
+				ctx,
+				familyId,
+				s,
+				new Timestamp(s.sourceTime.microsSinceUnixEpoch + shift),
+			);
+		ctx.db.demoReplay.insert({
+			familyId,
+			recordingFamilyId,
+			next: 0,
+			lastAlertAt: undefined,
+			startedBy: ctx.sender,
+			startedAt: ctx.timestamp,
+		});
+		ctx.db.demoTimer.insert({
+			scheduledId: 0n,
+			scheduledAt: ScheduleAt.interval(DEMO_TICK_MICROS),
+			familyId,
+		});
+	},
+);
+
+export const runDemoTimer = spacetimedb.reducer(
+	{ onSchedule: demoTimer },
+	{ timer: demoTimer.rowType },
+	(ctx, { timer }) => {
+		if (!ctx.sender.isEqual(ctx.databaseIdentity))
+			throw new SenderError("only the database runs demo timers");
+		const replay = ctx.db.demoReplay.familyId.find(timer.familyId);
+		if (replay === null) {
+			ctx.db.demoTimer.scheduledId.delete(timer.scheduledId);
+			return;
+		}
+		const rates = recordingOf(ctx, replay.recordingFamilyId)
+			.filter((s) => s.metric === "heart_rate")
+			.sort((a, b) =>
+				a.sourceTime.microsSinceUnixEpoch < b.sourceTime.microsSinceUnixEpoch
+					? -1
+					: 1,
+			);
+		const next = rates[replay.next % Math.max(rates.length, 1)];
+		if (next === undefined) return;
+		ctx.db.demoReplay.familyId.update({
+			...replay,
+			next: (replay.next + 1) % rates.length,
+		});
+		raiseThresholdAlerts(
+			ctx,
+			insertDemoSample(ctx, timer.familyId, next, ctx.timestamp),
+		);
+	},
+);
+
+// One heart-rate spike above the family's threshold, through the alert path a real reading takes,
+// so the video shows the alert and its family delivery. At most one a minute.
+export const showDemoAlert = spacetimedb.reducer(
+	{ familyId: t.u64() },
+	(ctx, { familyId }) => {
+		requireMember(ctx, familyId);
+		const replay = ctx.db.demoReplay.familyId.find(familyId);
+		if (replay === null) throw new SenderError("demo data is off");
+		if (
+			replay.lastAlertAt !== undefined &&
+			ctx.timestamp.microsSinceUnixEpoch -
+				replay.lastAlertAt.microsSinceUnixEpoch <
+				DEMO_ALERT_GAP_MICROS
+		)
+			throw new SenderError("one demo alert a minute: try again shortly");
+		const rule = [
+			...ctx.db.alertThreshold.byFamilyMetric.filter([familyId, "heart_rate"]),
+		].find((r) => r.direction.tag === "Above" && r.unit === "bpm");
+		if (rule === undefined)
+			throw new SenderError(
+				"set a heart rate threshold (above, in bpm) to show an alert",
+			);
+		ctx.db.demoReplay.familyId.update({
+			...replay,
+			lastAlertAt: ctx.timestamp,
+		});
+		raiseThresholdAlerts(
+			ctx,
+			insertDemoSample(
+				ctx,
+				familyId,
+				{
+					metric: "heart_rate",
+					value: Math.floor(rule.limit) + DEMO_SPIKE_BPM,
+					unit: "bpm",
+					quality: { tag: "Unvalidated" },
+				},
+				ctx.timestamp,
+			),
+		);
+	},
 );
