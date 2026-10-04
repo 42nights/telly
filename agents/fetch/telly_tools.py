@@ -1,8 +1,9 @@
-"""Pure logic for the telly Fetch.ai worker: config, grants, contract checks, HTTP forward."""
+"""Pure logic for the telly Fetch.ai worker and bridge: config, grants, contract checks, calls."""
 
+import hmac
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,18 @@ class ToolResult(Model):
     body: dict[str, Any]
 
 
+class BridgeCall(Model):
+    """The server's request to the bridge: its shared token, the family, and one ToolRequest."""
+
+    token: str
+    family_id: str
+    request: dict[str, Any]
+
+
+# Sends one ToolCall to the worker and waits for its ToolResult; None when nothing came back.
+SendToWorker = Callable[[ToolCall], Awaitable[ToolResult | None]]
+
+
 class ConfigError(Exception):
     pass
 
@@ -49,27 +62,72 @@ class Config:
     mailbox: bool
 
 
-def load_config(env: Mapping[str, str] = os.environ) -> Config:
-    def need(name: str) -> str:
-        value = env.get(name, "")
-        if not value.strip():
-            raise ConfigError(f"{name} is required")
-        return value
+@dataclass(frozen=True)
+class BridgeConfig:
+    seed: str
+    token: str
+    worker: str
+    port: int
+    mailbox: bool
+    # Local runs only (mailbox off): the worker's /submit URL, since Agentverse does not route.
+    worker_endpoint: str | None
 
-    seed = need("TELLY_FETCH_AGENT_SEED")
-    server_url = need("TELLY_SERVER_URL").strip().rstrip("/")
-    url = urlsplit(server_url)
+
+def _need(env: Mapping[str, str], name: str) -> str:
+    value = env.get(name, "")
+    if not value.strip():
+        raise ConfigError(f"{name} is required")
+    return value
+
+
+def _http_url(env: Mapping[str, str], name: str) -> str:
+    value = _need(env, name).strip().rstrip("/")
+    url = urlsplit(value)
     if url.scheme not in ("http", "https") or not url.netloc:
-        raise ConfigError("TELLY_SERVER_URL must be an http(s) URL")
-    token = need("TELLY_FETCH_SERVER_TOKEN")
-    grants = parse_grants(need("TELLY_FETCH_GRANTS"))
-    port = env.get("TELLY_FETCH_PORT", "8001")
+        raise ConfigError(f"{name} must be an http(s) URL")
+    return value
+
+
+def _port(env: Mapping[str, str], name: str, default: str) -> int:
+    port = env.get(name, default)
     if not port.isdigit() or not 0 < int(port) < 65536:
-        raise ConfigError("TELLY_FETCH_PORT must be a port number")
+        raise ConfigError(f"{name} must be a port number")
+    return int(port)
+
+
+def _mailbox(env: Mapping[str, str]) -> bool:
     mailbox = env.get("TELLY_FETCH_MAILBOX", "true").lower()
     if mailbox not in ("true", "false"):
         raise ConfigError("TELLY_FETCH_MAILBOX must be true or false")
-    return Config(seed, server_url, token, grants, int(port), mailbox == "true")
+    return mailbox == "true"
+
+
+def load_config(env: Mapping[str, str] = os.environ) -> Config:
+    return Config(
+        seed=_need(env, "TELLY_FETCH_AGENT_SEED"),
+        server_url=_http_url(env, "TELLY_SERVER_URL"),
+        token=_need(env, "TELLY_FETCH_SERVER_TOKEN"),
+        grants=parse_grants(_need(env, "TELLY_FETCH_GRANTS")),
+        port=_port(env, "TELLY_FETCH_PORT", "8001"),
+        mailbox=_mailbox(env),
+    )
+
+
+def load_bridge_config(env: Mapping[str, str] = os.environ) -> BridgeConfig:
+    worker = _need(env, "TELLY_FETCH_WORKER_ADDRESS").strip()
+    if not is_valid_address(worker):
+        raise ConfigError("TELLY_FETCH_WORKER_ADDRESS must be an agent address")
+    mailbox = _mailbox(env)
+    if mailbox and env.get("TELLY_FETCH_WORKER_ENDPOINT"):
+        raise ConfigError("TELLY_FETCH_WORKER_ENDPOINT is only for TELLY_FETCH_MAILBOX=false")
+    return BridgeConfig(
+        seed=_need(env, "TELLY_FETCH_BRIDGE_SEED"),
+        token=_need(env, "TELLY_FETCH_BRIDGE_TOKEN"),
+        worker=worker,
+        port=_port(env, "TELLY_FETCH_BRIDGE_PORT", "8002"),
+        mailbox=mailbox,
+        worker_endpoint=None if mailbox else _http_url(env, "TELLY_FETCH_WORKER_ENDPOINT"),
+    )
 
 
 def parse_grants(raw: str) -> dict[str, frozenset[str]]:
@@ -122,3 +180,22 @@ async def handle_call(cfg: Config, sender: str, family_id: str, request: dict[st
     if not isinstance(body, dict) or not schema.is_valid(body):
         return error(502, "upstream_error", "server response does not match the contract")
     return status, body
+
+
+async def bridge_call(cfg: BridgeConfig, call: BridgeCall, send: SendToWorker) -> ToolResult:
+    """Check the server's token and the request, then ask the worker through Agentverse."""
+
+    def fail(status: int, code: str, message: str) -> ToolResult:
+        _, body = error(status, code, message)
+        return ToolResult(family_id=call.family_id, status=status, body=body)
+
+    if not hmac.compare_digest(call.token.encode(), cfg.token.encode()):
+        return fail(401, "unauthorized", "bridge token is not valid")
+    if not TOOL_REQUEST.is_valid(call.request):
+        return fail(400, "invalid_request", "request does not match the ToolRequest schema")
+    result = await send(ToolCall(family_id=call.family_id, request=call.request))
+    if result is None:
+        return fail(503, "unavailable", "the Fetch.ai worker did not reply through Agentverse")
+    if result.family_id != call.family_id:
+        return fail(502, "upstream_error", "the worker replied for another family")
+    return result

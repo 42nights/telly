@@ -11,7 +11,18 @@ from aiohttp import web
 from aiohttp.test_utils import TestServer
 
 import telly_tools
-from telly_tools import Config, ConfigError, handle_call, load_config
+from telly_tools import (
+    BridgeCall,
+    BridgeConfig,
+    Config,
+    ConfigError,
+    ToolCall,
+    ToolResult,
+    bridge_call,
+    handle_call,
+    load_bridge_config,
+    load_config,
+)
 
 SENDER = "agent1q" + "a" * 58
 OTHER = "agent1q" + "b" * 58
@@ -125,6 +136,71 @@ class LoadConfigTest(unittest.TestCase):
         for grants in ("[]", "{", '{"not-an-address": ["12"]}', json.dumps({SENDER: "12"})):
             with self.assertRaisesRegex(ConfigError, "TELLY_FETCH_GRANTS"):
                 load_config({**self.ENV, "TELLY_FETCH_GRANTS": grants})
+
+
+class BridgeCallTest(unittest.IsolatedAsyncioTestCase):
+    CFG = BridgeConfig("seed", "server-secret", SENDER, 8002, True, None)
+
+    async def asyncSetUp(self) -> None:
+        self.sent: list[ToolCall] = []
+        self.reply: ToolResult | None = ToolResult(family_id="12", status=200, body=ALERTS)
+
+    async def send(self, message: ToolCall) -> ToolResult | None:
+        self.sent.append(message)
+        return self.reply
+
+    async def call(self, token: str = "server-secret", request: dict = REQUEST) -> ToolResult:
+        return await bridge_call(
+            self.CFG, BridgeCall(token=token, family_id="12", request=request), self.send
+        )
+
+    async def test_wrong_token_or_bad_request_is_refused_without_sending(self) -> None:
+        result = await self.call(token="guess")
+        self.assertEqual((result.status, result.body["error"]), (401, "unauthorized"))
+        result = await self.call(request={"tool": "run_sql", "input": {}})
+        self.assertEqual((result.status, result.body["error"]), (400, "invalid_request"))
+        self.assertEqual(self.sent, [])
+
+    async def test_worker_result_is_returned(self) -> None:
+        result = await self.call()
+        self.assertEqual((result.status, result.body), (200, ALERTS))
+        self.assertEqual(self.sent, [ToolCall(family_id="12", request=REQUEST)])
+
+    async def test_no_reply_is_unavailable_and_other_family_is_upstream_error(self) -> None:
+        self.reply = None
+        result = await self.call()
+        self.assertEqual((result.status, result.body["error"]), (503, "unavailable"))
+        self.reply = ToolResult(family_id="13", status=200, body=ALERTS)
+        result = await self.call()
+        self.assertEqual((result.status, result.body["error"]), (502, "upstream_error"))
+
+
+class LoadBridgeConfigTest(unittest.TestCase):
+    ENV = {
+        "TELLY_FETCH_BRIDGE_SEED": "seed",
+        "TELLY_FETCH_BRIDGE_TOKEN": "secret",
+        "TELLY_FETCH_WORKER_ADDRESS": SENDER,
+    }
+
+    def test_mailbox_is_default_and_local_endpoint_needs_mailbox_off(self) -> None:
+        cfg = load_bridge_config(self.ENV)
+        self.assertEqual((cfg.port, cfg.mailbox, cfg.worker_endpoint), (8002, True, None))
+        local = "http://127.0.0.1:8001/submit"
+        with self.assertRaisesRegex(ConfigError, "TELLY_FETCH_WORKER_ENDPOINT"):
+            load_bridge_config({**self.ENV, "TELLY_FETCH_WORKER_ENDPOINT": local})
+        with self.assertRaisesRegex(ConfigError, "TELLY_FETCH_WORKER_ENDPOINT"):
+            load_bridge_config({**self.ENV, "TELLY_FETCH_MAILBOX": "false"})
+        cfg = load_bridge_config(
+            {**self.ENV, "TELLY_FETCH_MAILBOX": "false", "TELLY_FETCH_WORKER_ENDPOINT": local}
+        )
+        self.assertEqual(cfg.worker_endpoint, local)
+
+    def test_missing_var_or_bad_address_is_named(self) -> None:
+        for name in self.ENV:
+            with self.assertRaisesRegex(ConfigError, name):
+                load_bridge_config({k: v for k, v in self.ENV.items() if k != name})
+        with self.assertRaisesRegex(ConfigError, "TELLY_FETCH_WORKER_ADDRESS"):
+            load_bridge_config({**self.ENV, "TELLY_FETCH_WORKER_ADDRESS": "agent1nope"})
 
 
 if __name__ == "__main__":
