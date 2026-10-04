@@ -3,6 +3,7 @@
 	"entry": [
 		"packages/db/src/**/*.ts",
 		"spacetimedb/src/**/*.test.ts",
+		"packages/contracts/src/**/*.test.ts",
 		"apps/web/smoke/*.smoke.ts",
 		"deploy/cloudflare/worker.js",
 		"deploy/cloudflare/landing/style.css"
