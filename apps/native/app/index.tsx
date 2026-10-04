@@ -1,12 +1,14 @@
-// The iOS shell (issue #94): the web app full screen in a WebView. Only the web app's origin loads
-// here. The issuer's sign-in page starts the native sign-in instead (Google refuses sign-in in a
-// WebView). Other sites open in Safari, and `tel:` and `mailto:` links open the phone and mail apps.
+// The iOS shell (issues #94 and #347): the whole app is this one screen, the web app full screen
+// in a WebView with safe-area padding and no native menu. Only the web app's origin loads here.
+// The issuer's sign-in page starts the native sign-in instead (Google refuses sign-in in a WebView).
+// Other sites open in Safari, and `tel:` and `mailto:` links open the phone and mail apps.
 import { DbId } from "@health/contracts/families";
 import { SESSION_KEYS, type SignInToken } from "@health/contracts/session";
 import { Schema } from "effect";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Alert, Linking, Platform, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
 import { ArRequest, answerArRequest } from "@/lib/ar-bridge";
@@ -41,7 +43,11 @@ const decodeBridgeMessage = (data: string) => {
 	}
 };
 
-const styles = StyleSheet.create({ fill: { flex: 1 } });
+// The web app's desktop teal (`--win95-desktop`, its theme-color) fills the safe-area padding.
+const styles = StyleSheet.create({
+	fill: { flex: 1 },
+	frame: { flex: 1, backgroundColor: "#008080" },
+});
 
 export default function WebApp() {
 	// `undefined` until SecureStore answers. `readSession` renews or drops an expired ID token.
@@ -87,54 +93,56 @@ export default function WebApp() {
 		)
 		.join(" ");
 	return (
-		<WebView
-			ref={webView}
-			// A new session reloads the page, so the web app always starts with the stored session.
-			key={session?.idToken ?? "signed-out"}
-			source={{ uri: ENV.EXPO_PUBLIC_WEB_URL }}
-			// The session goes only into the web app's own origin, in the main frame.
-			injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${storage} } true;`}
-			// Every URL reaches the check below; the library default opens other schemes itself.
-			originWhitelist={["*"]}
-			onShouldStartLoadWithRequest={({ url, isTopFrame }) => {
-				const origin = originOf(url);
-				if (origin === WEB_ORIGIN) return true;
-				// Frames inside the web app get no token, and camera and microphone ask first.
-				if (!isTopFrame && (origin !== null || url.startsWith("about:")))
-					return true;
-				if (origin !== null && origin === ISSUER_ORIGIN) startSignIn();
-				else
-					void Linking.openURL(url).catch((error: unknown) =>
-						console.warn("Could not open the link", error),
+		<SafeAreaView style={styles.frame}>
+			<WebView
+				ref={webView}
+				// A new session reloads the page, so the web app always starts with the stored session.
+				key={session?.idToken ?? "signed-out"}
+				source={{ uri: ENV.EXPO_PUBLIC_WEB_URL }}
+				// The session goes only into the web app's own origin, in the main frame.
+				injectedJavaScriptBeforeContentLoaded={`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) { ${storage} } true;`}
+				// Every URL reaches the check below; the library default opens other schemes itself.
+				originWhitelist={["*"]}
+				onShouldStartLoadWithRequest={({ url, isTopFrame }) => {
+					const origin = originOf(url);
+					if (origin === WEB_ORIGIN) return true;
+					// Frames inside the web app get no token, and camera and microphone ask first.
+					if (!isTopFrame && (origin !== null || url.startsWith("about:")))
+						return true;
+					if (origin !== null && origin === ISSUER_ORIGIN) startSignIn();
+					else
+						void Linking.openURL(url).catch((error: unknown) =>
+							console.warn("Could not open the link", error),
+						);
+					return false;
+				}}
+				onMessage={({ nativeEvent }) => {
+					if (originOf(nativeEvent.url) !== WEB_ORIGIN) return;
+					const message = decodeBridgeMessage(nativeEvent.data);
+					if (message === null) return;
+					if (message.type === "location-watch") {
+						void setLocationWatch(message.familyId).catch((error: unknown) =>
+							console.warn("Could not change background location", error),
+						);
+						return;
+					}
+					if (message.type === "sign-out") {
+						void Promise.all([setLocationWatch(null), writeSession(null)]).then(
+							() => setSession(null),
+						);
+						return;
+					}
+					// The answer (a room scan for a saved pin) goes only to the web app's origin.
+					void answerArRequest(message, TellyAr, Platform.OS).then((reply) =>
+						webView.current?.injectJavaScript(
+							`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) window.dispatchEvent(new CustomEvent("telly-ar", { detail: ${JSON.stringify(reply)} })); true;`,
+						),
 					);
-				return false;
-			}}
-			onMessage={({ nativeEvent }) => {
-				if (originOf(nativeEvent.url) !== WEB_ORIGIN) return;
-				const message = decodeBridgeMessage(nativeEvent.data);
-				if (message === null) return;
-				if (message.type === "location-watch") {
-					void setLocationWatch(message.familyId).catch((error: unknown) =>
-						console.warn("Could not change background location", error),
-					);
-					return;
-				}
-				if (message.type === "sign-out") {
-					void Promise.all([setLocationWatch(null), writeSession(null)]).then(
-						() => setSession(null),
-					);
-					return;
-				}
-				// The answer (a room scan for a saved pin) goes only to the web app's origin.
-				void answerArRequest(message, TellyAr, Platform.OS).then((reply) =>
-					webView.current?.injectJavaScript(
-						`if (location.origin === ${JSON.stringify(WEB_ORIGIN)}) window.dispatchEvent(new CustomEvent("telly-ar", { detail: ${JSON.stringify(reply)} })); true;`,
-					),
-				);
-			}}
-			mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
-			allowsInlineMediaPlayback
-			style={styles.fill}
-		/>
+				}}
+				mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
+				allowsInlineMediaPlayback
+				style={styles.fill}
+			/>
+		</SafeAreaView>
 	);
 }

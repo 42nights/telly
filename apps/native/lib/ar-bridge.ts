@@ -1,5 +1,5 @@
 // The AR pin requests from the web app (contract: telly-ar-pin) and their answers. The shell
-// (app/(drawer)/web.tsx) decodes a request, calls `answerArRequest`, and sends the answer back as
+// (app/index.tsx) decodes a request, calls `answerArRequest`, and sends the answer back as
 // a "telly-ar" event. The native module answers without `requestId`; this adds it. `objectId` is the
 // remembered object's sighting id (#301); the web app also sends it as `containerId` for shells
 // built before #301, so the pin's anchor name `telly-pin-<id>` is the same either way.

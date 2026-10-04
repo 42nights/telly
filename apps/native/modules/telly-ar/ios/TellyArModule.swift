@@ -1,5 +1,5 @@
 // The phone AR pin for the medicine finder. The web app asks through the WebView bridge
-// (app/(drawer)/web.tsx); this module opens a full-screen ARKit screen and answers with the
+// (app/index.tsx); this module opens a full-screen ARKit screen and answers with the
 // contract's reply shapes (minus `requestId`, which the shell adds).
 // The module shape follows the expo-modules-core examples (MIT, 650 Industries). The world map
 // save and load follow Apple's "Saving and Loading World Data" sample (Apple Sample Code License):
