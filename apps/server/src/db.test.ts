@@ -156,7 +156,7 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					// Through `callDb`, a refusal is `DbRejected`, distinct from an outage.
 					const refused = yield* Effect.flip(
 						callDb(outsider, (c) =>
-							c.reducers.sendMessage({ familyId, body: "x" }),
+							c.reducers.sendMessage({ familyId, clientId: "m2", body: "x" }),
 						),
 					);
 					expect(refused).toEqual(

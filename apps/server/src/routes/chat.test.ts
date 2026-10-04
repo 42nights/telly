@@ -58,6 +58,11 @@ const app =
 		? createApp({
 				corsOrigin: "http://localhost:3001",
 				auth: { issuer, audience, db: { uri, database } },
+				voice: {
+					apiKey: undefined,
+					voiceId: "unused",
+					baseUrl: "http://127.0.0.1:1",
+				},
 			})
 		: undefined;
 
