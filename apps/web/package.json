@@ -9,7 +9,8 @@
 		"serve": "vite preview",
 		"start": "vite",
 		"check-types": "vite build && tsc --noEmit",
-		"env:generate": "varlock codegen"
+		"env:generate": "varlock codegen",
+		"smoke": "playwright test"
 	},
 	"dependencies": {
 		"@health/contracts": "workspace:*",
@@ -27,6 +28,7 @@
 	},
 	"devDependencies": {
 		"@health/config": "workspace:*",
+		"@playwright/test": "1.63.0",
 		"@tanstack/react-router-devtools": "^1.167.1",
 		"@tanstack/router-plugin": "^1.168.35",
 		"@types/bun": "1.4.2",

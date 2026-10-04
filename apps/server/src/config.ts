@@ -41,7 +41,7 @@ export type IMessageConfig = {
 	readonly senders: ReadonlyMap<string, bigint>;
 };
 
-type Env = {
+export type Env = {
 	readonly CORS_ORIGIN: string;
 	readonly OIDC_ISSUER?: string | undefined;
 	readonly OIDC_AUDIENCE?: string | undefined;
