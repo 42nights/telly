@@ -3,6 +3,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { Meal, MealEstimate, Meals } from "@health/contracts/meal-facts";
 import { Effect, Schema } from "effect";
+import { Identity } from "spacetimedb";
+import type { FamilyDb } from "../db";
 import { mealRoutes } from "./meal-facts";
 import {
 	dbConfig,
@@ -12,6 +14,21 @@ import {
 	send,
 	withDb,
 } from "./test-family";
+
+type Family = { readonly db: FamilyDb; readonly familyId: string };
+
+/** The founder grants itself #26 care scopes (founder bootstrap). */
+const grant = (family: Family, scopes: readonly string[]) =>
+	Effect.forEach(scopes, (scope) =>
+		Effect.promise(() =>
+			family.db.connection.reducers.setCareGrant({
+				familyId: BigInt(family.familyId),
+				member: Identity.fromString(family.db.identity),
+				scope,
+				granted: true,
+			}),
+		),
+	);
 
 // A PNG header is all the route reads before it forwards the photo; this one says 4×3 pixels.
 const photo = {
@@ -63,6 +80,7 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 		withDb((db) =>
 			Effect.gen(function* () {
 				const family = yield* openFamily(db, "Meal family");
+				yield* grant(family, ["health_records", "media"]);
 				const app = familyApp(family.db, family.familyId, mealRoutes(config));
 
 				const estimated = yield* send(app, "POST", "/meals/lunch-1/estimates", {
@@ -131,6 +149,7 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 		withDb((db) =>
 			Effect.gen(function* () {
 				const family = yield* openFamily(db, "No camera family");
+				yield* grant(family, ["health_records", "media"]);
 				const app = familyApp(
 					family.db,
 					family.familyId,
@@ -167,6 +186,63 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 					["not_reported", 1],
 				]);
 				expect(estimates).toBe(before);
+			}),
+		));
+
+	test("meal records need health_records, and a photo also needs media", () =>
+		withDb((db) =>
+			Effect.gen(function* () {
+				const family = yield* openFamily(db, "Sharing family");
+				const app = familyApp(family.db, family.familyId, mealRoutes(config));
+				expect(failure(yield* send(app, "GET", "/meals"))).toEqual([
+					403,
+					"forbidden",
+				]);
+
+				yield* grant(family, ["health_records"]);
+				const before = estimates;
+				const photoEstimate = yield* send(
+					app,
+					"POST",
+					"/meals/tea-1/estimates",
+					{
+						source: "photo",
+						capturedAt: "2026-10-04T16:00:00.000Z",
+						image: photo,
+					},
+				);
+				expect(failure(photoEstimate)).toEqual([403, "forbidden"]);
+				expect(estimates).toBe(before);
+
+				// The module refuses a photo fact without media too, whatever the server does.
+				const direct = yield* Effect.promise(() =>
+					family.db.connection.reducers
+						.recordMealFact({
+							familyId: BigInt(family.familyId),
+							mealId: "tea-1",
+							fact: JSON.stringify({
+								type: "photo_taken",
+								capturedAt: "2026-10-04T16:00:00.000Z",
+							}),
+						})
+						.then(
+							() => "recorded",
+							(error: unknown) => String(error),
+						),
+				);
+				expect(direct).toContain("no care access: media");
+
+				const described = yield* send(app, "POST", "/meals/tea-1/estimates", {
+					source: "description",
+					text: "Tea and toast",
+				});
+				expect(described.status).toBe(200);
+				const meals = Schema.decodeUnknownSync(Meals)(
+					(yield* send(app, "GET", "/meals")).json,
+				).meals;
+				expect(meals[0]?.facts.map(({ fact }) => fact.type)).toEqual([
+					"food_estimate",
+				]);
 			}),
 		));
 });

@@ -20,6 +20,7 @@ import { bodyLimit } from "hono/body-limit";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { GeminiConfig } from "../integrations/gemini";
 import { estimateMeal, GEMINI_MEAL_MODEL } from "../integrations/gemini-meal";
+import { requireScope } from "./care-profile";
 import { imageSize } from "./vision";
 
 // Base64 grows 4/3; the rest is the request's other fields.
@@ -101,10 +102,21 @@ const checkPhoto = ({
 		throw new ApiFailure("invalid_request", `image is not a valid ${type}`);
 };
 
-/** Without a Gemini config (no `GEMINI_API_KEY`) estimates are `unavailable`; intake reports still work. */
+/**
+ * Meal facts are health records: every route needs the caller's #26 `health_records` scope, and a
+ * photo also needs `media`, checked here before anything reaches Gemini and again by the module.
+ * Without a Gemini config (no `GEMINI_API_KEY`) estimates are `unavailable`; intake reports still work.
+ */
 export const mealRoutes = (gemini: GeminiConfig | undefined) =>
 	new Hono<FamilyEnv>()
-		.get("/meals", (c) => c.json({ meals: readMeals(c) } satisfies Meals))
+		.use("/meals/*", async (c, next) => {
+			requireScope(c, "health_records");
+			await next();
+		})
+		.get("/meals", (c) => {
+			requireScope(c, "health_records");
+			return c.json({ meals: readMeals(c) } satisfies Meals);
+		})
 		.post(
 			"/meals/:mealId/estimates",
 			bodyLimit({
@@ -119,6 +131,7 @@ export const mealRoutes = (gemini: GeminiConfig | undefined) =>
 				const request = await decodeBody(c, MealEstimateRequest);
 				// The photo was taken whether or not an estimate follows; the photo itself is not kept.
 				if (request.source === "photo") {
+					requireScope(c, "media");
 					checkPhoto(request.image);
 					await record(c, mealId, {
 						type: "photo_taken",

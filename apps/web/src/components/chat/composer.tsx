@@ -6,6 +6,7 @@ import { type RefObject, useRef, useState } from "react";
 
 import { Tip } from "@/components/win95";
 import type { ApiResult } from "@/lib/api";
+import type { Outcome } from "@/lib/pending";
 
 import {
 	ATTACHMENT_ACCEPT,
@@ -102,8 +103,8 @@ export function Composer({
 		askVoice: (audio: Blob) => Promise<string | null>;
 	};
 	family: {
-		/** Resolves null once stored, otherwise why it was not sent. */
-		send: (body: string) => Promise<string | null>;
+		/** Stores the message, or saves it on this device to send once later. */
+		send: (body: string) => Promise<Outcome>;
 		transcribe: (audio: Blob) => Promise<ApiResult<VoiceTranscript>>;
 	};
 }) {
@@ -139,13 +140,17 @@ export function Composer({
 	};
 
 	const sendFamily = async (body: string) => {
-		const failure = await family.send(body);
-		if (failure === null) {
-			onCancelReply();
-			return true;
+		const outcome = await family.send(body);
+		if (outcome.kind === "rejected") {
+			setStatus(`Not sent: ${outcome.message}`);
+			return false;
 		}
-		setStatus(`Not sent: ${failure}`);
-		return false;
+		if (outcome.kind === "waiting")
+			setStatus(
+				"Saved on this device. It will be sent once, when the connection returns.",
+			);
+		onCancelReply();
+		return true;
 	};
 
 	const submit = async () => {

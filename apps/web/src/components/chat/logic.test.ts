@@ -7,7 +7,6 @@ import {
 	formatSize,
 	mergeMessages,
 	nextGeminiStatus,
-	outboxFor,
 	timeline,
 	toAttachment,
 } from "./logic";
@@ -76,14 +75,6 @@ test("toAttachment sends the file bytes as base64", async () => {
 		mimeType: "text/plain",
 		data: btoa("hello"),
 	});
-});
-
-test("outboxFor reuses the clientId only for a resend of the same text", () => {
-	const first = outboxFor(null, "hi");
-	expect(outboxFor(first, "hi")).toBe(first);
-	const edited = outboxFor(first, "hi there");
-	expect(edited.clientId).not.toBe(first.clientId);
-	expect(edited.clientId).toMatch(/^[A-Za-z0-9_-]+$/);
 });
 
 test("formatSize", () => {
