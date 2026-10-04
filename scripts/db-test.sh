@@ -1,12 +1,18 @@
 #!/bin/sh
 # Starts an isolated, in-memory SpacetimeDB on 127.0.0.1, publishes the module from spacetimedb/,
 # and runs the database tests against it. Nothing is published to a cloud server, and nothing
-# outlives the run. Needs the `spacetime` CLI (https://spacetimedb.com/install).
+# outlives the run. The publisher is a new identity that this local database issues, logged in
+# through a CLI config in the temporary directory; the module makes it the alert delivery operator.
+# Needs the `spacetime` CLI (https://spacetimedb.com/install) and curl.
 # Usage: bun run db:test   (SPACETIMEDB_PORT picks the port; default 3399)
 set -eu
 cd "$(git rev-parse --show-toplevel)"
 port=${SPACETIMEDB_PORT:-3399}
 server="http://127.0.0.1:$port"
+if spacetime server ping "$server" >/dev/null 2>&1; then
+	echo "db:test: another server already listens on $server; set SPACETIMEDB_PORT" >&2
+	exit 1
+fi
 data=$(mktemp -d)
 log="$data/server.log"
 spacetime start --in-memory --non-interactive --data-dir "$data" --listen-addr "127.0.0.1:$port" >"$log" 2>&1 &
@@ -22,6 +28,8 @@ until spacetime server ping "$server" >/dev/null 2>&1; do
 	fi
 	sleep 0.2
 done
-spacetime publish --server "$server" --module-path spacetimedb --anonymous --yes health-test
-SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test \
-	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts
+token=$(curl -fsS -X POST "$server/v1/identity" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+spacetime --config-path "$data/cli.toml" login --token "$token" >/dev/null
+spacetime --config-path "$data/cli.toml" publish --server "$server" --module-path spacetimedb --yes health-test
+SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIMEDB_OPERATOR_TOKEN="$token" \
+	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/alerts.db.test.ts

@@ -24,6 +24,10 @@ const views = [
 	"SELECT * FROM my_alerts",
 	"SELECT * FROM my_messages",
 	"SELECT * FROM my_acknowledgements",
+	"SELECT * FROM my_alert_thresholds",
+	"SELECT * FROM my_alert_deliveries",
+	// Rows only for the delivery operator identity; empty for every family member.
+	"SELECT * FROM pending_alert_deliveries",
 ];
 
 const quality = { Validated: "validated", Unvalidated: "unvalidated" } as const;
