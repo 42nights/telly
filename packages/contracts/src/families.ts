@@ -67,10 +67,16 @@ export type DeleteFamily = typeof DeleteFamily.Type;
 export const NewFamilyMember = Schema.Struct({ identity: IdentityHex });
 export type NewFamilyMember = typeof NewFamilyMember.Type;
 
-/** `GET /api/families/:familyId/members`: every member of the family, oldest first. */
+/**
+ * `GET /api/families/:familyId/members`: the people in the family. `name` is the name each person
+ * signed in with, stored when they open the app (`GET /api/me`); null until they do.
+ */
 export const FamilyMembers = Schema.Struct({
 	members: Schema.Array(
-		Schema.Struct({ identity: IdentityHex, addedAt: UtcTime }),
+		Schema.Struct({
+			identity: IdentityHex,
+			name: Schema.NullOr(Schema.String),
+		}),
 	),
 });
 export type FamilyMembers = typeof FamilyMembers.Type;

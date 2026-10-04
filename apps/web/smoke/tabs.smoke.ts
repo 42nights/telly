@@ -2,7 +2,7 @@
 // open every tab in the taskbar without a page error. Fake: the session (an unsigned JWT-shaped ID
 // token with a future `exp`, stored where the sign-in screen stores it) and the whole server API
 // (`page.route` on VITE_SERVER_URL). Every other non-app request is blocked and fails the test.
-import type { FamilyList, Me } from "@health/contracts/families";
+import type { FamilyList, FamilyMembers, Me } from "@health/contracts/families";
 import { expect, type Page, test } from "@playwright/test";
 
 import { SERVER_URL } from "../playwright.config";
@@ -34,6 +34,9 @@ const replies: Record<string, unknown> = {
 		messages: [],
 		acknowledgements: [],
 	},
+	"/api/families/1/members": {
+		members: [{ identity: "a".repeat(64), name: null }],
+	} satisfies FamilyMembers,
 	"/api/families/1/alerts": { alerts: [] },
 	"/api/families/1/alert-thresholds": { thresholds: [] },
 	"/api/families/1/monitoring": {
@@ -55,7 +58,6 @@ const replies: Record<string, unknown> = {
 		distanceMeters: null,
 		sharing: false,
 	},
-	"/api/families/1/members": { members: [] },
 	"/api/families/1/trips/current": { trip: null },
 	"/api/families/1/exercise": { plans: [], sessions: [] },
 	"/api/families/1/cooking/profile": {

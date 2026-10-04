@@ -142,6 +142,12 @@ describe.skipIf(app === undefined)("agent tool route", () => {
 		await send(owner, "POST", `/api/families/${home.id}/members`, {
 			identity: workerMe.identity,
 		});
+		// The worker reads health samples, so it needs health_records (#26).
+		await send(owner, "POST", `/api/families/${home.id}/care-access`, {
+			identity: workerMe.identity,
+			scope: "health_records",
+			granted: true,
+		});
 
 		const tools = (family: Family) => `/api/families/${family.id}/tools`;
 		expect(

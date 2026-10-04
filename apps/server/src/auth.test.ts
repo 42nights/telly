@@ -384,7 +384,8 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 		const bobFamilies = await (await call(bob, "GET", "/api/families")).json();
 		expect(bobFamilies).toEqual({ families: [] });
 
-		// Alice adds Bob by his identity; now the database lets him read the family.
+		// Alice adds Bob by his identity; now the database lets him read the family, and its samples
+		// once she shares health records with him (#26).
 		expect(
 			(
 				await call(alice, "POST", `${path}/members`, {
@@ -392,11 +393,25 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 				})
 			).status,
 		).toBe(204);
-		const read = await call(bob, "GET", path);
-		expect(read.status).toBe(200);
-		const records = Schema.decodeUnknownSync(FamilyRecords)(await read.json());
-		expect(records.families.map((f) => f.id)).toEqual([family.id]);
-		expect(records.samples.map((s) => s.source)).toEqual(["synthetic-demo"]);
+		const read = async () => {
+			const response = await call(bob, "GET", path);
+			expect(response.status).toBe(200);
+			return Schema.decodeUnknownSync(FamilyRecords)(await response.json());
+		};
+		const member = await read();
+		expect(member.families.map((f) => f.id)).toEqual([family.id]);
+		expect(member.samples).toEqual([]);
+		expect(
+			(
+				await call(alice, "POST", `${path}/care-access`, {
+					identity: bobMe.identity,
+					scope: "health_records",
+					granted: true,
+				})
+			).status,
+		).toBe(204);
+		const shared = await read();
+		expect(shared.samples.map((s) => s.source)).toEqual(["synthetic-demo"]);
 	});
 
 	test("a write cannot carry fields outside its contract", async () => {
@@ -451,33 +466,53 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 		});
 	});
 
-	test("the member list shows every member, oldest first, and only to members", async () => {
-		const [alice, bob, carol] = ["alice", "bob", "carol"].map(
-			(name) => `${name}-${crypto.randomUUID()}`,
-		) as [string, string, string];
-		const created = await call(alice, "POST", "/api/families", {
-			name: "Members",
-		});
-		const family = Schema.decodeUnknownSync(Family)(await created.json());
-		const identity = async (who: string) =>
+	test("members list each other by the name they signed in with; outsiders are refused", async () => {
+		const signIn = async (subject: string, name: string) =>
 			Schema.decodeUnknownSync(Me)(
-				await (await call(who, "GET", "/api/me")).json(),
+				await (
+					await app?.request("/api/me", {
+						headers: {
+							Authorization: `Bearer ${await token(subject, { name })}`,
+						},
+					})
+				)?.json(),
 			).identity;
-		await call(alice, "POST", `/api/families/${family.id}/members`, {
-			identity: await identity(bob),
-		});
-		const path = `/api/families/${family.id}/members`;
-		const members = Schema.decodeUnknownSync(FamilyMembers)(
-			await (await call(bob, "GET", path)).json(),
-		).members;
-		expect(members.map((m) => m.identity)).toEqual([
-			await identity(alice),
-			await identity(bob),
-		]);
-		expect(await errorOf(await call(carol, "GET", path))).toEqual([
-			403,
-			"forbidden",
-		]);
+		const members = async (subject: string, path: string) => {
+			const response = await call(subject, "GET", `${path}/members`);
+			expect(response.status).toBe(200);
+			const { members } = Schema.decodeUnknownSync(FamilyMembers)(
+				await response.json(),
+			);
+			return [...members].sort((a, b) => a.identity.localeCompare(b.identity));
+		};
+		const alice = `alice-${crypto.randomUUID()}`;
+		const bob = `bob-${crypto.randomUUID()}`;
+		const family = Schema.decodeUnknownSync(Family)(
+			await (
+				await call(alice, "POST", "/api/families", { name: "Lin" })
+			).json(),
+		);
+		const path = `/api/families/${family.id}`;
+		const aliceId = await signIn(alice, "Ana Lin");
+		// Bob's name is stored before he belongs to any family.
+		const bobId = await signIn(bob, "Ben Okafor");
+		await call(alice, "POST", `${path}/members`, { identity: bobId });
+		expect(await members(bob, path)).toEqual(
+			[
+				{ identity: aliceId, name: "Ana Lin" },
+				{ identity: bobId, name: "Ben Okafor" },
+			].sort((a, b) => a.identity.localeCompare(b.identity)),
+		);
+		// A new name replaces the old one.
+		await signIn(bob, "Ben O.");
+		expect(
+			(await members(alice, path)).find((m) => m.identity === bobId),
+		).toEqual({ identity: bobId, name: "Ben O." });
+		expect(
+			await errorOf(
+				await call(`eve-${crypto.randomUUID()}`, "GET", `${path}/members`),
+			),
+		).toEqual([403, "forbidden"]);
 	});
 
 	test("an invite admits one person once; members may reuse the link", async () => {
@@ -615,6 +650,13 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 					expect(pushTokenFamily(ingest, sha256Hex(first))).toBe(
 						BigInt(family.id),
 					);
+					// The ingest identity is a member but not a person, so the members list leaves it out.
+					const membersReply = yield* as(alice, "GET", `${path}/members`);
+					const listed = Schema.decodeUnknownSync(FamilyMembers)(
+						yield* Effect.promise(() => membersReply.json()),
+					).members.map((m) => m.identity);
+					expect(listed).toHaveLength(2);
+					expect(listed).not.toContain(ingest.identity);
 					expect((yield* push(first)).status).toBe(200);
 					expect((yield* push("unknown-token")).status).toBe(401);
 					let samples: readonly HealthSample[] = [];

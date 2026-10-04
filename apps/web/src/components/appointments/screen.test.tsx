@@ -96,8 +96,7 @@ test("a family the caller is not a member of shows the forbidden notice", async 
 		},
 	});
 	const { view } = await show();
-	expect(await view.findByText("Not a member of this family")).toBeDefined();
-	expect(view.getByText("Not your family.")).toBeDefined();
+	expect(await view.findByText("Not shared with you")).toBeDefined();
 });
 
 test("upcoming visits are kept apart from past and cancelled ones", async () => {

@@ -349,6 +349,13 @@ export const FamilyMember = __t.object("FamilyMember", {
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
 
+export const FamilyPerson = __t.object("FamilyPerson", {
+  familyId: __t.u64(),
+  member: __t.identity(),
+  name: __t.option(__t.string()),
+});
+export type FamilyPerson = __Infer<typeof FamilyPerson>;
+
 export const FamilyPushToken = __t.object("FamilyPushToken", {
   familyId: __t.u64(),
   tokenHash: __t.string(),
@@ -519,6 +526,13 @@ export const MedicineSighting = __t.object("MedicineSighting", {
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
 
+export const MemberName = __t.object("MemberName", {
+  member: __t.identity(),
+  name: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type MemberName = __Infer<typeof MemberName>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -588,6 +602,9 @@ export type MyFamilyInvites = __Infer<typeof MyFamilyInvites>;
 
 export const MyFamilyMembers = __t.object("MyFamilyMembers", {});
 export type MyFamilyMembers = __Infer<typeof MyFamilyMembers>;
+
+export const MyFamilyPeople = __t.object("MyFamilyPeople", {});
+export type MyFamilyPeople = __Infer<typeof MyFamilyPeople>;
 
 export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
 export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;

@@ -8,6 +8,7 @@ import {
 	difference,
 	MARKER_TTL_MS,
 	MOVED_ABOVE,
+	MOVED_CHECKS,
 	sample,
 	signature,
 } from "./stale-marker";
@@ -33,14 +34,38 @@ test("a brightness change is not motion, a moved scene is", () => {
 	);
 });
 
-test("markers clear on motion or age, and stay while the scene holds", () => {
+/** A 256×192 RGBA frame of fine speckle (like label print) on large blocks, moved `dx` pixels. */
+const speckle = (dx: number) => {
+	const rgba = new Uint8ClampedArray(256 * 192 * 4);
+	for (let i = 0; i < 256 * 192; i++) {
+		const x = (i % 256) + dx;
+		const y = Math.floor(i / 256);
+		const block = ((Math.floor(x / 48) + Math.floor(y / 48)) % 2) * 120 + 60;
+		const dot = (x * 7919 + y * 104729) % 10 < 3 ? -50 : 0;
+		rgba.fill(block + dot, i * 4, i * 4 + 3);
+		rgba[i * 4 + 3] = 255;
+	}
+	return rgba;
+};
+
+test("each cell averages its block, so a 1 px shake is not motion but a turned camera is", () => {
+	const held = signature(speckle(0), 8);
+	expect(difference(held, signature(speckle(1), 8))).toBeLessThan(
+		MOVED_ABOVE / 2,
+	);
+	expect(difference(held, signature(speckle(48), 8))).toBeGreaterThan(
+		MOVED_ABOVE,
+	);
+});
+
+test("markers clear on sustained motion or age, and stay while the scene holds", () => {
 	const at = 1_000_000;
-	expect(clearedReason(at, at + 5_000, 2)).toBeNull();
-	expect(clearedReason(at, at + 5_000, MOVED_ABOVE + 1)).toBe("moved");
-	expect(clearedReason(at, at + MARKER_TTL_MS + 1, 2)).toBe("old");
-	// No live video (camera off): only age clears the marker.
-	expect(clearedReason(at, at + MARKER_TTL_MS, null)).toBeNull();
-	expect(clearedReason(at, at + MARKER_TTL_MS + 1, null)).toBe("old");
+	expect(clearedReason(at, at + 5_000, 0)).toBeNull();
+	// One shaky check is jitter; motion must last MOVED_CHECKS checks in a row.
+	expect(clearedReason(at, at + 5_000, MOVED_CHECKS - 1)).toBeNull();
+	expect(clearedReason(at, at + 5_000, MOVED_CHECKS)).toBe("moved");
+	expect(clearedReason(at, at + MARKER_TTL_MS, 0)).toBeNull();
+	expect(clearedReason(at, at + MARKER_TTL_MS + 1, 0)).toBe("old");
 });
 
 describe("sample", () => {
@@ -51,7 +76,7 @@ describe("sample", () => {
 	let original: PropertyDescriptor | undefined;
 	beforeEach(() => {
 		draws = [];
-		pixels = stripes(0);
+		pixels = speckle(0);
 		original = Object.getOwnPropertyDescriptor(
 			HTMLCanvasElement.prototype,
 			"getContext",
@@ -88,13 +113,6 @@ describe("sample", () => {
 		Reflect.deleteProperty(HTMLMediaElement, "HAVE_CURRENT_DATA");
 	});
 
-	const canvasOf = (width: number) => {
-		const canvas = document.createElement("canvas");
-		canvas.width = width;
-		canvas.height = 480;
-		return canvas;
-	};
-
 	const videoOf = (readyState: number, width = 640) => {
 		const video = document.createElement("video");
 		Object.defineProperty(video, "readyState", { value: readyState });
@@ -104,23 +122,11 @@ describe("sample", () => {
 		return video;
 	};
 
-	test("a checked frame is shrunk to 32×24 and compared without its brightness", () => {
-		const canvas = canvasOf(640);
-		const signed = sample(canvas);
-		expect(draws).toEqual([{ source: canvas, width: 32, height: 24 }]);
-		expect(signed).toEqual(signature(stripes(0)));
-	});
-
-	test("a video frame is drawn full size first, then shrunk", () => {
+	test("a video frame is drawn once at 256×192 and averaged into 32×24 cells", () => {
 		const video = videoOf(2);
 		const signed = sample(video);
-		expect(draws.map(({ width, height }) => [width, height])).toEqual([
-			[640, 480],
-			[32, 24],
-		]);
-		expect(draws[0]?.source).toBe(video);
-		expect(draws[1]?.source).toBeInstanceOf(HTMLCanvasElement);
-		expect(signed).toEqual(signature(stripes(0)));
+		expect(draws).toEqual([{ source: video, width: 256, height: 192 }]);
+		expect(signed).toEqual(signature(speckle(0), 8));
 	});
 
 	test("no frame gives no signature", () => {
@@ -129,19 +135,17 @@ describe("sample", () => {
 		const detached = document.createElement("video");
 		expect(sample(detached)).toBeNull();
 		expect(sample(videoOf(1))).toBeNull();
-		// A video with no size yet, and an empty canvas.
+		// A video with no size yet.
 		expect(sample(videoOf(2, 0))).toBeNull();
-		expect(sample(canvasOf(0))).toBeNull();
 	});
 
 	test("a transparent frame (not drawable yet) gives no signature", () => {
-		pixels = new Uint8ClampedArray(32 * 24 * 4);
-		expect(sample(canvasOf(640))).toBeNull();
+		pixels = new Uint8ClampedArray(256 * 192 * 4);
+		expect(sample(videoOf(2))).toBeNull();
 	});
 
 	test("no 2D context gives no signature", () => {
 		pixels = null;
-		expect(sample(canvasOf(640))).toBeNull();
 		expect(sample(videoOf(2))).toBeNull();
 	});
 });

@@ -50,8 +50,8 @@ const base = (extra: Record<string, unknown> = {}) => ({
 	"GET /api/families/fam-1/location/home": WATCH,
 	"GET /api/families/fam-1/members": {
 		members: [
-			{ identity: ME, addedAt: "2025-11-02T08:00:00Z" },
-			{ identity: MOM, addedAt: "2025-12-24T08:00:00Z" },
+			{ identity: ME, name: "Ana" },
+			{ identity: MOM, name: "Rosa Rivera" },
 		],
 	},
 	"GET /api/families/fam-1/care-access": {
@@ -70,9 +70,7 @@ const base = (extra: Record<string, unknown> = {}) => ({
 	...extra,
 });
 const momBox = async () => {
-	const box = await screen.findByRole("checkbox", {
-		name: "Family member since Dec 24, 2025",
-	});
+	const box = await screen.findByRole("checkbox", { name: "Rosa Rivera" });
 	if (!(box instanceof HTMLInputElement)) throw new Error("not a checkbox");
 	return box;
 };

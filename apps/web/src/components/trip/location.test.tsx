@@ -111,9 +111,9 @@ const MEMBERS = "GET /api/families/1/members";
 const members: ServerReply = {
 	json: {
 		members: [
-			{ identity: me, addedAt: at(600) },
-			{ identity: sister, addedAt: "2025-12-24T08:00:00Z" },
-			{ identity: brother, addedAt: "2026-01-01T08:00:00Z" },
+			{ identity: me, name: "Ana" },
+			{ identity: sister, name: "Rosa Rivera" },
+			{ identity: brother, name: null },
 		],
 	},
 };
@@ -160,9 +160,9 @@ describe("WhoSeesMe", () => {
 				b instanceof HTMLInputElement && b.checked,
 			]),
 		).toEqual([
-			["Family member since Dec 24, 2025", true],
+			["Rosa Rivera", true],
 			[
-				"Family member since Jan 1, 2026Cannot see it yet: turn on Location for them in Care › Sharing.",
+				"Family memberCannot see it yet: turn on Location for them in Care › Sharing.",
 				true,
 			],
 		]);
@@ -223,7 +223,7 @@ describe("FamilyLocationSection", () => {
 		await waitFor(() =>
 			expect(
 				within(section).getByRole("heading", { level: 4 }).textContent,
-			).toBe("Family member since Dec 24, 2025"),
+			).toBe("Rosa Rivera"),
 		);
 		expect(within(section).getAllByRole("article")).toHaveLength(1);
 		expect(section.textContent).not.toContain(me);
@@ -259,11 +259,11 @@ describe("FamilyLocationSection", () => {
 			<FamilyLocationSection familyId="1" me={me} now={now} />,
 		);
 		const list = await view.findByRole("list", { name: "Going out" });
-		await waitFor(() => expect(list.textContent).toContain("Dec 24, 2025"));
+		await waitFor(() => expect(list.textContent).toContain("Rosa Rivera"));
 		const items = within(list).getAllByRole("listitem");
 		expect(items.map((i) => i.textContent?.split(" at ")[0])).toEqual([
-			"Family member since Dec 24, 2025 is back home",
-			"Family member since Dec 24, 2025 left home",
+			"Rosa Rivera is back home",
+			"Rosa Rivera left home",
 		]);
 		// A manual start has no fix of its own; the link opens the person's latest position.
 		for (const item of items)
