@@ -6,7 +6,8 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./families": "./src/families.ts",
-		"./tools": "./src/tools.ts"
+		"./tools": "./src/tools.ts",
+		"./family": "./src/family.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
