@@ -140,7 +140,7 @@ export function CookingSession({
 						})}
 						data-slot="button"
 						search={{ dish: meal.name }}
-						to="/meals"
+						to="/meal"
 					>
 						Yes, record it
 					</Link>

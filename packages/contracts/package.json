@@ -14,8 +14,11 @@
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
+		"./session": "./src/session.ts",
+		"./care": "./src/care.ts",
+		"./meal-facts": "./src/meal-facts.ts",
 		"./care-profile": "./src/care-profile.ts",
-		"./meals": "./src/meals.ts",
+		"./trends": "./src/trends.ts",
 		"./cooking": "./src/cooking.ts"
 	},
 	"scripts": {

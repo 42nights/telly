@@ -1,6 +1,7 @@
-// Meal photos, uncertain nutrition estimates, and separate intake reports, under
+// Meal photos, uncertain nutrition estimates, and separate intake reports (#33), under
 // `/api/families/:familyId/meals`. Each fact about a meal is its own record. A photo or a food
-// estimate never says what was eaten: only an intake report or "unknown" sets a meal's intake.
+// estimate never says what was eaten: only an intake report sets a meal's intake. #32's meal and
+// drink check-ins record their answers as `IntakeReport` facts here.
 import { Schema } from "effect";
 import { DbId, IdentityHex, UtcTime } from "./families";
 import { MAX_VISION_IMAGE_BYTES } from "./vision";
@@ -100,58 +101,52 @@ export const MealEstimate = Schema.Struct({
 });
 export type MealEstimate = typeof MealEstimate.Type;
 
-/** How much of the served meal was eaten, in the reporter's own judgement. */
-export const PortionEaten = Schema.Literals([
-	"none",
-	"a_little",
-	"about_half",
-	"most",
-	"all",
-]);
-export type PortionEaten = typeof PortionEaten.Type;
+/** Meal or drink. Same literals as #32's check-ins, so a check-in answer records this fact. */
+export const IntakeKind = Schema.Literals(["meal", "drink"]);
+export type IntakeKind = typeof IntakeKind.Type;
 
-const IntakeReported = Schema.Struct({
-	kind: Schema.Literal("intake_reported"),
-	/** `null` when the reporter gave only `words`. */
-	portion: Schema.NullOr(PortionEaten),
-	/** What the reporter said or typed, verbatim. */
+/**
+ * How much the reporter says was eaten or drunk. `unknown` is a real answer, never a gap to fill:
+ * a photo, an empty plate, an estimate, or a check-in's "done" alone never sets an amount.
+ */
+export const IntakeAmount = Schema.Literals(["all", "some", "none", "unknown"]);
+export type IntakeAmount = typeof IntakeAmount.Type;
+
+/** One intake report, separate from any photo or estimate. Its time is the record's `recordedAt`. */
+export const IntakeReport = Schema.Struct({
+	type: Schema.Literal("intake_report"),
+	kind: IntakeKind,
+	amount: IntakeAmount,
+	/** The wearer reports for themselves; a caregiver reports what they saw or helped with. */
+	reportedBy: Schema.Literals(["wearer", "caregiver"]),
+	/** What the reporter said or typed, verbatim, or `null`. */
 	words: Schema.NullOr(Text(2000)),
-	reporter: Schema.Literals(["wearer", "caregiver"]),
 	via: Schema.Literals(["voice", "text", "tap"]),
-}).check(
-	Schema.makeFilter((report: { portion: unknown; words: unknown }) =>
-		report.portion !== null || report.words !== null
-			? true
-			: "give a portion, words, or both",
-	),
-);
+});
+export type IntakeReport = typeof IntakeReport.Type;
 
 const CaregiverAssistance = Schema.Struct({
-	kind: Schema.Literal("caregiver_assistance"),
+	type: Schema.Literal("caregiver_assistance"),
 	/** What the caregiver did, such as "cut the food". */
 	help: Text(500),
 });
 
-const IntakeUnknown = Schema.Struct({ kind: Schema.Literal("intake_unknown") });
-
 /** `POST /meals/:mealId/intake` body: one report, separate from any photo or estimate. */
 export const MealIntakeReport = Schema.Union([
-	IntakeReported,
+	IntakeReport,
 	CaregiverAssistance,
-	IntakeUnknown,
 ]);
 export type MealIntakeReport = typeof MealIntakeReport.Type;
 
 /** One stored fact. The server records `photo_taken` and `food_estimate`; never the photo. */
 export const MealFact = Schema.Union([
-	Schema.Struct({ kind: Schema.Literal("photo_taken"), capturedAt: UtcTime }),
+	Schema.Struct({ type: Schema.Literal("photo_taken"), capturedAt: UtcTime }),
 	Schema.Struct({
-		kind: Schema.Literal("food_estimate"),
+		type: Schema.Literal("food_estimate"),
 		estimate: MealEstimate,
 	}),
-	IntakeReported,
+	IntakeReport,
 	CaregiverAssistance,
-	IntakeUnknown,
 ]);
 export type MealFact = typeof MealFact.Type;
 
@@ -164,8 +159,9 @@ export const MealRecord = Schema.Struct({
 export type MealRecord = typeof MealRecord.Type;
 
 /**
- * One meal and its facts, oldest first. `intake` comes from the latest intake report or "unknown"
- * only: `not_reported` until someone reports, whatever photos or estimates exist.
+ * One meal and its facts, oldest first. `intake` comes only from the latest intake report:
+ * `not_reported` until someone reports, whatever photos or estimates exist; `unknown` when that
+ * report has amount `unknown` and no words.
  */
 export const Meal = Schema.Struct({
 	mealId: MealId,

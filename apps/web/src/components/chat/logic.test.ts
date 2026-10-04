@@ -7,7 +7,6 @@ import {
 	formatSize,
 	mergeMessages,
 	nextGeminiStatus,
-	outboxFor,
 	timeline,
 	toAttachment,
 } from "./logic";
@@ -78,14 +77,6 @@ test("toAttachment sends the file bytes as base64", async () => {
 	});
 });
 
-test("outboxFor reuses the clientId only for a resend of the same text", () => {
-	const first = outboxFor(null, "hi");
-	expect(outboxFor(first, "hi")).toBe(first);
-	const edited = outboxFor(first, "hi there");
-	expect(edited.clientId).not.toBe(first.clientId);
-	expect(edited.clientId).toMatch(/^[A-Za-z0-9_-]+$/);
-});
-
 test("formatSize", () => {
 	expect(formatSize(512)).toBe("512 B");
 	expect(formatSize(1536)).toBe("1.5 KB");
@@ -127,6 +118,9 @@ test("evidenceLine", () => {
 	expect(evidenceLine(evidence, at)).toBe("heart_rate 72 bpm · Watch · at T");
 	expect(evidenceLine({ ...evidence, stale: true }, at)).toBe(
 		"heart_rate 72 bpm · Watch · at T · stale",
+	);
+	expect(evidenceLine({ ...evidence, synthetic: true }, at)).toBe(
+		"heart_rate 72 bpm · Watch · at T · demo, not real",
 	);
 });
 

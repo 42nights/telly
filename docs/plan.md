@@ -43,6 +43,7 @@ NOOP is the existing WHOOP app. Its source and documentation are in [`noop/`](..
 The new server stubs only the NOOP-to-server connection. It returns `{"status":"not_connected","source":"noop"}`.
 The stub does no transport, ingestion, or database write. It supplies no readings and no WHOOP-derived nudges.
 Clients show "NOOP not connected". Other data sources stay available with their own provenance.
+The [WHOOP capability catalog](../noop/whoop/health-fields.html) lists every field that NOOP collects, as typed placeholders. It is a reference, not a connection; #27 owns its typed contract.
 
 ### Rules that apply to every change
 
@@ -89,6 +90,16 @@ On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigne
 6. Optional glasses adapter, verified on hardware separately.
 
 Step 5 needs an approved deployment target. The production sign-in issuer, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication are separate decisions.
+
+## Planning board
+
+[`board.html`](board.html) is one static HTML file with no build step and no network data.
+Open it directly in a browser, or serve the folder: `python3 -m http.server 45500 -d docs`, then go to `http://127.0.0.1:45500/board.html`.
+
+- **Flows:** each demo flow and each October 3 backlog flow links its GitHub issues. "Flow details" shows the trigger, required context, prompt, allowed replies, next action, failure, sharing, and completion.
+- **Placeholders:** wireframe values in `{braces}` are typed placeholders, not readings. People and messages are synthetic. Thresholds are family-set, not clinical.
+- **Reports:** dated lab results (Finchnode, read only) stay separate from wearable observations.
+- **WHOOP:** the board links the catalog and separates confirmed BLE capability, unavailable data, unvalidated data, and deferred hardware research.
 
 ## Coordination
 

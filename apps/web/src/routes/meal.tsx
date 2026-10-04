@@ -10,25 +10,29 @@ import {
 	EstimateReview,
 	EstimateStatus,
 	IntakeReport,
-} from "@/components/meals/parts";
-import { useMeal } from "@/components/meals/use-meal";
+} from "@/components/meal/parts";
+import { useMeal } from "@/components/meal/use-meal";
 import { useFamily } from "@/lib/family";
 
-export const Route = createFileRoute("/meals")({
+export const Route = createFileRoute("/meal")({
 	// `dish`: a meal the wearer made with guided cooking (#42) and chose to record.
 	validateSearch: (search: Record<string, unknown>): { dish?: string } =>
 		typeof search.dish === "string" ? { dish: search.dish.slice(0, 2000) } : {},
-	component: MealsComponent,
+	component: MealRoute,
 });
+
+/** Keyed by the selected person, so one person's photo, estimate, or report never shows for another. */
+function MealRoute() {
+	const familyId = useFamily().family?.id ?? null;
+	return <MealScreen familyId={familyId} key={familyId ?? "none"} />;
+}
 
 /**
  * A meal: a photo or a description gives an estimate of the food served, which the wearer can
  * correct. How much was eaten is a separate answer; the photo and the estimate never decide it.
  */
-function MealsComponent() {
-	const { family } = useFamily();
+function MealScreen({ familyId }: { familyId: string | null }) {
 	const { dish } = Route.useSearch();
-	const familyId = family?.id ?? null;
 	const camera = useCamera(false);
 	const video = useRef<HTMLVideoElement | null>(null);
 	const meal = useMeal(familyId);

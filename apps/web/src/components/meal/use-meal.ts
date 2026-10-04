@@ -3,7 +3,7 @@ import {
 	MealEstimate,
 	type MealEstimateRequest,
 	type MealIntakeReport,
-} from "@health/contracts/meals";
+} from "@health/contracts/meal-facts";
 import { VoiceTranscript } from "@health/contracts/voice";
 import { useEffect, useRef, useState } from "react";
 

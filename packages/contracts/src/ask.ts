@@ -50,6 +50,8 @@ export const FamilyQuestion = Schema.Struct({
 	attachments: Schema.optionalKey(
 		Schema.Array(QuestionAttachment).check(Schema.isMaxLength(4)),
 	),
+	/** `wearer`: the person with memory loss asks from the wearer screen, so the answer uses the calm-support rules. */
+	asker: Schema.optionalKey(Schema.Literal("wearer")),
 });
 export type FamilyQuestion = typeof FamilyQuestion.Type;
 
@@ -65,6 +67,11 @@ export const FamilyAnswer = Schema.Struct({
 	answeredAt: Schema.String,
 	/** 0 to 3 short questions that Gemini made from this answer. Empty when Gemini gave none. */
 	followUps: Schema.Array(Schema.String),
+	/**
+	 * True when the question asked for urgent help or reported a serious symptom (`urgentRequest`).
+	 * The server then asks no model, reads no records, and `model` is `none`: open the help flow.
+	 */
+	urgent: Schema.Boolean,
 });
 export type FamilyAnswer = typeof FamilyAnswer.Type;
 
@@ -93,3 +100,46 @@ export const VoiceAnswer = Schema.Struct({
 	speech: SpokenAnswer,
 });
 export type VoiceAnswer = typeof VoiceAnswer.Type;
+
+// Words of an explicit help request or a serious symptom, matched in lower case without accents.
+// ponytail: English and Spanish word lists; add a language's list when the app supports it. A
+// match is never a diagnosis: it only opens the help flow, and the wearer can go back.
+const URGENT: Readonly<Record<"en" | "es", ReadonlyArray<RegExp>>> = {
+	en: [
+		/^\W*(please\W+)?help(\W+me)?(\W+please)?\W*$/,
+		/\bneed help\W*(now|right now|quickly|fast)?\W*$/,
+		/\b(call|get|send)\b.{0,20}\b(911|112|999|ambulance|paramedics?|police|emergency|a doctor)\b/,
+		/\bemergency\b|\bambulance\b/,
+		/\bfell\b(?!\s+asleep)|\bfallen\b|\bfall(ing)? down\b|\bcan'?t get up\b|\bcannot get up\b/,
+		/\bchest\b.{0,20}\b(pain|hurts?|pressure|tight\w*)\b|\b(pain|pressure)\b.{0,15}\bchest\b/,
+		/\b(can'?t|cannot|can not|hard to|trouble|struggling to|difficulty)\s+breath(e|ing)?\b|\bshort(ness)? of breath\b|\bnot breathing\b/,
+		/\bbleed(ing|s)?\b|\bhit my head\b|\bsevere pain\b/,
+		/\bfaint(ed|ing)?\b|\bpass(ed|ing)? out\b|\bunconscious\b|\bunresponsive\b|\bwon'?t wake up\b/,
+		/\bstroke\b|\bface\b.{0,10}\bdroop|\bslurr|\bnumb(ness)?\b|\bheart attack\b|\bseizure\b|\bchok(e|ing)\b/,
+		/\boverdose\b|\btoo many (pills|tablets|meds|medicines?)\b|\bsuicid|\bkill myself\b|\bend my life\b|\bwant to die\b/,
+	],
+	es: [
+		/^\W*(por favor\W+)?ayuda(me)?(\W+por favor)?\W*$|\bnecesito ayuda\W*$|\bsocorro\b/,
+		/\bemergencias?\b|\bambulancia\b|\bllam[ae]\w*\b.{0,20}\b(911|112|policia|medico)\b/,
+		/\bme (he )?caido\b|\bme cai\b|\bno (me )?puedo levantar(me)?\b/,
+		/\b(dolor|duele)\b.{0,15}\bpecho\b|\bpecho\b.{0,15}\bduele\b|\bno puedo respirar\b|\bme falta (el )?aire\b|\bme ahogo\b/,
+		/\bsangr(o|ando|e)\b|\bdesmay|\binfarto\b|\bderrame\b|\bconvulsi/,
+		/\bsobredosis\b|\bquiero morir(me)?\b|\bsuicid/,
+	],
+};
+
+/**
+ * The language of an explicit help request or a serious symptom in `text`, or null. Clients check
+ * it before any other route, and the server answers such a question `urgent` without a model, so
+ * a calm conversation never delays the help flow.
+ */
+export const urgentRequest = (text: string): "en" | "es" | null => {
+	const plain = text
+		.normalize("NFD")
+		.replace(/\p{M}/gu, "")
+		.replaceAll("’", "'")
+		.toLowerCase();
+	if (URGENT.en.some((words) => words.test(plain))) return "en";
+	if (URGENT.es.some((words) => words.test(plain))) return "es";
+	return null;
+};

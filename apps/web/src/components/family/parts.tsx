@@ -294,7 +294,7 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 					return (
 						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-2">
 							<span className="text-sm">{metricLabel(metric)}</span>
-							<b className="text-2xl text-muted-foreground leading-tight">
+							<b className="text-muted-foreground text-xl leading-tight">
 								Unavailable
 							</b>
 							<span className="text-muted-foreground text-xs">

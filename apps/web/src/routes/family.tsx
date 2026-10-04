@@ -15,7 +15,7 @@ import {
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
 import { ApiNotice } from "@/components/win95";
-import { memberLabel } from "@/lib/members";
+import { senderLabel } from "@/lib/members";
 
 export const Route = createFileRoute("/family")({
 	component: FamilyPhone,
@@ -112,7 +112,12 @@ function ChatPreview({
 	messages,
 	me,
 }: {
-	messages: readonly { sender: string; body: string; sentAt: string }[];
+	messages: readonly {
+		sender: string;
+		clientId: string;
+		body: string;
+		sentAt: string;
+	}[];
 	me: string | null;
 }) {
 	const newest = messages.reduce<(typeof messages)[number] | null>(
@@ -125,7 +130,7 @@ function ChatPreview({
 	if (newest === null) return <p>No messages yet.</p>;
 	return (
 		<p className="line-clamp-3 break-words">
-			<b>{memberLabel(newest.sender, me)}</b>
+			<b>{senderLabel(newest, me)}</b>
 			{": "}
 			{newest.body}
 		</p>

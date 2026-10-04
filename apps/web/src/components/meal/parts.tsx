@@ -1,9 +1,9 @@
 import type {
 	FoodIdentity,
+	IntakeAmount,
 	MealEstimate,
 	MealIntakeReport,
-	PortionEaten,
-} from "@health/contracts/meals";
+} from "@health/contracts/meal-facts";
 import { Button } from "@health/ui/components/button";
 import { Loader2, Mic, Plus, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -314,12 +314,11 @@ export function EstimateStatus({ state }: { state: EstimateState }) {
 	);
 }
 
-const portions: ReadonlyArray<[PortionEaten, string]> = [
+const amounts: ReadonlyArray<[IntakeAmount, string]> = [
 	["none", "None"],
-	["a_little", "A little"],
-	["about_half", "About half"],
-	["most", "Most"],
+	["some", "Some"],
 	["all", "All"],
+	["unknown", "Not sure"],
 ];
 
 const reportFailure = {
@@ -347,7 +346,7 @@ export function IntakeReport({
 	);
 	const [caregiver, setCaregiver] = useState(false);
 	const [help, setHelp] = useState("");
-	const reporter = caregiver ? "caregiver" : "wearer";
+	const reportedBy = caregiver ? "caregiver" : "wearer";
 	const said = words?.text.trim() || null;
 	const via = said === null ? "tap" : words?.spoken ? "voice" : "text";
 	const busy = report.kind === "saving";
@@ -361,19 +360,20 @@ export function IntakeReport({
 			<p className="text-[16px] text-muted-foreground">
 				Only your answer counts here. A photo never decides it.
 			</p>
-			<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-				{portions.map(([portion, label]) => (
+			<div className="grid grid-cols-2 gap-2">
+				{amounts.map(([amount, label]) => (
 					<Button
 						className={big}
 						disabled={busy}
-						key={portion}
+						key={amount}
 						onClick={() =>
 							onReport(
 								{
-									kind: "intake_reported",
-									portion,
+									type: "intake_report",
+									kind: "meal",
+									amount,
 									words: said,
-									reporter,
+									reportedBy,
 									via,
 								},
 								label.toLowerCase(),
@@ -384,14 +384,6 @@ export function IntakeReport({
 						{label}
 					</Button>
 				))}
-				<Button
-					className={big}
-					disabled={busy}
-					onClick={() => onReport({ kind: "intake_unknown" }, "not sure")}
-					variant="outline"
-				>
-					Not sure
-				</Button>
 			</div>
 
 			<label className="grid gap-1 text-[16px]">
@@ -419,10 +411,11 @@ export function IntakeReport({
 						said !== null &&
 						onReport(
 							{
-								kind: "intake_reported",
-								portion: null,
+								type: "intake_report",
+								kind: "meal",
+								amount: "unknown",
 								words: said,
-								reporter,
+								reportedBy,
 								via,
 							},
 							`“${said}”`,
@@ -448,7 +441,7 @@ export function IntakeReport({
 					event.preventDefault();
 					if (help.trim() === "") return;
 					onReport(
-						{ kind: "caregiver_assistance", help: help.trim() },
+						{ type: "caregiver_assistance", help: help.trim() },
 						`help: ${help.trim()}`,
 					);
 					setHelp("");

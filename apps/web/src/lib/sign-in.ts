@@ -1,11 +1,12 @@
 // Web sign-in (issue #4): the OIDC authorization code flow with PKCE (S256), `state`, and `nonce`.
 // The issuer is configured, never chosen here. The ID token becomes the session token; the server
 // checks its signature, issuer, audience, and expiry.
+import { tokenClaims } from "@health/contracts/session";
 import { Schema } from "effect";
 
 import { ENV } from "@/env";
 
-import { setSessionToken, tokenClaims } from "./session";
+import { setSessionToken } from "./session";
 
 const PENDING = "telly.sign-in.pending";
 

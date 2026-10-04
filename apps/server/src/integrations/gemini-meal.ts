@@ -5,7 +5,7 @@ import type {
 	FoodIdentity,
 	MealEstimateRequest,
 	MealItem,
-} from "@health/contracts/meals";
+} from "@health/contracts/meal-facts";
 import { Schema } from "effect";
 import { ApiFailure } from "../http";
 import type { GeminiConfig } from "./gemini";

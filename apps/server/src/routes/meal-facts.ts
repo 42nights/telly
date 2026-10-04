@@ -2,6 +2,7 @@
 // server records a photo or an estimate only as itself; a meal's intake changes only through
 // `POST /meals/:mealId/intake`. The module's reducer checks family membership again.
 import {
+	type IntakeReport,
 	MAX_MEAL_IMAGE_BYTES,
 	type Meal,
 	type MealEstimate,
@@ -11,7 +12,7 @@ import {
 	MealIntakeReport,
 	type MealRecord,
 	type Meals,
-} from "@health/contracts/meals";
+} from "@health/contracts/meal-facts";
 import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -19,6 +20,7 @@ import { bodyLimit } from "hono/body-limit";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { GeminiConfig } from "../integrations/gemini";
 import { estimateMeal, GEMINI_MEAL_MODEL } from "../integrations/gemini-meal";
+import { requireScope } from "./care-profile";
 import { imageSize } from "./vision";
 
 // Base64 grows 4/3; the rest is the request's other fields.
@@ -44,17 +46,16 @@ const readMeals = (c: Context<FamilyEnv>): Meal[] => {
 	return (
 		[...meals]
 			.map(([mealId, facts]) => {
-				// Only an intake report or "unknown" sets intake; photos and estimates never do.
-				const latest = facts.findLast(
-					({ fact }) =>
-						fact.kind === "intake_reported" || fact.kind === "intake_unknown",
-				);
+				// Only an intake report sets intake; photos and estimates never do.
+				let latest: IntakeReport | undefined;
+				for (const { fact } of facts)
+					if (fact.type === "intake_report") latest = fact;
 				const intake: Meal["intake"] =
 					latest === undefined
 						? "not_reported"
-						: latest.fact.kind === "intake_reported"
-							? "reported"
-							: "unknown";
+						: latest.amount === "unknown" && latest.words === null
+							? "unknown"
+							: "reported";
 				return { mealId, intake, facts };
 			})
 			// Newest activity first. Database times share one fixed-width UTC format.
@@ -101,10 +102,21 @@ const checkPhoto = ({
 		throw new ApiFailure("invalid_request", `image is not a valid ${type}`);
 };
 
-/** Without a Gemini config (no `GEMINI_API_KEY`) estimates are `unavailable`; intake reports still work. */
+/**
+ * Meal facts are health records: every route needs the caller's #26 `health_records` scope, and a
+ * photo also needs `media`, checked here before anything reaches Gemini and again by the module.
+ * Without a Gemini config (no `GEMINI_API_KEY`) estimates are `unavailable`; intake reports still work.
+ */
 export const mealRoutes = (gemini: GeminiConfig | undefined) =>
 	new Hono<FamilyEnv>()
-		.get("/meals", (c) => c.json({ meals: readMeals(c) } satisfies Meals))
+		.use("/meals/*", async (c, next) => {
+			requireScope(c, "health_records");
+			await next();
+		})
+		.get("/meals", (c) => {
+			requireScope(c, "health_records");
+			return c.json({ meals: readMeals(c) } satisfies Meals);
+		})
 		.post(
 			"/meals/:mealId/estimates",
 			bodyLimit({
@@ -119,9 +131,10 @@ export const mealRoutes = (gemini: GeminiConfig | undefined) =>
 				const request = await decodeBody(c, MealEstimateRequest);
 				// The photo was taken whether or not an estimate follows; the photo itself is not kept.
 				if (request.source === "photo") {
+					requireScope(c, "media");
 					checkPhoto(request.image);
 					await record(c, mealId, {
-						kind: "photo_taken",
+						type: "photo_taken",
 						capturedAt: request.capturedAt,
 					});
 				}
@@ -138,7 +151,7 @@ export const mealRoutes = (gemini: GeminiConfig | undefined) =>
 					estimatedAt: new Date().toISOString(),
 					items,
 				};
-				await record(c, mealId, { kind: "food_estimate", estimate });
+				await record(c, mealId, { type: "food_estimate", estimate });
 				return c.json(estimate satisfies MealEstimate);
 			},
 		)
