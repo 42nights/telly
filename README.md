@@ -41,9 +41,11 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database |
 | Sign-in check and family data API (server only) | OIDC token check and family access on every `/api` route except `/api/sources`. Tested with a local test issuer only. The production issuer is not chosen, and no sign-in screen exists ([#4](https://github.com/ayaangazali/telly/issues/4)) |
 | Threshold alerts and durable delivery (server only) | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
+| Lab report API (server only) | Generate, fill, and review. Hospital submission is unavailable: Finchnode only reads records ([#17](https://github.com/ayaangazali/telly/issues/17), [#8](https://github.com/ayaangazali/telly/issues/8)) |
+| Finchnode laboratory results (server only) | Tested against the keyless public demo with fictional patients. No sandbox or live key is configured |
 | Product features from the overview | Planned |
 | Gemini medicine detection (server only) | Route, frame mapping, and errors are tested against a local protocol server. No live Gemini call is verified yet, and no client draws the markers ([#15](https://github.com/ayaangazali/telly/issues/15)) |
-| Providers: ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
+| Providers: ElevenLabs, Grokbot, Fetch.ai Agentverse, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
 | Optional glasses adapter | Planned |
 
@@ -95,12 +97,20 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `DELETE /api/families/:familyId/alert-thresholds/:thresholdId` | Remove a rule |
 | `GET /api/families/:familyId/monitoring` | Each rule's state from the newest validated sample: `in_range`, `out_of_range`, or `unavailable` (`missing` or `stale`) |
 | `POST /api/families/:familyId/vision/medicine-detections` | Find medicine containers in one camera frame with Gemini. See below |
+| `GET /api/families/:familyId/reports`, `POST …/reports` | The family's lab reports, newest first; generate a draft from the family's latest samples |
+| `GET …/reports/:reportId`, `POST …/reports/:reportId/fields` | One report; fill its fields while it is a draft (`409 conflict` after review) |
+| `POST …/reports/:reportId/review` | A member confirms the report; it no longer changes. This is not clinician review |
+| `POST …/reports/:reportId/submit` | `409` before review, then `503 unavailable`: Finchnode has no API that sends a report to a hospital ([#8](https://github.com/ayaangazali/telly/issues/8)) |
+| `POST …/finchnode/sessions`, `POST …/finchnode/sessions/:sessionId/link` | Start Finchnode Connect for labs; link the patient to the family after they approve sharing |
+| `GET …/finchnode/labs` | Laboratory results of the family's linked patients, with source, units, ranges, and consent state |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 
 When the database records a validated sample, it checks the family's rules in the same transaction. A fresh sample in the rule's unit that is strictly beyond the limit writes the alert and its queued delivery together. A replayed sample (same rule, source, and source time) raises nothing new. A stale sample raises nothing, and monitoring shows it as `unavailable`, never in range. No model takes part in this check.
 
 The alert outbox sends each delivery at least once, with the idempotency key `alert-<alertId>`. It runs as the identity that published the module: set `ALERT_OPERATOR_TOKEN` to that identity's SpacetimeDB token. Without it, deliveries stay `queued`. Without a delivery transport, they become `unavailable`, never `sent`. Delivery (`queued`, `sent`, `failed`, `unavailable`) and family acknowledgement are separate.
+
+Finchnode is off until `FINCHNODE_MODE` is set: `demo` uses the keyless public demo (fictional patients only), and `api` uses `FINCHNODE_API_KEY`. A report marker without a sample stays `null` (unavailable). Reports carry no reference ranges or flags, because no validated laboratory range exists for these signals.
 
 #### Medicine detection
 
@@ -119,7 +129,7 @@ bun run test              # Behavior tests
 bun run check:quality     # Fallow: unused code, duplication, complexity, import boundaries
 bun run check:structure   # Sentrux rules and regression gate
 bun run --filter server build && bun run smoke   # Real server responses under Node
-bun run db:test           # Family-access, alert, outbox, connection-recovery, and server-lifecycle tests on an isolated in-memory local SpacetimeDB
+bun run db:test           # Family-access, alert, outbox, report, Finchnode, connection-recovery, and server-lifecycle tests on an isolated in-memory local SpacetimeDB
 bun run db:drill          # Crash-restart and backup/restore drill on isolated local data
 bun run build             # Production build of every app
 ```
