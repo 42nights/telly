@@ -1,0 +1,8 @@
+[{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session_duration_s","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"sleep_performance","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"strain","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-28","key":"strain","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"hrv_rr_overcount","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"day_cycle_onset_ts","sourceId":"my-whoop"},
+{"deviceId":"my-whoop-noop","day":"2026-09-29","key":"rhr_primary_session_valid_samples","sourceId":"my-whoop"}]

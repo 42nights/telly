@@ -50,7 +50,7 @@ permissions:
 jobs:
   build:
     if: vars.HEALTH_SERVER_URL != '' && vars.HEALTH_WEB_URL != ''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -76,7 +76,7 @@ jobs:
   # repository owner sets the two secrets; their values are in the shared key store (docs/deploy.md).
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -100,7 +100,7 @@ jobs:
 
   smoke:
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
