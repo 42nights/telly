@@ -146,7 +146,7 @@ The live API passed these signed-out checks on 2026-10-04:
 
 `https://app.saintess.tech/hud` loads signed out. It shows "Sign in to use Talk" and "Practice mode · calls are simulated".
 
-This walkthrough did not run the signed-in steps on the live app. Google sign-in there is in Testing mode, and the walkthrough needs three family members. To repeat it live, you need ID tokens for three Google test users.
+This walkthrough did not run the signed-in steps on the live app. Google sign-in there was in Testing mode at that time, and the walkthrough needs three family members. To repeat it live, you need ID tokens for three Google accounts.
 
 ## Gaps found
 

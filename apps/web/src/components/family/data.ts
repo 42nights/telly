@@ -1,4 +1,4 @@
-// The reads both family screens share, for the selected family, and the "Mark as seen" write.
+// The family screen's reads for the selected family, and the "Mark as seen" write.
 import { type Family, FamilyRecords } from "@health/contracts";
 import {
 	AcknowledgedAlert,
@@ -21,7 +21,7 @@ const POLL_MS = 15_000;
 // ponytail: every poll re-reads all family samples; read only the newest if the payload grows slow.
 export const RECORDS_POLL_MS = 5_000;
 
-/** The selected family and everything both family screens read about it. */
+/** The selected family and everything the family screen reads about it. */
 export type FamilyData = {
 	readonly familyState: ApiState<FamilyList>;
 	readonly family: Family | null;
