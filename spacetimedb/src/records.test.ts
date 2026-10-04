@@ -273,7 +273,7 @@ describe("location sharing", () => {
 			granted: true,
 		});
 
-	test("share once; viewer sees the location only with the location scope; revoke deletes it", () => {
+	test("share once; sharing grants the viewer Location access, so they see it at once; revoke deletes it", () => {
 		expect(() => report("Fix", fix())).toThrow(
 			"location is not shared with anyone",
 		);
@@ -283,13 +283,16 @@ describe("location sharing", () => {
 		expect(h.view(mod.myLocationShares, bob)).toMatchObject([
 			{ sharer: alice, viewer: bob },
 		]);
+		// One grant event, written by the sharer: sharing twice grants once.
+		expect(
+			h
+				.rows<{ member: typeof bob; scope: string }>("careGrantEvent")
+				.filter((e) => e.member.isEqual(bob) && e.scope === "location"),
+		).toMatchObject([{ changedBy: alice, granted: true }]);
 		report("Fix", fix());
 		h.advance(60);
 		report("NoFix");
 		expect(h.rows("location")).toHaveLength(1);
-		// A share without the viewer's `location` scope (#26) shows nothing.
-		expect(h.view(mod.myLocations, bob)).toEqual([]);
-		grantLocation(bob);
 		expect(h.view(mod.myLocations, bob)).toMatchObject([
 			{
 				status: { tag: "NoFix" },
@@ -299,9 +302,29 @@ describe("location sharing", () => {
 		]);
 		expect(h.view(mod.myLocations, alice)).toHaveLength(1);
 		expect(h.view(mod.myLocations, mallory)).toEqual([]);
+		// A later revoke of the scope (#26) still hides the location.
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member: bob,
+			scope: "location",
+			granted: false,
+		});
+		expect(h.view(mod.myLocations, bob)).toEqual([]);
 		h.call(mod.revokeLocationShare, alice, { familyId: 1n, viewer: bob });
 		expect(h.rows("locationShare")).toEqual([]);
 		expect(h.rows("location")).toEqual([]);
+	});
+
+	test("a member without family access shares, and the viewer sees it", () => {
+		const carol = identity(4);
+		h.call(mod.addFamilyMember, alice, { familyId: 1n, member: carol });
+		h.call(mod.shareLocation, bob, { familyId: 1n, viewer: carol });
+		h.call(mod.reportLocation, bob, {
+			familyId: 1n,
+			status: { tag: "Fix" },
+			fix: fix(),
+		});
+		expect(h.view(mod.myLocations, carol)).toMatchObject([{ sharer: bob }]);
 	});
 
 	test("revoking one of two viewers keeps the location", () => {

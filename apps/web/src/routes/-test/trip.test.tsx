@@ -54,19 +54,6 @@ const base = (extra: Record<string, unknown> = {}) => ({
 			{ identity: MOM, name: "Rosa Rivera" },
 		],
 	},
-	"GET /api/families/fam-1/care-access": {
-		mine: [],
-		grants: [
-			{
-				identity: MOM,
-				scope: "location",
-				granted: true,
-				changedBy: ME,
-				changedAt: NOW,
-			},
-		],
-		history: [],
-	},
 	...extra,
 });
 const momBox = async () => {
@@ -106,7 +93,7 @@ const need = (attempts: unknown[]) => ({
 	remaining: [],
 });
 
-// happy-dom has no geolocation; the reporter and "This is home" use this fake instead.
+// happy-dom has no geolocation; the reporter and Settings' "This is home" use this fake instead.
 type Watcher = { ok: PositionCallback; fail: PositionErrorCallback | null };
 let watcher: Watcher | null = null;
 let here: Partial<GeolocationCoordinates> = { ...HOME, accuracy: 15 };
@@ -133,17 +120,13 @@ afterEach(() => {
 	here = { ...HOME, accuracy: 15 };
 });
 
-test("no form: one tap on This is home saves this position, turns on automatic trips, and shares with the family", async () => {
+test("no form: no home buttons; ticking a person shares, and this device then sends its position so the database learns home", async () => {
 	signIn();
-	let watch: Record<string, unknown> = WATCH;
+	let watch: Record<string, unknown> = { ...WATCH, autoTrip: false };
 	let shared = false;
 	const calls = serve(
 		base({
 			"GET /api/families/fam-1/location/home": () => watch,
-			"PUT /api/families/fam-1/location/home": (call: { body: unknown }) => {
-				watch = { ...WATCH, ...(call.body as object) };
-				return watch;
-			},
 			"GET /api/families/fam-1/location": () => ({
 				...LOCATIONS,
 				shares: shared ? [SHARE] : [],
@@ -153,37 +136,70 @@ test("no form: one tap on This is home saves this position, turns on automatic t
 				watch = { ...watch, sharing: true };
 				return { ...LOCATIONS, shares: [SHARE] };
 			},
+			"POST /api/families/fam-1/location": () => {
+				watch = { ...watch, home: HOME, autoTrip: true, distanceMeters: 0 };
+				return MY_LOCATION;
+			},
 		}),
 	);
 	renderRoute("/trip");
-	expect((await momBox()).checked).toBe(false);
+	expect(await screen.findByText("Location not shared")).toBeTruthy();
+	for (const name of ["This is home", "I'm going out", "I'm back home"])
+		expect(screen.queryByRole("button", { name })).toBeNull();
+	expect(watcher).toBeNull();
+
+	fireEvent.click(await momBox());
+	await waitFor(async () => expect((await momBox()).checked).toBe(true));
+	expect(await screen.findByText("Finding home…")).toBeTruthy();
+	await waitFor(() => expect(watcher).not.toBeNull());
+	watcher?.ok({
+		coords: { ...HOME, accuracy: 15 },
+		timestamp: Date.parse(NOW),
+	} as GeolocationPosition);
+	// The report rereads the home watch, where the database saved the first fix as home.
+	expect(await screen.findByText("At home")).toBeTruthy();
+	expect(calls.filter((c) => c.method === "PUT").map((c) => c.path)).toEqual([
+		`/api/families/fam-1/location/shares/${MOM}`,
+	]);
+});
+
+test("Settings: This is home saves this position, turns on automatic trips, and shares with the family", async () => {
+	signIn();
+	let watch: Record<string, unknown> = WATCH;
+	const calls = serve(
+		base({
+			"GET /api/families/fam-1/location/home": () => watch,
+			"PUT /api/families/fam-1/location/home": (call: { body: unknown }) => {
+				watch = { ...WATCH, ...(call.body as object) };
+				return watch;
+			},
+			[`PUT /api/families/fam-1/location/shares/${MOM}`]: {
+				...LOCATIONS,
+				shares: [SHARE],
+			},
+		}),
+	);
+	renderRoute("/settings/going-out");
 	fireEvent.click(await screen.findByRole("button", { name: "This is home" }));
-	expect(
-		await screen.findByText(
-			"You are at home. Telly tells the people you chose when you go out.",
-		),
-	).toBeTruthy();
+	await waitFor(() =>
+		expect(
+			calls
+				.filter((c) => c.path.includes("/location/shares/"))
+				.map((c) => c.path),
+		).toEqual([`/api/families/fam-1/location/shares/${MOM}`]),
+	);
 	expect(calls.find((c) => c.method === "PUT")?.body).toEqual({
 		home: HOME,
 		radiusMeters: 200,
 		autoTrip: true,
 	});
-	// The first home turns sharing on for every family member, never for the wearer.
-	expect(
-		calls
-			.filter((c) => c.path.includes("/location/shares/"))
-			.map((c) => c.path),
-	).toEqual([`/api/families/fam-1/location/shares/${MOM}`]);
-	await waitFor(async () => expect((await momBox()).checked).toBe(true));
-	// Sharing and automatic trips on: this device now sends its position.
-	await waitFor(() => expect(watcher).not.toBeNull());
 });
 
-test("a position known only roughly is not saved as home", async () => {
+test("Settings: a position known only roughly is not saved as home", async () => {
 	signIn();
 	here = { ...HOME, accuracy: 900 };
 	const calls = serve(base());
-	renderRoute("/trip");
+	renderRoute("/settings/going-out");
 	fireEvent.click(await screen.findByRole("button", { name: "This is home" }));
 	expect((await screen.findByRole("alert")).textContent).toContain(
 		"only within 900 m",
@@ -191,7 +207,7 @@ test("a position known only roughly is not saved as home", async () => {
 	expect(calls.some((c) => c.method === "PUT")).toBe(false);
 });
 
-test("out: shows the distance and time, sends the position, and I'm back home ends the trip", async () => {
+test("out: one status line with the distance and time, and the position is sent", async () => {
 	signIn();
 	const awaySince = new Date(Date.now() - 10 * 60_000).toISOString();
 	const calls = serve(
@@ -210,14 +226,12 @@ test("out: shows the distance and time, sends the position, and I'm back home en
 				shares: [SHARE],
 			},
 			"POST /api/families/fam-1/location": MY_LOCATION,
-			"POST /api/families/fam-1/location/away": { ...WATCH, sharing: true },
 		}),
 	);
 	renderRoute("/trip");
-	expect(
-		await screen.findByRole("heading", { name: "You are out" }),
-	).toBeTruthy();
-	expect(screen.getByText("1.2 km from home · left 10 min ago")).toBeTruthy();
+	expect((await screen.findByRole("status")).textContent).toBe(
+		"Out · 1.2 km from home · 10 min",
+	);
 	expect(
 		screen.getByRole("link", { name: "Directions home" }).getAttribute("href"),
 	).toContain("destination=40%2C-73");
@@ -231,12 +245,6 @@ test("out: shows the distance and time, sends the position, and I'm back home en
 			calls.find((c) => c.method === "POST" && c.path.endsWith("/location"))
 				?.body,
 		).toMatchObject({ status: "fix", fix: { latitude: 40.011 } }),
-	);
-	fireEvent.click(screen.getByRole("button", { name: "I'm back home" }));
-	await waitFor(() =>
-		expect(calls.find((c) => c.path.endsWith("/away"))?.body).toEqual({
-			away: false,
-		}),
 	);
 });
 
@@ -252,9 +260,7 @@ test("without a share, nothing is sent even with automatic trips on", async () =
 		}),
 	);
 	renderRoute("/trip");
-	expect(
-		await screen.findByText(/^Share your location with someone below/),
-	).toBeTruthy();
+	expect(await screen.findByText("Location not shared")).toBeTruthy();
 	expect(watcher).toBeNull();
 	expect((await momBox()).checked).toBe(false);
 });
@@ -341,8 +347,11 @@ test("help with nobody to contact says to call instead", async () => {
 	serve(base({ "POST /api/families/fam-1/care/needs": need([]) }));
 	renderRoute("/trip");
 	expect(
-		await screen.findByText("Add Mom's number in Settings to call her here."),
+		await screen.findByRole("button", { name: "Tell my family I need help" }),
 	).toBeTruthy();
+	// No number: no Call button and no sentence about it.
+	expect(screen.queryByRole("link", { name: "Call Mom" })).toBeNull();
+	expect(screen.queryByText(/Mom's number/)).toBeNull();
 	fireEvent.click(
 		await screen.findByRole("button", { name: "Tell my family I need help" }),
 	);

@@ -1,6 +1,8 @@
 // The AR object pin bridge to the iOS shell (contract: telly-ar-pin). A request goes out through
 // `ReactNativeWebView.postMessage`; the shell answers with a "telly-ar" CustomEvent that echoes the
 // request's `requestId`. Outside the shell (web, Android) there is no bridge, so AR is unsupported.
+// Since #351 the AR screen follows the member's other pinned objects, and `watchAr` reads its
+// messages (a camera frame to check, objects that moved) one at a time until it closes.
 import { Schema } from "effect";
 
 const Capabilities = Schema.Struct({
@@ -13,12 +15,19 @@ const Capabilities = Schema.Struct({
 });
 // The replies also echo the object id: `objectId` from shells built since #301, `containerId` from
 // older ones. The `requestId` already matches a reply to its request, so neither is read.
+const MapPin = Schema.Struct({
+	objectId: Schema.String,
+	anchorId: Schema.String,
+});
+export type MapPin = typeof MapPin.Type;
 const PinSaved = Schema.Struct({
 	type: Schema.Literal("ar.pinSaved"),
 	requestId: Schema.String,
 	anchorId: Schema.String,
 	worldMap: Schema.String,
 	mapBytes: Schema.Number,
+	/** Every pin in the saved room map. Shells from before #351 send none. */
+	anchors: Schema.optionalKey(Schema.Array(MapPin)),
 });
 const PinFound = Schema.Struct({
 	type: Schema.Literal("ar.pinFound"),
@@ -37,9 +46,61 @@ const ArErrorReply = Schema.Struct({
 	code: ArErrorCode,
 	message: Schema.String,
 });
-const ArReply = Schema.Union([Capabilities, PinSaved, PinFound, ArErrorReply]);
+/** The open AR screen asks for a vision check of its camera frame (upright base64 JPEG). */
+const ArCheck = Schema.Struct({
+	type: Schema.Literal("ar.check"),
+	requestId: Schema.String,
+	checkId: Schema.String,
+	objectIds: Schema.Array(Schema.String),
+	image: Schema.String,
+	width: Schema.Int,
+	height: Schema.Int,
+	capturedAt: Schema.String,
+});
+/** The check confirmed objects more than 0.5 m from their anchors; the screen moved the anchors. */
+const ArMoved = Schema.Struct({
+	type: Schema.Literal("ar.moved"),
+	requestId: Schema.String,
+	checkId: Schema.String,
+	objectIds: Schema.Array(Schema.String),
+	/** The room map with the moved anchors, missing when it could not be saved. */
+	worldMap: Schema.optionalKey(Schema.String),
+	anchors: Schema.optionalKey(Schema.Array(MapPin)),
+});
+const ArClosed = Schema.Struct({
+	type: Schema.Literal("ar.closed"),
+	requestId: Schema.String,
+});
+const ArReply = Schema.Union([
+	Capabilities,
+	PinSaved,
+	PinFound,
+	ArErrorReply,
+	ArCheck,
+	ArMoved,
+	ArClosed,
+]);
 type ArReply = typeof ArReply.Type;
 const decodeReply = Schema.decodeUnknownOption(ArReply);
+
+/** A message of the open AR screen. */
+export type ArEvent = typeof ArCheck.Type | typeof ArMoved.Type;
+
+/** Another pinned object of the member, followed while the AR screen runs. */
+export type PinnedObject = {
+	readonly objectId: string;
+	readonly label: string;
+};
+
+/** The answer to an `ar.check`: the center of each confirmed object's box, in picture pixels. */
+export type CheckAnswer = {
+	readonly checkId: string;
+	readonly found: readonly {
+		readonly objectId: string;
+		readonly x: number;
+		readonly y: number;
+	}[];
+};
 
 export type ArCapabilities = {
 	readonly supported: boolean;
@@ -64,6 +125,9 @@ type Request =
 			readonly familyId: string;
 			readonly objectId: string;
 			readonly label: string;
+			readonly session: string;
+			readonly others: readonly PinnedObject[];
+			readonly worldMap?: string;
 	  }
 	| {
 			readonly type: "ar.findPin";
@@ -71,6 +135,13 @@ type Request =
 			readonly label: string;
 			readonly anchorId: string;
 			readonly worldMap: string;
+			readonly session: string;
+			readonly others: readonly PinnedObject[];
+	  }
+	| {
+			readonly type: "ar.watch";
+			readonly session: string;
+			readonly answer?: CheckAnswer;
 	  };
 
 /** Sends `request` and resolves with the reply that echoes its id, or `null` (no bridge, timeout). */
@@ -128,17 +199,24 @@ export const arCapabilities = async (): Promise<ArCapabilities> => {
 		: { supported: reply.supported, reason: reply.reason };
 };
 
-/** Opens the AR screen to pin `objectId`; resolves with the anchor and the room's world map. */
+/**
+ * Opens the AR screen to pin `objectId`; resolves with the anchor and the room's world map.
+ * `worldMap` is the member's room map, so the new pin joins the pins already in it.
+ */
 export const savePin = async (pin: {
 	readonly familyId: string;
 	readonly objectId: string;
 	readonly label: string;
+	readonly session: string;
+	readonly others: readonly PinnedObject[];
+	readonly worldMap?: string;
 }): Promise<
 	| {
 			readonly kind: "saved";
 			readonly anchorId: string;
 			readonly worldMap: string;
 			readonly mapBytes: number;
+			readonly anchors: readonly MapPin[];
 	  }
 	| ArFailure
 > => {
@@ -149,6 +227,7 @@ export const savePin = async (pin: {
 		anchorId: reply.anchorId,
 		worldMap: reply.worldMap,
 		mapBytes: reply.mapBytes,
+		anchors: reply.anchors ?? [],
 	};
 };
 
@@ -158,7 +237,26 @@ export const findPin = async (pin: {
 	readonly label: string;
 	readonly anchorId: string;
 	readonly worldMap: string;
+	readonly session: string;
+	readonly others: readonly PinnedObject[];
 }): Promise<{ readonly kind: "found" } | ArFailure> => {
 	const reply = await send({ type: "ar.findPin", ...pin }, SESSION_TIMEOUT_MS);
 	return reply?.type === "ar.pinFound" ? { kind: "found" } : failure(reply);
+};
+
+/**
+ * The next message of the AR screen opened with `session`, sending `answer` to its last check.
+ * `null` once the screen closed, or when the shell does not answer (one built before #351).
+ */
+export const watchAr = async (
+	session: string,
+	answer?: CheckAnswer,
+): Promise<ArEvent | null> => {
+	const reply = await send(
+		{ type: "ar.watch", session, ...(answer === undefined ? {} : { answer }) },
+		SESSION_TIMEOUT_MS,
+	);
+	return reply?.type === "ar.check" || reply?.type === "ar.moved"
+		? reply
+		: null;
 };

@@ -240,7 +240,7 @@ describe("SavedThings", () => {
 			expect(calls.map((c) => c.path)).toEqual([
 				"/api/families/1/medicine-memory/objects/k/ar-pin",
 			]);
-			expect(sent.at(-1)).toMatchObject({
+			expect(sent.find((r) => r.type === "ar.findPin")).toMatchObject({
 				type: "ar.findPin",
 				objectId: "k",
 				containerId: "k",

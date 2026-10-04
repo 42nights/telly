@@ -103,11 +103,7 @@ export function HelpHome({
 			)}
 			{speech.key === "help" && <SpeechLine speech={speech} />}
 			<div className="grid grid-cols-2 gap-2">
-				{contacts.momPhone === null ? (
-					<p className="text-[16px]">
-						Add Mom's number in Settings to call her here.
-					</p>
-				) : (
+				{contacts.momPhone !== null && (
 					<a
 						className={buttonVariants({ className: big, variant: "outline" })}
 						data-slot="button"

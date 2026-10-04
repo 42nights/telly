@@ -34,7 +34,7 @@ export type PictureCheck = {
 	readonly result: CheckResult;
 };
 
-type Frame = {
+export type Frame = {
 	readonly picture: string;
 	readonly data: string;
 	readonly width: number;
@@ -70,12 +70,30 @@ const withoutFamily = (families: ApiState<FamilyList>): CheckResult => {
 	return families;
 };
 
+/** The full frame, unrotated: the server maps boxes back into these pixels. */
+export const detectionRequest = (
+	id: string,
+	capturedAt: number,
+	frame: Frame,
+) => ({
+	frame: {
+		id,
+		capturedAt: new Date(capturedAt).toISOString(),
+		width: frame.width,
+		height: frame.height,
+		crop: { x: 0, y: 0, width: frame.width, height: frame.height },
+		rotation: 0,
+	},
+	image: { type: "image/jpeg", data: frame.data },
+});
+
 /** Asks the vision route about one captured frame; the reply must name that frame's `id`. */
 export const detect = async (
 	familyId: string,
 	frame: Frame,
 	signal: AbortSignal,
 	id: string = crypto.randomUUID(),
+	capturedAt = Date.now(),
 ): Promise<CheckResult> => {
 	const result = await apiRequest(
 		ObjectDetections,
@@ -83,18 +101,7 @@ export const detect = async (
 		{
 			method: "POST",
 			signal,
-			// The full frame, unrotated: the server maps boxes back into these pixels.
-			body: {
-				frame: {
-					id,
-					capturedAt: new Date().toISOString(),
-					width: frame.width,
-					height: frame.height,
-					crop: { x: 0, y: 0, width: frame.width, height: frame.height },
-					rotation: 0,
-				},
-				image: { type: "image/jpeg", data: frame.data },
-			},
+			body: detectionRequest(id, capturedAt, frame),
 		},
 	);
 	if (result.kind !== "ready") return result;
@@ -240,6 +247,7 @@ export function usePictureCheck(
 			frame,
 			controller.signal,
 			base.id,
+			base.capturedAt,
 		).catch(() => null);
 		// Drop a reply for an older picture, or one the wearer stopped.
 		if (result === null || controller.signal.aborted) return;

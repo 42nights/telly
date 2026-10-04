@@ -48,11 +48,13 @@ const added = <T extends { id: string }>(
 /** Signed-in routes outside one family, mounted at `/api`. */
 export const accountRoutes = () =>
 	new Hono<AuthEnv>()
-		// Stores the caller's sign-in name for their family members when it changed. A failed save
-		// is logged and does not fail sign-in; the next `/me` tries again.
+		// Stores the caller's sign-in name (or, without one, the part of their email before the @) for
+		// their family members when it changed. A failed save is logged and does not fail sign-in; the
+		// next `/me` tries again.
 		.get("/me", async (c) => {
 			const { db, identity } = c.var;
-			const name = identity.name?.trim();
+			const name =
+				identity.name?.trim() || identity.email?.split("@")[0]?.trim();
 			const stored = [...db.connection.db.myFamilyPeople.iter()].some(
 				(row) => row.member.toHexString() === db.identity && row.name === name,
 			);

@@ -1,5 +1,5 @@
 // The phone's signed-in session (issues #4 and #222): the OIDC ID token and the refresh token that the
-// sign-in screen stores. They live only in Expo SecureStore (iOS Keychain, Android Keystore), never in
+// shell's native sign-in stores. They live only in Expo SecureStore (iOS Keychain, Android Keystore), never in
 // AsyncStorage or logs. The server checks the ID token's signature, issuer, audience, and expiry; the
 // app renews the one-hour ID token with the refresh token, and drops a session the issuer refuses.
 import {

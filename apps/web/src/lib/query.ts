@@ -103,6 +103,8 @@ const ALSO_CHANGES: Readonly<Record<string, readonly string[]>> = {
 	"demo-data": ["", "alerts", "monitoring"],
 	"alert-thresholds": ["monitoring"],
 	"care-access": ["care-profile", "care-instructions"],
+	// A location share grants the viewer Location access.
+	location: ["care-access"],
 	"care-instructions": ["care-profile"],
 	reminders: ["reminder-occurrences"],
 	reports: ["report-pdfs"],

@@ -77,23 +77,33 @@ describe("describeLocation", () => {
 });
 
 describe("trip status", () => {
+	const watch = {
+		home: { latitude: 1, longitude: 2 },
+		radiusMeters: 200,
+		autoTrip: true,
+		awaySince: null,
+		distanceMeters: null,
+		sharing: true,
+	};
 	const out = (minutesAgo: number, distanceMeters: number | null) =>
-		tripStatus(
-			{
-				home: { latitude: 1, longitude: 2 },
-				radiusMeters: 200,
-				autoTrip: true,
-				awaySince: at(minutesAgo),
-				distanceMeters,
-				sharing: true,
-			},
-			now,
-		);
+		tripStatus({ ...watch, awaySince: at(minutesAgo), distanceMeters }, now);
 
-	test("rounds the distance to 10 m under a kilometer, and leaves it out when unknown", () => {
-		expect(out(10, 1234)).toBe("1.2 km from home · left 10 min ago");
-		expect(out(0, 347)).toBe("350 m from home · left just now");
-		expect(out(5, null)).toBe("left 5 min ago");
+	test("out: rounds the distance to 10 m under a kilometer, and leaves it out when unknown", () => {
+		expect(out(10, 1234)).toBe("Out · 1.2 km from home · 10 min");
+		expect(out(0, 347)).toBe("Out · 350 m from home · 0 min");
+		expect(out(5, null)).toBe("Out · 5 min");
+		expect(out(150, 50)).toMatch(/^Out · 50 m from home · since /);
+	});
+
+	test("at home, or the one reason it is not known yet", () => {
+		expect(tripStatus(watch, now)).toBe("At home");
+		expect(tripStatus({ ...watch, sharing: false }, now)).toBe(
+			"Location not shared",
+		);
+		expect(tripStatus({ ...watch, home: null }, now)).toBe("Finding home…");
+		expect(tripStatus({ ...watch, autoTrip: false }, now)).toBe(
+			"Trip watch off",
+		);
 	});
 
 	test("the help message carries no coordinates and fits a care need summary", () => {
