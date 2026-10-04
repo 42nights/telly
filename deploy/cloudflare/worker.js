@@ -1,6 +1,7 @@
 // Worker `telly` on the 42nights Cloudflare account (deploy/cloudflare/deploy.sh). It serves the web
 // app from static assets and sends /health and /api/* to the Node API, which runs in one Cloudflare
-// Container. The container pulls its own keys at start (deploy/cloudflare/entrypoint.sh).
+// Container. The container pulls its own keys at start (deploy/cloudflare/entrypoint.sh). On
+// LANDING_HOST it serves the static landing page (deploy/cloudflare/landing/) instead of the app.
 const port = 8080;
 // Public settings the API needs; deploy.sh puts them in the Worker's vars.
 const passed = [
@@ -81,7 +82,19 @@ export class Api {
 
 export default {
 	fetch(request, env) {
-		const { pathname } = new URL(request.url);
+		const url = new URL(request.url);
+		const { pathname } = url;
+		if (url.hostname === env.LANDING_HOST) {
+			// Landing files have an extension; any other path is an app route, so it goes to the app.
+			if (pathname !== "/" && !/\.[a-z0-9]+$/i.test(pathname))
+				return Response.redirect(
+					`https://app.${env.LANDING_HOST}${pathname}${url.search}`,
+					302,
+				);
+			// `/landing/` serves landing/index.html (asset html_handling redirects `/index.html` paths).
+			url.pathname = `/landing${pathname}`;
+			return env.ASSETS.fetch(new Request(url, request));
+		}
 		if (pathname === "/health" || pathname.startsWith("/api/"))
 			// One Durable Object, and so one container, per deploy: a deploy never reuses a
 			// container that started with older settings. The previous one stops when idle.

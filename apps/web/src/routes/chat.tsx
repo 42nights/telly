@@ -7,6 +7,8 @@ import { type ReactNode, useRef, useState } from "react";
 import { Composer } from "@/components/chat/composer";
 import { ChatLog } from "@/components/chat/entries";
 import {
+	ASK_AGENT,
+	type ChatTarget,
 	GEMINI_CHIP,
 	type GeminiStatus,
 	timeline,
@@ -116,8 +118,7 @@ function ChatBody({
 	const chat = useChat(familyId);
 	const agent = useAsk(familyId);
 	const [draft, setDraft] = useState("");
-	/** The member label of the family message being answered; null asks the family agent. */
-	const [replyTo, setReplyTo] = useState<string | null>(null);
+	const [target, setTarget] = useState<ChatTarget>(ASK_AGENT);
 	const input = useRef<HTMLTextAreaElement>(null);
 	const { read } = chat;
 	const header = <ChatHeader familyName={familyName} gemini={agent.status} />;
@@ -143,11 +144,11 @@ function ChatBody({
 				identity={identity}
 				emptyText={emptyText}
 				onReply={(label) => {
-					setReplyTo(label);
+					setTarget((current) => ({ ...current, replyTo: label }));
 					input.current?.focus();
 				}}
 				onFollowUp={(question) => {
-					setReplyTo(null);
+					setTarget(ASK_AGENT);
 					setDraft(question);
 					input.current?.focus();
 				}}
@@ -157,8 +158,8 @@ function ChatBody({
 				draft={draft}
 				setDraft={setDraft}
 				input={input}
-				replyTo={replyTo}
-				onCancelReply={() => setReplyTo(null)}
+				target={target}
+				onTarget={setTarget}
 				placeholder={`Ask about ${familyName}'s health records…`}
 				offline={down}
 				agent={agent}
