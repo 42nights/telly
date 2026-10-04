@@ -81,7 +81,7 @@ const dailyValues = (rows: NonNullable<Tables["dailyMetric"]>): NoopSample[] =>
 					: [
 							{
 								metric,
-								value: value * scale,
+								value: Math.round(value * scale * 10) / 10,
 								unit,
 								time,
 								source: `noop:${row.deviceId}`,
