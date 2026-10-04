@@ -187,8 +187,31 @@ const push = async (source: string) => {
 			});
 	}
 
-	// Bind every server key in the store, including ones other members uploaded.
-	const stored = (await list()).filter((s) => names.has(s.name));
+	// Bind every server and Fetch agent key in the store, including ones other members uploaded.
+	// A store secret TELLY_<NAME> serves as <NAME> when <NAME> itself is not stored, such as
+	// TELLY_OIDC_CLIENT_SECRET for OIDC_CLIENT_SECRET. Every TELLY_SECRETS_PULL_TOKEN* is a token.
+	const agentSchema = new URL(
+		"../../../agents/fetch/.env.schema",
+		import.meta.url,
+	);
+	const served = new Set([
+		...names,
+		...(existsSync(agentSchema)
+			? secretNames(readFileSync(agentSchema, "utf8"))
+			: []),
+	]);
+	const all = await list();
+	const has = new Set(all.map((s) => s.name));
+	const bindings = all.flatMap((s) => {
+		if (s.name.startsWith(pullToken))
+			return [[`pull_token${s.name.slice(pullToken.length).toLowerCase()}`, s]];
+		if (served.has(s.name)) return [[s.name, s]];
+		const alias = s.name.replace(/^TELLY_/, "");
+		return alias !== s.name && served.has(alias) && !has.has(alias)
+			? [[alias, s]]
+			: [];
+	}) as [string, Secret][];
+	const stored = bindings.filter(([name]) => !name.startsWith("pull_token"));
 	const form = new FormData();
 	form.append(
 		"metadata",
@@ -200,18 +223,12 @@ const push = async (source: string) => {
 					observability: { enabled: false },
 					logpush: false,
 					bindings: [
-						...stored.map((s) => ({
+						...bindings.map(([name, s]) => ({
 							type: "secrets_store_secret",
-							name: s.name,
+							name,
 							store_id: store.id,
 							secret_name: s.name,
 						})),
-						{
-							type: "secrets_store_secret",
-							name: "pull_token",
-							store_id: store.id,
-							secret_name: pullToken,
-						},
 					],
 				}),
 			],
@@ -237,8 +254,10 @@ const push = async (source: string) => {
 	// A file without server keys only redeploys the Worker.
 	console.log(`Uploaded: ${[...keys.keys()].join(", ") || "none"}`);
 	console.log(`Worker ${worker} at ${url} binds ${stored.length} keys:`);
-	for (const s of stored)
-		console.log(`  ${s.name}  modified ${s.modified ?? "?"}`);
+	for (const [name, s] of stored)
+		console.log(
+			`  ${name}${name === s.name ? "" : ` (from ${s.name})`}  modified ${s.modified ?? "?"}`,
+		);
 };
 
 /** `only`: the keys this process needs; the board says not to give every process every key. */
@@ -257,21 +276,14 @@ const pull = async (dest: string, only?: readonly string[]) => {
 			`HTTP ${response.status} from ${url}; ${dest} left unchanged`,
 		);
 	const pulled = parseEnv(await response.text());
-	const names = secretNames(readFileSync(schemaPath, "utf8"));
-	const unknown = [...pulled.keys()].filter((name) => !names.has(name));
-	if (unknown.length > 0)
-		throw new Error(
-			`Not server keys: ${unknown.join(", ")}; ${dest} left unchanged`,
-		);
-	const all = serverKeys(pulled, names);
-	const missing = (only ?? []).filter((name) => !all.has(name));
+	// Without a list, a pull takes the server keys; with one, exactly the listed keys.
+	const wanted = new Set(only ?? secretNames(readFileSync(schemaPath, "utf8")));
+	const missing = (only ?? []).filter((name) => !pulled.has(name));
 	if (missing.length > 0)
 		throw new Error(
 			`Not stored: ${missing.join(", ")}; ${dest} left unchanged`,
 		);
-	const keys = only
-		? new Map([...all].filter(([name]) => only.includes(name)))
-		: all;
+	const keys = serverKeys(pulled, wanted);
 	if (keys.size === 0)
 		throw new Error(`No keys stored; ${dest} left unchanged`);
 	const text = [

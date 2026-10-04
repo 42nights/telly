@@ -50,7 +50,8 @@ jq -n --arg image "$image" --arg web "$tmp/web" --arg id "$(date -u +%Y%m%dT%H%M
 	migrations: [{ tag: "v1", new_sqlite_classes: ["Api"] }],
 	vars: (env | {CORS_ORIGIN: .HEALTH_SERVER_URL, TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
 		"TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
-		"SPACETIMEDB_DATABASE", "FINCHNODE_MODE")))),
+		"SPACETIMEDB_DATABASE", "FINCHNODE_MODE", "TELLY_R2_ACCOUNT_ID", "TELLY_R2_BUCKET",
+		"TELLY_R2_ACCESS_KEY_ID")))),
 }' >"$tmp/wrangler.json"
 jq -n '{TELLY_SECRETS_PULL_TOKEN: env.TELLY_SECRETS_PULL_TOKEN}' >"$tmp/secrets.json"
 $wrangler deploy --config "$tmp/wrangler.json" --secrets-file "$tmp/secrets.json" \

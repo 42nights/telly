@@ -30,13 +30,18 @@ export default {
 	async fetch(request: Request, env: WorkerEnv): Promise<Response> {
 		if (request.method !== "GET") return deny();
 		try {
-			const token = env.pull_token;
 			const given = request.headers.get("X-Telly-Pull-Token");
-			if (!isSecret(token) || !given) return deny();
-			const expected = await token.get();
-			// A short token would make guessing practical; refuse to serve with one.
-			if (expected.length < 32 || !(await sameSecret(given, expected)))
-				return deny();
+			if (!given) return deny();
+			// Each pull_token* binding is one valid token, so a new token never revokes another.
+			let accepted = false;
+			for (const [name, binding] of Object.entries(env)) {
+				if (!name.startsWith("pull_token") || !isSecret(binding)) continue;
+				const expected = await binding.get();
+				// A short token would make guessing practical; never accept one.
+				if (expected.length >= 32 && (await sameSecret(given, expected)))
+					accepted = true;
+			}
+			if (!accepted) return deny();
 			let text = "";
 			// Server keys are upper case; lower-case bindings, such as pull_token, are not served.
 			for (const name of Object.keys(env).sort()) {
