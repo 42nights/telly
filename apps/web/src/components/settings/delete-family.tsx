@@ -19,6 +19,12 @@ export function DeleteFamilySettings() {
 		family === null ? null : familyPath(family.id, "/care-access"),
 	);
 	const [open, setOpen] = useState(false);
+	// Only a member with `family_access` can delete; for anyone else the part is hidden.
+	if (
+		family === null ||
+		(access.kind === "ready" && !access.value.mine.includes("family_access"))
+	)
+		return null;
 	return (
 		<Window
 			icon={Trash2}
@@ -26,14 +32,8 @@ export function DeleteFamilySettings() {
 			status="Deleting cannot be undone."
 		>
 			<div className="grid gap-3 p-2 text-sm">
-				{family === null ? (
-					<p>No person is paired yet.</p>
-				) : access.kind !== "ready" ? (
+				{access.kind !== "ready" ? (
 					<ApiNotice state={access} what="your access to this family" />
-				) : !access.value.mine.includes("family_access") ? (
-					<p>
-						Only a member with family access can delete <b>{family.name}</b>.
-					</p>
 				) : (
 					<>
 						<p>

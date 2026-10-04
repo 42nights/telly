@@ -27,7 +27,7 @@ const fix = {
 };
 
 describe.skipIf(dbConfig === undefined)("family location", () => {
-	test("a location needs both the person's share and the viewer's location scope; revoking either hides it", () =>
+	test("a location needs both the person's share and the viewer's location scope; sharing grants the scope, and revoking either hides it", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
 				const wearer = yield* openFamily(config, "Location family");
@@ -101,10 +101,10 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					Schema.decodeUnknownSync(SharedLocation)(reported.json),
 				).toMatchObject({ status: "fix", fix });
 
-				// Share without the viewer's `location` scope: hidden, with the clear state flag.
+				// Sharing also granted the viewer the `location` scope: visible at once.
 				expect(yield* read(shared)).toMatchObject({
-					locations: [],
-					seesShared: false,
+					locations: [{ sharer: wearer.db.identity, status: "fix", fix }],
+					seesShared: true,
 				});
 				// The wearer always sees their own location, even without the `location` scope.
 				yield* grantLocation(wearer.db, false);
@@ -113,7 +113,6 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					seesShared: false,
 				});
 
-				yield* grantLocation(shared, true);
 				yield* grantLocation(notShared, true);
 				// Share and scope: visible.
 				expect(yield* read(shared)).toMatchObject({

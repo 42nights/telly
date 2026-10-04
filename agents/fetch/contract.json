@@ -23,7 +23,7 @@
 							"metric": {
 								"type": "string",
 								"minLength": 1,
-								"description": "Only samples of this metric, such as heart_rate."
+								"description": "Only samples of this metric. Use one of: sleep_duration, sleep_efficiency, resting_heart_rate, hrv, recovery, daily_strain, respiratory_rate, daily_steps, skin_temperature, heart_rate, on_wrist. sleep_duration is in minutes. Without a metric, the newest samples are mostly heart_rate."
 							},
 							"limit": {
 								"type": "integer",

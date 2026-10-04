@@ -1,5 +1,5 @@
-// Phone numbers for the "Call Mom", "Call family", and "Call 911" buttons. There is no server
-// contract for contact numbers yet, so they are saved on this device only and the screens say so.
+// Phone numbers for the "Call Mom", "Call family", and "Call 911" buttons, saved on this device.
+// The wearer's "Call my family" first uses the care profile's contacts (#26), which the server keeps.
 // Calls start in the phone's own dialer through `tel:` links; the app never calls or texts by itself.
 import { useEffect, useState } from "react";
 
@@ -30,6 +30,11 @@ export const isFullPhoneNumber = (value: string): boolean => {
 /** A `tel:` link that keeps only the leading `+` and the digits. */
 export const telHref = (value: string): string =>
 	`tel:${value.trim().startsWith("+") ? "+" : ""}${value.replace(/\D/g, "")}`;
+
+/** Opens the phone's dialer with `number`, for a call that starts after a form submit, not a link. */
+export const dial = (number: string): void => {
+	window.location.href = telHref(number);
+};
 
 const phoneOrNull = (stored: object, key: string): string | null => {
 	const value: unknown = key in stored ? Reflect.get(stored, key) : null;

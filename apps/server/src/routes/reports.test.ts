@@ -17,6 +17,7 @@ import { openFamilyDb, readFamilyRecords } from "../db";
 import type { FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
 import type { Mail, Mailer } from "../integrations/resend";
+import { reportPdfLinkRoutes } from "../report-pdf-links";
 import { familyRoutes } from "./families";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
@@ -534,6 +535,71 @@ describe.skipIf(dbConfig === undefined)("report email", () => {
 				const unset = familyApp(db, familyId, reportRoutes());
 				const none = yield* send(unset, "POST", `/reports/${report.id}/email`);
 				expect(failure(none)).toEqual([503, "unavailable"]);
+			}),
+		));
+
+	test("the preview is the PDF every email attaches, and only health records holders see it", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Preview");
+				const relative = yield* joinFamily(config, owner, familyId, []);
+				const outsider = yield* openFamilyDb(config);
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(owner, familyId, reportRoutes(undefined, mailer));
+				yield* send(app, "PUT", "/report-email", { enabled: true, recipient });
+				const report = yield* reviewedReport(app);
+				yield* send(app, "POST", `/reports/${report.id}/email`);
+				expect(sent).toHaveLength(2);
+
+				const preview = yield* Effect.promise(async () =>
+					app.request(`/reports/${report.id}/pdf`),
+				);
+				expect(preview.status).toBe(200);
+				expect(preview.headers.get("content-type")).toBe("application/pdf");
+				const bytes = new Uint8Array(
+					yield* Effect.promise(() => preview.arrayBuffer()),
+				);
+				for (const mail of sent) expect(mail.attachment.content).toEqual(bytes);
+
+				// The iOS app's one-use link answers the same bytes, under the report's date.
+				const link = yield* send(app, "POST", `/reports/${report.id}/pdf-link`);
+				const { url } = Schema.decodeUnknownSync(ReportPdfLink)(link.json);
+				const linked = yield* Effect.promise(async () =>
+					reportPdfLinkRoutes().request(
+						url.replace("/api/report-pdf-links", ""),
+					),
+				);
+				expect(linked.headers.get("content-disposition")).toBe(
+					`inline; filename="Telly lab report ${report.createdAt.slice(0, 10)}.pdf"`,
+				);
+				expect(
+					new Uint8Array(yield* Effect.promise(() => linked.arrayBuffer())),
+				).toEqual(bytes);
+
+				// A draft previews as it stands; only a member with health records sees any of it.
+				const draft = Schema.decodeUnknownSync(Report)(
+					(yield* send(app, "POST", "/reports")).json,
+				);
+				const drafted = yield* Effect.promise(async () =>
+					app.request(`/reports/${draft.id}/pdf`),
+				);
+				expect(drafted.status).toBe(200);
+				expect(
+					new TextDecoder("latin1").decode(
+						yield* Effect.promise(() => drafted.arrayBuffer()),
+					),
+				).toContain("Draft: not reviewed.");
+				for (const caller of [relative, outsider]) {
+					const callerApp = familyApp(caller, familyId, reportRoutes());
+					for (const path of ["pdf", "pdf-link"]) {
+						const refused = yield* send(
+							callerApp,
+							path === "pdf" ? "GET" : "POST",
+							`/reports/${report.id}/${path}`,
+						);
+						expect(failure(refused)).toEqual([403, "forbidden"]);
+					}
+				}
 			}),
 		));
 });

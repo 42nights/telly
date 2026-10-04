@@ -87,12 +87,20 @@ describe("ar bridge", () => {
 				},
 			]);
 			expect(
-				await savePin({ familyId: "1", objectId: "7", label: "Lisinopril" }),
+				await savePin({
+					familyId: "1",
+					objectId: "7",
+					label: "Lisinopril",
+					session: "s",
+					others: [],
+				}),
 			).toEqual({
 				kind: "saved",
 				anchorId: "telly-pin-7",
 				worldMap: "bWFw",
 				mapBytes: 3,
+				// Shells built before #351 list no pins of the map.
+				anchors: [],
 			});
 			expect(sent[0]).toMatchObject({
 				type: "ar.savePin",
@@ -119,6 +127,8 @@ describe("ar bridge", () => {
 				label: "Lisinopril",
 				anchorId: "telly-pin-7",
 				worldMap: "bWFw",
+				session: "s",
+				others: [],
 			}),
 		).toEqual({
 			kind: "error",
@@ -135,6 +145,8 @@ describe("ar bridge", () => {
 			familyId: "1",
 			objectId: "7",
 			label: "Lisinopril",
+			session: "s",
+			others: [],
 		});
 		expect(saved).toMatchObject({ kind: "error", code: "failed" });
 	});

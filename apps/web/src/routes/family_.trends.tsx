@@ -65,10 +65,7 @@ function Trends() {
 				className="mx-auto w-full max-w-4xl"
 			>
 				<div className="grid gap-3 p-1 text-sm">
-					<header className="flex flex-wrap items-center gap-2">
-						<h2 className="font-bold text-xl">{family?.name ?? "No person"}</h2>
-						<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
-					</header>
+					<PersonPicker className="[&_select]:min-w-0 [&_select]:flex-1" />
 					{family !== null ? (
 						<TrendForm key={family.id} familyId={family.id} />
 					) : state.kind === "ready" ? (

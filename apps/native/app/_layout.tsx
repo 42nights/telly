@@ -22,10 +22,6 @@ const DARK_THEME = {
 	colors: NAV_THEME.dark,
 };
 
-export const unstable_settings = {
-	initialRouteName: "(drawer)",
-};
-
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
@@ -37,11 +33,11 @@ export default function RootLayout() {
 
 	return (
 		<ThemeProvider value={isDarkColorScheme ? DARK_THEME : LIGHT_THEME}>
-			<StatusBar style={isDarkColorScheme ? "light" : "dark"} />
+			{/* Light text on the web app's teal safe-area padding (app/index.tsx). */}
+			<StatusBar style="light" />
 			<GestureHandlerRootView style={styles.container}>
-				<Stack>
-					<Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-				</Stack>
+				{/* No native header: the web app is the whole screen. */}
+				<Stack screenOptions={{ headerShown: false }} />
 			</GestureHandlerRootView>
 		</ThemeProvider>
 	);
