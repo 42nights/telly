@@ -25,7 +25,15 @@ export type Sources = typeof Sources.Type;
 
 /** Every non-2xx JSON response from the server. */
 export const ApiError = Schema.Struct({
-	error: Schema.Literals(["not_found", "internal"]),
+	error: Schema.Literals([
+		"not_found",
+		"internal",
+		"unauthorized",
+		"forbidden",
+		"invalid_request",
+		"unavailable",
+		"upstream_error",
+	]),
 	message: Schema.String,
 });
 export type ApiError = typeof ApiError.Type;

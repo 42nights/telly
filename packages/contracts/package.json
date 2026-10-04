@@ -4,10 +4,12 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./tools": "./src/tools.ts"
 	},
 	"scripts": {
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"agent-contract": "bun scripts/agent-contract.ts && biome format --write ../../agents/fetch/contract.json"
 	},
 	"dependencies": {
 		"effect": "catalog:"
