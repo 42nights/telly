@@ -3,7 +3,7 @@ import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users } from "lucide-react";
-
+import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
 import { type FamilyData, useFamilyData } from "@/components/family/data";
 import {
@@ -14,6 +14,8 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
+import { ReminderHistorySection } from "@/components/reminders/history";
+import { FamilyLocationSection } from "@/components/trip/location";
 import { ApiNotice } from "@/components/win95";
 import { senderLabel } from "@/lib/members";
 
@@ -57,6 +59,8 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 
 			<AlertSection data={data} now={now} />
 
+			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
+
 			<section aria-labelledby="glance" className="grid gap-2">
 				<h3 id="glance" className="font-bold">
 					Today at a glance
@@ -70,6 +74,8 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList state={data.monitoring} />
 			</section>
+
+			<ReminderHistorySection familyId={family.id} me={data.me} />
 
 			<section aria-labelledby="chat" className="grid gap-2">
 				<h3 id="chat" className="font-bold">
@@ -101,6 +107,15 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 					Guided exercise
 				</h3>
 				<ExerciseSection familyId={family.id} />
+			</section>
+
+			<section aria-labelledby="cooking" className="grid gap-2">
+				<h3 id="cooking" className="font-bold">
+					Cooking abilities
+				</h3>
+				<div className="win95-inset grid gap-2 bg-card p-2">
+					<CookingAbilities familyId={family.id} />
+				</div>
 			</section>
 		</div>
 	);

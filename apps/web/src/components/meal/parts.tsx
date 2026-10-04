@@ -90,12 +90,15 @@ function TalkButton({
 /** The no-camera path: say or type what the meal is. */
 export function DescribeMeal({
 	familyId,
+	initialText,
 	onDescribe,
 }: {
 	familyId: string | null;
+	/** Filled in, not sent: the wearer still presses Estimate. */
+	initialText: string;
 	onDescribe: (text: string) => void;
 }) {
-	const [text, setText] = useState("");
+	const [text, setText] = useState(initialText);
 	return (
 		<form
 			className="grid gap-2"

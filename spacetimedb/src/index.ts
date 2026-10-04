@@ -12,6 +12,7 @@ import {
 	table,
 	type ViewCtx,
 } from "spacetimedb/server";
+import { afterQuietHours, nextLocalTime } from "./local-time";
 
 const family = table(
 	{ name: "family" },
@@ -236,6 +237,98 @@ const finchnodeLink = table(
 	},
 );
 
+const TripStep = t.enum("TripStep", {
+	// The wearer was asked "Are you heading out now?".
+	Asked: t.unit(),
+	// The wearer confirmed and stated a plan. A later `Leaving` in the same trip is a changed plan.
+	Leaving: t.unit(),
+	Cancelled: t.unit(),
+	Arrived: t.unit(),
+});
+
+// A leaving-home check-in, one row per step. Rows are never changed, so an earlier plan stays in
+// the history and a later one never gets overwritten. No location is stored.
+const tripEvent = table(
+	{ name: "trip_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server for the `Asked` row, so it knows which trip it started.
+		tripId: t.string().index("btree"),
+		step: TripStep,
+		// What started or changed the trip: `manual` or `departure_signal`.
+		source: t.string(),
+		purpose: t.option(t.string()),
+		destination: t.option(t.string()),
+		// The wearer's choice of family notices, set on `Leaving`.
+		notifyDeparture: t.bool(),
+		notifyArrival: t.bool(),
+		by: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
+// What a person's device last said about its position. `NoFix` covers a timeout or no signal.
+const LocationStatus = t.enum("LocationStatus", {
+	Fix: t.unit(),
+	GpsDenied: t.unit(),
+	NoFix: t.unit(),
+});
+
+// One position from a device; `fixTime` is when the device took it, by the device clock.
+const LocationFix = t.object("LocationFix", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+	accuracyMeters: t.f64(),
+	fixTime: t.timestamp(),
+});
+
+// A person's latest location report in one family: one row per sharer, replaced by each report,
+// so no trail is kept. `fix` is the last good fix; a later GPS-denied or no-fix report changes
+// only `status` and `reportedAt`, so the fix stays readable as the last known location.
+const location = table(
+	{
+		name: "location",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		status: LocationStatus,
+		fix: t.option(LocationFix),
+		// When the database accepted the latest report.
+		reportedAt: t.timestamp(),
+	},
+);
+
+// One person allows one other family member to see their location. Deleting it revokes access.
+const locationShare = table(
+	{
+		name: "location_share",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		viewer: t.identity().index("btree"),
+		sharedAt: t.timestamp(),
+	},
+);
+
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -250,6 +343,38 @@ const mealFact = table(
 		fact: t.string(),
 		recordedBy: t.identity(),
 		recordedAt: t.timestamp(),
+	},
+);
+
+// A family's permission to remember where medicine containers were last seen (issue #29). Without
+// this row no sighting is stored, and removing it deletes the family's sightings.
+const medicineMemory = table(
+	{ name: "medicine_memory" },
+	{
+		familyId: t.u64().primaryKey(),
+		// Agreed familiar places to search when a container is not where it was last seen.
+		places: t.array(t.string()),
+		setBy: t.identity(),
+		setAt: t.timestamp(),
+	},
+);
+
+// Where a medicine container was last seen: one row per family and container description. Only a
+// newer camera observation that the person confirmed changes it; `notFoundAt` marks it outdated.
+const medicineSighting = table(
+	{ name: "medicine_sighting" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		container: t.string(),
+		place: t.string(),
+		// When the camera captured the frame the container was found in.
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+		savedBy: t.identity(),
+		notFoundAt: t.option(t.timestamp()),
 	},
 );
 
@@ -405,6 +530,114 @@ const ladderTimer = table(
 	},
 );
 
+// The reminder lifecycle (issue #28). Kinds, states, responses, and sources are the strings of
+// `@health/contracts/reminders`; local times are minutes after local midnight.
+
+// The wearer's prompt rules: the settings row's columns and the reducer's arguments.
+const promptRules = () => ({
+	timeZone: t.string(),
+	quietStart: t.option(t.u16()),
+	quietEnd: t.option(t.u16()),
+	repeatEveryMinutes: t.u32(),
+	maxPrompts: t.u32(),
+	snoozeMinutes: t.u32(),
+});
+
+// One row per family.
+const reminderSettings = table(
+	{ name: "reminder_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		...promptRules(),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const reminder = table(
+	{ name: "reminder" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		times: t.array(t.u16()),
+		// Chosen by the server, so it finds the reminder it created.
+		clientId: t.string().unique(),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+	},
+);
+
+// One scheduled time of one reminder. `slot` (reminder and time) makes scheduling it idempotent.
+// Prompts have ended when `nextPromptAt` is none.
+const reminderOccurrence = table(
+	{ name: "reminder_occurrence" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		reminderId: t.u64().index("btree"),
+		slot: t.string().unique(),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		minuteOfDay: t.u16(),
+		scheduledFor: t.timestamp(),
+		state: t.string(),
+		promptDue: t.bool(),
+		prompts: t.u32(),
+		nextPromptAt: t.option(t.timestamp()),
+	},
+);
+
+// Append-only. A missing actor is the database scheduler.
+const reminderEvent = table(
+	{ name: "reminder_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		occurrenceId: t.u64().index("btree"),
+		familyId: t.u64().index("btree"),
+		state: t.string(),
+		response: t.option(t.string()),
+		at: t.timestamp(),
+		actor: t.option(t.identity()),
+		source: t.string(),
+		wording: t.option(t.string()),
+	},
+);
+
+// Each handled client request, keyed by occurrence, sender, and client id, so a retry records nothing new.
+const reminderRequest = table(
+	{ name: "reminder_request" },
+	{ key: t.string().primaryKey(), fingerprint: t.string() },
+);
+
+// Prompt deadlines, run by the database itself. A timer whose `dueAt` no longer matches the
+// occurrence's `nextPromptAt` was replaced and does nothing.
+const reminderTimer = table(
+	{ name: "reminder_timer" },
+	{
+		scheduledId: t.u64().primaryKey().autoInc(),
+		scheduledAt: t.scheduleAt(),
+		occurrenceId: t.u64(),
+		dueAt: t.timestamp(),
+	},
+);
+
+// Home-speaker handoff settings (issue #46), one row per family. No row means off.
+const speakerSettings = table(
+	{ name: "speaker_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // The wearer's care profile (#26). Each save is a new version, so the history keeps who changed
 // it and when. JSON that the server validates against `@health/contracts/care-profile`.
 const careProfileVersion = table(
@@ -503,6 +736,105 @@ const exerciseEvent = table(
 	},
 );
 
+// A food-delivery proposal's status (#43). The provider is simulated; no row means a real order.
+const OrderStatus = t.enum("OrderStatus", {
+	Proposed: t.unit(),
+	Approved: t.unit(),
+	Replaced: t.unit(),
+	Placed: t.unit(),
+	Uncertain: t.unit(),
+	Failed: t.unit(),
+	Delivered: t.unit(),
+	Eaten: t.unit(),
+});
+
+// Append-only: each row is one status change of one proposal. The first row (`Proposed`) holds the
+// proposal as JSON that the server validates against `@health/contracts/delivery`.
+const deliveryEvent = table(
+	{ name: "delivery_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server; also the provider's idempotency key for the order.
+		proposalId: t.string().index("btree"),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+		actor: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
+// A proposed visit (#44). `visit` is fixed when it is suggested. A request and a provider
+// confirmation each keep who recorded them and when, so a suggestion or a request is never a
+// booking. Nothing here contacts a provider: every step is a member's record.
+const appointment = table(
+	{ name: "appointment" },
+	{
+		// Chosen by the server, so it knows which appointment it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts` appointment schemas.
+		visit: t.string(),
+		prep: t.string(),
+		// "model" or "member": who proposed the visit.
+		source: t.string(),
+		suggestedBy: t.identity(),
+		suggestedAt: t.timestamp(),
+		requestedBy: t.option(t.identity()),
+		requestedAt: t.option(t.timestamp()),
+		// The provider's confirmation as a member received it (JSON).
+		confirmation: t.option(t.string()),
+		confirmedBy: t.option(t.identity()),
+		confirmedAt: t.option(t.timestamp()),
+		cancelledBy: t.option(t.identity()),
+		cancelledAt: t.option(t.timestamp()),
+		// The summary a member reviewed (JSON); replaced by each new review.
+		summary: t.option(t.string()),
+		summaryReviewedBy: t.option(t.identity()),
+		summaryReviewedAt: t.option(t.timestamp()),
+	},
+);
+
+// A member's consent to send an appointment's reviewed summary to one clinician. `explicit` covers
+// one send of the summary as reviewed at approval; `standing` covers repeated sends at the agreed
+// frequency. Sends are simulated: no clinician delivery path is approved.
+const clinicianShare = table(
+	{ name: "clinician_share" },
+	{
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		appointmentId: t.string(),
+		// JSON: the recipient and the chosen summary sections.
+		recipient: t.string(),
+		sections: t.string(),
+		// "explicit" (frequency "once") or "standing" (frequency "weekly" or "monthly").
+		consent: t.string(),
+		frequency: t.string(),
+		approvedBy: t.identity(),
+		approvedAt: t.timestamp(),
+		// For explicit consent: the summary review it covers.
+		approvedSummaryAt: t.option(t.timestamp()),
+		revokedBy: t.option(t.identity()),
+		revokedAt: t.option(t.timestamp()),
+		sends: t.u32(),
+		lastSentAt: t.option(t.timestamp()),
+	},
+);
+
+// The wearer's agreed kitchen abilities and food dislikes (#42): one current row per family, with
+// who saved it last. JSON that the server validates against `CookingProfile` in
+// `@health/contracts/cooking`.
+const cookingProfile = table(
+	{ name: "cooking_profile" },
+	{
+		familyId: t.u64().primaryKey(),
+		profile: t.string(),
+		editedBy: t.identity(),
+		editedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -516,16 +848,32 @@ const spacetimedb = schema({
 	alertDelivery,
 	report,
 	finchnodeLink,
+	location,
+	locationShare,
+	medicineMemory,
+	medicineSighting,
 	contactLadder,
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	reminderSettings,
+	reminder,
+	reminderOccurrence,
+	reminderEvent,
+	reminderRequest,
+	reminderTimer,
+	speakerSettings,
 	mealFact,
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	tripEvent,
 	exercisePlan,
 	exerciseEvent,
+	deliveryEvent,
+	appointment,
+	clinicianShare,
+	cookingProfile,
 });
 export default spacetimedb;
 
@@ -1216,6 +1564,183 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+// Debounce: an unanswered question stays open for 30 minutes and a confirmed trip for 12 hours. A
+// departure signal within 30 minutes of the family's last trip step asks nothing.
+const ASK_OPEN_MICROS = 30n * 60_000_000n;
+const TRIP_OPEN_MICROS = 12n * 3_600_000_000n;
+const SIGNAL_QUIET_MICROS = 30n * 60_000_000n;
+
+const tripNotice = (
+	ctx: Ctx,
+	familyId: bigint,
+	clientId: string,
+	body: string,
+) =>
+	ctx.db.message.insert({
+		id: 0n,
+		familyId,
+		sender: ctx.sender,
+		body,
+		sentAt: ctx.timestamp,
+		clientId,
+	});
+
+type TripRow = Infer<typeof tripEvent.rowType>;
+
+// ponytail: scans the family's trip history per step; index by time if it grows large.
+const tripHistory = (ctx: Ctx, familyId: bigint): TripRow[] =>
+	[...ctx.db.tripEvent.familyId.filter(familyId)].sort((a, b) =>
+		a.id < b.id ? -1 : 1,
+	);
+
+const TripPlan = t.object("TripPlan", {
+	purpose: t.string(),
+	destination: t.option(t.string()),
+	notifyDeparture: t.bool(),
+	notifyArrival: t.bool(),
+});
+type TripPlan = Infer<typeof TripPlan>;
+
+/** Whether a new question may start: no trip is open and a departure signal is not repeating. */
+const mayAsk = (ctx: Ctx, latest: TripRow | undefined, source: string) => {
+	if (latest === undefined) return true;
+	const age =
+		ctx.timestamp.microsSinceUnixEpoch - latest.at.microsSinceUnixEpoch;
+	if (latest.step.tag === "Asked" && age < ASK_OPEN_MICROS) return false;
+	if (latest.step.tag === "Leaving" && age < TRIP_OPEN_MICROS) return false;
+	return !(source === "departure_signal" && age < SIGNAL_QUIET_MICROS);
+};
+
+/** A stated plan. The first one sends the departure notice when the wearer chose it. */
+const leave = (
+	ctx: Ctx,
+	trip: TripRow[],
+	plan: TripPlan | undefined,
+	record: () => void,
+) => {
+	if (plan === undefined) throw new SenderError("purpose is required");
+	requireText("purpose", plan.purpose);
+	const last = trip[trip.length - 1];
+	if (
+		last?.step.tag === "Leaving" &&
+		last.purpose === plan.purpose &&
+		last.destination === plan.destination &&
+		last.notifyDeparture === plan.notifyDeparture &&
+		last.notifyArrival === plan.notifyArrival
+	)
+		return; // a resend
+	const first = !trip.some((e) => e.step.tag === "Leaving");
+	record();
+	if (first && plan.notifyDeparture && last !== undefined)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-left`,
+			`I'm leaving home: ${plan.purpose}${plan.destination === undefined ? "" : ` (${plan.destination})`}.`,
+		);
+};
+
+/** `Cancelled` or `Arrived`. Arrival sends the arrival notice when the wearer chose it. */
+const endTrip = (
+	ctx: Ctx,
+	last: TripRow,
+	arrived: boolean,
+	record: () => void,
+) => {
+	if (arrived && last.step.tag !== "Leaving")
+		throw new SenderError("the trip has not started");
+	record();
+	if (arrived && last.notifyArrival)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-arrived`,
+			`I arrived: ${last.destination ?? last.purpose ?? "my trip"}.`,
+		);
+};
+
+/**
+ * One step of a leaving-home check-in. `Asked` starts a trip unless one is open or a departure
+ * signal repeats within the quiet time; then it records nothing. `Leaving` needs the plan. The
+ * chosen family notices are family messages, written in the same transaction as the step.
+ */
+export const recordTripEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		tripId: t.string(),
+		step: TripStep,
+		source: t.string(),
+		plan: t.option(TripPlan),
+	},
+	(ctx, { familyId, tripId, step, source, plan }) => {
+		requireMember(ctx, familyId);
+		requireText("tripId", tripId);
+		if (source !== "manual" && source !== "departure_signal")
+			throw new SenderError("source must be manual or departure_signal");
+		const history = tripHistory(ctx, familyId);
+		const trip = history.filter((e) => e.tripId === tripId);
+		const last = trip[trip.length - 1];
+		const record = () => {
+			ctx.db.tripEvent.insert({
+				id: 0n,
+				familyId,
+				tripId,
+				step,
+				source,
+				purpose: plan?.purpose,
+				destination: plan?.destination,
+				notifyDeparture: plan?.notifyDeparture === true,
+				notifyArrival: plan?.notifyArrival === true,
+				by: ctx.sender,
+				at: ctx.timestamp,
+			});
+		};
+		if (step.tag === "Asked") {
+			// A resend of the question finds its trip and records nothing.
+			if (
+				last === undefined &&
+				mayAsk(ctx, history[history.length - 1], source)
+			)
+				record();
+			return;
+		}
+		if (last === undefined) throw new SenderError("no such trip");
+		if (step.tag !== "Leaving" && last.step.tag === step.tag) return; // a resend
+		if (last.step.tag === "Cancelled" || last.step.tag === "Arrived")
+			throw new SenderError("the trip has ended");
+		if (step.tag === "Leaving") return leave(ctx, trip, plan, record);
+		endTrip(ctx, last, step.tag === "Arrived", record);
+	},
+);
+
+const sharesOf = (ctx: Ctx, familyId: bigint) => [
+	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
+];
+
+/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+export const shareLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		if (viewer.isEqual(ctx.sender))
+			throw new SenderError("viewer must be another family member");
+		const member = ctx.db.familyMember.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (member.next().done)
+			throw new SenderError("viewer is not a member of this family");
+		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
+		ctx.db.locationShare.insert({
+			id: 0n,
+			familyId,
+			sharer: ctx.sender,
+			viewer,
+			sharedAt: ctx.timestamp,
+		});
+	},
+);
+
 // Whether a fact comes from a photo: the photo was taken, or an estimate was made from it.
 const fromPhoto = (fact: string) => {
 	let parsed: unknown;
@@ -1250,6 +1775,133 @@ export const recordMealFact = spacetimedb.reducer(
 			recordedBy: ctx.sender,
 			recordedAt: ctx.timestamp,
 		});
+	},
+);
+
+/** Stops one member seeing the sender's location. After the last revoke the stored location is deleted. */
+export const revokeLocationShare = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		const shares = sharesOf(ctx, familyId);
+		for (const share of shares)
+			if (share.viewer.isEqual(viewer))
+				ctx.db.locationShare.id.delete(share.id);
+		if (shares.some((s) => !s.viewer.isEqual(viewer))) return;
+		for (const row of ctx.db.location.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.location.id.delete(row.id);
+	},
+);
+
+const requireValidFix = (ctx: Ctx, fix: Infer<typeof LocationFix>) => {
+	if (!(Math.abs(fix.latitude) <= 90 && Math.abs(fix.longitude) <= 180))
+		throw new SenderError("coordinates out of range");
+	if (!(fix.accuracyMeters > 0 && Number.isFinite(fix.accuracyMeters)))
+		throw new SenderError("accuracyMeters must be positive");
+	if (
+		fix.fixTime.microsSinceUnixEpoch >
+		ctx.timestamp.microsSinceUnixEpoch + MAX_CLOCK_AHEAD_MICROS
+	)
+		throw new SenderError("fixTime is in the future");
+};
+
+/**
+ * Stores the sender's latest location report. Refused while the sender shares with nobody, so
+ * nothing is collected without a share. A report without a fix keeps the last fix.
+ */
+export const reportLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), status: LocationStatus, fix: t.option(LocationFix) },
+	(ctx, { familyId, status, fix }) => {
+		requireMember(ctx, familyId);
+		if (sharesOf(ctx, familyId).length === 0)
+			throw new SenderError("location is not shared with anyone");
+		if ((status.tag === "Fix") !== (fix !== undefined))
+			throw new SenderError("a fix is required exactly when status is Fix");
+		if (fix !== undefined) requireValidFix(ctx, fix);
+		const existing = ctx.db.location.byFamilySharer
+			.filter([familyId, ctx.sender])
+			.next().value;
+		const row = {
+			id: existing?.id ?? 0n,
+			familyId,
+			sharer: ctx.sender,
+			status,
+			fix: fix ?? existing?.fix,
+			reportedAt: ctx.timestamp,
+		};
+		if (existing === undefined) ctx.db.location.insert(row);
+		else ctx.db.location.id.update(row);
+	},
+);
+
+export const setMedicineMemory = spacetimedb.reducer(
+	{ familyId: t.u64(), enabled: t.bool(), places: t.array(t.string()) },
+	(ctx, { familyId, enabled, places }) => {
+		requireMember(ctx, familyId);
+		if (!enabled) {
+			ctx.db.medicineMemory.familyId.delete(familyId);
+			ctx.db.medicineSighting.familyId.delete(familyId);
+			return;
+		}
+		for (const place of places) requireText("place", place);
+		const row = { familyId, places, setBy: ctx.sender, setAt: ctx.timestamp };
+		if (ctx.db.medicineMemory.familyId.find(familyId) === null)
+			ctx.db.medicineMemory.insert(row);
+		else ctx.db.medicineMemory.familyId.update(row);
+	},
+);
+
+// A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
+const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+
+export const rememberMedicine = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		container: t.string(),
+		place: t.string(),
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+	},
+	(ctx, seen) => {
+		requireMember(ctx, seen.familyId);
+		if (ctx.db.medicineMemory.familyId.find(seen.familyId) === null)
+			throw new SenderError("medicine memory is off for this family");
+		requireText("container", seen.container);
+		requireText("place", seen.place);
+		requireText("source", seen.source);
+		if (!(seen.confidence >= 0 && seen.confidence <= 1))
+			throw new SenderError("confidence must be between 0 and 1");
+		const age =
+			ctx.timestamp.microsSinceUnixEpoch - seen.seenAt.microsSinceUnixEpoch;
+		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
+			throw new SenderError("seenAt must be a current observation");
+		const key = seen.container.trim().toLowerCase();
+		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
+			if (old.container.trim().toLowerCase() !== key) continue;
+			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
+				throw new SenderError("a newer sighting is already stored");
+			ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+			return;
+		}
+		ctx.db.medicineSighting.insert({ ...row, id: 0n });
+	},
+);
+
+// The person looked at the remembered place and the container was not there. The place stays as
+// the last sighting, marked outdated, until a new sighting replaces it.
+export const markMedicineNotFound = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		const found = ctx.db.medicineSighting.id.find(id);
+		if (found === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, found.familyId);
+		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
 	},
 );
 
@@ -1483,6 +2135,454 @@ export const runLadderTimer = spacetimedb.reducer(
 	},
 );
 
+// Reminder lifecycle (issue #28). The database runs every prompt on its own timers, so a server
+// restart neither loses nor repeats one. Silence only ever ends an occurrence `unresolved`.
+
+const REMINDER_KINDS = [
+	"medication",
+	"meal",
+	"hydration",
+	"appointment",
+	"charging",
+	"routine",
+];
+const REMINDER_RESPONSES = [
+	"okay",
+	"dismissed",
+	"done",
+	"already_did_it",
+	"later",
+	"not_now",
+	"stop",
+	"help",
+	"unsure",
+	"repeat",
+];
+const CLIENT_SOURCES = ["phone", "web", "glasses"];
+// A home speaker only delivers: it cannot hear an answer (#46). The server records its deliveries.
+const DELIVERY_SOURCES = [...CLIENT_SOURCES, "speaker"];
+const SPEAKER_ROOMS = ["private", "shared"];
+const COMPLETE_STATES = ["self_reported_complete", "caregiver_confirmed"];
+const MINUTES_PER_DAY = 24 * 60;
+
+type ReminderSettingsRow = Infer<typeof reminderSettings.rowType>;
+type ReminderRow = Infer<typeof reminder.rowType>;
+type OccurrenceRow = Infer<typeof reminderOccurrence.rowType>;
+
+const toMs = (at: Timestamp) => Number(at.microsSinceUnixEpoch / 1000n);
+const fromMs = (ms: number) => new Timestamp(BigInt(ms) * 1000n);
+
+const quietHours = (s: ReminderSettingsRow) =>
+	s.quietStart === undefined || s.quietEnd === undefined
+		? undefined
+		: { start: s.quietStart, end: s.quietEnd };
+
+const requireReminderSettings = (ctx: Ctx, familyId: bigint) => {
+	const found = ctx.db.reminderSettings.familyId.find(familyId);
+	if (found === null) throw new SenderError("save the reminder settings first");
+	return found;
+};
+
+/** The prompt time `minutes` from now, held until quiet hours end. */
+const promptAfter = (ctx: Ctx, s: ReminderSettingsRow, minutes: number) =>
+	fromMs(
+		afterQuietHours(
+			toMs(ctx.timestamp) + minutes * 60_000,
+			quietHours(s),
+			s.timeZone,
+		),
+	);
+
+const scheduleReminderTimer = (ctx: Ctx, occurrenceId: bigint, at: Timestamp) =>
+	ctx.db.reminderTimer.insert({
+		scheduledId: 0n,
+		scheduledAt: ScheduleAt.time(at.microsSinceUnixEpoch),
+		occurrenceId,
+		dueAt: at,
+	});
+
+const recordReminderEvent = (
+	ctx: Ctx,
+	occurrence: OccurrenceRow,
+	state: string,
+	answer: {
+		response?: string | undefined;
+		source: string;
+		wording?: string | undefined;
+	},
+) =>
+	ctx.db.reminderEvent.insert({
+		id: 0n,
+		occurrenceId: occurrence.id,
+		familyId: occurrence.familyId,
+		state,
+		response: answer.response,
+		at: ctx.timestamp,
+		actor: answer.source === "scheduler" ? undefined : ctx.sender,
+		source: answer.source,
+		wording: answer.wording,
+	});
+
+/** Schedules the reminder's next occurrence at local `minute` after `afterMs`, once per slot. */
+const scheduleOccurrence = (
+	ctx: Ctx,
+	r: ReminderRow,
+	minute: number,
+	afterMs: number,
+) => {
+	const s = requireReminderSettings(ctx, r.familyId);
+	const at = nextLocalTime(afterMs, minute, s.timeZone);
+	const slot = `${r.id}:${at}`;
+	if (ctx.db.reminderOccurrence.slot.find(slot) !== null) return;
+	const firstPrompt = fromMs(afterQuietHours(at, quietHours(s), s.timeZone));
+	const occurrence = ctx.db.reminderOccurrence.insert({
+		id: 0n,
+		familyId: r.familyId,
+		reminderId: r.id,
+		slot,
+		kind: r.kind,
+		subjectId: r.subjectId,
+		title: r.title,
+		minuteOfDay: minute,
+		scheduledFor: fromMs(at),
+		state: "scheduled",
+		promptDue: false,
+		prompts: 0,
+		nextPromptAt: firstPrompt,
+	});
+	recordReminderEvent(ctx, occurrence, "scheduled", { source: "scheduler" });
+	scheduleReminderTimer(ctx, occurrence.id, firstPrompt);
+};
+
+const requireOccurrence = (ctx: Ctx, occurrenceId: bigint) => {
+	const found = ctx.db.reminderOccurrence.id.find(occurrenceId);
+	// A missing occurrence fails like another family's, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	return found;
+};
+
+const requireClientSource = (source: string) => {
+	if (!CLIENT_SOURCES.includes(source))
+		throw new SenderError("source must be phone, web, or glasses");
+};
+
+const requireWording = (wording: string | undefined) => {
+	if (wording !== undefined && wording.length > 2000)
+		throw new SenderError("wording must be at most 2000 characters");
+};
+
+/**
+ * True when the sender already sent `clientId` for this occurrence with the same `fingerprint`: a
+ * retry after a lost reply, which records nothing new. The same id with other content fails.
+ */
+const seenRequest = (
+	ctx: Ctx,
+	occurrenceId: bigint,
+	clientId: string,
+	fingerprint: string,
+) => {
+	requireText("clientId", clientId);
+	const key = `${occurrenceId}:${ctx.sender.toHexString()}:${clientId}`;
+	const seen = ctx.db.reminderRequest.key.find(key);
+	if (seen === null) {
+		ctx.db.reminderRequest.insert({ key, fingerprint });
+		return false;
+	}
+	if (seen.fingerprint !== fingerprint)
+		throw new SenderError("clientId is already used for another request");
+	return true;
+};
+
+export const setReminderSettings = spacetimedb.reducer(
+	{ familyId: t.u64(), ...promptRules() },
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		try {
+			new Intl.DateTimeFormat("en", { timeZone: settings.timeZone });
+		} catch {
+			throw new SenderError("timeZone is not a known IANA time zone");
+		}
+		if (
+			(settings.quietStart === undefined) !==
+			(settings.quietEnd === undefined)
+		)
+			throw new SenderError("quiet hours need both a start and an end");
+		if (
+			(settings.quietStart ?? 0) >= MINUTES_PER_DAY ||
+			(settings.quietEnd ?? 0) >= MINUTES_PER_DAY
+		)
+			throw new SenderError("quiet hours must be times of day");
+		for (const minutes of [settings.repeatEveryMinutes, settings.snoozeMinutes])
+			if (minutes < 1 || minutes > 240)
+				throw new SenderError(
+					"repeat spacing and snooze must be 1 to 240 minutes",
+				);
+		if (settings.maxPrompts < 1 || settings.maxPrompts > 10)
+			throw new SenderError("maxPrompts must be 1 to 10");
+		const row = {
+			...settings,
+			quietStart: settings.quietStart,
+			quietEnd: settings.quietEnd,
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.reminderSettings.familyId.find(settings.familyId) === null)
+			ctx.db.reminderSettings.insert(row);
+		else ctx.db.reminderSettings.familyId.update(row);
+	},
+);
+
+export const createReminder = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		clientId: t.string(),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		times: t.array(t.u16()),
+	},
+	(ctx, input) => {
+		requireMember(ctx, input.familyId);
+		requireReminderSettings(ctx, input.familyId);
+		requireText("clientId", input.clientId);
+		requireText("title", input.title);
+		if (!REMINDER_KINDS.includes(input.kind))
+			throw new SenderError("kind is not a reminder kind");
+		if (
+			input.times.length === 0 ||
+			input.times.length > 12 ||
+			input.times.some((minute) => minute >= MINUTES_PER_DAY)
+		)
+			throw new SenderError("times must be 1 to 12 times of day");
+		// The server resends after a lost reply; the first stored reminder stands.
+		if (ctx.db.reminder.clientId.find(input.clientId) !== null) return;
+		const created = ctx.db.reminder.insert({
+			...input,
+			subjectId: input.subjectId,
+			id: 0n,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+		});
+		for (const minute of new Set(input.times))
+			scheduleOccurrence(ctx, created, minute, toMs(ctx.timestamp));
+	},
+);
+
+/** Stops the reminder. Occurrences that are not yet due go with it; every other one stays as history. */
+export const deleteReminder = spacetimedb.reducer(
+	{ reminderId: t.u64() },
+	(ctx, { reminderId }) => {
+		const found = ctx.db.reminder.id.find(reminderId);
+		if (found === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, found.familyId);
+		ctx.db.reminder.id.delete(reminderId);
+		const now = ctx.timestamp.microsSinceUnixEpoch;
+		for (const occurrence of [
+			...ctx.db.reminderOccurrence.reminderId.filter(reminderId),
+		]) {
+			if (
+				occurrence.state !== "scheduled" ||
+				occurrence.prompts > 0 ||
+				occurrence.scheduledFor.microsSinceUnixEpoch <= now
+			)
+				continue;
+			for (const event of [
+				...ctx.db.reminderEvent.occurrenceId.filter(occurrence.id),
+			])
+				ctx.db.reminderEvent.id.delete(event.id);
+			ctx.db.reminderOccurrence.id.delete(occurrence.id);
+		}
+	},
+);
+
+/** A device showed or spoke the due prompt. Without a due prompt it records nothing. */
+export const recordReminderDelivery = spacetimedb.reducer(
+	{ occurrenceId: t.u64(), clientId: t.string(), source: t.string() },
+	(ctx, { occurrenceId, clientId, source }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		if (!DELIVERY_SOURCES.includes(source))
+			throw new SenderError("source must be phone, web, glasses, or speaker");
+		if (seenRequest(ctx, occurrenceId, clientId, `delivery:${source}`)) return;
+		if (!occurrence.promptDue) return;
+		recordReminderEvent(ctx, occurrence, "delivered", { source });
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "delivered",
+			promptDue: false,
+		});
+	},
+);
+
+/** The wearer's answer. See `ReminderResponse` in `@health/contracts/reminders` for each state. */
+export const answerReminder = spacetimedb.reducer(
+	{
+		occurrenceId: t.u64(),
+		clientId: t.string(),
+		source: t.string(),
+		response: t.string(),
+		wording: t.option(t.string()),
+	},
+	(ctx, { occurrenceId, clientId, source, response, wording }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		requireClientSource(source);
+		requireWording(wording);
+		if (!REMINDER_RESPONSES.includes(response))
+			throw new SenderError("response is not a reminder response");
+		const fingerprint = `answer:${source}:${response}:${wording ?? ""}`;
+		if (seenRequest(ctx, occurrenceId, clientId, fingerprint)) return;
+		const answer = (state: string, change: Partial<OccurrenceRow>) => {
+			recordReminderEvent(ctx, occurrence, state, {
+				response,
+				source,
+				wording,
+			});
+			ctx.db.reminderOccurrence.id.update({ ...occurrence, ...change, state });
+		};
+		const end = { promptDue: false, nextPromptAt: undefined };
+		if (response === "done" || response === "already_did_it") {
+			// A dose or meal is recorded once, however often it is reported.
+			if (COMPLETE_STATES.includes(occurrence.state)) return;
+			return answer("self_reported_complete", end);
+		}
+		if (occurrence.nextPromptAt === undefined)
+			throw new SenderError("prompts have ended for this occurrence");
+		const settings = requireReminderSettings(ctx, occurrence.familyId);
+		switch (response) {
+			case "okay":
+			case "dismissed":
+				// Seen, not done: follow-up prompts continue.
+				return answer("acknowledged", { promptDue: false });
+			case "later":
+			case "not_now": {
+				const next = promptAfter(
+					ctx,
+					settings,
+					response === "later"
+						? settings.snoozeMinutes
+						: settings.repeatEveryMinutes,
+				);
+				answer("deferred", {
+					promptDue: false,
+					prompts: 0,
+					nextPromptAt: next,
+				});
+				scheduleReminderTimer(ctx, occurrenceId, next);
+				return;
+			}
+			case "stop":
+				return answer("declined", end);
+			case "repeat":
+				return answer(occurrence.state, { promptDue: true });
+			default:
+				// `help` and `unsure`: a person takes over; prompting again could cause a second dose.
+				return answer("unresolved", end);
+		}
+	},
+);
+
+/** A family member confirms the task was done. Separate from the wearer's own report; once per occurrence. */
+export const confirmReminder = spacetimedb.reducer(
+	{
+		occurrenceId: t.u64(),
+		clientId: t.string(),
+		source: t.string(),
+		wording: t.option(t.string()),
+	},
+	(ctx, { occurrenceId, clientId, source, wording }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		requireClientSource(source);
+		requireWording(wording);
+		const fingerprint = `confirm:${source}:${wording ?? ""}`;
+		if (seenRequest(ctx, occurrenceId, clientId, fingerprint)) return;
+		if (occurrence.state === "caregiver_confirmed") return;
+		recordReminderEvent(ctx, occurrence, "caregiver_confirmed", {
+			source,
+			wording,
+		});
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "caregiver_confirmed",
+			promptDue: false,
+			nextPromptAt: undefined,
+		});
+	},
+);
+
+/**
+ * Gives the next prompt, or ends the occurrence `unresolved` after `maxPrompts` prompts that no answer
+ * settled. The first run also schedules the reminder's next occurrence for the same time of day.
+ */
+export const runReminderTimer = spacetimedb.reducer(
+	{ onSchedule: reminderTimer },
+	{ timer: reminderTimer.rowType },
+	(ctx, { timer }) => {
+		if (!ctx.sender.isEqual(ctx.databaseIdentity))
+			throw new SenderError("only the database runs reminder timers");
+		const occurrence = ctx.db.reminderOccurrence.id.find(timer.occurrenceId);
+		if (
+			occurrence?.nextPromptAt?.microsSinceUnixEpoch !==
+			timer.dueAt.microsSinceUnixEpoch
+		)
+			return;
+		const owner = ctx.db.reminder.id.find(occurrence.reminderId);
+		if (owner !== null)
+			scheduleOccurrence(
+				ctx,
+				owner,
+				occurrence.minuteOfDay,
+				Math.max(toMs(occurrence.scheduledFor), toMs(ctx.timestamp)),
+			);
+		const settings = requireReminderSettings(ctx, occurrence.familyId);
+		if (occurrence.prompts >= settings.maxPrompts) {
+			// Silence settles nothing and contacts nobody: the occurrence stays visibly open.
+			recordReminderEvent(ctx, occurrence, "unresolved", {
+				source: "scheduler",
+			});
+			ctx.db.reminderOccurrence.id.update({
+				...occurrence,
+				state: "unresolved",
+				promptDue: false,
+				nextPromptAt: undefined,
+			});
+			return;
+		}
+		const next = promptAfter(ctx, settings, settings.repeatEveryMinutes);
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			promptDue: true,
+			prompts: occurrence.prompts + 1,
+			nextPromptAt: next,
+		});
+		scheduleReminderTimer(ctx, occurrence.id, next);
+	},
+);
+
+export const setSpeakerSettings = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+	},
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		if (!SPEAKER_ROOMS.includes(settings.room))
+			throw new SenderError("room must be private or shared");
+		if (settings.sharedRoomKinds.some((k) => !REMINDER_KINDS.includes(k)))
+			throw new SenderError("sharedRoomKinds must be reminder kinds");
+		const row = {
+			...settings,
+			sharedRoomKinds: [...new Set(settings.sharedRoomKinds)],
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.speakerSettings.familyId.find(settings.familyId) === null)
+			ctx.db.speakerSettings.insert(row);
+		else ctx.db.speakerSettings.familyId.update(row);
+	},
+);
+
 export const saveCareProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
@@ -1699,6 +2799,290 @@ export const recordExerciseEvent = spacetimedb.reducer(
 	},
 );
 
+type OrderStatusTag = Infer<typeof OrderStatus>["tag"];
+
+// The statuses each status may follow. A retry after `Uncertain` or `Failed` may record either again.
+const ORDER_STEPS: Record<OrderStatusTag, readonly OrderStatusTag[]> = {
+	Proposed: [],
+	Approved: ["Proposed"],
+	Replaced: ["Proposed", "Approved", "Failed"],
+	Placed: ["Approved", "Uncertain", "Failed"],
+	Uncertain: ["Approved", "Uncertain", "Failed"],
+	Failed: ["Approved", "Uncertain", "Failed"],
+	Delivered: ["Placed"],
+	Eaten: ["Delivered"],
+};
+
+export const recordDeliveryEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		proposalId: t.string(),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+	},
+	(ctx, event) => {
+		requireMember(ctx, event.familyId);
+		requireText("proposalId", event.proposalId);
+		let last: Infer<typeof deliveryEvent.rowType> | undefined;
+		for (const row of ctx.db.deliveryEvent.proposalId.filter(event.proposalId))
+			if (last === undefined || row.id > last.id) last = row;
+		if (last !== undefined && last.familyId !== event.familyId)
+			throw new SenderError("proposal id already exists");
+		if ((event.status.tag === "Proposed") !== (event.proposal !== undefined))
+			throw new SenderError("only a new proposal carries proposal JSON");
+		if (event.status.tag === "Proposed") {
+			if (last !== undefined)
+				throw new SenderError("proposal id already exists");
+			requireText("proposal", event.proposal ?? "");
+		} else if (
+			last === undefined ||
+			!ORDER_STEPS[event.status.tag].includes(last.status.tag)
+		)
+			throw new SenderError(
+				`a ${last?.status.tag ?? "missing"} proposal cannot become ${event.status.tag}`,
+			);
+		ctx.db.deliveryEvent.insert({
+			...event,
+			id: 0n,
+			proposal: event.proposal,
+			actor: ctx.sender,
+			at: ctx.timestamp,
+		});
+	},
+);
+
+const requireAppointment = (ctx: Ctx, id: string) => {
+	const found = ctx.db.appointment.id.find(id);
+	// A missing appointment fails like another family's, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.cancelledAt !== undefined)
+		throw new SenderError("appointment is cancelled");
+	return found;
+};
+
+export const suggestAppointment = spacetimedb.reducer(
+	{
+		id: t.string(),
+		familyId: t.u64(),
+		visit: t.string(),
+		prep: t.string(),
+		source: t.string(),
+	},
+	(ctx, suggested) => {
+		requireMember(ctx, suggested.familyId);
+		requireText("id", suggested.id);
+		requireText("visit", suggested.visit);
+		requireText("prep", suggested.prep);
+		if (suggested.source !== "model" && suggested.source !== "member")
+			throw new SenderError("source must be model or member");
+		if (ctx.db.appointment.id.find(suggested.id) !== null)
+			throw new SenderError("appointment id already exists");
+		ctx.db.appointment.insert({
+			...suggested,
+			suggestedBy: ctx.sender,
+			suggestedAt: ctx.timestamp,
+			requestedBy: undefined,
+			requestedAt: undefined,
+			confirmation: undefined,
+			confirmedBy: undefined,
+			confirmedAt: undefined,
+			cancelledBy: undefined,
+			cancelledAt: undefined,
+			summary: undefined,
+			summaryReviewedBy: undefined,
+			summaryReviewedAt: undefined,
+		});
+	},
+);
+
+export const updateAppointmentPrep = spacetimedb.reducer(
+	{ id: t.string(), prep: t.string() },
+	(ctx, { id, prep }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("prep", prep);
+		ctx.db.appointment.id.update({ ...found, prep });
+	},
+);
+
+// A member's explicit request. It records intent only; nothing reaches the provider.
+export const requestAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt !== undefined)
+			throw new SenderError("appointment is already requested");
+		ctx.db.appointment.id.update({
+			...found,
+			requestedBy: ctx.sender,
+			requestedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Only a requested appointment takes the provider's confirmation: a suggestion never skips ahead.
+export const confirmAppointment = spacetimedb.reducer(
+	{ id: t.string(), confirmation: t.string() },
+	(ctx, { id, confirmation }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt === undefined)
+			throw new SenderError("only a requested appointment can be confirmed");
+		if (found.confirmedAt !== undefined)
+			throw new SenderError("appointment is already confirmed");
+		requireText("confirmation", confirmation);
+		ctx.db.appointment.id.update({
+			...found,
+			confirmation,
+			confirmedBy: ctx.sender,
+			confirmedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const cancelAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		ctx.db.appointment.id.update({
+			...found,
+			cancelledBy: ctx.sender,
+			cancelledAt: ctx.timestamp,
+		});
+	},
+);
+
+export const reviewAppointmentSummary = spacetimedb.reducer(
+	{ id: t.string(), summary: t.string() },
+	(ctx, { id, summary }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("summary", summary);
+		ctx.db.appointment.id.update({
+			...found,
+			summary,
+			summaryReviewedBy: ctx.sender,
+			summaryReviewedAt: ctx.timestamp,
+		});
+	},
+);
+
+const frequencies: Record<string, string[]> = {
+	explicit: ["once"],
+	standing: ["weekly", "monthly"],
+};
+// Keep in step with `shareIntervalDays` in apps/server/src/routes/appointments.ts.
+const intervalMicros: Record<string, bigint> = {
+	weekly: 7n * 86_400_000_000n,
+	monthly: 30n * 86_400_000_000n,
+};
+
+// Approving and sending a clinician update need the `clinician_delivery` care scope (#26) as well
+// as the per-update consent.
+export const approveClinicianShare = spacetimedb.reducer(
+	{
+		id: t.string(),
+		appointmentId: t.string(),
+		recipient: t.string(),
+		sections: t.string(),
+		consent: t.string(),
+		frequency: t.string(),
+	},
+	(ctx, share) => {
+		const found = requireAppointment(ctx, share.appointmentId);
+		requireCareScope(ctx, found.familyId, "clinician_delivery");
+		requireText("id", share.id);
+		requireText("recipient", share.recipient);
+		requireText("sections", share.sections);
+		if (found.summaryReviewedAt === undefined)
+			throw new SenderError("review the summary before sharing it");
+		if (!frequencies[share.consent]?.includes(share.frequency))
+			throw new SenderError("consent and frequency do not match");
+		if (ctx.db.clinicianShare.id.find(share.id) !== null)
+			throw new SenderError("share id already exists");
+		ctx.db.clinicianShare.insert({
+			...share,
+			familyId: found.familyId,
+			approvedBy: ctx.sender,
+			approvedAt: ctx.timestamp,
+			approvedSummaryAt:
+				share.consent === "explicit" ? found.summaryReviewedAt : undefined,
+			revokedBy: undefined,
+			revokedAt: undefined,
+			sends: 0,
+			lastSentAt: undefined,
+		});
+	},
+);
+
+const requireShare = (ctx: Ctx, id: string) => {
+	const found = ctx.db.clinicianShare.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.revokedAt !== undefined) throw new SenderError("share is revoked");
+	return found;
+};
+
+// Records one simulated send, only inside the consent: once for explicit consent, and no sooner
+// than the agreed interval for a standing arrangement.
+export const sendClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		requireCareScope(ctx, share.familyId, "clinician_delivery");
+		const found = requireAppointment(ctx, share.appointmentId);
+		if (share.consent === "explicit") {
+			if (share.sends > 0)
+				throw new SenderError("explicit consent covers one send");
+			if (
+				found.summaryReviewedAt?.microsSinceUnixEpoch !==
+				share.approvedSummaryAt?.microsSinceUnixEpoch
+			)
+				throw new SenderError("the summary changed after approval");
+		} else if (
+			share.lastSentAt !== undefined &&
+			ctx.timestamp.microsSinceUnixEpoch <
+				share.lastSentAt.microsSinceUnixEpoch +
+					(intervalMicros[share.frequency] ?? 0n)
+		)
+			throw new SenderError("not due yet at the agreed frequency");
+		ctx.db.clinicianShare.id.update({
+			...share,
+			sends: share.sends + 1,
+			lastSentAt: ctx.timestamp,
+		});
+	},
+);
+
+// Any member may withdraw consent; stopping a share never needs more access than starting one.
+export const revokeClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		ctx.db.clinicianShare.id.update({
+			...share,
+			revokedBy: ctx.sender,
+			revokedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const saveCookingProfile = spacetimedb.reducer(
+	{ familyId: t.u64(), profile: t.string() },
+	(ctx, { familyId, profile }) => {
+		requireCareScope(ctx, familyId, "care_plan_edit");
+		requireText("profile", profile);
+		const row = {
+			familyId,
+			profile,
+			editedBy: ctx.sender,
+			editedAt: ctx.timestamp,
+		};
+		if (ctx.db.cookingProfile.familyId.find(familyId) === null)
+			ctx.db.cookingProfile.insert(row);
+		else ctx.db.cookingProfile.familyId.update(row);
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1824,12 +3208,43 @@ export const myFinchnodeLinks = spacetimedb.view(
 			),
 );
 
+export const myTripEvents = spacetimedb.view(
+	{ name: "my_trip_events", public: true },
+	t.array(tripEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.tripEvent, (m, e) => m.familyId.eq(e.familyId)),
+);
+
 // Only for families where the caller holds `health_records` now (#26).
 export const myMealFacts = spacetimedb.view(
 	{ name: "my_meal_facts", public: true },
 	t.array(mealFact.rowType),
 	(ctx) =>
 		careReader(ctx, (familyId) => ctx.db.mealFact.familyId.filter(familyId)),
+);
+
+export const myMedicineMemory = spacetimedb.view(
+	{ name: "my_medicine_memory", public: true },
+	t.array(medicineMemory.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineMemory, (m, r) =>
+				m.familyId.eq(r.familyId),
+			),
+);
+
+export const myMedicineSightings = spacetimedb.view(
+	{ name: "my_medicine_sightings", public: true },
+	t.array(medicineSighting.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineSighting, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
 );
 
 export const myContactLadders = spacetimedb.view(
@@ -1861,6 +3276,71 @@ export const myContactAttempts = spacetimedb.view(
 			.rightSemijoin(ctx.from.contactAttempt, (m, a) =>
 				m.familyId.eq(a.familyId),
 			),
+);
+
+export const myReminderSettings = spacetimedb.view(
+	{ name: "my_reminder_settings", public: true },
+	t.array(reminderSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myReminders = spacetimedb.view(
+	{ name: "my_reminders", public: true },
+	t.array(reminder.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminder, (m, r) => m.familyId.eq(r.familyId)),
+);
+
+export const myReminderOccurrences = spacetimedb.view(
+	{ name: "my_reminder_occurrences", public: true },
+	t.array(reminderOccurrence.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderOccurrence, (m, o) =>
+				m.familyId.eq(o.familyId),
+			),
+);
+
+export const myReminderEvents = spacetimedb.view(
+	{ name: "my_reminder_events", public: true },
+	t.array(reminderEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
+			),
+);
+
+// The caller's own locations, and those of people who share theirs with the caller. A revoked
+// share drops the row at once.
+export const myLocations = spacetimedb.view(
+	{ name: "my_locations", public: true },
+	t.array(location.rowType),
+	(ctx) => [
+		...ctx.db.location.sharer.filter(ctx.sender),
+		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
+	],
+);
+
+// Shares the caller gave or received.
+export const myLocationShares = spacetimedb.view(
+	{ name: "my_location_shares", public: true },
+	t.array(locationShare.rowType),
+	(ctx) => [
+		...ctx.db.locationShare.sharer.filter(ctx.sender),
+		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
 );
 
 // Care views (#26): the profile and instructions only for families where the caller holds
@@ -1927,4 +3407,57 @@ export const myExerciseEvents = spacetimedb.view(
 			.rightSemijoin(ctx.from.exerciseEvent, (m, e) =>
 				m.familyId.eq(e.familyId),
 			),
+);
+
+export const mySpeakerSettings = spacetimedb.view(
+	{ name: "my_speaker_settings", public: true },
+	t.array(speakerSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.speakerSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myDeliveryEvents = spacetimedb.view(
+	{ name: "my_delivery_events", public: true },
+	t.array(deliveryEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.deliveryEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
+			),
+);
+
+export const myAppointments = spacetimedb.view(
+	{ name: "my_appointments", public: true },
+	t.array(appointment.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.appointment, (m, a) => m.familyId.eq(a.familyId)),
+);
+
+export const myClinicianShares = spacetimedb.view(
+	{ name: "my_clinician_shares", public: true },
+	t.array(clinicianShare.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.clinicianShare, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+// Like the care profile, only for families where the caller holds `health_records` now.
+export const myCookingProfiles = spacetimedb.view(
+	{ name: "my_cooking_profiles", public: true },
+	t.array(cookingProfile.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => {
+			const row = ctx.db.cookingProfile.familyId.find(familyId);
+			return row === null ? [] : [row];
+		}),
 );
