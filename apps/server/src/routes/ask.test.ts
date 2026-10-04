@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { ApiError } from "@health/contracts";
-import { FamilyAnswer, VoiceAnswer } from "@health/contracts/ask";
+import {
+	FamilyAnswer,
+	urgentRequest,
+	VoiceAnswer,
+} from "@health/contracts/ask";
 import { Schema } from "effect";
 import { Hono } from "hono";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
@@ -210,6 +214,62 @@ describe("POST /ask", () => {
 			expect((await errorOf(response)).error).toBe("unavailable");
 		}
 		expect(bridgeCalls).toHaveLength(0);
+	});
+
+	test("an urgent request answers at once, with no model or record read, even when neither is set up", async () => {
+		for (const [question, start] of [
+			["I fell and I can't get up", "This sounds urgent."],
+			["Me caí, ayúdame, no puedo levantarme", "Esto parece urgente."],
+		] as const) {
+			const response = await ask(
+				{ question, asker: "wearer" },
+				mount({ gemini: false, fetch: false }),
+			);
+			expect(response.status).toBe(200);
+			const reply = Schema.decodeUnknownSync(FamilyAnswer)(
+				await response.json(),
+			);
+			expect(reply.urgent).toBe(true);
+			expect(reply.model).toBe("none");
+			expect(reply.answer.startsWith(start)).toBe(true);
+		}
+		expect(geminiBodies).toHaveLength(0);
+		expect(bridgeCalls).toHaveLength(0);
+	});
+
+	test("help requests and serious symptoms are urgent; repeats, feelings, and errands are not", () => {
+		for (const text of [
+			"Help!",
+			"please help me",
+			"I need help",
+			"Call an ambulance",
+			"I’ve fallen",
+			"My chest hurts",
+			"I can't breathe",
+			"My arm is bleeding",
+			"I took too many pills",
+			"Llama al 911",
+			"Me duele el pecho",
+		])
+			expect({ text, urgent: urgentRequest(text) !== null }).toEqual({
+				text,
+				urgent: true,
+			});
+		for (const text of [
+			"Where is my daughter?",
+			"What day is it today?",
+			"I feel sad and confused",
+			"I miss my husband",
+			"Help me find my glasses",
+			"I need help finding my keys",
+			"I fell asleep after lunch",
+			"Where are my blood pressure pills?",
+			"¿Dónde está mi hija?",
+		])
+			expect({ text, urgent: urgentRequest(text) }).toEqual({
+				text,
+				urgent: null,
+			});
 	});
 
 	test("invalid, failed, empty, or endless provider replies are upstream errors", async () => {

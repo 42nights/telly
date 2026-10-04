@@ -55,6 +55,12 @@ export function useFamilyData(): FamilyData {
 		records.kind === "ready" ? records.value.samples : null,
 		"Demo samples are not shown. The family records contain",
 	);
+	// A "Mark as seen" failure belongs to the person it was for.
+	const familyId = family?.id;
+	useEffect(() => {
+		void familyId;
+		setSeenError(null);
+	}, [familyId]);
 
 	const markSeen = async (alertId: string) => {
 		const alertsPath = path(

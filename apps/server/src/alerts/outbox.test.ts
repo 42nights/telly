@@ -1,6 +1,6 @@
 // Runs against a real local SpacetimeDB: `bun run db:test` publishes the module as a fresh identity,
 // which becomes the delivery operator, and passes its token in SPACETIMEDB_OPERATOR_TOKEN. The
-// transports here are local test doubles: they prove the outbox protocol, not delivery by a provider.
+// transports here, except `familyThread`, are local test doubles: they prove the outbox protocol.
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { Timestamp } from "spacetimedb";
@@ -10,7 +10,12 @@ import {
 	openFamilyDb,
 	readFamilyRecords,
 } from "../db";
-import { type AlertMessage, DeliveryFailure, runAlertOutbox } from "./outbox";
+import {
+	type AlertMessage,
+	DeliveryFailure,
+	familyThread,
+	runAlertOutbox,
+} from "./outbox";
 import { readAlerts, readThresholds } from "./records";
 
 const uri = process.env.SPACETIMEDB_URI;
@@ -209,6 +214,7 @@ describe.skipIf(config === undefined)("threshold alerts and outbox", () => {
 								}),
 							() =>
 								reducers.markAlertDeliveryUnavailable({ alertId, reason: "x" }),
+							() => reducers.postAlertMessage({ alertId }),
 						];
 						for (const step of steps)
 							expect(yield* rejection(step)).toBe(
@@ -246,6 +252,70 @@ describe.skipIf(config === undefined)("threshold alerts and outbox", () => {
 						attempts: 0,
 						lastError: "No family delivery transport is configured",
 					});
+				}),
+			),
+		));
+
+	test("the family thread gets each alert once from the operator, and no member can imitate it", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const db = yield* openFamilyDb(config);
+					const outsider = yield* openFamilyDb(config);
+					const operator = yield* openOperator(config);
+					const familyId = yield* heartFamily(db);
+					yield* record(db, familyId, 150);
+					const [alert] = readAlerts(db, familyId.toString());
+					if (alert === undefined) throw new Error("alert missing");
+					const clientId = `alert-${alert.alert.id}`;
+					const message: AlertMessage = {
+						alertId: alert.alert.id,
+						familyId: familyId.toString(),
+						summary: alert.alert.summary,
+						idempotencyKey: clientId,
+					};
+					// At-least-once: a resend after a lost report posts nothing new.
+					const send = familyThread(operator);
+					yield* send(message);
+					yield* send(message);
+					expect(
+						yield* rejection(() =>
+							db.connection.reducers.sendMessage({
+								familyId,
+								clientId,
+								body: "fake alert",
+							}),
+						),
+					).toBe("SenderError: clientId must not start with alert-");
+					// The member's own later message arrives after every earlier write.
+					yield* Effect.promise(() =>
+						db.connection.reducers.sendMessage({
+							familyId,
+							clientId: "after",
+							body: "seen",
+						}),
+					);
+					const thread = yield* eventually(() => {
+						const rows = readFamilyRecords(db).messages.filter(
+							(m) => m.familyId === familyId.toString(),
+						);
+						return rows.some((m) => m.clientId === "after") ? rows : undefined;
+					});
+					expect(thread.filter((m) => m.clientId !== "after")).toEqual([
+						{
+							id: expect.any(String),
+							familyId: familyId.toString(),
+							sender: operator.identity,
+							body: alert.alert.summary,
+							sentAt: expect.any(String),
+							clientId,
+						},
+					]);
+					expect(
+						readFamilyRecords(outsider).messages.filter(
+							(m) => m.familyId === familyId.toString(),
+						),
+					).toEqual([]);
 				}),
 			),
 		));

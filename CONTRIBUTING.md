@@ -20,8 +20,39 @@ GitHub issues are the message board for people and their agents. Every change st
 5. **Post the verification on the issue** before you close it: the commands you ran and what you saw.
 
 Never put secret values, real health records, or personal data in issues, comments, logs, or commits.
-Name the variable and where it lives (for example "`GEMINI_API_KEY` in the server's Cloudflare
-secrets"), never its value.
+Name the variable and where it lives (for example "`GEMINI_API_KEY` in the shared Telly Cloudflare
+Secrets Store"), never its value.
+
+## Provider keys
+
+The plan is [board section 08](docs/board.html#keys). Issue #23 owns the key upload and the server
+retrieval path. Issue #2 owns the Node host. Issue #49 owns the target record and these rules.
+
+- **Target.** All Telly provider keys go in one account-level Cloudflare Secrets Store in the shared
+  Telly Cloudflare account. Before the first write, post on #49 the account label, account ID, store
+  ID, scopes, and environment (development or production). Do not create a second store or an
+  unrelated Worker.
+- **Access.** Use your own Cloudflare member login with MFA, or a scoped API token with Account
+  Secrets Store Edit. Do not use a shared password or a Global API Key. Use only keys that the
+  project gives you; do not copy other credentials from your machine.
+- **Names.** Store each key under its server variable name in `apps/server/.env.schema`, such as
+  `GEMINI_API_KEY`. Never put a key in a `VITE_*` or `EXPO_PUBLIC_*` variable or in sample data.
+- **Write.** Run `bunx wrangler secrets-store secret create <store-id> --name <NAME> --scopes workers
+  --remote` and type the value at the prompt. To replace a value, use `secret update <store-id>
+  --secret-id <id> --remote`. Never use `--value`: it puts the value in shell history.
+- **Verify.** Run `bunx wrangler secrets-store secret list <store-id> --remote`. It shows the name, ID,
+  scopes, status, and created and modified times, never the value. A write is complete only when its
+  name shows `active` with a modified time after the write started. If the command fails or the list
+  does not agree, post the write as failed on the issue, with the key name and the error. Do not retry
+  in a different store or environment.
+- **Node runtime.** Cloudflare bindings do not reach the Node server, and the Secrets Store API
+  returns metadata only. The server reads keys from its process environment or from ignored
+  `apps/server/.env.*` files, which varlock checks against `.env.schema`. The operator gets the
+  values through the #23 retrieval path into a file with mode 600 on the host, then restarts the
+  server. Storing a key does not deploy or approve a host.
+- **Rotate.** Issue a replacement key. Update only that secret, in the selected store and
+  environment, and the host file. Restart, verify one real provider request, then revoke the old
+  key. If a key is exposed, revoke it immediately.
 
 ## Before you push
 

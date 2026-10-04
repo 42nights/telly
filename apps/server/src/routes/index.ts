@@ -5,6 +5,7 @@ import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
 import { careRoutes } from "./care";
+import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
 import { familyRoutes } from "./families";
@@ -12,6 +13,7 @@ import { finchnodeRoutes } from "./finchnode";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import { toolRoutes } from "./tools";
+import { trendRoutes } from "./trends";
 import { visionRoutes } from "./vision";
 import { voiceRoutes } from "./voice";
 
@@ -38,7 +40,9 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", reminderRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
+		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", careProfileRoutes());
 };

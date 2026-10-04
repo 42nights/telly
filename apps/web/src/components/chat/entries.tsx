@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { Tip } from "@/components/win95";
 import { useDemoWarning } from "@/lib/demo";
-import { memberLabel } from "@/lib/members";
+import { isAlertMessage, senderLabel } from "@/lib/members";
 
 import { type Ask, evidenceLine, type TimelineItem } from "./logic";
 
@@ -227,8 +227,12 @@ export function ChatLog({
 		if (ownLast != null) log.current?.scrollTo({ top: 0 });
 	}, [ownLast]);
 	const messageItem = (message: FamilyMessage) => {
-		const label = memberLabel(message.sender, identity);
-		const other = identity !== null && message.sender !== identity;
+		const label = senderLabel(message, identity);
+		// An alert came from the server, not a member, so it has no one to reply to.
+		const other =
+			identity !== null &&
+			message.sender !== identity &&
+			!isAlertMessage(message);
 		return (
 			<MessageItem
 				key={message.id}
