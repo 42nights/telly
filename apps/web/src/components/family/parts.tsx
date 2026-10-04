@@ -1,6 +1,6 @@
-// Pieces of the family screen: the alert card with its three actions, the monitoring badge and
-// list, and today's newest readings. Each shows only what the server returned.
-import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
+// Pieces of the family screen: the alert card with its three actions, the monitoring badge, and
+// today's newest readings. Each shows only what the server returned.
+import type { Family, HealthSample } from "@health/contracts";
 import type { FamilyAlert, Monitoring } from "@health/contracts/alerts";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
@@ -21,7 +21,6 @@ import {
 	type Glance,
 	type MonitoringLevel,
 	monitoringLevel,
-	newestNoopSample,
 	newestPerMetric,
 	oldAge,
 	seenText,
@@ -287,13 +286,14 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 			</p>
 		);
 	return (
-		<ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
+		// ponytail: an inner scroll only when the cards outgrow the window (a long list of metrics).
+		<ul className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] content-start gap-1.5 overflow-y-auto">
 			{glance.map(({ metric, sample }) => {
 				if (sample === null)
 					return (
-						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-2">
-							<span className="text-sm">{metricLabel(metric)}</span>
-							<b className="text-muted-foreground text-xl leading-tight">
+						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-1.5">
+							<span className="text-xs">{metricLabel(metric)}</span>
+							<b className="text-lg text-muted-foreground leading-tight">
 								Unavailable
 							</b>
 						</li>
@@ -303,78 +303,17 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 					<li key={metric} className="win95-inset grid bg-card">
 						<Hint
 							text={`${sourceName(sample.source)} · ${clock(sample.sourceTime)}`}
-							className="grid content-start gap-0.5 p-2"
+							className="grid content-start gap-0.5 p-1.5"
 						>
-							<span className="text-sm">{metricLabel(metric)}</span>
-							<b className="text-2xl leading-tight">{readingValue(sample)}</b>
+							<span className="text-xs">{metricLabel(metric)}</span>
+							<b className="text-lg leading-tight">{readingValue(sample)}</b>
 							{age !== null && (
-								<span className="text-muted-foreground text-xs">{age}</span>
+								<span className="text-[11px] text-muted-foreground">{age}</span>
 							)}
 						</Hint>
 					</li>
 				);
 			})}
-		</ul>
-	);
-}
-
-export function MonitoringList({
-	state,
-	records,
-	familyId,
-	now,
-}: {
-	state: ApiState<Monitoring>;
-	records: ApiState<FamilyRecords>;
-	familyId: string;
-	now: number;
-}) {
-	const whoop =
-		records.kind === "ready"
-			? newestNoopSample(records.value.samples, familyId)
-			: null;
-	return (
-		<ul className="win95-inset grid divide-y divide-border bg-card text-sm">
-			{state.kind !== "ready" ? (
-				<li className="p-2">
-					<ApiNotice state={state} what="monitoring" />
-				</li>
-			) : state.value.thresholds.length === 0 ? (
-				<li className="p-2">No thresholds set: nothing is monitored.</li>
-			) : (
-				state.value.thresholds.map(({ threshold, state: rowState, reason }) => (
-					<li
-						key={threshold.id}
-						className="flex flex-wrap justify-between gap-x-2 p-2"
-					>
-						<span>
-							{metricLabel(threshold.metric)} {threshold.direction}{" "}
-							{threshold.limit} {threshold.unit}
-						</span>
-						<span
-							className={cn(
-								rowState === "out_of_range" && "font-bold text-destructive",
-							)}
-						>
-							{rowState === "unavailable"
-								? `Unavailable: ${reason === "stale" ? "no recent reading" : "no reading"}`
-								: rowState === "in_range"
-									? "In range"
-									: "Out of range"}
-						</span>
-					</li>
-				))
-			)}
-			<li className="flex justify-between gap-2 p-2">
-				<span>WHOOP</span>
-				{whoop === null ? (
-					<span>No readings</span>
-				) : (
-					<Hint text={`Newest reading ${clock(whoop.sourceTime)}`}>
-						{oldAge(whoop.sourceTime, now) ?? "Connected"}
-					</Hint>
-				)}
-			</li>
 		</ul>
 	);
 }

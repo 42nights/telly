@@ -25,7 +25,6 @@ import {
 	AlertSection,
 	FamilyGate,
 	MonitoringBadge,
-	MonitoringList,
 	ReadingsGlance,
 } from "./parts";
 
@@ -438,94 +437,5 @@ describe("MonitoringBadge", () => {
 	])("shows the level", (state, text) => {
 		const view = render(<MonitoringBadge state={state} />);
 		expect(view.getByText(text)).toBeDefined();
-	});
-});
-
-describe("MonitoringList", () => {
-	test("a monitoring read in progress says so, and NOOP shows not connected", () => {
-		const view = render(
-			<MonitoringList
-				state={{ kind: "loading" }}
-				records={{ kind: "loading" }}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
-		expect(view.getByRole("status").textContent).toContain(
-			"Loading monitoring…",
-		);
-		expect(view.getByText("No readings")).toBeDefined();
-	});
-
-	test("no thresholds means nothing is monitored", () => {
-		const view = render(
-			<MonitoringList
-				state={monitoring()}
-				records={records([])}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
-		expect(
-			view.getByText("No thresholds set: nothing is monitored."),
-		).toBeDefined();
-		expect(view.getByText("No readings")).toBeDefined();
-	});
-
-	test("each threshold shows its state, and a NOOP sample shows WHOOP connected", () => {
-		const view = render(
-			<MonitoringList
-				state={monitoring(
-					row("in_range"),
-					row("out_of_range", {
-						threshold: threshold({
-							id: "t2",
-							direction: "below",
-							limit: 40,
-						}),
-					}),
-					row("unavailable", {
-						threshold: threshold({
-							id: "t3",
-							metric: "spo2",
-							direction: "below",
-							limit: 90,
-							unit: "%",
-						}),
-						reason: "stale",
-					}),
-					row("unavailable", {
-						threshold: threshold({ id: "t4", metric: "steps", unit: "steps" }),
-						reason: "missing",
-					}),
-				)}
-				records={records([
-					sample({
-						metric: "strain",
-						source: "noop:whoop",
-						sourceTime: minutesAgo(5),
-					}),
-					sample({
-						metric: "strain",
-						familyId: "f2",
-						source: "noop:whoop",
-						sourceTime: minutesAgo(1),
-					}),
-				])}
-				familyId="f1"
-				now={NOW}
-			/>,
-		);
-		const items = view.getAllByRole("listitem").map((li) => li.textContent);
-		expect(items).toEqual([
-			"Heart rate above 110 bpmIn range",
-			"Heart rate below 40 bpmOut of range",
-			"SpO2 below 90 %Unavailable: no recent reading",
-			"Steps above 110 stepsUnavailable: no reading",
-			`WHOOPConnectedNewest reading ${clock(minutesAgo(5))}`,
-		]);
-		expect(view.getByText("Out of range").className).toContain(
-			"text-destructive",
-		);
 	});
 });

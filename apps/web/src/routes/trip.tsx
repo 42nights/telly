@@ -26,7 +26,7 @@ import {
 } from "@/components/trip/use-trip";
 import { type Speech, SpeechLine, useSpeech } from "@/components/wearer/speech";
 import { useNow } from "@/components/wearer/use-now";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { telHref, useContacts } from "@/lib/contacts";
 import { useFamily } from "@/lib/family";
@@ -54,24 +54,24 @@ function TripScreen() {
 		locations.value.shares.some((s) => s.sharer === myId);
 
 	return (
-		<main className="win95-desktop min-h-0 overflow-y-auto p-2 sm:p-4">
+		<main>
 			<Window
 				title="Going out"
 				icon={Footprints}
-				className="mx-auto w-full max-w-xl"
+				className="mx-auto w-full max-w-6xl"
 				status={TRAFFIC_NOTE}
 			>
-				<div className="grid gap-4 p-2 text-[18px]">
-					<TripPlan trip={trip} setTrip={setTrip} say={say} speech={speech} />
-
-					<HelpHome
-						familyId={familyId}
-						trip={trip}
-						sharing={sharing}
-						say={say}
-						speech={speech}
-					/>
-
+				<div className="grid content-start gap-3 p-1 text-[18px] lg:grid-cols-2">
+					<div className="grid content-start gap-3">
+						<TripPlan trip={trip} setTrip={setTrip} say={say} speech={speech} />
+						<HelpHome
+							familyId={familyId}
+							trip={trip}
+							sharing={sharing}
+							say={say}
+							speech={speech}
+						/>
+					</div>
 					<LocationPanel
 						familyId={familyId}
 						trip={trip}
@@ -186,13 +186,19 @@ function LocationPanel({
 					locations={locations.value}
 					me={me.value.identity}
 				/>
-				<SharingControls
-					familyId={familyId}
-					locations={locations.value}
-					me={me.value.identity}
-					onChange={onChange}
-					records={records}
-				/>
+				{/* Folded so the screen fits a phone; the summary names what opens. */}
+				<details className="win95-inset bg-card p-2">
+					<summary className="min-h-11 cursor-pointer content-center font-bold">
+						Sharing settings
+					</summary>
+					<SharingControls
+						familyId={familyId}
+						locations={locations.value}
+						me={me.value.identity}
+						onChange={onChange}
+						records={records}
+					/>
+				</details>
 			</>
 		);
 	return (
@@ -239,7 +245,7 @@ function TripForm({
 				onChange={(event) => setDestination(event.target.value)}
 				placeholder="The pharmacy on Main Street"
 			/>
-			<label htmlFor="trip-purpose">What for? (you can leave this empty)</label>
+			<label htmlFor="trip-purpose">What for?</label>
 			<input
 				id="trip-purpose"
 				className="win95-inset win95-field h-12 bg-card px-2"
@@ -248,7 +254,6 @@ function TripForm({
 				onChange={(event) => setPurpose(event.target.value)}
 				placeholder="pick up my pills"
 			/>
-			<p className="text-[16px]">Saved on this device only.</p>
 			<div className="flex flex-wrap gap-2">
 				<Button
 					className={`${big} win95-primary`}
@@ -340,7 +345,7 @@ function HelpHome({
 
 	return (
 		<section aria-labelledby="help" className="grid gap-2">
-			<h3 id="help" className="font-bold">
+			<h3 id="help" className="sr-only">
 				Help me get home
 			</h3>
 			<Button
@@ -363,11 +368,7 @@ function HelpHome({
 			)}
 			{speech.key === "help" && <SpeechLine speech={speech} />}
 			<div className="grid gap-2 sm:grid-cols-2">
-				{contacts.momPhone === null ? (
-					<p className="text-[16px]">
-						Add Mom's number in Settings to call her here.
-					</p>
-				) : (
+				{contacts.momPhone !== null && (
 					<a
 						className={buttonVariants({ className: big, variant: "outline" })}
 						data-slot="button"
@@ -388,18 +389,19 @@ function HelpHome({
 					</a>
 				)}
 			</div>
-			<label className="text-[16px]" htmlFor="home-address">
-				Home address, for Directions home (saved on this device only)
-			</label>
-			<input
-				id="home-address"
-				className="win95-inset win95-field h-12 bg-card px-2"
-				value={home}
-				onChange={(event) => {
-					setHome(event.target.value);
-					localStorage.setItem(HOME_KEY, event.target.value);
-				}}
-			/>
+			<div className="flex items-center gap-2 text-[16px]">
+				<label htmlFor="home-address">Home address</label>
+				<Tip text="For Directions home. Saved on this device only." />
+				<input
+					id="home-address"
+					className="win95-inset win95-field h-12 min-w-0 flex-1 bg-card px-2"
+					value={home}
+					onChange={(event) => {
+						setHome(event.target.value);
+						localStorage.setItem(HOME_KEY, event.target.value);
+					}}
+				/>
+			</div>
 		</section>
 	);
 }
@@ -409,8 +411,7 @@ const reportText = (
 	trip: Trip | null,
 	sharing: boolean,
 ) => {
-	if (!sharing)
-		return "Not shared. Telly sends your location only to people you choose.";
+	if (!sharing) return "Not shared with anyone.";
 	if (trip === null)
 		return "Shared during a trip. Start a trip to send your location.";
 	switch (reporting.kind) {

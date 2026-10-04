@@ -37,7 +37,11 @@ export function CareWindow({
 		<Window
 			title={part === "needs" ? "Care needs" : "Contact ladder"}
 			icon={part === "needs" ? HeartHandshake : PhoneForwarded}
-			status="Calls are simulated. Only accepting and then confirming help closes a need."
+			status={
+				part === "needs"
+					? "Calls are simulated. Only accepting and then confirming help closes a need."
+					: "Calls are simulated."
+			}
 		>
 			<div className="grid gap-4 p-2 text-sm">
 				{part === "needs" ? (
@@ -124,7 +128,7 @@ function LadderSection({ base, me }: { base: string; me: string | null }) {
 	const ladder = useApi(ContactLadderReply, `${base}/ladder`, { refreshKey });
 	return (
 		<section aria-labelledby="ladder" className="grid gap-2">
-			<h3 id="ladder" className="font-bold">
+			<h3 id="ladder" className="sr-only">
 				Contact ladder
 			</h3>
 			{ladder.kind !== "ready" ? (

@@ -52,21 +52,9 @@ const personText = (
 function PersonGroup() {
 	const { state, family } = useFamily();
 	return (
-		<fieldset className="border border-border p-2">
+		<fieldset className="border border-border px-2 pb-1">
 			<legend className="px-1">Person</legend>
-			<div className="flex items-center gap-2">
-				<span
-					aria-hidden
-					className="win95-inset grid size-11 place-items-center bg-card font-bold text-base"
-				>
-					{family?.name.charAt(0).toUpperCase() ?? "?"}
-				</span>
-				<div className="grid min-w-0 flex-1">
-					<b className="truncate">{personText(state, family)}</b>
-					<small className="text-sm">Paired manually</small>
-				</div>
-				<Tip text="This demo supports one person; pairing is manual" />
-			</div>
+			<b className="block truncate">{personText(state, family)}</b>
 		</fieldset>
 	);
 }
@@ -97,13 +85,10 @@ function NumbersForm({
 	contacts: Contacts;
 	save: (next: Contacts) => void;
 }) {
-	const mom = useNumber(
-		contacts.momPhone,
-		"Call Mom stays off until you add a number.",
-	);
+	const mom = useNumber(contacts.momPhone, "Call Mom is off until you add one");
 	const family = useNumber(
 		contacts.familyPhone,
-		"Call family stays off until you add a number.",
+		"Call family is off until you add one",
 	);
 	const emergency = useNumber(contacts.emergency);
 	const changed = mom.changed || family.changed || emergency.changed;
@@ -129,8 +114,11 @@ function NumbersForm({
 			>
 				<PersonGroup />
 
-				<fieldset className="grid gap-3 border border-border p-2">
-					<legend className="px-1">Numbers for the call buttons</legend>
+				<fieldset className="grid gap-2 border border-border p-2">
+					<legend className="flex items-center gap-1 px-1">
+						Numbers for the call buttons
+						<Tip text="Calls start from your phone's dialer. The app never calls or texts by itself." />
+					</legend>
 					<NumberField
 						id="settings-mom"
 						label="Mom's phone number"
@@ -148,10 +136,6 @@ function NumbersForm({
 						tip="911 is the US number. Outside the US, enter your local emergency number, for example 112 or 999."
 						{...emergency.field}
 					/>
-					<p className="flex items-center gap-1">
-						Calls start from your phone's dialer.
-						<Tip text="The app never calls or texts by itself." />
-					</p>
 				</fieldset>
 
 				<div className="flex flex-wrap items-center justify-between gap-2">
@@ -188,8 +172,6 @@ function NumberField({
 	error: string | null;
 	note: string | null;
 }) {
-	const describedBy =
-		error !== null ? `${id}-error` : note !== null ? `${id}-note` : undefined;
 	return (
 		<div className="grid gap-1">
 			<span className="flex items-center gap-1">
@@ -202,16 +184,16 @@ function NumberField({
 				autoComplete="tel"
 				className="win95-inset win95-field h-11 w-full bg-card px-2 text-base"
 				value={value}
+				// What stays off while the box is blank: a hint in the empty box, not another line.
+				placeholder={note ?? undefined}
 				aria-invalid={error !== null}
-				aria-describedby={describedBy}
+				aria-describedby={error !== null ? `${id}-error` : undefined}
 				onChange={(event) => onChange(event.target.value)}
 			/>
-			{error !== null ? (
+			{error !== null && (
 				<p id={`${id}-error`} className="font-bold text-destructive">
 					{error}
 				</p>
-			) : (
-				note !== null && <p id={`${id}-note`}>{note}</p>
 			)}
 		</div>
 	);

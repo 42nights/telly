@@ -34,6 +34,9 @@ export const familyScreens = [
 		icon: Users,
 		tabs: [
 			{ to: "/family", label: "Overview" },
+			{ to: "/family/daily", label: "Daily" },
+			{ to: "/family/exercise", label: "Exercise" },
+			{ to: "/family/cooking", label: "Cooking" },
 			{ to: "/family/alerts", label: "Alerts" },
 			{ to: "/family/trends", label: "Trends" },
 			{ to: "/family/thresholds", label: "Thresholds" },
@@ -48,6 +51,7 @@ export const familyScreens = [
 			{ to: "/care", label: "Needs" },
 			{ to: "/care/contacts", label: "Contacts" },
 			{ to: "/care/plan", label: "Care plan" },
+			{ to: "/care/facts", label: "Profile" },
 			{ to: "/care/sharing", label: "Sharing" },
 		],
 	},

@@ -6,7 +6,7 @@ import { MessageSquare, Volume2 } from "lucide-react";
 
 import { ApiNotice } from "@/components/win95";
 import { type ApiState, useApi } from "@/lib/api";
-import { senderLabel } from "@/lib/members";
+import { isAlertMessage, senderLabel } from "@/lib/members";
 
 import { SpeechLine, useSpeech } from "./speech";
 
@@ -17,7 +17,10 @@ const time = (iso: string) =>
 		minute: "2-digit",
 	});
 
-/** The family's messages, newest first, read-only. Each one can be read aloud. */
+/**
+ * The family's messages, newest first, read-only. Each one can be read aloud. Alert notices are
+ * left out: Alerts already shows each alert once.
+ */
 export function Messages({
 	records,
 	familyId,
@@ -36,6 +39,7 @@ export function Messages({
 		);
 	const messages = records.value.messages
 		.filter((message) => message.familyId === familyId)
+		.filter((message) => !isAlertMessage(message))
 		.toSorted((a, b) => b.sentAt.localeCompare(a.sentAt));
 	return (
 		<div className="grid gap-2">

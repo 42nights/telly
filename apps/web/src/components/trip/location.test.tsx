@@ -321,22 +321,13 @@ describe("SharingControls", () => {
 describe("FamilyLocationSection", () => {
 	const path = "GET /api/families/1/location";
 
-	test("shows the locations shared with me, not my own, and copies my sharing ID without showing it", async () => {
+	test("shows the locations shared with me, not my own, and no sharing ID", async () => {
 		serve({
 			[path]: {
 				json: {
 					locations: [location({ sharer: me }), location({})],
 					shares: [],
 					seesShared: true,
-				},
-			},
-		});
-		const copied: string[] = [];
-		Object.defineProperty(navigator, "clipboard", {
-			configurable: true,
-			value: {
-				writeText: async (text: string) => {
-					copied.push(text);
 				},
 			},
 		});
@@ -351,14 +342,10 @@ describe("FamilyLocationSection", () => {
 			"Member bbbbbb",
 		);
 		expect(section.textContent).not.toContain(me);
-		fireEvent.click(
-			within(section).getByRole("button", { name: "Copy my sharing ID" }),
-		);
-		await waitFor(() => expect(copied).toEqual([me]));
-		await waitFor(() => expect(section.textContent).toContain("Copied."));
+		expect(within(section).queryByRole("button")).toBeNull();
 	});
 
-	test("says when nobody shares a location, and shows no ID before I am known", async () => {
+	test("says when nobody shares a location, and keeps showing an old one when I become unknown", async () => {
 		serve({
 			[path]: {
 				json: { locations: [location({})], shares: [], seesShared: true },
@@ -373,9 +360,6 @@ describe("FamilyLocationSection", () => {
 			),
 		);
 		view.rerender(<FamilyLocationSection familyId="1" me={null} now={now} />);
-		expect(view.queryByRole("button", { name: "Copy my sharing ID" })).toBe(
-			null,
-		);
 		expect(view.getAllByRole("article")).toHaveLength(1);
 	});
 

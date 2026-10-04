@@ -1,6 +1,5 @@
-// The family screen's parts from the old dashboard (#209): key numbers, the recent-alerts table,
-// the newest messages, and the alert thresholds. Each shows only what the server returned.
-import type { Family } from "@health/contracts";
+// The family screen's tables from the old dashboard (#209): the recent alerts and the alert
+// thresholds. Each shows only what the server returned.
 import type {
 	AlertThreshold,
 	FamilyAlert,
@@ -8,87 +7,13 @@ import type {
 } from "@health/contracts/alerts";
 import { cn } from "@health/ui/lib/utils";
 
-import { ApiNotice, Hint } from "@/components/win95";
+import { ApiNotice } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
-import { memberLabel, senderLabel } from "@/lib/members";
+import { memberLabel } from "@/lib/members";
 import { metricLabel } from "@/lib/readings";
 
 import type { FamilyData } from "./data";
 import { clock, deliveryText } from "./logic";
-
-export function KeyNumbers({
-	data,
-	family,
-}: {
-	data: FamilyData;
-	family: Family;
-}) {
-	const { alerts, records } = data;
-	// The glance list already shows HRV, as unavailable when only demo samples exist.
-	const hrv =
-		records.kind === "ready" &&
-		records.value.samples.some(
-			(s) => s.familyId === family.id && s.metric === "hrv",
-		);
-	return (
-		<div className="grid gap-2 sm:grid-cols-2">
-			{!hrv && (
-				<div className="win95-inset grid gap-0.5 bg-card p-2">
-					<span>HRV</span>
-					<b className="text-muted-foreground text-xl">Unavailable</b>
-				</div>
-			)}
-			<Hint
-				text="Alerts nobody has marked as seen yet."
-				className="win95-inset grid gap-0.5 bg-card p-2"
-			>
-				<span>Open alerts</span>
-				<b className="text-xl">
-					{alerts.kind === "ready"
-						? alerts.value.alerts.filter((a) => a.acknowledgements.length === 0)
-								.length
-						: "Unavailable"}
-				</b>
-			</Hint>
-		</div>
-	);
-}
-
-/** The family's newest messages, read-only. Replying happens in the chat. */
-export function RecentMessages({
-	data,
-	familyId,
-}: {
-	data: FamilyData;
-	familyId: string;
-}) {
-	const { records, me } = data;
-	if (records.kind !== "ready")
-		return (
-			<div className="win95-inset bg-card">
-				<ApiNotice state={records} what="messages" />
-			</div>
-		);
-	const messages = records.value.messages
-		.filter((m) => m.familyId === familyId)
-		.toSorted((a, b) => b.sentAt.localeCompare(a.sentAt))
-		.slice(0, 5);
-	if (messages.length === 0)
-		return <p className="win95-inset bg-card p-2">No messages yet.</p>;
-	return (
-		<ul className="win95-inset grid divide-y divide-border bg-card">
-			{messages.map((m) => (
-				<li key={m.id} className="grid gap-0.5 p-2">
-					<span className="flex justify-between gap-2 text-xs">
-						<b>{senderLabel(m, me)}</b>
-						<time dateTime={m.sentAt}>{clock(m.sentAt)}</time>
-					</span>
-					<span className="line-clamp-2 break-words">{m.body}</span>
-				</li>
-			))}
-		</ul>
-	);
-}
 
 export function RecentAlerts({ data }: { data: FamilyData }) {
 	const { alerts } = data;

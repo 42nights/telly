@@ -3,7 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChefHat, CloudOff, Home, RotateCw, Utensils } from "lucide-react";
 
 import { ExerciseInvite } from "@/components/exercise/session";
-import { StatusFooter } from "@/components/hud/status-footer";
 import { Window } from "@/components/hud/window";
 import { MealCheckIn } from "@/components/meal-check-in/check-in";
 import { SetupChecklist } from "@/components/onboarding/checklist";
@@ -145,8 +144,6 @@ function HudComponent() {
 					</div>
 
 					<WearerInbox familyId={familyId} now={now} records={records} />
-
-					<StatusFooter now={now} records={records} />
 				</div>
 			</Window>
 		</main>

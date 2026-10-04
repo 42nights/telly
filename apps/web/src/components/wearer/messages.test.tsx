@@ -107,7 +107,7 @@ describe("Messages", () => {
 		expect(view.queryByRole("list")).toBeNull();
 	});
 
-	test("shows this family's messages newest first, with who wrote each", async () => {
+	test("shows this family's messages newest first, with who wrote each, and no alert notices", async () => {
 		serve(meRoute);
 		const view = inRouter(
 			<Messages
@@ -139,11 +139,12 @@ describe("Messages", () => {
 			expect(view.getAllByRole("listitem")[0]?.textContent).toContain("You"),
 		);
 		const items = view.getAllByRole("listitem");
+		// The alert notice is not repeated here: Alerts on Home shows it once (captain: "2 alerts?").
 		expect(
 			items.map((item) => item.querySelector("p + p")?.textContent),
-		).toEqual(["On my way", "Heart rate high", "Old news"]);
-		expect(items[1]?.textContent).toContain("Telly alert");
-		expect(items[2]?.textContent).toContain("Member b0c1d2");
+		).toEqual(["On my way", "Old news"]);
+		expect(view.queryByText("Telly alert")).toBeNull();
+		expect(items[1]?.textContent).toContain("Member b0c1d2");
 		expect(items[0]?.querySelector("time")?.getAttribute("dateTime")).toBe(
 			"2026-01-01T09:00:00Z",
 		);

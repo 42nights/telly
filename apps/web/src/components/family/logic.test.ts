@@ -13,7 +13,6 @@ import {
 	clock,
 	deliveryText,
 	monitoringLevel,
-	newestNoopSample,
 	newestPerMetric,
 	newestUnseen,
 	oldAge,
@@ -174,25 +173,6 @@ describe("newestUnseen", () => {
 		).toBe("a");
 		expect(newestUnseen([seen])).toBeNull();
 		expect(newestUnseen([])).toBeNull();
-	});
-});
-
-describe("newestNoopSample", () => {
-	test("the newest NOOP sample of this family only", () => {
-		const noop = (id: string, familyId: string, sourceTime: string) => ({
-			...sample(id, "strain", sourceTime),
-			familyId,
-			source: "noop:whoop",
-		});
-		const samples = [
-			noop("old", "1", "2026-01-01T10:00:00Z"),
-			noop("new", "1", "2026-01-01T11:00:00Z"),
-			noop("older", "1", "2026-01-01T09:00:00Z"),
-			noop("other", "2", "2026-01-01T12:00:00Z"),
-			sample("phone", "heart_rate", "2026-01-01T12:00:00Z"),
-		];
-		expect(newestNoopSample(samples, "1")?.id).toBe("new");
-		expect(newestNoopSample(samples, "3")).toBeNull();
 	});
 });
 

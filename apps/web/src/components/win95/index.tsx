@@ -46,12 +46,15 @@ export function Tip({
 export function Hint({
 	text,
 	align = "start",
+	side = "below",
 	className,
 	children,
 }: {
 	text: string;
 	/** `end` keeps the tooltip inside the window when the content sits at a right edge. */
 	align?: "start" | "end";
+	/** `above` keeps the tooltip on screen when the content sits at the bottom edge. */
+	side?: "below" | "above";
 	className?: string;
 	children: ReactNode;
 }) {
@@ -61,6 +64,7 @@ export function Hint({
 			type="button"
 			className={cn("win95-hint", className)}
 			data-align={align}
+			data-side={side}
 			aria-describedby={id}
 		>
 			{children}

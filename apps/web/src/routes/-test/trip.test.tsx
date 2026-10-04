@@ -246,12 +246,11 @@ test("help with nobody to contact says to call instead", async () => {
 	signIn();
 	serve(base({ "POST /api/families/fam-1/care/needs": need([]) }));
 	renderRoute("/trip");
-	expect(
-		await screen.findByText("Add Mom's number in Settings to call her here."),
-	).toBeTruthy();
 	fireEvent.click(
 		await screen.findByRole("button", { name: "Tell my family I need help" }),
 	);
+	// With no saved number there is no Call Mom button, and no line about it either.
+	expect(screen.queryByRole("link", { name: "Call Mom" })).toBeNull();
 	expect(
 		await screen.findByText(/Nobody is set up to be contacted yet/),
 	).toBeTruthy();
@@ -365,11 +364,7 @@ test("not sharing: explains that nothing is sent", async () => {
 	signIn();
 	serve(base());
 	renderRoute("/trip");
-	expect(
-		await screen.findByText(
-			"Not shared. Telly sends your location only to people you choose.",
-		),
-	).toBeTruthy();
+	expect(await screen.findByText("Not shared with anyone.")).toBeTruthy();
 	expect(screen.getByText(/Nobody\. Telly sends no location/)).toBeTruthy();
 });
 
@@ -484,11 +479,7 @@ test("stopping a share reloads the locations", async () => {
 	);
 	const before = calls.filter((c) => c.path.endsWith("/location")).length;
 	fireEvent.click(screen.getByRole("button", { name: /^Stop sharing with/ }));
-	expect(
-		await screen.findByText(
-			"Not shared. Telly sends your location only to people you choose.",
-		),
-	).toBeTruthy();
+	expect(await screen.findByText("Not shared with anyone.")).toBeTruthy();
 	expect(
 		calls.filter((c) => c.path.endsWith("/location")).length,
 	).toBeGreaterThan(before);
