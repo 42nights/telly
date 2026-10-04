@@ -39,10 +39,11 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | CI: lint, types, tests, Fallow, Sentrux, server build and runtime smoke | Runs on Namespace runners ([runs](https://github.com/ayaangazali/telly/actions/workflows/health.yml)) |
 | NOOP-to-server connection | Stub only. Reports `not_connected`, with no transport, readings, or nudges |
 | Database (SpacetimeDB) and generated server bindings | Module, bindings, and server connection are ready and tested on a local database |
-| Web app: HUD, medicine finder, family phone, family dashboard, family chat, lab reports, and settings | The screens call the real server routes. Tested in a browser against a local server, a local database, a local test sign-in issuer, and a local stand-in for Gemini ([#11](https://github.com/ayaangazali/telly/issues/11)) |
+| Web app: HUD, medicine finder, family phone, family dashboard, family chat, care contacts, lab reports, and settings | The screens call the real server routes. Tested in a browser against a local server, a local database, a local test sign-in issuer, and a local stand-in for Gemini ([#11](https://github.com/ayaangazali/telly/issues/11), [#14](https://github.com/ayaangazali/telly/issues/14)) |
 | Sign-in and family data API | OIDC token check and family access on every `/api` route except `/api/sources`. The web app has a sign-in screen (authorization code with PKCE). Tested with a local test issuer only. The production issuer is not chosen, and the phone app has no sign-in screen ([#4](https://github.com/ayaangazali/telly/issues/4)) |
 | Phone app | Scaffold only: one screen shows `GET /api/sources`. No product feature exists on the phone yet |
-| Threshold alerts and durable delivery (server only) | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
+| Threshold alerts and durable delivery | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. The web HUD shows the family's alerts. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
+| Family contact ladder: care needs, contact order, and accepted responsibility | The database runs each step on its own timer and records each attempt once. Calls are simulated, and messages stay in the app: no phone or SMS provider exists. Tested on a local database ([#30](https://github.com/ayaangazali/telly/issues/30)) |
 | Lab reports | Generate, fill, and review, on the server and on the web reports screen. Hospital submission is unavailable: Finchnode only reads records ([#17](https://github.com/ayaangazali/telly/issues/17), [#8](https://github.com/ayaangazali/telly/issues/8)) |
 | Finchnode laboratory results | Tested against the keyless public demo with fictional patients. The web app labels these results as demo data. No sandbox or live key is configured |
 | Gemini medicine detection | The route, frame mapping, and errors are tested against a local protocol server. The web medicine screen draws the box and the arrow on the camera frame. No live Gemini call is verified yet ([#15](https://github.com/ayaangazali/telly/issues/15)) |
@@ -115,6 +116,9 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `POST /api/families/:familyId/voice/transcriptions`, `POST …/voice/speech` | Turn a recording into text, or text into speech, with ElevenLabs ([docs/voice.md](docs/voice.md)) |
 | `POST /api/families/:familyId/tools` | Run one family data tool. The Fetch.ai worker is the caller |
 | `POST /api/families/:familyId/cues` | A Gemma health cue from validated samples. Advice only: it never changes thresholds or alerts |
+| `GET`, `PUT /api/families/:familyId/care/ladder` | Read or set the family's contact order |
+| `GET`, `POST …/care/needs`, `GET …/care/needs/:needId` | List care needs, raise one, or read one with its contact attempts |
+| `POST …/care/needs/:needId/responses` | The current contact sends `seen`, `answer`, `accept`, or `decline`; the member who accepted sends `help_confirmed` |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 
