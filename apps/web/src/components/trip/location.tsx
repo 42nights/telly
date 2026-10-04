@@ -219,6 +219,11 @@ export function FamilyLocationSection({
 			</h3>
 			{state.kind !== "ready" ? (
 				<ApiNotice state={state} what="location" />
+			) : !state.value.seesShared ? (
+				<p role="status">
+					Location sharing is off for you. Someone with family access can turn
+					on Location for you in Sharing.
+				</p>
 			) : shared.length === 0 ? (
 				<p>Nobody shares a location with you.</p>
 			) : (

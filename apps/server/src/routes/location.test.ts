@@ -23,7 +23,7 @@ const fix = {
 };
 
 describe.skipIf(dbConfig === undefined)("family location", () => {
-	test("only chosen members see a location, and revoking the last share deletes it", () =>
+	test("a location needs both the person's share and the viewer's location scope; revoking either hides it", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
 				const wearer = yield* openFamily(config, "Location family");
@@ -38,18 +38,29 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 						}),
 					);
 				const app = familyApp(wearer.db, wearer.familyId, locationRoutes());
+				// The founder may set grants until someone holds `family_access` (#26).
+				const grantLocation = (member: typeof shared, granted: boolean) =>
+					Effect.promise(() =>
+						wearer.db.connection.reducers.setCareGrant({
+							familyId: BigInt(wearer.familyId),
+							member: Identity.fromString(member.identity),
+							scope: "location",
+							granted,
+						}),
+					);
 				// Like the server, which opens a connection per request, each read connects anew.
-				const seenBy = (db: typeof shared) =>
+				const read = (db: typeof shared) =>
 					Effect.gen(function* () {
 						const fresh = yield* openFamilyDb({ ...config, token: db.token });
-						const read = yield* send(
+						const got = yield* send(
 							familyApp(fresh, wearer.familyId, locationRoutes()),
 							"GET",
 							"/location",
 						);
-						return Schema.decodeUnknownSync(FamilyLocations)(read.json)
-							.locations;
+						return Schema.decodeUnknownSync(FamilyLocations)(got.json);
 					});
+				const seenBy = (db: typeof shared) =>
+					Effect.map(read(db), (got) => got.locations);
 
 				// Nothing is collected before the wearer shares with someone.
 				const early = yield* send(app, "POST", "/location", {
@@ -86,10 +97,39 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					Schema.decodeUnknownSync(SharedLocation)(reported.json),
 				).toMatchObject({ status: "fix", fix });
 
-				expect(yield* seenBy(shared)).toMatchObject([
-					{ sharer: wearer.db.identity, status: "fix", fix },
-				]);
-				expect(yield* seenBy(notShared)).toEqual([]);
+				// Share without the viewer's `location` scope: hidden, with the clear state flag.
+				expect(yield* read(shared)).toMatchObject({
+					locations: [],
+					seesShared: false,
+				});
+				// The wearer always sees their own location, even without the `location` scope.
+				yield* grantLocation(wearer.db, false);
+				expect(yield* read(wearer.db)).toMatchObject({
+					locations: [{ sharer: wearer.db.identity, status: "fix", fix }],
+					seesShared: false,
+				});
+
+				yield* grantLocation(shared, true);
+				yield* grantLocation(notShared, true);
+				// Share and scope: visible.
+				expect(yield* read(shared)).toMatchObject({
+					locations: [{ sharer: wearer.db.identity, status: "fix", fix }],
+					seesShared: true,
+				});
+				// Scope without a share: hidden.
+				expect(yield* read(notShared)).toMatchObject({
+					locations: [],
+					seesShared: true,
+				});
+
+				// Revoking the scope hides the location at once; the share stays.
+				yield* grantLocation(shared, false);
+				expect(yield* read(shared)).toMatchObject({
+					locations: [],
+					shares: [{ sharer: wearer.db.identity, viewer: shared.identity }],
+					seesShared: false,
+				});
+				yield* grantLocation(shared, true);
 
 				// GPS turned off: the status changes and the last fix stays as last known.
 				const denied = yield* send(app, "POST", "/location", {
@@ -107,13 +147,32 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					`/location/shares/${shared.identity}`,
 				);
 				expect(Schema.decodeUnknownSync(FamilyLocations)(revoked.json)).toEqual(
-					{ locations: [], shares: [] },
+					{ locations: [], shares: [], seesShared: false },
 				);
 				expect(yield* seenBy(shared)).toEqual([]);
 				const late = yield* send(app, "POST", "/location", {
 					status: "no_fix",
 				});
 				expect(failure(late)).toEqual([400, "invalid_request"]);
+
+				// A share target must be a 64-hex identity; nothing is changed for a malformed one.
+				for (const method of ["PUT", "DELETE"]) {
+					const malformed = yield* send(
+						app,
+						method,
+						"/location/shares/not-an-identity",
+					);
+					expect(failure(malformed)).toEqual([400, "invalid_request"]);
+					expect(malformed.json).toMatchObject({
+						message: "identity must be 64 hex characters",
+					});
+				}
+				const after = yield* send(app, "GET", "/location");
+				expect(Schema.decodeUnknownSync(FamilyLocations)(after.json)).toEqual({
+					locations: [],
+					shares: [],
+					seesShared: false,
+				});
 			}),
 		));
 });

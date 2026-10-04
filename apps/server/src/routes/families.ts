@@ -4,7 +4,9 @@
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import {
 	DeleteFamily,
+	type FamilyInvite,
 	type FamilyList,
+	type JoinedFamily,
 	type Me,
 	NewFamily,
 	NewFamilyMember,
@@ -19,10 +21,14 @@ import {
 	callReducer,
 	decodeBody,
 	type FamilyEnv,
+	newSecret,
+	sha256Hex,
 } from "../http";
 import type { R2Bucket } from "../integrations/r2";
 import { requireScope } from "./care-profile";
 import { familyPdfPrefix } from "./reports";
+
+const INVITE_TTL_MS = 7 * 24 * 3_600_000;
 
 // ponytail: a reducer returns no row, so the new row is the one that appeared during the call. Two
 // concurrent creates by the same caller can swap rows; return ids from a procedure if that matters.
@@ -57,6 +63,23 @@ export const accountRoutes = () =>
 				readFamilyRecords(c.var.db).families,
 			);
 			return c.json(family, 201);
+		})
+		// Any signed-in caller may join with a valid code; the module checks it is unused and current.
+		.post("/invites/:code/join", async (c) => {
+			const codeHash = sha256Hex(c.req.param("code"));
+			await callReducer(c.var.db, (db) =>
+				db.reducers.joinFamilyByInvite({ codeHash }),
+			);
+			const { families } = readFamilyRecords(c.var.db);
+			const invite = [...c.var.db.connection.db.myFamilyInvites.iter()].find(
+				(row) => row.codeHash === codeHash,
+			);
+			const family = families.find(
+				(row) => row.id === invite?.familyId.toString(),
+			);
+			if (family === undefined)
+				throw new Error("the joined family is not visible to its new member");
+			return c.json({ family } satisfies JoinedFamily);
 		});
 
 /** One family's routes, mounted at `/api/families/:familyId` behind the membership check. */
@@ -107,6 +130,21 @@ export const familyRoutes = (storage?: R2Bucket) =>
 				}),
 			);
 			return c.body(null, 204);
+		})
+		.post("/invites", async (c) => {
+			const { secret: code, hash: codeHash } = newSecret();
+			const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+			await callReducer(c.var.db, (db) =>
+				db.reducers.createFamilyInvite({
+					familyId: c.var.familyId,
+					codeHash,
+					expiresAt: Timestamp.fromDate(expiresAt),
+				}),
+			);
+			return c.json(
+				{ code, expiresAt: expiresAt.toISOString() } satisfies FamilyInvite,
+				201,
+			);
 		})
 		.post("/samples", async (c) => {
 			const sample = await decodeBody(c, NewHealthSample);

@@ -28,8 +28,9 @@ class MemoryStorage implements Storage {
 		this.#items.set(key, value);
 	}
 }
-globalThis.sessionStorage = new MemoryStorage();
-globalThis.localStorage = new MemoryStorage();
+// A DOM test file that ran earlier in this process may have left happy-dom's storage in place.
+globalThis.sessionStorage ??= new MemoryStorage();
+globalThis.localStorage ??= new MemoryStorage();
 
 const token = (sub: string) =>
 	`h.${Buffer.from(JSON.stringify({ iss: "https://id.test", sub, exp: 4e9 })).toString("base64url")}.s`;
@@ -98,5 +99,72 @@ test("only the person who saved an action sends it, and a refused action is not 
 	const [outcome] = (await flushPending()).values();
 	expect(outcome).toEqual({ kind: "rejected", message: "refused" });
 	expect(refused).toHaveLength(1);
+	expect(localStorage.getItem("telly.pending")).toBeNull();
+});
+
+test("signed out, an action is refused at once and nothing is saved or sent", async () => {
+	setSessionToken(null);
+	const sent = serve(201);
+	expect(
+		await submitAction("/api/families/1/messages", { body: "hi" }),
+	).toEqual({ kind: "rejected", message: "Sign in first." });
+	expect(sent).toEqual([]);
+	expect(localStorage.getItem("telly.pending")).toBeNull();
+});
+
+test("a 503 reply keeps the action waiting, and a later pass sends it once", async () => {
+	setSessionToken(token("alice"));
+	serve(503);
+	expect(
+		await submitAction("/api/families/1/messages", { body: "hi" }),
+	).toEqual({ kind: "waiting" });
+	expect(
+		JSON.parse(localStorage.getItem("telly.pending") ?? "[]"),
+	).toHaveLength(1);
+
+	const sent = serve(201);
+	await flushPending();
+	expect(sent).toHaveLength(1);
+	expect(localStorage.getItem("telly.pending")).toBeNull();
+});
+
+test("a corrupt or wrongly shaped saved queue is dropped, and a new action still goes out", async () => {
+	setSessionToken(token("alice"));
+	for (const corrupt of ["{not json", JSON.stringify([{ path: 1 }])]) {
+		localStorage.setItem("telly.pending", corrupt);
+		const sent = serve(201);
+		expect(
+			await submitAction("/api/families/1/messages", { body: "hi" }),
+		).toEqual({ kind: "sent" });
+		expect(sent).toEqual([{ body: "hi", clientId: expect.any(String) }]);
+		expect(localStorage.getItem("telly.pending")).toBeNull();
+	}
+});
+
+test("a new action waits behind an earlier waiting one, and both go out in queue order", async () => {
+	setSessionToken(token("alice"));
+	serve(null);
+	await submitAction("/api/families/1/messages", { body: "first" });
+	expect(
+		await submitAction("/api/families/1/messages", { body: "second" }),
+	).toEqual({ kind: "waiting" });
+
+	const sent = serve(201);
+	await flushPending();
+	expect(sent.map((body) => Reflect.get(Object(body), "body"))).toEqual([
+		"first",
+		"second",
+	]);
+});
+
+test("two passes started together send each action once", async () => {
+	setSessionToken(token("alice"));
+	const sent = serve(201);
+	const outcomes = await Promise.all([
+		submitAction("/api/families/1/messages", { body: "a" }),
+		submitAction("/api/families/1/messages", { body: "b" }),
+	]);
+	expect(outcomes).toEqual([{ kind: "sent" }, { kind: "sent" }]);
+	expect(sent).toHaveLength(2);
 	expect(localStorage.getItem("telly.pending")).toBeNull();
 });

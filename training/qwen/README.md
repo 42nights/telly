@@ -10,9 +10,8 @@ The base model is `Qwen/Qwen3.5-9B`, a multimodal (text and image) Qwen model. R
 
 | Path | Purpose |
 | --- | --- |
-| `train.py` | The entry point: `validate`, `check`, `train`, `deploy` |
+| `train.py` | The entry point: `validate`, `check`, `train` |
 | `datasets.py` | Fetches and converts the training data into `data/` |
-| `serve.py` | The versioned inference endpoint: an OpenAI-compatible bridge to one pinned checkpoint |
 | `requirements.txt` | Pinned Python dependencies (`river-client` 0.12.0, `pillow` 12.3.0) |
 | `fixtures/synthetic.jsonl` | Four synthetic cue examples. They prove the format only |
 | `../../packages/contracts/src/cue-format.json` | The prompt and output format. Training and the server read this one file |
@@ -81,40 +80,37 @@ Checkpoint: `river://2058ed15-9c11-4d2f-9307-ae0c25113f7a/sampler_weights/health
 
 Credits: the River API key cannot read spend. Read it in the River Console under **Billing** and **Usage**, with a team login.
 
-## Serve (versioned endpoint)
+## Serve
 
-The plan is a River dedicated deployment (`train.py deploy`). On 2026-10-04 River rejected it for this account: `unsupported_topology: no approved unified specification for base model Qwen/Qwen3.5-9B`, and the same for prefill/decode. `Qwen/Qwen3.6-35B-A3B-FP8` gave the same error. Ask River to approve a deployment specification for the base model; then `train.py deploy --checkpoint river://... --confirm-paid` prints the server values.
+River rejected a dedicated deployment for this account on 2026-10-04: `unsupported_topology: no approved unified specification for base model Qwen/Qwen3.5-9B`, and the same for prefill/decode. `Qwen/Qwen3.6-35B-A3B-FP8` gave the same error.
 
-Until then, `serve.py` is the endpoint. It pins one checkpoint and forwards OpenAI chat-completion requests to River's checkpoint chat API (`chat_complete_from_checkpoint`). It listens on 127.0.0.1 only, and it accepts only `Authorization: Bearer $RIVER_API_KEY`. It never logs request bodies.
-
-```sh
-.venv/bin/python serve.py --checkpoint river://2058ed15-9c11-4d2f-9307-ae0c25113f7a/sampler_weights/health-cue-qwen35-9b-v1-2026-10-04 --port 8003
-```
+So the server uses River queued inference for the checkpoint. `apps/server/src/integrations/qwen.ts` calls River's gRPC API (`river.api.v1.RiverService`) directly, the same calls that `river-client` makes for `chat_complete_from_checkpoint`: `ChatCompleteFromCheckpoint` queues one OpenAI-format chat request, and `RetrieveFuture` polls for the reply. No bridge process runs.
 
 ## Server configuration
 
-The server calls the endpoint for `POST /api/families/:familyId/cues` (`apps/server/src/integrations/qwen.ts`). It asks with `temperature: 0` and `chat_template_kwargs.enable_thinking: false`.
+The server calls River for `POST /api/families/:familyId/cues`. It asks with `temperature: 0` and `chat_template_kwargs.enable_thinking: false`.
 
 | Variable | Value |
 | --- | --- |
-| `QWEN_BASE_URL` | `http://127.0.0.1:8003/v1` for `serve.py`, or the deployment `base_url` |
-| `QWEN_DEPLOYMENT` | `health-cue-qwen35-9b-v1-2026-10-04` (the checkpoint name, or the deployment model id) |
+| `QWEN_BASE_URL` | `https://api.river.ai` |
+| `QWEN_BASE_MODEL` | `Qwen/Qwen3.5-9B` (the base model of the checkpoint) |
 | `QWEN_CHECKPOINT` | The `river://` checkpoint. It is the model version in every cue |
-| `RIVER_API_KEY` | The same key that `serve.py` holds; server-only |
+| `RIVER_API_KEY` | Server-only, from the key store |
 
-Set all four values or none. With none, the route answers `503 unavailable`; it never sends a canned cue. A partial set stops the server at startup. A cue is advice only. It never feeds threshold evaluation or alert delivery.
+Set all four values or none. With none, the route answers `503 unavailable`; it never sends a canned cue. A partial set stops the server at startup. A cue is advice only. It never feeds threshold evaluation or alert delivery. Production sets the three public values in `deploy/cloudflare/settings.env` and pulls `RIVER_API_KEY` through `TELLY_PULL_KEYS`.
 
-Sample result through the server adapter (`requestCue`) and `serve.py`, with synthetic readings:
+Sample result through the server adapter (`requestCue`) and River, with synthetic readings:
 
 | Readings | Cue |
 | --- | --- |
 | `steps` 310 count | `{"kind":"walk","text":"A gentle walk around the room or to the window might be pleasant now."}` |
 | `sleep_duration` 4.2 h | `{"kind":"rest","text":"Maybe lie down for a little while and relax."}` |
 | `steps` 7400 count, `heart_rate` 68 bpm | `{"kind":"none","text":"No cue right now."}` |
-| any, with a wrong key | `QwenUpstreamError` (HTTP 401) |
+| `heart_rate` 72, 75, and 74 bpm | `{"kind":"none","text":"No cue right now."}` (direct gRPC, 11.8 s) |
+| any, with a wrong key | `QwenUpstreamError` |
 
-Each call took 3 to 7 seconds, within the server's 20-second timeout.
+Each call took 3 to 12 seconds, within the server's 30-second timeout.
 
 ## Continuous integration
 
-Ordinary CI does not train, deploy, or call River. The server tests use a local protocol server that speaks the same chat API.
+Ordinary CI does not train, deploy, or call River. The server tests use a local gRPC server that speaks the same queued chat API.

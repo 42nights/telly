@@ -1,6 +1,6 @@
-// Care needs and the family contact ladder (issue #30), shown on the care plan screen (#209). Every
-// family client polls the same needs, so each shows the same state. Calls are simulated; Telly
-// places no real calls or texts.
+// Care needs and the family contact ladder (issue #30): the Care screen's Needs and Contacts tabs.
+// Every family client polls the same needs, so each shows the same state. Calls are simulated;
+// Telly places no real calls or texts.
 import {
 	CareNeed,
 	CareNeeds,
@@ -10,7 +10,7 @@ import {
 } from "@health/contracts/care";
 import { Me } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake, PhoneForwarded } from "lucide-react";
 import { useState } from "react";
 
 import { LadderForm } from "@/components/care/ladder-form";
@@ -22,19 +22,29 @@ import { apiRequest, familyPath, useApi } from "@/lib/api";
 const POLL_MS = 5_000;
 const field = "win95-inset win95-field h-11 min-w-0 bg-card px-2 text-sm";
 
-export function CareNeedsWindow({ familyId }: { familyId: string }) {
+/** One Care tab's window: the needs with the ask form, or the contact ladder. */
+export function CareWindow({
+	familyId,
+	part,
+}: {
+	familyId: string;
+	part: "needs" | "ladder";
+}) {
 	const meState = useApi(Me, "/api/me");
 	const me = meState.kind === "ready" ? meState.value.identity : null;
 	const base = familyPath(familyId, "/care");
 	return (
 		<Window
-			title="Family help"
-			icon={HeartHandshake}
+			title={part === "needs" ? "Care needs" : "Contact ladder"}
+			icon={part === "needs" ? HeartHandshake : PhoneForwarded}
 			status="Calls are simulated. Only accepting and then confirming help closes a need."
 		>
 			<div className="grid gap-4 p-2 text-sm">
-				<NeedsSection base={base} me={me} />
-				<LadderSection base={base} me={me} />
+				{part === "needs" ? (
+					<NeedsSection base={base} me={me} />
+				) : (
+					<LadderSection base={base} me={me} />
+				)}
 			</div>
 		</Window>
 	);

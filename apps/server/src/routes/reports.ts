@@ -3,6 +3,8 @@
 import type { HealthSample } from "@health/contracts";
 import {
 	Report,
+	type ReportEmail,
+	ReportEmailSettings,
 	ReportFields,
 	ReportMarker,
 	type ReportPdf,
@@ -16,6 +18,7 @@ import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
+import type { Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
 import { readAccess } from "./care-profile";
@@ -78,25 +81,59 @@ const generateMarkers = (samples: readonly HealthSample[]): ReportMarker[] => {
 	}));
 };
 
-export const readReports = (c: Context<FamilyEnv>): Report[] =>
-	[...c.var.db.connection.db.myReports.iter()]
+const readEmails = (c: Context<FamilyEnv>) =>
+	new Map(
+		[...c.var.db.connection.db.myReportEmails.iter()].map((row) => [
+			row.reportId,
+			row,
+		]),
+	);
+
+export const readReports = (c: Context<FamilyEnv>): Report[] => {
+	const emails = readEmails(c);
+	return [...c.var.db.connection.db.myReports.iter()]
 		.filter((row) => row.familyId === c.var.familyId)
-		.map((row) => ({
-			id: row.id,
-			familyId: row.familyId.toString(),
-			createdBy: row.createdBy.toHexString(),
-			createdAt: row.createdAt.toISOString(),
-			...readSnapshot(row.markers),
-			fields: Schema.decodeUnknownSync(Fields)(row.fields),
-			review:
-				row.reviewedBy === undefined || row.reviewedAt === undefined
-					? null
-					: {
-							reviewedBy: row.reviewedBy.toHexString(),
-							reviewedAt: row.reviewedAt.toISOString(),
-						},
-		}))
+		.map((row) => {
+			const email = emails.get(row.id);
+			return {
+				id: row.id,
+				familyId: row.familyId.toString(),
+				createdBy: row.createdBy.toHexString(),
+				createdAt: row.createdAt.toISOString(),
+				...readSnapshot(row.markers),
+				fields: Schema.decodeUnknownSync(Fields)(row.fields),
+				review:
+					row.reviewedBy === undefined || row.reviewedAt === undefined
+						? null
+						: {
+								reviewedBy: row.reviewedBy.toHexString(),
+								reviewedAt: row.reviewedAt.toISOString(),
+							},
+				email:
+					email === undefined
+						? null
+						: {
+								// The module writes only `ReportEmail` statuses.
+								status: email.status as ReportEmail["status"],
+								recipient: email.recipient,
+								reason: email.reason ?? null,
+								automatic: email.automatic,
+								updatedAt: email.updatedAt.toISOString(),
+							},
+			};
+		})
 		.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};
+
+const readEmailSettings = (c: Context<FamilyEnv>): ReportEmailSettings => {
+	const row = [...c.var.db.connection.db.myReportEmailSettings.iter()].find(
+		(s) => s.familyId === c.var.familyId,
+	);
+	return {
+		enabled: row?.enabled ?? false,
+		recipient: row?.recipient || null,
+	};
+};
 
 const findReport = (c: Context<FamilyEnv>, id = c.req.param("reportId")) => {
 	const report = readReports(c).find((row) => row.id === id);
@@ -123,9 +160,67 @@ const needStorage = (storage: R2Bucket | undefined) => {
 	return storage;
 };
 
-/** The report flow: generate a draft, fill it, review it, then submit it. */
-export const reportRoutes = (storage?: R2Bucket) =>
+/**
+ * Queues an email of a reviewed report, sends it with the PDF attached, and records the result. The
+ * module decides whether anything is queued: an automatic send happens once per report, and only
+ * while the setting is on. Only the attempt whose `sendId` the module stored sends.
+ */
+const emailReport = async (
+	c: Context<FamilyEnv>,
+	reportId: string,
+	automatic: boolean,
+	mailer: Mailer | undefined,
+) => {
+	const { db } = c.var;
+	const sendId = crypto.randomUUID();
+	await callReducer(db, (connection) =>
+		connection.reducers.queueReportEmail({ reportId, sendId, automatic }),
+	);
+	if (readEmails(c).get(reportId)?.sendId !== sendId) return;
+	const report = findReport(c, reportId);
+	let failure: string | undefined;
+	if (mailer === undefined) failure = "Email is not set up on this server";
+	else
+		try {
+			await mailer({
+				to: report.email?.recipient ?? "",
+				subject: "Reviewed lab report from Telly",
+				text: [
+					`A family member marked this lab report as reviewed on ${report.review?.reviewedAt ?? ""}.`,
+					"The report is attached as a PDF.",
+					"A family review is not a clinician review. Nothing in this report is medical advice.",
+				].join("\n\n"),
+				attachment: {
+					filename: `lab-report-${report.id.slice(0, 8)}.pdf`,
+					content: reportPdf(report, new Date()),
+				},
+				idempotencyKey: sendId,
+			});
+		} catch (error) {
+			failure = error instanceof Error ? error.message : "The email failed";
+		}
+	await callReducer(db, (connection) =>
+		connection.reducers.settleReportEmail({ reportId, sendId, failure }),
+	);
+};
+
+/** The report flow: generate a draft, fill it, review it, then submit or email it. */
+export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 	new Hono<FamilyEnv>()
+		.get("/report-email", (c) =>
+			c.json(readEmailSettings(c) satisfies ReportEmailSettings),
+		)
+		.put("/report-email", async (c) => {
+			const { enabled, recipient } = await decodeBody(c, ReportEmailSettings);
+			await callReducer(c.var.db, (connection) =>
+				connection.reducers.setReportEmailSettings({
+					familyId: c.var.familyId,
+					enabled,
+					recipient: recipient ?? "",
+				}),
+			);
+			return c.json(readEmailSettings(c) satisfies ReportEmailSettings);
+		})
 		.get("/reports", (c) =>
 			c.json({ reports: readReports(c) } satisfies Reports),
 		)
@@ -178,7 +273,7 @@ export const reportRoutes = (storage?: R2Bucket) =>
 			return c.json(findReport(c) satisfies Report);
 		})
 		.post("/reports/:reportId/review", async (c) => {
-			const { id } = findReport(c);
+			const { id, review } = findReport(c);
 			await callReducer(c.var.db, (connection) =>
 				connection.reducers.updateReport({
 					id,
@@ -186,6 +281,18 @@ export const reportRoutes = (storage?: R2Bucket) =>
 					review: true,
 				}),
 			);
+			// Only the review that froze the draft emails it; reviewing again sends nothing.
+			if (review === null) await emailReport(c, id, true, mailer);
+			return c.json(findReport(c) satisfies Report);
+		})
+		.post("/reports/:reportId/email", async (c) => {
+			const { id } = findReport(c);
+			if (mailer === undefined)
+				throw new ApiFailure(
+					"unavailable",
+					"Email is not set up on this server",
+				);
+			await emailReport(c, id, false, mailer);
 			return c.json(findReport(c) satisfies Report);
 		})
 		.post("/reports/:reportId/submit", (c) => {

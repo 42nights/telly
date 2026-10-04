@@ -38,7 +38,11 @@ const ACCESS_TEXT = {
 export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 	const [fetch, setFetch] = useState<Fetch>({ kind: "idle" });
 
-	const readLabs = async () => {
+	/**
+	 * Shows the linked subjects' labs. With `orConnect`, a family without a subject that still shares
+	 * starts FinchNode Connect instead, so a finished Connect is not asked for again.
+	 */
+	const readLabs = async (orConnect = false): Promise<void> => {
 		setFetch({ kind: "working", step: "Reading lab results…" });
 		const labs = await apiRequest(
 			FinchnodeLabs,
@@ -48,6 +52,11 @@ export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 			setFetch(labs);
 			return;
 		}
+		if (
+			orConnect &&
+			!labs.value.subjects.some((subject) => subject.access === "granted")
+		)
+			return connect();
 		const demo = labs.value.subjects.filter((s) => s.synthetic).length;
 		if (demo > 0)
 			console.error(
@@ -56,7 +65,7 @@ export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 		setFetch({ kind: "done", labs: labs.value, at: Date.now() });
 	};
 
-	const start = async () => {
+	const connect = async (): Promise<void> => {
 		setFetch({ kind: "working", step: "Starting a FinchNode session…" });
 		const session = await apiRequest(
 			FinchnodeSession,
@@ -96,7 +105,7 @@ export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 					type="button"
 					className="h-11 px-3 text-sm"
 					disabled={fetch.kind === "working"}
-					onClick={() => void start()}
+					onClick={() => void readLabs(true)}
 				>
 					Fetch health data from Finchnode
 				</Button>

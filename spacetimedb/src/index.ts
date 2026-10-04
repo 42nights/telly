@@ -835,6 +835,65 @@ const cookingProfile = table(
 	},
 );
 
+// Report email (#8), one row per family. Only a `family_access` holder changes it. No row means off.
+const reportEmailSettings = table(
+	{ name: "report_email_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		// Email each report automatically when a member marks it as reviewed.
+		enabled: t.bool(),
+		// Empty when no address is set.
+		recipient: t.string(),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+// The latest email of one report. The server picks `sendId` per attempt; only that attempt settles it.
+const reportEmail = table(
+	{ name: "report_email" },
+	{
+		reportId: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		sendId: t.string(),
+		recipient: t.string(),
+		// "queued", "sent", or "failed".
+		status: t.string(),
+		reason: t.option(t.string()),
+		automatic: t.bool(),
+		requestedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+// One-time join codes (onboarding). Only the code's SHA-256 is stored; the code itself is shown
+// once to the member who made it. One person may join with it, before `expiresAt`.
+const familyInvite = table(
+	{ name: "family_invite" },
+	{
+		codeHash: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+		expiresAt: t.timestamp(),
+		usedBy: t.option(t.identity()),
+		usedAt: t.option(t.timestamp()),
+	},
+);
+
+// The family's WHOOP push token (SHA-256 only). NOOP pushes with the token, and the server's NOOP
+// ingest identity records the samples into this family. One per family; a new token replaces it.
+const familyPushToken = table(
+	{ name: "family_push_token" },
+	{
+		familyId: t.u64().primaryKey(),
+		tokenHash: t.string().unique(),
+		ingest: t.identity().index("btree"),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+	},
+);
+
 // Who deleted which family, and when (`deleteFamily`). It keeps no name and no health data.
 const familyDeletion = table(
 	{ name: "family_deletion" },
@@ -885,6 +944,10 @@ const spacetimedb = schema({
 	appointment,
 	clinicianShare,
 	cookingProfile,
+	reportEmailSettings,
+	reportEmail,
+	familyInvite,
+	familyPushToken,
 	familyDeletion,
 });
 export default spacetimedb;
@@ -1228,18 +1291,26 @@ const founderOf = (ctx: Ctx, familyId: bigint) => {
 	return founder?.member;
 };
 
-// The founder holds every care scope, so a new family works without a sharing step (#188).
+// The founder holds every care scope, so a new family works without a sharing step (#188). A scope
+// the member already has an event for (granted or revoked) keeps its latest choice.
 const grantEveryCareScope = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	const decided = new Set<string>();
+	for (const event of ctx.db.careGrantEvent.byFamilyMember.filter([
+		familyId,
+		member,
+	]))
+		decided.add(event.scope);
 	for (const scope of Object.keys(careScopes))
-		ctx.db.careGrantEvent.insert({
-			id: 0n,
-			familyId,
-			member,
-			scope,
-			granted: true,
-			changedBy: ctx.sender,
-			changedAt: ctx.timestamp,
-		});
+		if (!decided.has(scope))
+			ctx.db.careGrantEvent.insert({
+				id: 0n,
+				familyId,
+				member,
+				scope,
+				granted: true,
+				changedBy: ctx.sender,
+				changedAt: ctx.timestamp,
+			});
 };
 
 export const createFamily = spacetimedb.reducer(
@@ -1261,31 +1332,36 @@ export const createFamily = spacetimedb.reducer(
 	},
 );
 
-// One-time repair for families created before #188: a family with no grant event at all gives its
-// founder every scope, as `createFamily` now does. The founder could already grant these through
-// `maySetUpSharing`. Only the operator calls it; a second call changes nothing. Deletes nothing.
+// One-time repair for families created before #188: each founder gets every scope they have no
+// event for, as `createFamily` now does. A scope the founder granted or revoked stays as it is. The
+// founder could already grant these through `maySetUpSharing`. Only the operator calls it; a second
+// call changes nothing. Deletes nothing.
 export const backfillFounderCareGrants = spacetimedb.reducer((ctx) => {
 	if (ctx.db.operator.identity.find(ctx.sender) === null)
 		throw new SenderError("not the delivery operator");
 	for (const family of ctx.db.family.iter()) {
-		if (!ctx.db.careGrantEvent.familyId.filter(family.id).next().done) continue;
 		const founder = founderOf(ctx, family.id);
 		if (founder !== undefined) grantEveryCareScope(ctx, family.id, founder);
 	}
 });
 
+/** Adds `member` with no care grants, unless they already belong to the family. */
+const addMemberIfAbsent = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
+	if (!rows.next().done) return;
+	ctx.db.familyMember.insert({
+		id: 0n,
+		familyId,
+		member,
+		addedAt: ctx.timestamp,
+	});
+};
+
 export const addFamilyMember = spacetimedb.reducer(
 	{ familyId: t.u64(), member: t.identity() },
 	(ctx, { familyId, member }) => {
 		requireMember(ctx, familyId);
-		const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
-		if (!rows.next().done) return;
-		ctx.db.familyMember.insert({
-			id: 0n,
-			familyId,
-			member,
-			addedAt: ctx.timestamp,
-		});
+		addMemberIfAbsent(ctx, familyId, member);
 	},
 );
 
@@ -2657,11 +2733,16 @@ export const setSpeakerSettings = spacetimedb.reducer(
 	},
 );
 
+/** A care or cooking profile save: a `care_plan_edit` holder with non-empty text. */
+const requireProfileEdit = (ctx: Ctx, familyId: bigint, profile: string) => {
+	requireCareScope(ctx, familyId, "care_plan_edit");
+	requireText("profile", profile);
+};
+
 export const saveCareProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
-		requireCareScope(ctx, familyId, "care_plan_edit");
-		requireText("profile", profile);
+		requireProfileEdit(ctx, familyId, profile);
 		ctx.db.careProfileVersion.insert({
 			id: 0n,
 			familyId,
@@ -3140,8 +3221,7 @@ export const revokeClinicianShare = spacetimedb.reducer(
 export const saveCookingProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
-		requireCareScope(ctx, familyId, "care_plan_edit");
-		requireText("profile", profile);
+		requireProfileEdit(ctx, familyId, profile);
 		const row = {
 			familyId,
 			profile,
@@ -3391,16 +3471,30 @@ export const myReminderEvents = spacetimedb.view(
 			),
 );
 
-// The caller's own locations, and those of people who share theirs with the caller. A revoked
-// share drops the row at once.
+// The caller's own locations, and those of people who share theirs with the caller. Another
+// person's location also needs the caller's `location` care scope (#26) in that family. A revoked
+// share or scope drops the row at once.
 export const myLocations = spacetimedb.view(
 	{ name: "my_locations", public: true },
 	t.array(location.rowType),
 	(ctx) => [
 		...ctx.db.location.sharer.filter(ctx.sender),
-		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) => [
-			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
-		]),
+		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) =>
+			holdsCareScope(
+				ctx.db.careGrantEvent.byFamilyMember.filter([
+					share.familyId,
+					ctx.sender,
+				]),
+				"location",
+			)
+				? [
+						...ctx.db.location.byFamilySharer.filter([
+							share.familyId,
+							share.sharer,
+						]),
+					]
+				: [],
+		),
 	],
 );
 
@@ -3533,6 +3627,233 @@ export const myCookingProfiles = spacetimedb.view(
 		}),
 );
 
+const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// A queued send older than this lost its server, so a member may send again.
+const EMAIL_STALE_MS = 2 * 60_000;
+
+export const setReportEmailSettings = spacetimedb.reducer(
+	{ familyId: t.u64(), enabled: t.bool(), recipient: t.string() },
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
+			settings.familyId,
+			ctx.sender,
+		]);
+		if (
+			!holdsCareScope(mine, "family_access") &&
+			!maySetUpSharing(ctx, settings.familyId)
+		)
+			throw new SenderError("no care access: family_access");
+		if (
+			(settings.enabled || settings.recipient !== "") &&
+			!(
+				settings.recipient.length <= 254 &&
+				EMAIL_ADDRESS.test(settings.recipient)
+			)
+		)
+			throw new SenderError("recipient must be an email address");
+		const row = {
+			...settings,
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.reportEmailSettings.familyId.find(settings.familyId) === null)
+			ctx.db.reportEmailSettings.insert(row);
+		else ctx.db.reportEmailSettings.familyId.update(row);
+	},
+);
+
+// Queues an email of a reviewed report to the family's address. An automatic send happens at most
+// once per report and only while the setting is on; otherwise it does nothing.
+export const queueReportEmail = spacetimedb.reducer(
+	{ reportId: t.string(), sendId: t.string(), automatic: t.bool() },
+	(ctx, { reportId, sendId, automatic }) => {
+		const found = requireReport(ctx, reportId);
+		requireText("sendId", sendId);
+		if (found.reviewedAt === undefined)
+			throw new SenderError("review the report before you email it");
+		const settings = ctx.db.reportEmailSettings.familyId.find(found.familyId);
+		const existing = ctx.db.reportEmail.reportId.find(reportId);
+		if (automatic && (settings?.enabled !== true || existing !== null)) return;
+		if (settings === null || settings.recipient === "")
+			throw new SenderError("set a report email address in Settings first");
+		if (
+			existing?.status === "queued" &&
+			toMs(ctx.timestamp) - toMs(existing.updatedAt) < EMAIL_STALE_MS
+		)
+			throw new SenderError("this report email is already being sent");
+		const row = {
+			reportId,
+			familyId: found.familyId,
+			sendId,
+			recipient: settings.recipient,
+			status: "queued",
+			reason: undefined,
+			automatic,
+			requestedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (existing === null) ctx.db.reportEmail.insert(row);
+		else ctx.db.reportEmail.reportId.update(row);
+	},
+);
+
+// Records the result of the queued attempt `sendId`. A failure carries its reason.
+export const settleReportEmail = spacetimedb.reducer(
+	{ reportId: t.string(), sendId: t.string(), failure: t.option(t.string()) },
+	(ctx, { reportId, sendId, failure }) => {
+		const row = ctx.db.reportEmail.reportId.find(reportId);
+		if (row === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, row.familyId);
+		if (row.sendId !== sendId || row.status !== "queued") return;
+		ctx.db.reportEmail.reportId.update({
+			...row,
+			status: failure === undefined ? "sent" : "failed",
+			reason: failure,
+			updatedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Onboarding: one-time join codes and the family's WHOOP push token.
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+const INVITE_MAX_MICROS = 7n * 24n * 3_600n * 1_000_000n;
+
+export const createFamilyInvite = spacetimedb.reducer(
+	{ familyId: t.u64(), codeHash: t.string(), expiresAt: t.timestamp() },
+	(ctx, { familyId, codeHash, expiresAt }) => {
+		requireMember(ctx, familyId);
+		if (!SHA256_HEX.test(codeHash))
+			throw new SenderError("codeHash must be 64 lowercase hex characters");
+		// The server's clock may run slightly ahead of the database's.
+		const ahead =
+			expiresAt.microsSinceUnixEpoch - ctx.timestamp.microsSinceUnixEpoch;
+		if (ahead <= 0n || ahead > INVITE_MAX_MICROS + MAX_CLOCK_AHEAD_MICROS)
+			throw new SenderError("expiresAt must be within the next 7 days");
+		ctx.db.familyInvite.insert({
+			codeHash,
+			familyId,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+			expiresAt,
+			usedBy: undefined,
+			usedAt: undefined,
+		});
+	},
+);
+
+export const myReportEmailSettings = spacetimedb.view(
+	{ name: "my_report_email_settings", public: true },
+	t.array(reportEmailSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reportEmailSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myReportEmails = spacetimedb.view(
+	{ name: "my_report_emails", public: true },
+	t.array(reportEmail.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reportEmail, (m, e) => m.familyId.eq(e.familyId)),
+);
+
+// A member who joins again succeeds (a reloaded join page) and leaves the invite unchanged.
+export const joinFamilyByInvite = spacetimedb.reducer(
+	{ codeHash: t.string() },
+	(ctx, { codeHash }) => {
+		const invalid = new SenderError("this invite is unknown, used, or expired");
+		const invite = ctx.db.familyInvite.codeHash.find(codeHash);
+		if (invite === null) throw invalid;
+		const rows = ctx.db.familyMember.byFamilyMember.filter([
+			invite.familyId,
+			ctx.sender,
+		]);
+		if (!rows.next().done) return;
+		if (
+			invite.usedAt !== undefined ||
+			invite.expiresAt.microsSinceUnixEpoch <=
+				ctx.timestamp.microsSinceUnixEpoch
+		)
+			throw invalid;
+		addMemberIfAbsent(ctx, invite.familyId, ctx.sender);
+		ctx.db.familyInvite.codeHash.update({
+			...invite,
+			usedBy: ctx.sender,
+			usedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Same gate as `setCareGrant`: a `family_access` holder, or the founder of a new family. The new
+// token revokes the old one, and the ingest identity becomes a member with no care grants.
+export const setFamilyPushToken = spacetimedb.reducer(
+	{ familyId: t.u64(), tokenHash: t.string(), ingest: t.identity() },
+	(ctx, { familyId, tokenHash, ingest }) => {
+		requireMember(ctx, familyId);
+		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
+			familyId,
+			ctx.sender,
+		]);
+		if (
+			!holdsCareScope(mine, "family_access") &&
+			!maySetUpSharing(ctx, familyId)
+		)
+			throw new SenderError("no care access: family_access");
+		if (!SHA256_HEX.test(tokenHash))
+			throw new SenderError("tokenHash must be 64 lowercase hex characters");
+		const row = {
+			familyId,
+			tokenHash,
+			ingest,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+		};
+		if (ctx.db.familyPushToken.familyId.find(familyId) === null)
+			ctx.db.familyPushToken.insert(row);
+		else ctx.db.familyPushToken.familyId.update(row);
+		addMemberIfAbsent(ctx, familyId, ingest);
+	},
+);
+
+// Invites of the caller's families, so a joiner finds the family of the code they used.
+export const myFamilyInvites = spacetimedb.view(
+	{ name: "my_family_invites", public: true },
+	t.array(familyInvite.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.familyInvite, (m, i) =>
+				m.familyId.eq(i.familyId),
+			),
+);
+
+// The push tokens that name the caller as their ingest identity. Empty for family members.
+export const myPushTokens = spacetimedb.view(
+	{ name: "my_push_tokens", public: true },
+	t.array(t.object("PushToken", { familyId: t.u64(), tokenHash: t.string() })),
+	(ctx) =>
+		[...ctx.db.familyPushToken.ingest.filter(ctx.sender)].map(
+			({ familyId, tokenHash }) => ({ familyId, tokenHash }),
+		),
+);
+
+// Any member may rename the family; the id, members, and records stay as they are.
+export const renameFamily = spacetimedb.reducer(
+	{ familyId: t.u64(), name: t.string() },
+	(ctx, { familyId, name }) => {
+		requireMember(ctx, familyId);
+		requireText("name", name);
+		const found = ctx.db.family.id.find(familyId);
+		if (found === null) throw new SenderError("not a member of this family");
+		ctx.db.family.id.update({ ...found, name });
+	},
+);
+
 /**
  * Deletes a family and every row it owns, for good. Only a `family_access` holder may, and only
  * with the family's exact name, so a wrong id deletes nothing. The server deletes the family's
@@ -3597,6 +3918,10 @@ export const deleteFamily = spacetimedb.reducer(
 			db.appointment.familyId,
 			db.clinicianShare.familyId,
 			db.cookingProfile.familyId,
+			db.reportEmailSettings.familyId,
+			db.reportEmail.familyId,
+			db.familyInvite.familyId,
+			db.familyPushToken.familyId,
 		])
 			index.delete(familyId);
 		db.family.id.delete(familyId);

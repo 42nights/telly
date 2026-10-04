@@ -188,5 +188,16 @@ describe.skipIf(app === undefined)("agent tool route", () => {
 				400,
 				{ error: "invalid_request" },
 			]);
+		// A body over 16 KiB is refused before any tool runs.
+		expect(
+			await send(worker, "POST", tools(home), {
+				tool: "alerts",
+				input: {},
+				padding: "x".repeat(16 * 1024),
+			}),
+		).toMatchObject([
+			400,
+			{ error: "invalid_request", message: "Request body is too large" },
+		]);
 	});
 });

@@ -75,7 +75,14 @@ export const familyApp = (
 ) =>
 	new Hono<FamilyEnv>()
 		.use(async (c, next) => {
-			c.set("identity", { issuer: "test", subject: db.identity });
+			c.set("identity", {
+				issuer: "test",
+				subject: db.identity,
+				name: null,
+				givenName: null,
+				email: null,
+				picture: null,
+			});
 			c.set("db", db);
 			c.set("familyId", BigInt(familyId));
 			await next();

@@ -122,6 +122,32 @@ const fill = (
 		places: ["Kitchen"],
 	});
 	h.call(mod.saveCookingProfile, founder, { familyId, profile: "{}" });
+	h.call(mod.updateReport, founder, {
+		id: `report-${familyId}`,
+		fields: undefined,
+		review: true,
+	});
+	h.call(mod.setReportEmailSettings, founder, {
+		familyId,
+		enabled: true,
+		recipient: "family@example.com",
+	});
+	h.call(mod.queueReportEmail, founder, {
+		reportId: `report-${familyId}`,
+		sendId: "s1",
+		automatic: false,
+	});
+	const hash = String(familyId).repeat(64).slice(0, 64);
+	h.call(mod.createFamilyInvite, founder, {
+		familyId,
+		codeHash: hash,
+		expiresAt: at("2026-01-06T12:00:00Z"),
+	});
+	h.call(mod.setFamilyPushToken, founder, {
+		familyId,
+		tokenHash: hash,
+		ingest: identity(100 + Number(familyId)),
+	});
 	return familyId;
 };
 
@@ -154,6 +180,10 @@ describe("deleteFamily", () => {
 			"contactAttempt",
 			"acknowledgement",
 			"alertDelivery",
+			"reportEmail",
+			"reportEmailSettings",
+			"familyInvite",
+			"familyPushToken",
 		])
 			expect(h.rows(name).length).toBeGreaterThan(other[name]?.length ?? 0);
 

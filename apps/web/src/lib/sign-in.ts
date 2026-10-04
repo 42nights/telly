@@ -5,6 +5,7 @@
 // signature, issuer, audience, and expiry on every request.
 import {
 	authorizationUrl,
+	discoverAuthorizationEndpoint,
 	exchangeSignInCode,
 	tokenMatches,
 } from "@health/contracts/session";
@@ -16,7 +17,6 @@ import { setSessionToken } from "./session";
 
 const PENDING = "telly.sign-in.pending";
 
-const Discovery = Schema.Struct({ authorization_endpoint: Schema.String });
 const Pending = Schema.Struct({
 	verifier: Schema.String,
 	state: Schema.String,
@@ -48,13 +48,8 @@ const redirectUri = () => `${location.origin}/sign-in`;
 
 /** Sends the browser to the issuer's sign-in page; `finishSignIn` gives back `returnTo`. */
 export const startSignIn = async (config: SignInConfig, returnTo: string) => {
-	const response = await fetch(
-		`${config.issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
-	);
-	if (!response.ok)
-		throw new Error(`The sign-in server replied HTTP ${response.status}.`);
-	const { authorization_endpoint } = Schema.decodeUnknownSync(Discovery)(
-		await response.json(),
+	const authorizationEndpoint = await discoverAuthorizationEndpoint(
+		config.issuer,
 	);
 	const pending = {
 		verifier: random(),
@@ -68,7 +63,7 @@ export const startSignIn = async (config: SignInConfig, returnTo: string) => {
 		new TextEncoder().encode(pending.verifier),
 	);
 	location.assign(
-		authorizationUrl(authorization_endpoint, {
+		authorizationUrl(authorizationEndpoint, {
 			clientId: config.clientId,
 			redirectUri: redirectUri(),
 			state: pending.state,
@@ -100,13 +95,16 @@ export const finishSignIn = async (
 	const pending = takePending();
 	if (pending === null || pending.state !== reply.state)
 		throw new Error("This sign-in reply is not from this tab. Sign in again.");
-	const idToken = await exchangeSignInCode(ENV.VITE_SERVER_URL, {
-		code: reply.code,
-		codeVerifier: pending.verifier,
-		redirectUri: redirectUri(),
-	});
+	const { idToken, refreshToken } = await exchangeSignInCode(
+		ENV.VITE_SERVER_URL,
+		{
+			code: reply.code,
+			codeVerifier: pending.verifier,
+			redirectUri: redirectUri(),
+		},
+	);
 	if (!tokenMatches(idToken, config.issuer, pending.nonce))
 		throw new Error("The sign-in server sent a token for another sign-in.");
-	setSessionToken(idToken);
+	setSessionToken(idToken, refreshToken);
 	return pending.returnTo;
 };
