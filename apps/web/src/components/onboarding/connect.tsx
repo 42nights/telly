@@ -132,7 +132,6 @@ export function ConnectScreen({ family }: { family: Family }) {
 							onSaved={(text) => {
 								setMessage(text);
 								setOpen(null);
-								status.refreshReminders();
 							}}
 						/>
 					)}

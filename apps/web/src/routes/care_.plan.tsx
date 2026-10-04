@@ -3,12 +3,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MessageSquareText } from "lucide-react";
 
 import { CareScreen } from "@/components/care/screen";
+import { careReads } from "@/components/care-profile/data";
 import { InstructionsWindow } from "@/components/care-profile/instructions-window";
 import { ProfileWindow } from "@/components/care-profile/profile-window";
 import { CareParts, Part } from "@/components/care-profile/screen";
 import { Window } from "@/components/hud/window";
+import { loadFamilyReads } from "@/lib/family";
 
 export const Route = createFileRoute("/care_/plan")({
+	loader: loadFamilyReads(careReads),
 	component: () => (
 		<CareScreen>
 			{(familyId) => (

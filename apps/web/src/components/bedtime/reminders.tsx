@@ -128,13 +128,12 @@ export function OvernightReminders({
 	familyId: string | null;
 	onPrompt: () => void;
 }) {
-	const [refresh, setRefresh] = useState(0);
 	const [answered, setAnswered] = useState<string | null>(null);
 	const path = familyId === null ? null : familyPath(familyId, "");
 	const history = useApi(
 		ReminderHistory,
 		path === null ? null : `${path}/reminder-occurrences`,
-		{ pollMs: POLL_MS, refreshKey: refresh },
+		{ pollMs: POLL_MS },
 	);
 	const settings = useApi(
 		SavedReminderSettings,
@@ -173,7 +172,6 @@ export function OvernightReminders({
 					method: "POST",
 					body: { ...body, source: "web" },
 				});
-			setRefresh((n) => n + 1);
 		})();
 	}, [freshKey, familyId, onPrompt]);
 
@@ -188,10 +186,7 @@ export function OvernightReminders({
 					key={showing.id}
 					familyId={familyId}
 					occurrence={showing}
-					onAnswered={(text) => {
-						setAnswered(text);
-						setRefresh((n) => n + 1);
-					}}
+					onAnswered={setAnswered}
 				/>
 			)}
 			{answered !== null && (
