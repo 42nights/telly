@@ -37,11 +37,13 @@
 		"react-native-safe-area-context": "~5.7.0",
 		"react-native-screens": "~4.26.0",
 		"react-native-web": "~0.21.0",
+		"react-native-webview": "13.16.1",
 		"react-native-worklets": "0.10.1",
 		"varlock": "catalog:"
 	},
 	"devDependencies": {
 		"@health/config": "workspace:*",
+		"@types/bun": "1.4.2",
 		"@types/react": "~19.2.18",
 		"babel-preset-expo": "~57.0.10",
 		"typescript": "~6.0.3"
