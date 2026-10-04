@@ -76,6 +76,23 @@ Run standalone Node/Bun tools that use Varlock from the owning app directory so 
 
 - Run checks: `bun run check`
 
+## CI on Namespace
+
+The `check` and `structure` jobs in `.github/workflows/health.yml` run on the runner that the repository variable `HEALTH_RUNNER` names. When it is unset, they run on `ubuntu-latest`. `changes` and `required` always run on `ubuntu-latest`, so `health / required` reports even when no Namespace runner is available. Tracked in #21.
+
+Status: not connected. No Namespace workflow run has passed yet.
+
+To connect (repository owner only, because the Namespace Runners app needs `Administration: Read and write` on the repository):
+
+1. Sign in at [cloud.namespace.so](https://cloud.namespace.so) on the Developer plan. Do not start a paid plan.
+2. Open [GitHub runners](https://cloud.namespace.so/workspace/ghrunners), install the Namespace Runners app, and select only `ayaangazali/telly`.
+3. Set the repository variable: `gh variable set HEALTH_RUNNER --body nscloud-ubuntu-24.04-amd64-2x4 -R ayaangazali/telly`.
+4. Run the workflow: `gh workflow run health.yml -R ayaangazali/telly`. Each `check` and `structure` log must show a Namespace runner.
+
+Use Linux AMD64 with Ubuntu 24.04: the Sentrux release is an x86-64 binary, and its fallback installs `libgtk-3-0t64`, which exists only on Ubuntu 24.04. The 2x4 shape (2 vCPU, 4 GB) is the smallest standard shape. The largest local process (`check-types`) peaks at about 1.5 GB. If a job runs out of memory, use `nscloud-ubuntu-24.04-amd64-4x8`.
+
+To return to GitHub-hosted runners, delete the variable: `gh variable delete HEALTH_RUNNER -R ayaangazali/telly`.
+
 ## Project Structure
 
 ```
