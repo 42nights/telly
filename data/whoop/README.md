@@ -16,6 +16,10 @@ To put this history in a Telly family, open Setup → WHOOP → Connect for that
 `bun data/whoop/push.ts '<that URL>'`. The script sends the daily scores, band events, and heart
 rate through the ingest that NOOP's live push uses. A second run adds nothing.
 
+Or, with database access, run `bun apps/server/scripts/seed-whoop.ts <familyId>` (the script
+header lists its settings). It writes the NOOP relay's samples: heart rate per minute, wrist
+on/off, and the daily scores. A re-run adds only rows that are not stored yet.
+
 ## Reading it
 
 - `ts`, `startTs` and `endTs` are Unix seconds (UTC). `day` is a local `YYYY-MM-DD`.

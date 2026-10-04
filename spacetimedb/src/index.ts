@@ -3832,3 +3832,15 @@ export const myPushTokens = spacetimedb.view(
 			({ familyId, tokenHash }) => ({ familyId, tokenHash }),
 		),
 );
+
+// Any member may rename the family; the id, members, and records stay as they are.
+export const renameFamily = spacetimedb.reducer(
+	{ familyId: t.u64(), name: t.string() },
+	(ctx, { familyId, name }) => {
+		requireMember(ctx, familyId);
+		requireText("name", name);
+		const found = ctx.db.family.id.find(familyId);
+		if (found === null) throw new SenderError("not a member of this family");
+		ctx.db.family.id.update({ ...found, name });
+	},
+);
