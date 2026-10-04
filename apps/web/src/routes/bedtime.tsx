@@ -2,10 +2,11 @@ import { Health } from "@health/contracts";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { Moon, Pause, Play } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
 	useBattery,
+	useChime,
 	useOnline,
 	useSleepSound,
 } from "@/components/bedtime/hooks";
@@ -16,6 +17,7 @@ import {
 	SLEEP_TIMERS,
 	timerLeft,
 } from "@/components/bedtime/logic";
+import { OvernightReminders } from "@/components/bedtime/reminders";
 import { STALE_MS, usePolled } from "@/components/hud/use-polled";
 import { Window } from "@/components/hud/window";
 import { Request } from "@/components/wearer/request";
@@ -26,7 +28,13 @@ export const Route = createFileRoute("/bedtime")({
 	component: Bedtime,
 });
 
-function OvernightCheck({ now }: { now: number }) {
+function OvernightCheck({
+	now,
+	soundAllowed,
+}: {
+	now: number;
+	soundAllowed: boolean;
+}) {
 	const battery = useBattery();
 	const online = useOnline();
 	const health = usePolled(Health, "/health");
@@ -34,10 +42,12 @@ function OvernightCheck({ now }: { now: number }) {
 		health.latest?.kind === "ready" && now - (health.okAt ?? 0) <= STALE_MS;
 	// What the app can and cannot do tonight. Missing pieces stay visible, never "all set".
 	const lines: readonly Line[] = [
-		{
-			ok: false,
-			text: "Overnight channel: this phone. No reminders are saved yet (issue #28), so nothing will wake you tonight.",
-		},
+		soundAllowed
+			? { ok: true, text: "Reminder sound on." }
+			: {
+					ok: false,
+					text: "Reminder sound blocked by the browser · tap this screen once to allow it.",
+				},
 		chargeLine(battery),
 		connectionLine(online, serverLive),
 		{
@@ -72,14 +82,29 @@ function Bedtime() {
 	const now = useNow();
 	const { family } = useFamily();
 	const sound = useSleepSound();
+	const { allowed, chime } = useChime();
 	const [timer, setTimer] = useState<number | null>(30);
 	const left = timerLeft(sound.endsAt, now);
+	const { pause } = sound;
+	// An important prompt always wins over the sleep sound.
+	const onPrompt = useCallback(() => {
+		pause();
+		chime();
+	}, [pause, chime]);
 
 	return (
 		<main className="mx-auto w-full max-w-3xl p-2 md:p-4">
 			<Window icon={Moon} title="Bedtime">
 				<div className="grid gap-4 p-2 md:p-4">
-					<OvernightCheck now={now} />
+					<fieldset className="grid gap-2 border border-border p-2">
+						<legend className="px-1 font-bold">Reminders tonight</legend>
+						<OvernightReminders
+							familyId={family?.id ?? null}
+							onPrompt={onPrompt}
+						/>
+					</fieldset>
+
+					<OvernightCheck now={now} soundAllowed={allowed} />
 
 					<fieldset className="grid gap-3 border border-border p-2 text-[18px]">
 						<legend className="px-1 font-bold">Sleep sound · optional</legend>

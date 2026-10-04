@@ -20,12 +20,15 @@ export function useBattery(): Battery | null {
 		const getBattery = (navigator as BatteryNavigator).getBattery;
 		if (getBattery === undefined) return;
 		let manager: BatteryManager | null = null;
+		let stopped = false;
 		const read = () =>
 			manager !== null &&
 			setBattery({ level: manager.level, charging: manager.charging });
 		getBattery
 			.call(navigator)
 			.then((m) => {
+				// Only a real BatteryManager reports changes; anything else stays unknown.
+				if (stopped || !(m instanceof EventTarget)) return;
 				manager = m;
 				read();
 				m.addEventListener("levelchange", read);
@@ -33,6 +36,7 @@ export function useBattery(): Battery | null {
 			})
 			.catch(() => setBattery(null));
 		return () => {
+			stopped = true;
 			manager?.removeEventListener("levelchange", read);
 			manager?.removeEventListener("chargingchange", read);
 			manager = null;
@@ -121,4 +125,50 @@ export function useSleepSound() {
 	useEffect(() => () => void audio.current?.context.close(), []);
 
 	return { playing, volume, endsAt, play, pause, setVolume };
+}
+
+/**
+ * A three-tone chime for a due reminder. `allowed` is false while the browser blocks sound; one tap
+ * or key press on the page allows it.
+ */
+export function useChime() {
+	const context = useRef<AudioContext | null>(null);
+	const [allowed, setAllowed] = useState(false);
+	useEffect(() => {
+		const c = new AudioContext();
+		context.current = c;
+		const update = () => setAllowed(c.state === "running");
+		const unlock = () => void c.resume();
+		c.addEventListener("statechange", update);
+		addEventListener("pointerdown", unlock);
+		addEventListener("keydown", unlock);
+		update();
+		return () => {
+			removeEventListener("pointerdown", unlock);
+			removeEventListener("keydown", unlock);
+			context.current = null;
+			void c.close();
+		};
+	}, []);
+	const chime = useCallback(() => {
+		const c = context.current;
+		if (c === null) return;
+		try {
+			[660, 880, 660].forEach((hz, i) => {
+				const start = c.currentTime + i * 0.4;
+				const tone = c.createOscillator();
+				const gain = c.createGain();
+				tone.frequency.value = hz;
+				gain.gain.setValueAtTime(0.4, start);
+				gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+				tone.connect(gain).connect(c.destination);
+				tone.start(start);
+				tone.stop(start + 0.35);
+			});
+		} catch {
+			// A browser without full Web Audio stays silent; the prompt must still show.
+			setAllowed(false);
+		}
+	}, []);
+	return { allowed, chime };
 }

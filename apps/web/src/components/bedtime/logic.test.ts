@@ -1,6 +1,76 @@
 import { describe, expect, test } from "bun:test";
 
-import { chargeLine, connectionLine, timerLeft } from "./logic";
+import type { ReminderOccurrence } from "@health/contracts/reminders";
+
+import {
+	awaitsAnswer,
+	chargeLine,
+	connectionLine,
+	timerLeft,
+	tonight,
+} from "./logic";
+
+const NOW = Date.parse("2026-10-04T22:00:00.000Z");
+const occurrence = (
+	id: string,
+	change: Partial<ReminderOccurrence>,
+): ReminderOccurrence => ({
+	id,
+	reminderId: "1",
+	familyId: "7",
+	kind: "medication",
+	subjectId: null,
+	title: `Synthetic reminder ${id}`,
+	scheduledFor: "2026-10-05T02:00:00.000Z",
+	state: "scheduled",
+	promptDue: false,
+	prompts: 0,
+	nextPromptAt: "2026-10-05T02:00:00.000Z",
+	...change,
+});
+
+describe("overnight reminders", () => {
+	test("only scheduled prompts in the next 12 hours count, soonest first", () => {
+		const ids = tonight(
+			[
+				occurrence("late", { nextPromptAt: "2026-10-05T09:59:00.000Z" }),
+				occurrence("soon", {}),
+				occurrence("tomorrow", { nextPromptAt: "2026-10-05T10:01:00.000Z" }),
+				occurrence("ended", { state: "unresolved", nextPromptAt: null }),
+				occurrence("showing", { state: "delivered" }),
+				occurrence("due", { promptDue: true }),
+			],
+			NOW,
+		).map((u) => u.id);
+		expect(ids).toEqual(["soon", "late"]);
+	});
+
+	test("a reminder held by quiet hours says so", () => {
+		const [held] = tonight(
+			[occurrence("held", { nextPromptAt: "2026-10-05T07:00:00.000Z" })],
+			NOW,
+		);
+		expect(held?.text).toContain("held by quiet hours");
+		const [snoozed] = tonight(
+			[
+				occurrence("snoozed", {
+					state: "deferred",
+					nextPromptAt: "2026-10-05T02:10:00.000Z",
+				}),
+			],
+			NOW,
+		);
+		expect(snoozed?.text).not.toContain("quiet hours");
+	});
+
+	test("a shown prompt waits for an answer until one is recorded", () => {
+		expect(awaitsAnswer(occurrence("a", { promptDue: true }))).toBe(true);
+		expect(awaitsAnswer(occurrence("b", { state: "delivered" }))).toBe(true);
+		expect(awaitsAnswer(occurrence("c", { state: "acknowledged" }))).toBe(
+			false,
+		);
+	});
+});
 
 describe("overnight readiness", () => {
 	test("an unknown battery is not ready and is not shown as a zero charge", () => {
