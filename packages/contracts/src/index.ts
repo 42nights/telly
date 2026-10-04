@@ -1,5 +1,7 @@
 import { Schema } from "effect";
 
+export * from "./voice";
+
 /** `GET /health`: process liveness only, not provider or data availability. */
 export const Health = Schema.Struct({
 	status: Schema.Literal("ok"),
