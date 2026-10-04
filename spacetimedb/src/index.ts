@@ -1,6 +1,6 @@
 // Family-scoped health data. Every table is private: clients read only through the per-sender views
 // below, and every reducer checks the caller's family membership itself, independent of the server.
-import { type Identity, Timestamp } from "spacetimedb";
+import { Identity, Timestamp } from "spacetimedb";
 import {
 	type Infer,
 	type InferSchema,
@@ -346,12 +346,37 @@ const mealFact = table(
 	},
 );
 
-// A family's permission to remember where medicine containers were last seen (issue #29). Without
-// this row no sighting is stored, and removing it deletes the family's sightings.
+// Before #291: one family's permission and places, shared by every member. Nothing writes it now:
+// `migrateMedicineMembers` moves each row to the family's wearer in `medicine_places`. SpacetimeDB
+// cannot change a primary key in place, so the table stays for that move and for family deletion.
 const medicineMemory = table(
 	{ name: "medicine_memory" },
 	{
 		familyId: t.u64().primaryKey(),
+		places: t.array(t.string()),
+		setBy: t.identity(),
+		setAt: t.timestamp(),
+	},
+);
+
+// One member's permission to remember where their medicine containers were last seen (#29, #291).
+// Without this row no sighting of that member is stored, and removing it deletes their sightings.
+const medicinePlaces = table(
+	{
+		name: "medicine_places",
+		indexes: [
+			{
+				accessor: "byFamilyPerson",
+				algorithm: "btree",
+				columns: ["familyId", "personId"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The member whose medicine this is.
+		personId: t.identity(),
 		// Agreed familiar places to search when a container is not where it was last seen.
 		places: t.array(t.string()),
 		setBy: t.identity(),
@@ -359,8 +384,9 @@ const medicineMemory = table(
 	},
 );
 
-// Where a medicine container was last seen: one row per family and container description. Only a
-// newer camera observation that the person confirmed changes it; `notFoundAt` marks it outdated.
+// Where one member's medicine container was last seen: one row per member and container
+// description. Only a newer camera observation that the person confirmed changes it; `notFoundAt`
+// marks it outdated.
 const medicineSighting = table(
 	{ name: "medicine_sighting" },
 	{
@@ -375,6 +401,9 @@ const medicineSighting = table(
 		labelRead: t.bool(),
 		savedBy: t.identity(),
 		notFoundAt: t.option(t.timestamp()),
+		// The member whose medicine this is (#291). Rows from before #291 hold the zero identity until
+		// `migrateMedicineMembers` gives them to the family's wearer.
+		personId: t.identity().default(Identity.zero()),
 	},
 );
 
@@ -921,6 +950,7 @@ const spacetimedb = schema({
 	location,
 	locationShare,
 	medicineMemory,
+	medicinePlaces,
 	medicineSighting,
 	contactLadder,
 	careNeed,
@@ -1967,22 +1997,93 @@ export const reportLocation = spacetimedb.reducer(
 	},
 );
 
+/** Whether a member manages every member's medicine memory (#291): a family admin or a caregiver. */
+const managesEveryMedicine = (
+	events: Iterable<{ id: bigint; scope: string; granted: boolean }>,
+) => {
+	const list = [...events];
+	return (
+		holdsCareScope(list, "family_access") ||
+		holdsCareScope(list, "care_plan_edit")
+	);
+};
+
+// A member manages their own medicine memory; see `managesEveryMedicine` for everyone else's.
+const requireMedicineOf = (ctx: Ctx, familyId: bigint, personId: Identity) => {
+	requireMember(ctx, familyId);
+	if (personId.isEqual(ctx.sender)) return;
+	if (
+		ctx.db.familyMember.byFamilyMember.filter([familyId, personId]).next().done
+	)
+		throw new SenderError("not a member of this family");
+	if (
+		!managesEveryMedicine(
+			ctx.db.careGrantEvent.byFamilyMember.filter([familyId, ctx.sender]),
+		)
+	)
+		throw new SenderError(
+			"no care access: family_access or care_plan_edit for another member's medicine",
+		);
+};
+
+const placesOf = (ctx: Ctx, familyId: bigint, personId: Identity) =>
+	[...ctx.db.medicinePlaces.byFamilyPerson.filter([familyId, personId])][0];
+
 export const setMedicineMemory = spacetimedb.reducer(
-	{ familyId: t.u64(), enabled: t.bool(), places: t.array(t.string()) },
-	(ctx, { familyId, enabled, places }) => {
-		requireMember(ctx, familyId);
+	{
+		familyId: t.u64(),
+		personId: t.identity(),
+		enabled: t.bool(),
+		places: t.array(t.string()),
+	},
+	(ctx, { familyId, personId, enabled, places }) => {
+		requireMedicineOf(ctx, familyId, personId);
+		const existing = placesOf(ctx, familyId, personId);
 		if (!enabled) {
-			ctx.db.medicineMemory.familyId.delete(familyId);
-			ctx.db.medicineSighting.familyId.delete(familyId);
+			if (existing !== undefined) ctx.db.medicinePlaces.id.delete(existing.id);
+			for (const sighting of [
+				...ctx.db.medicineSighting.familyId.filter(familyId),
+			])
+				if (sighting.personId.isEqual(personId))
+					ctx.db.medicineSighting.id.delete(sighting.id);
 			return;
 		}
 		for (const place of places) requireText("place", place);
-		const row = { familyId, places, setBy: ctx.sender, setAt: ctx.timestamp };
-		if (ctx.db.medicineMemory.familyId.find(familyId) === null)
-			ctx.db.medicineMemory.insert(row);
-		else ctx.db.medicineMemory.familyId.update(row);
+		const row = {
+			id: existing?.id ?? 0n,
+			familyId,
+			personId,
+			places,
+			setBy: ctx.sender,
+			setAt: ctx.timestamp,
+		};
+		if (existing === undefined) ctx.db.medicinePlaces.insert(row);
+		else ctx.db.medicinePlaces.id.update(row);
 	},
 );
+
+// One-time move for #291: each family's shared medicine memory, and every sighting, becomes the
+// wearer's own (the family's first member). It keeps every row: a sighting gets its `personId`, and
+// the shared row moves to `medicine_places`, unless the wearer already saved a newer one there. Only
+// the operator calls it; a second call changes nothing.
+export const migrateMedicineMembers = spacetimedb.reducer((ctx) => {
+	if (ctx.db.operator.identity.find(ctx.sender) === null)
+		throw new SenderError("not the delivery operator");
+	for (const shared of [...ctx.db.medicineMemory.iter()]) {
+		const wearer = founderOf(ctx, shared.familyId);
+		if (wearer === undefined) continue;
+		if (placesOf(ctx, shared.familyId, wearer) === undefined)
+			ctx.db.medicinePlaces.insert({ ...shared, id: 0n, personId: wearer });
+		ctx.db.medicineMemory.familyId.delete(shared.familyId);
+	}
+	const nobody = Identity.zero();
+	for (const sighting of [...ctx.db.medicineSighting.iter()]) {
+		if (!sighting.personId.isEqual(nobody)) continue;
+		const wearer = founderOf(ctx, sighting.familyId);
+		if (wearer !== undefined)
+			ctx.db.medicineSighting.id.update({ ...sighting, personId: wearer });
+	}
+});
 
 // A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
 const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
@@ -1990,6 +2091,7 @@ const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
 export const rememberMedicine = spacetimedb.reducer(
 	{
 		familyId: t.u64(),
+		personId: t.identity(),
 		container: t.string(),
 		place: t.string(),
 		seenAt: t.timestamp(),
@@ -1998,9 +2100,9 @@ export const rememberMedicine = spacetimedb.reducer(
 		labelRead: t.bool(),
 	},
 	(ctx, seen) => {
-		requireMember(ctx, seen.familyId);
-		if (ctx.db.medicineMemory.familyId.find(seen.familyId) === null)
-			throw new SenderError("medicine memory is off for this family");
+		requireMedicineOf(ctx, seen.familyId, seen.personId);
+		if (placesOf(ctx, seen.familyId, seen.personId) === undefined)
+			throw new SenderError("medicine memory is off for this member");
 		requireText("container", seen.container);
 		requireText("place", seen.place);
 		requireText("source", seen.source);
@@ -2013,6 +2115,7 @@ export const rememberMedicine = spacetimedb.reducer(
 		const key = seen.container.trim().toLowerCase();
 		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
 		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
+			if (!old.personId.isEqual(seen.personId)) continue;
 			if (old.container.trim().toLowerCase() !== key) continue;
 			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
 				throw new SenderError("a newer sighting is already stored");
@@ -2030,7 +2133,7 @@ export const markMedicineNotFound = spacetimedb.reducer(
 	(ctx, { id }) => {
 		const found = ctx.db.medicineSighting.id.find(id);
 		if (found === null) throw new SenderError("not a member of this family");
-		requireMember(ctx, found.familyId);
+		requireMedicineOf(ctx, found.familyId, found.personId);
 		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
 	},
 );
@@ -3382,26 +3485,47 @@ export const myMealFacts = spacetimedb.view(
 		careReader(ctx, (familyId) => ctx.db.mealFact.familyId.filter(familyId)),
 );
 
-export const myMedicineMemory = spacetimedb.view(
-	{ name: "my_medicine_memory", public: true },
-	t.array(medicineMemory.rowType),
+// The caller's own medicine memory, and every member's in families where the caller manages them
+// (`managesEveryMedicine`, #291). A revoked scope drops the other members' rows at once.
+const medicineReader = <Row extends { personId: Identity }>(
+	ctx: ViewCtx<InferSchema<typeof spacetimedb>>,
+	rows: (familyId: bigint) => Iterable<Row>,
+): Row[] =>
+	[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) => {
+		const every = managesEveryMedicine(
+			ctx.db.careGrantEvent.byFamilyMember.filter([m.familyId, ctx.sender]),
+		);
+		return [...rows(m.familyId)].filter(
+			(row) => every || row.personId.isEqual(ctx.sender),
+		);
+	});
+
+export const myMedicinePlaces = spacetimedb.view(
+	{ name: "my_medicine_places", public: true },
+	t.array(medicinePlaces.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.medicineMemory, (m, r) =>
-				m.familyId.eq(r.familyId),
-			),
+		medicineReader(ctx, (familyId) =>
+			ctx.db.medicinePlaces.familyId.filter(familyId),
+		),
 );
 
 export const myMedicineSightings = spacetimedb.view(
 	{ name: "my_medicine_sightings", public: true },
 	t.array(medicineSighting.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.medicineSighting, (m, s) =>
-				m.familyId.eq(s.familyId),
-			),
+		medicineReader(ctx, (familyId) =>
+			ctx.db.medicineSighting.familyId.filter(familyId),
+		),
+);
+
+// Every member of the caller's families, so a screen can choose whose medicine it shows (#291).
+export const myFamilyMembers = spacetimedb.view(
+	{ name: "my_family_members", public: true },
+	t.array(familyMember.rowType),
+	(ctx) =>
+		[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) => [
+			...ctx.db.familyMember.familyId.filter(m.familyId),
+		]),
 );
 
 export const myContactLadders = spacetimedb.view(
@@ -3906,6 +4030,7 @@ export const deleteFamily = spacetimedb.reducer(
 			db.locationShare.familyId,
 			db.mealFact.familyId,
 			db.medicineMemory.familyId,
+			db.medicinePlaces.familyId,
 			db.medicineSighting.familyId,
 			db.contactLadder.familyId,
 			db.careNeed.familyId,

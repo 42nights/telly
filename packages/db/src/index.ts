@@ -57,6 +57,7 @@ import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
 import MarkMedicineNotFoundReducer from "./mark_medicine_not_found_reducer";
+import MigrateMedicineMembersReducer from "./migrate_medicine_members_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import QueueReportEmailReducer from "./queue_report_email_reducer";
@@ -117,12 +118,13 @@ import MyExerciseEventsRow from "./my_exercise_events_table";
 import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFamilyInvitesRow from "./my_family_invites_table";
+import MyFamilyMembersRow from "./my_family_members_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
 import MyLocationSharesRow from "./my_location_shares_table";
 import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
-import MyMedicineMemoryRow from "./my_medicine_memory_table";
+import MyMedicinePlacesRow from "./my_medicine_places_table";
 import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
 import MyPushTokensRow from "./my_push_tokens_table";
@@ -267,6 +269,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyFamilyInvitesRow),
+  myFamilyMembers: __table({
+    name: 'my_family_members',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyFamilyMembersRow),
   myFinchnodeLinks: __table({
     name: 'my_finchnode_links',
     indexes: [
@@ -302,13 +311,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMealFactsRow),
-  myMedicineMemory: __table({
-    name: 'my_medicine_memory',
+  myMedicinePlaces: __table({
+    name: 'my_medicine_places',
     indexes: [
     ],
     constraints: [
     ],
-  }, MyMedicineMemoryRow),
+  }, MyMedicinePlacesRow),
   myMedicineSightings: __table({
     name: 'my_medicine_sightings',
     indexes: [
@@ -427,6 +436,7 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
   __reducerSchema("mark_medicine_not_found", MarkMedicineNotFoundReducer),
+  __reducerSchema("migrate_medicine_members", MigrateMedicineMembersReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("queue_report_email", QueueReportEmailReducer),

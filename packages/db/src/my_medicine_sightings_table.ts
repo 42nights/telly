@@ -21,4 +21,5 @@ export default __t.row({
   labelRead: __t.bool().name("label_read"),
   savedBy: __t.identity().name("saved_by"),
   notFoundAt: __t.option(__t.timestamp()).name("not_found_at"),
+  personId: __t.identity().name("person_id"),
 });
