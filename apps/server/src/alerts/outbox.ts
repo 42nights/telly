@@ -144,21 +144,37 @@ export const runAlertOutbox = (
 	}).pipe(Effect.forever);
 
 /**
- * Runs the outbox for the server's lifetime as the delivery operator (`operator`: the module
- * publisher's token), opening the connection again whenever it fails. Without an operator, nothing
- * runs and deliveries stay `queued`.
+ * Delivers into the family's in-app message thread as the operator. The database dedupes by the
+ * idempotency key, so the at-least-once outbox posts each alert to the thread once.
  */
-export const alertOutboxWorker = (
-	operator: DbConfig | undefined,
-	transport: AlertTransport | undefined,
-) =>
+export const familyThread =
+	(operator: FamilyDb): AlertTransport =>
+	({ alertId }) =>
+		callDb(operator, ({ reducers }) =>
+			reducers.postAlertMessage({ alertId: BigInt(alertId) }),
+		).pipe(
+			Effect.mapError(
+				() =>
+					new DeliveryFailure({
+						kind: "retryable",
+						reason: "The family thread did not accept the alert",
+					}),
+			),
+		);
+
+/**
+ * Runs the outbox for the server's lifetime as the delivery operator (`operator`: the module
+ * publisher's token), delivering to the family thread and opening the connection again whenever it
+ * fails. Without an operator, nothing runs and deliveries stay `queued`.
+ */
+export const alertOutboxWorker = (operator: DbConfig | undefined) =>
 	operator === undefined
 		? Effect.logWarning(
 				"The alert outbox is not configured (ALERT_OPERATOR_TOKEN and the SpacetimeDB settings): deliveries stay queued",
 			)
 		: Effect.scoped(
 				Effect.flatMap(openFamilyDb(operator), (db) =>
-					runAlertOutbox(db, transport),
+					runAlertOutbox(db, familyThread(db)),
 				),
 			).pipe(
 				Effect.tapCause((cause) =>

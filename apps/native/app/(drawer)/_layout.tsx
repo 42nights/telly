@@ -37,6 +37,16 @@ const DrawerLayout = () => {
 					),
 				}}
 			/>
+			<Drawer.Screen
+				name="sign-in"
+				options={{
+					headerTitle: "Sign in",
+					drawerLabel: "Sign in",
+					drawerIcon: ({ size, color }) => (
+						<Ionicons name="key-outline" size={size} color={color} />
+					),
+				}}
+			/>
 		</Drawer>
 	);
 };
