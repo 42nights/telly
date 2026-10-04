@@ -501,3 +501,58 @@ body {
 	clip-path: inset(50%);
 	white-space: nowrap;
 }
+
+/* The finder over the camera (#383): the answer floats on the video as compact translucent
+   controls. Unlayered, like the button face above, so it wins over the Win95 face and utilities. */
+.finder-panel .finder-way {
+	display: none;
+}
+.finder-panel .finder-actions {
+	grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+}
+.finder-panel p {
+	font-size: 17px;
+	line-height: 1.3;
+	text-shadow: 0 1px 2px #000000;
+}
+.finder-panel .text-muted-foreground {
+	color: #e0e0e0;
+}
+.finder-panel .win95-raised {
+	background-color: rgb(0 0 0 / 0.55);
+	box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.5);
+	padding: 0.5rem;
+}
+.finder-panel [data-slot="button"] {
+	height: auto;
+	min-height: 3rem;
+	padding: 0.25rem 0.5rem;
+	flex-direction: column;
+	gap: 0.125rem;
+	font-size: 15px;
+	line-height: 1.1;
+	white-space: normal;
+	color: #ffffff;
+	background-color: rgb(0 0 0 / 0.55);
+	border-radius: 0.75rem;
+	box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.75);
+}
+.finder-panel [data-slot="button"].win95-primary:not(:disabled) {
+	background-color: rgb(0 0 128 / 0.85);
+	outline: 0;
+}
+.finder-panel [data-slot="button"]:disabled {
+	color: rgb(255 255 255 / 0.5);
+	text-shadow: none;
+}
+/* While the finder covers the screen, the app's status bar and taskbar do not render at all: iOS
+   WebKit can draw a later sibling over a fixed element inside a scrolling box. */
+html[data-finder-full] .app-status,
+html[data-finder-full] .win95-taskbar {
+	display: none;
+}
+/* On the camera, the button says what to do; the long hint and its (i) tips would cover it. */
+.finder-panel .finder-hint,
+.finder-panel .win95-tip {
+	display: none;
+}

@@ -75,9 +75,29 @@ const memory = (sightings: object[]) => ({
 	sightings,
 });
 
+/** The video shows, then the person taps Check: opening the finder takes no picture. */
 async function showVideo() {
 	fireEvent.loadedData(await screen.findByLabelText("Live camera preview"));
+	fireEvent.click(
+		await screen.findByRole("button", { name: "Check this picture" }),
+	);
 }
+
+test("opening the finder shows the camera and sends nothing to vision until Check", async () => {
+	installCamera();
+	signIn();
+	const calls = serve({
+		"GET /api/families": { families: [FAMILY] },
+		[`GET ${MEMORY}`]: memory([]),
+		[DETECT]: detections([KEYS]),
+	});
+	renderRoute("/find?q=where%20are%20my%20keys");
+	fireEvent.loadedData(await screen.findByLabelText("Live camera preview"));
+	await screen.findByRole("button", { name: "Check this picture" });
+	await new Promise((resolve) => setTimeout(resolve, 50));
+	expect(calls.filter((c) => `${c.method} ${c.path}` === DETECT)).toEqual([]);
+	expect(screen.queryByAltText("Camera frame that was checked")).toBeNull();
+});
 
 test("names the asked thing first, Not this moves on, and Save keeps it at the named place", async () => {
 	installCamera();
