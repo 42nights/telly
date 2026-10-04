@@ -15,6 +15,7 @@ import { emergencyRoutes } from "./emergency";
 import { exerciseRoutes } from "./exercise";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
+import { healthKitRoutes } from "./healthkit";
 import { mealRoutes } from "./meal-facts";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
@@ -61,5 +62,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", careProfileRoutes())
 		.route("/", tripRoutes())
 		.route("/", exerciseRoutes())
-		.route("/", deliveryRoutes(simulatedDelivery()));
+		.route("/", deliveryRoutes(simulatedDelivery()))
+		.route("/", healthKitRoutes());
 };

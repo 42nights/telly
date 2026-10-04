@@ -24,7 +24,8 @@
 		"./emergency": "./src/emergency.ts",
 		"./speaker": "./src/speaker.ts",
 		"./trips": "./src/trips.ts",
-		"./delivery": "./src/delivery.ts"
+		"./delivery": "./src/delivery.ts",
+		"./healthkit": "./src/healthkit.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
