@@ -1,12 +1,15 @@
 import { expect, test } from "bun:test";
 
 import {
+	ASK_AGENT,
 	type Ask,
 	attachFiles,
 	evidenceLine,
 	formatSize,
 	mergeMessages,
 	nextGeminiStatus,
+	sendsToFamily,
+	setFamilyOnly,
 	timeline,
 	toAttachment,
 } from "./logic";
@@ -139,4 +142,17 @@ test("timeline interleaves messages and asks by time", () => {
 		ask.askedAt,
 		late.sentAt,
 	]);
+});
+
+test("Family only sends only to the family; off asks the family agent", () => {
+	expect(sendsToFamily(ASK_AGENT)).toBe(false);
+	const familyOnly = setFamilyOnly(ASK_AGENT, true);
+	expect(sendsToFamily(familyOnly)).toBe(true);
+	// A finished reply keeps the toggle the user chose.
+	const replying = { ...familyOnly, replyTo: "Mom" };
+	expect(sendsToFamily({ ...replying, replyTo: null })).toBe(true);
+	expect(sendsToFamily({ ...ASK_AGENT, replyTo: "Mom" })).toBe(true);
+	// Turning the toggle off during a reply ends the reply, so Send asks the agent.
+	expect(setFamilyOnly(replying, false)).toEqual(ASK_AGENT);
+	expect(sendsToFamily(setFamilyOnly(replying, false))).toBe(false);
 });

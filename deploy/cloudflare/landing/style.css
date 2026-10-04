@@ -8,9 +8,11 @@
 	--dark: #000000;
 	--title: #000080;
 	--title-end: #1084d0;
-	--raised: inset -2px -2px 0 var(--dark), inset 2px 2px 0 var(--light),
+	--raised:
+		inset -2px -2px 0 var(--dark), inset 2px 2px 0 var(--light),
 		inset -4px -4px 0 var(--shadow), inset 4px 4px 0 var(--highlight);
-	--sunken: inset 2px 2px 0 var(--shadow), inset -2px -2px 0 var(--highlight),
+	--sunken:
+		inset 2px 2px 0 var(--shadow), inset -2px -2px 0 var(--highlight),
 		inset 4px 4px 0 var(--dark), inset -4px -4px 0 var(--light);
 }
 
@@ -25,7 +27,11 @@ body {
 	flex-direction: column;
 	background: var(--desktop);
 	color: #000000;
-	font: 1rem/1.5 Tahoma, "Segoe UI", Arial, sans-serif;
+	font:
+		1rem / 1.5 Tahoma,
+		"Segoe UI",
+		Arial,
+		sans-serif;
 }
 
 main {
@@ -50,7 +56,9 @@ ul {
 .window {
 	padding: 6px;
 	background: var(--face);
-	box-shadow: var(--raised), 3px 3px 0 var(--dark);
+	box-shadow:
+		var(--raised),
+		3px 3px 0 var(--dark);
 }
 
 .titlebar {
@@ -79,7 +87,9 @@ ul {
 	color: #000000;
 	font-size: 0.75rem;
 	line-height: 1;
-	box-shadow: inset -1px -1px 0 var(--dark), inset 1px 1px 0 var(--highlight),
+	box-shadow:
+		inset -1px -1px 0 var(--dark),
+		inset 1px 1px 0 var(--highlight),
 		inset -2px -2px 0 var(--shadow);
 }
 
@@ -198,7 +208,9 @@ h3 {
 .taskbar {
 	padding: 0.625rem 1rem;
 	background: var(--face);
-	box-shadow: inset 0 2px 0 var(--highlight), inset 0 1px 0 var(--light);
+	box-shadow:
+		inset 0 2px 0 var(--highlight),
+		inset 0 1px 0 var(--light);
 	font-size: 0.9375rem;
 	text-align: center;
 }

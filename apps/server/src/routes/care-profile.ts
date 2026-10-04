@@ -45,7 +45,7 @@ const unknownProfile: CareProfile = {
 const newestFirst = (a: { id: bigint }, b: { id: bigint }) =>
 	a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 
-const readAccess = (c: Ctx): CareAccess => {
+export const readAccess = (c: Ctx): CareAccess => {
 	const history = [...c.var.db.connection.db.myCareGrants.iter()]
 		.filter((row) => row.familyId === c.var.familyId)
 		.sort(newestFirst)
