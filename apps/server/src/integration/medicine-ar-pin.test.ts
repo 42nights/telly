@@ -40,8 +40,11 @@ describe.skipIf(!integration)("object AR pins", () => {
 	const sightingIds: string[] = [];
 	const pinPath = (index: number) =>
 		`${family.path}/medicine-memory/objects/${sightingIds[index]}/ar-pin`;
+	// Each member's maps are in their own folder (#301).
 	const stored = (index: number) =>
-		harness().bucket.get(`ar-pins/${family.id}/${sightingIds[index]}.worldmap`);
+		harness().bucket.get(
+			`ar-pins/${family.id}/${owner.identity}/${sightingIds[index]}.worldmap`,
+		);
 	const first = worldMap(4096);
 
 	beforeAll(async () => {
@@ -52,13 +55,7 @@ describe.skipIf(!integration)("object AR pins", () => {
 		outsider = await signIn(`ar-pin-outsider-${run}`);
 		family = await createFamily(owner, "AR pins");
 		await addMember(owner, family.path, relative);
-		await json(
-			MedicineMemory,
-			await owner.call("PUT", `${family.path}/medicine-memory`, {
-				enabled: true,
-				places: ["Kitchen"],
-			}),
-		);
+		// No setting first: remembering is on for every member (#301).
 		for (const container of ["Synthetic pill box", "Synthetic keys"]) {
 			const memory = await json(
 				MedicineMemory,
@@ -96,6 +93,7 @@ describe.skipIf(!integration)("object AR pins", () => {
 		expect(pin).toMatchObject({
 			familyId: family.id,
 			objectId: sightingIds[0],
+			personId: owner.identity,
 			anchorId: "anchor-1",
 			mapBytes: first.length,
 		});
@@ -124,12 +122,12 @@ describe.skipIf(!integration)("object AR pins", () => {
 			MedicineMemory,
 			await owner.call("GET", `${family.path}/medicine-memory`),
 		);
-		expect(memory.sightings.map((s) => [s.id, s.pinned]).toSorted()).toEqual(
-			[
-				[sightingIds[0], true],
-				[sightingIds[1], false],
-			].toSorted(),
-		);
+		const pinned = (id: string | undefined) =>
+			memory.sightings.find((s) => s.id === id)?.pinned;
+		expect([pinned(sightingIds[0]), pinned(sightingIds[1])]).toEqual([
+			true,
+			false,
+		]);
 	});
 
 	test("a new pin replaces the anchor and map and keeps when it was first made", async () => {
@@ -221,7 +219,38 @@ describe.skipIf(!integration)("object AR pins", () => {
 		]);
 	});
 
-	test("turning a member's memory off deletes their pin rows and maps, and no one else's", async () => {
+	test("forgetting one thing deletes its pin and its map, also at the key of a pin from before #301", async () => {
+		await json(
+			MedicineArPin,
+			await owner.call("PUT", pinPath(1), {
+				anchorId: "anchor-keys",
+				worldMap: first.toBase64(),
+			}),
+		);
+		// A map left at the first key, without the member, as pins saved before #301 have it.
+		const legacy = `ar-pins/${family.id}/${sightingIds[1]}.worldmap`;
+		harness().bucket.set(legacy, {
+			body: first,
+			type: "application/octet-stream",
+			lastModified: new Date().toISOString(),
+		});
+		const forgot = await json(
+			MedicineMemory,
+			await owner.call(
+				"DELETE",
+				`${family.path}/medicine-memory/sightings/${sightingIds[1]}`,
+			),
+		);
+		expect(forgot.sightings.map((s) => s.id)).not.toContain(sightingIds[1]);
+		expect(stored(1)).toBeUndefined();
+		expect(harness().bucket.get(legacy)).toBeUndefined();
+		expect(await errorOf(await owner.call("GET", pinPath(1)))).toEqual([
+			404,
+			"not_found",
+		]);
+	});
+
+	test("forgetting everything of a member deletes their pin rows and maps, and no one else's", async () => {
 		await json(
 			MedicineArPin,
 			await owner.call("PUT", pinPath(0), {
@@ -229,14 +258,7 @@ describe.skipIf(!integration)("object AR pins", () => {
 				worldMap: first.toBase64(),
 			}),
 		);
-		// The relative pins their own object.
-		await json(
-			MedicineMemory,
-			await relative.call("PUT", `${family.path}/medicine-memory`, {
-				enabled: true,
-				places: [],
-			}),
-		);
+		// The relative pins their own object, with no setting first.
 		const theirs = await json(
 			MedicineMemory,
 			await relative.call("POST", `${family.path}/medicine-memory/sightings`, {
@@ -261,7 +283,7 @@ describe.skipIf(!integration)("object AR pins", () => {
 		const prefix = `ar-pins/${family.id}/`;
 		const keys = () =>
 			[...harness().bucket.keys()].filter((key) => key.startsWith(prefix));
-		expect(keys()).toHaveLength(3);
+		expect(keys()).toHaveLength(2);
 
 		await json(
 			MedicineMemory,
@@ -270,7 +292,9 @@ describe.skipIf(!integration)("object AR pins", () => {
 				places: [],
 			}),
 		);
-		expect(keys()).toEqual([`${prefix}${theirId}.worldmap`]);
+		expect(keys()).toEqual([
+			`${prefix}${relative.identity}/${theirId}.worldmap`,
+		]);
 		// The objects are deleted with the memory, so their pins are gone too.
 		for (const index of [0, 1])
 			expect(await errorOf(await owner.call("GET", pinPath(index)))).toEqual([

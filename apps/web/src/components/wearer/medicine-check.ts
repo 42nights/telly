@@ -134,15 +134,18 @@ export type Choice = {
 
 /**
  * The object the arrow points to in `check`, and the person's choice about it: "Not this" moves the
- * arrow on within one picture, and Save opens the form for it. A new picture starts over.
+ * arrow on within one picture, and Save opens the form for it. A new picture starts over. With
+ * `adding` (Add a thing), the form is open from the start.
  */
 export function useArrow(
 	check: PictureCheck | null,
 	asked: ObjectCategory | null,
+	adding = false,
 ) {
 	const [step, setStep] = useState({ id: "", skipped: 0, saving: false });
 	const id = check?.id ?? "";
-	const skipped = step.id === id ? step.skipped : 0;
+	const mine = step.id === id;
+	const skipped = mine ? step.skipped : 0;
 	const best =
 		check?.result.kind === "done"
 			? (candidates(check.result.detections, asked)[skipped] ?? null)
@@ -150,9 +153,9 @@ export function useArrow(
 	const choice: Choice = {
 		skipped,
 		save: () => setStep({ id, skipped, saving: true }),
-		notThis: () => setStep({ id, skipped: skipped + 1, saving: false }),
+		notThis: () => setStep({ id, skipped: skipped + 1, saving: adding }),
 	};
-	return { best, choice, saving: step.id === id && step.saving };
+	return { best, choice, saving: mine ? step.saving : adding };
 }
 
 /** The most confident medicine container: onboarding reads the label of the real box. */

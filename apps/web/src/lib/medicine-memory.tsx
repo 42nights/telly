@@ -1,5 +1,5 @@
-// One member's medicine last-seen memory (issues #29, #291): read it, change it through the server,
-// and choose whose it is. Each family member has their own medicines and places.
+// One member's memory of where their things were last seen (issues #29, #291, #301): read it,
+// change it through the server, and choose whose it is. Each family member has their own.
 import { MedicineMemory } from "@health/contracts/medicine-memory";
 import { useEffect, useState } from "react";
 
@@ -18,7 +18,7 @@ const KEY = "telly.medicine-person";
 
 /** Changes the memory with one request; a `ready` reply also re-reads it. */
 export type MedicineMemoryChange = (
-	method: "PUT" | "POST",
+	method: "PUT" | "POST" | "DELETE",
 	path: string,
 	body?: unknown,
 ) => Promise<ApiResult<MedicineMemory>>;
@@ -55,9 +55,13 @@ export function useMedicineMemory(
 /**
  * The memory of the member last chosen on this device for this family, or the signed-in member's.
  * A member the caller may no longer open falls back to the signed-in member. The wearer view
- * always shows the signed-in member's own.
+ * always shows the signed-in member's own. `linked` is a member a link names: it becomes the
+ * chosen one.
  */
-export function useChosenMedicineMemory(familyId: string | null) {
+export function useChosenMedicineMemory(
+	familyId: string | null,
+	linked?: string,
+) {
 	const [, reread] = useState(0);
 	const wearer = useView() === "wearer";
 	const key = `${KEY}.${familyId}`;
@@ -69,6 +73,11 @@ export function useChosenMedicineMemory(familyId: string | null) {
 		localStorage.removeItem(key);
 		reread((n) => n + 1);
 	}, [lost, key]);
+	useEffect(() => {
+		if (linked === undefined) return;
+		localStorage.setItem(key, linked);
+		reread((n) => n + 1);
+	}, [linked, key]);
 	const choose = (next: string) => {
 		localStorage.setItem(key, next);
 		reread((n) => n + 1);

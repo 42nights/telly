@@ -8,7 +8,6 @@ import type {
 } from "@health/contracts/medicine-memory";
 import type { ObjectDetection } from "@health/contracts/vision";
 import { Button } from "@health/ui/components/button";
-import { Link } from "@tanstack/react-router";
 import {
 	CameraOff,
 	History,
@@ -272,7 +271,7 @@ export function useArSupported() {
 }
 
 /** A small picture of the object from the check that saved it, or nothing for an older note. */
-function Thumb({ sighting }: { sighting: MedicineSighting }) {
+export function Thumb({ sighting }: { sighting: MedicineSighting }) {
 	if (sighting.thumbnail === "") return null;
 	return (
 		<img
@@ -286,7 +285,8 @@ function Thumb({ sighting }: { sighting: MedicineSighting }) {
 /**
  * "Where is my…?": the member's saved things, newest first. Picking one shows where it was last
  * seen, where it is usually kept, and on an iPhone with a pin starts finding it in AR. `asked` is
- * the category of the request, which picks the first matching thing.
+ * the category of the request, which picks the first matching thing; `open` is a thing a link
+ * opens, as if the person picked it.
  */
 export function SavedThings({
 	memory,
@@ -294,18 +294,20 @@ export function SavedThings({
 	familyId,
 	asked,
 	ar,
+	open,
 }: {
 	memory: ApiState<MedicineMemory>;
 	change: Change;
 	familyId: string | null;
 	asked: ObjectDetection["category"] | null;
 	ar: boolean;
+	open: string | null;
 }) {
 	const now = useNow();
 	const [picked, setPicked] = useState<{
 		readonly id: string;
 		readonly byTap: boolean;
-	} | null>(null);
+	} | null>(open === null ? null : { id: open, byTap: true });
 	if (memory.kind === "loading" || familyId === null) return null;
 	const box = "win95-raised grid gap-2 p-3 text-[18px]";
 	if (memory.kind !== "ready")
@@ -315,16 +317,7 @@ export function SavedThings({
 				{memory.kind === "signed_out" ? "Sign in first." : memory.message}
 			</p>
 		);
-	const { permission, sightings } = memory.value;
-	if (permission === null)
-		return (
-			<p className="text-[16px] text-muted-foreground">
-				I don't keep notes on where things were last seen.{" "}
-				<Link className="underline" to="/settings/places">
-					Turn this on in Settings
-				</Link>
-			</p>
-		);
+	const { places, sightings } = memory.value;
 	if (sightings.length === 0)
 		return (
 			<p className="text-[16px] text-muted-foreground">
@@ -372,7 +365,7 @@ export function SavedThings({
 						findNow={picked?.id === shown.id && picked.byTap}
 						key={shown.id}
 						now={now}
-						places={permission.places}
+						places={places}
 						sighting={shown}
 					/>
 					<p className="text-[16px]">
@@ -406,19 +399,9 @@ export function RememberPlace({
 	ar: string | null;
 }) {
 	if (memory.kind !== "ready") return null;
-	if (memory.value.permission === null)
-		return (
-			<p className="text-[16px]" role="status">
-				To save where things are, turn on remembering in{" "}
-				<Link className="underline" to="/settings/places">
-					Settings
-				</Link>
-				.
-			</p>
-		);
 	const places = [
 		...new Set([
-			...memory.value.permission.places,
+			...memory.value.places,
 			...memory.value.sightings.map((s) => s.place),
 		]),
 	];

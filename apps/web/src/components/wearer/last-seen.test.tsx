@@ -6,12 +6,6 @@ import type {
 	MedicineSighting,
 } from "@health/contracts/medicine-memory";
 import type { ObjectDetection } from "@health/contracts/vision";
-import {
-	createMemoryHistory,
-	createRootRoute,
-	createRouter,
-	RouterProvider,
-} from "@tanstack/react-router";
 import type { ApiResult, ApiState } from "@/lib/api";
 import type { MedicineMemoryChange } from "@/lib/medicine-memory";
 import {
@@ -58,11 +52,7 @@ const sighting = (
 	...extra,
 });
 
-const permission = {
-	places: ["Kitchen counter", "Bedside table", "Bathroom shelf"],
-	setBy: "a",
-	setAt: minutesAgo(600),
-};
+const places = ["Kitchen counter", "Bedside table", "Bathroom shelf"];
 
 const ready = (
 	value: Omit<MedicineMemory, "personId" | "people">,
@@ -92,19 +82,8 @@ const changes = () => {
 const memory: MedicineMemory = {
 	personId: ME,
 	people: [ME],
-	permission,
+	places,
 	sightings: [sighting("s1")],
-};
-
-/** Renders `node` inside a router, for the links to Settings. */
-const routed = async (node: React.ReactNode) => {
-	const router = createRouter({
-		routeTree: createRootRoute({ component: () => node }),
-		history: createMemoryHistory(),
-	});
-	const view = render(<RouterProvider router={router} />);
-	await waitFor(() => expect(view.container.textContent).not.toBe(""));
-	return view;
 };
 
 const keys = sighting("k", {
@@ -122,6 +101,7 @@ describe("SavedThings", () => {
 		familyId: "1",
 		asked: null,
 		ar: false,
+		open: null,
 	} as const;
 
 	test("shows nothing while loading or with no paired person", () => {
@@ -148,21 +128,9 @@ describe("SavedThings", () => {
 		},
 	);
 
-	test("with remembering off it links to Settings", async () => {
-		const view = await routed(
-			<SavedThings
-				{...props}
-				memory={ready({ permission: null, sightings: [] })}
-			/>,
-		);
-		const link = view.getByRole("link", { name: "Turn this on in Settings" });
-		expect(link.getAttribute("href")).toBe("/settings/places");
-		view.getByText(/I don't keep notes on where things were last seen\./);
-	});
-
 	test("with nothing saved it says how to save", () => {
 		const view = render(
-			<SavedThings {...props} memory={ready({ permission, sightings: [] })} />,
+			<SavedThings {...props} memory={ready({ places, sightings: [] })} />,
 		);
 		expect(view.container.textContent).toBe(
 			"No saved things yet. Point the camera at something you often lose, then tap Save.",
@@ -174,7 +142,7 @@ describe("SavedThings", () => {
 			<SavedThings
 				{...props}
 				memory={ready({
-					permission,
+					places,
 					sightings: [
 						sighting("sure"),
 						keys,
@@ -220,13 +188,67 @@ describe("SavedThings", () => {
 			<SavedThings
 				{...props}
 				asked="keys"
-				memory={ready({ permission, sightings: [sighting("s"), keys] })}
+				memory={ready({ places, sightings: [sighting("s"), keys] })}
 			/>,
 		);
 		expect(view.container.textContent).toContain(
 			"Last seen 1 h ago at Hall table.",
 		);
 		expect(view.container.textContent).not.toContain("at Kitchen counter.");
+	});
+
+	test("a link to one thing opens it, and on an iPhone starts AR find for a pinned thing", async () => {
+		const calls = serve({
+			"GET /api/families/1/medicine-memory/objects/k/ar-pin": {
+				json: { anchorId: "telly-pin-k", worldMap: "bWFw" },
+			},
+		});
+		const sent: Record<string, unknown>[] = [];
+		globalThis.ReactNativeWebView = {
+			postMessage: (data) => {
+				const request = JSON.parse(data) as Record<string, unknown>;
+				sent.push(request);
+				const detail =
+					request.type === "ar.capabilities"
+						? {
+								type: "ar.capabilities",
+								requestId: request.requestId,
+								supported: true,
+							}
+						: { type: "ar.pinFound", requestId: request.requestId };
+				queueMicrotask(() =>
+					globalThis.dispatchEvent(new CustomEvent("telly-ar", { detail })),
+				);
+			},
+		};
+		try {
+			const view = render(
+				<SavedThings
+					{...props}
+					ar
+					memory={ready({
+						places,
+						sightings: [sighting("s"), { ...keys, pinned: true }],
+					})}
+					open="k"
+				/>,
+			);
+			expect(view.container.textContent).toContain(
+				"Last seen 1 h ago at Hall table.",
+			);
+			await view.findByText("The marker showed where you pinned keys.");
+			expect(calls.map((c) => c.path)).toEqual([
+				"/api/families/1/medicine-memory/objects/k/ar-pin",
+			]);
+			expect(sent.at(-1)).toMatchObject({
+				type: "ar.findPin",
+				objectId: "k",
+				containerId: "k",
+				anchorId: "telly-pin-k",
+			});
+		} finally {
+			globalThis.ReactNativeWebView = undefined;
+		}
 	});
 
 	test("It's not there marks the place out of date and shows a failure", async () => {
@@ -236,7 +258,7 @@ describe("SavedThings", () => {
 				{...props}
 				asked="medicine"
 				change={change}
-				memory={ready({ permission, sightings: [sighting("a/b")] })}
+				memory={ready({ places, sightings: [sighting("a/b")] })}
 			/>,
 		);
 		const button = view.getByRole("button", { name: "It's not there" });
@@ -269,7 +291,7 @@ describe("SavedThings", () => {
 				{...props}
 				asked="medicine"
 				memory={ready({
-					permission,
+					places,
 					sightings: [sighting("moved", { notFoundAt: minutesAgo(2) })],
 				})}
 			/>,
@@ -325,9 +347,9 @@ describe("RememberPlace", () => {
 			{ target: { value } },
 		);
 
-	test("shows nothing while loading, and links to Settings while remembering is off", async () => {
+	test("shows nothing while loading, and the form with no setting first", () => {
 		const { change } = changes();
-		const loading = render(
+		const view = render(
 			<RememberPlace
 				ar={null}
 				best={sure}
@@ -336,20 +358,18 @@ describe("RememberPlace", () => {
 				memory={{ kind: "loading" }}
 			/>,
 		);
-		expect(loading.container.textContent).toBe("");
-		loading.unmount();
-		const off = await routed(
+		expect(view.container.textContent).toBe("");
+		// Remembering is on for every member (#301).
+		view.rerender(
 			<RememberPlace
 				ar={null}
 				best={sure}
 				change={change}
 				check={check}
-				memory={ready({ permission: null, sightings: [] })}
+				memory={ready({ places: [], sightings: [] })}
 			/>,
 		);
-		expect(
-			off.getByRole("link", { name: "Settings" }).getAttribute("href"),
-		).toBe("/settings/places");
+		view.getByRole("form", { name: "Save where it is" });
 	});
 
 	test("saves any thing with its kind and picture at a place once one is given", async () => {
@@ -361,7 +381,7 @@ describe("RememberPlace", () => {
 				change={change}
 				check={check}
 				memory={ready({
-					permission,
+					places,
 					sightings: [sighting("s", { place: "Hall" }), sighting("t")],
 				})}
 			/>,
@@ -420,7 +440,7 @@ describe("RememberPlace", () => {
 				}}
 				change={change}
 				check={check}
-				memory={ready({ permission, sightings: [] })}
+				memory={ready({ places, sightings: [] })}
 			/>,
 		);
 		const save = view.getByRole("button", { name: "Save this place" });
@@ -459,7 +479,7 @@ describe("RememberPlace", () => {
 				best={sure}
 				change={change}
 				check={check}
-				memory={ready({ permission, sightings: [] })}
+				memory={ready({ places, sightings: [] })}
 			/>,
 		);
 		place("Hall");
@@ -503,7 +523,7 @@ describe("RememberPlace", () => {
 					best={{ ...sure, category: "keys", label: "Keys" }}
 					change={change}
 					check={check}
-					memory={ready({ permission, sightings: [] })}
+					memory={ready({ places, sightings: [] })}
 				/>,
 			);
 			place("Hall table");

@@ -217,7 +217,7 @@ export function Request({
 		<SupportActions onHelp={() => setStep({ kind: "help", asked: null })} />
 	);
 	const openFinder = (q: string) =>
-		void navigate({ to: "/medicine", search: { q } });
+		void navigate({ to: "/find", search: { q } });
 
 	/** Shows "Thinking…" with Cancel; returns the signal for the request. */
 	const think = (asked: string | null) => {

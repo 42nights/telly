@@ -11,6 +11,7 @@ import {
 } from "@health/contracts/medicine-ar-pin";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { Identity } from "spacetimedb";
 import { DbUnavailable } from "../db";
 import {
 	ApiFailure,
@@ -23,10 +24,12 @@ import type { R2Bucket } from "../integrations/r2";
 
 type Ctx = Context<FamilyEnv>;
 
-// Every world map of a family is under `ar-pins/<familyId>/`. The key kept its first name: the
-// object id is the container id of the pins saved before #301.
-const mapKey = (familyId: bigint, objectId: bigint) =>
-	`ar-pins/${familyId}/${objectId}.worldmap`;
+// Every world map of a family is under `ar-pins/<familyId>/`, one folder per member (#301). A pin
+// saved before #301 has the zero identity and its map at the first key, without the member.
+const mapKey = (familyId: bigint, personId: Identity, objectId: bigint) =>
+	personId.isEqual(Identity.zero())
+		? `ar-pins/${familyId}/${objectId}.worldmap`
+		: `ar-pins/${familyId}/${personId.toHexString()}/${objectId}.worldmap`;
 
 // The base64 of the largest map, and room for the anchor id and the JSON around them.
 const MAX_BODY_BYTES = Math.ceil(MAX_WORLD_MAP_BYTES / 3) * 4 + 4096;
@@ -57,19 +60,23 @@ const objectOf = (c: Ctx) => {
 	return sighting;
 };
 
-const readPin = (c: Ctx, objectId: bigint): MedicineArPin | undefined => {
+const readPin = (c: Ctx, objectId: bigint) => {
 	const { familyId } = c.var;
 	const row = [...rows(c).myMedicineArPins.iter()].find(
 		(pin) => pin.containerId === objectId && pin.familyId === familyId,
 	);
 	return (
 		row && {
-			familyId: row.familyId.toString(),
-			objectId: row.containerId.toString(),
-			anchorId: row.anchorId,
-			mapBytes: row.mapBytes,
-			createdAt: row.createdAt.toISOString(),
-			updatedAt: row.updatedAt.toISOString(),
+			key: mapKey(familyId, row.personId, objectId),
+			pin: {
+				familyId: row.familyId.toString(),
+				objectId: row.containerId.toString(),
+				personId: row.personId.toHexString(),
+				anchorId: row.anchorId,
+				mapBytes: row.mapBytes,
+				createdAt: row.createdAt.toISOString(),
+				updatedAt: row.updatedAt.toISOString(),
+			} satisfies MedicineArPin,
 		}
 	);
 };
@@ -100,15 +107,12 @@ const needStorage = (storage: R2Bucket | undefined) => {
 const routes = (storage: R2Bucket | undefined, path: string) =>
 	new Hono<FamilyEnv>()
 		.get(path, async (c) => {
-			const objectId = objectOf(c).id;
-			const pin = readPin(c, objectId);
-			const map =
-				pin &&
-				(await needStorage(storage).get(mapKey(c.var.familyId, objectId)));
-			if (pin === undefined || map === undefined)
+			const found = readPin(c, objectOf(c).id);
+			const map = found && (await needStorage(storage).get(found.key));
+			if (found === undefined || map === undefined)
 				throw new ApiFailure("not_found", "This object has no AR pin");
 			return c.json({
-				...pin,
+				...found.pin,
 				worldMap: map.toBase64(),
 			} satisfies StoredMedicineArPin);
 		})
@@ -126,23 +130,11 @@ const routes = (storage: R2Bucket | undefined, path: string) =>
 				const map = decodeMap(worldMap);
 				const bucket = needStorage(storage);
 				const { db, familyId } = c.var;
-				if (
-					![...rows(c).myMedicinePlaces.iter()].some(
-						(row) =>
-							row.familyId === familyId && row.personId.isEqual(personId),
-					)
-				)
-					throw new ApiFailure(
-						"conflict",
-						"Remembering where things were seen is off for this person",
-					);
-				// The map first: a refused row leaves only an unread object, which turning the memory
-				// off deletes with the others.
-				await bucket.put(
-					mapKey(familyId, objectId),
-					map,
-					"application/octet-stream",
-				);
+				const before = readPin(c, objectId)?.key;
+				// The map first: a refused row leaves only an unread object, which forgetting the
+				// member's things deletes with the others.
+				const key = mapKey(familyId, personId, objectId);
+				await bucket.put(key, map, "application/octet-stream");
 				await callReducer(db, (connection) =>
 					connection.reducers.saveMedicineArPin({
 						familyId,
@@ -151,20 +143,25 @@ const routes = (storage: R2Bucket | undefined, path: string) =>
 						mapBytes: map.length,
 					}),
 				);
-				const pin = readPin(c, objectId);
-				if (pin === undefined)
+				// A pin saved before #301 moves to the member's folder.
+				if (before !== undefined && before !== key) await bucket.remove(before);
+				const saved = readPin(c, objectId);
+				if (saved === undefined)
 					throw new ApiFailure("internal", "The AR pin was not saved");
-				return c.json(pin);
+				return c.json(saved.pin);
 			},
 		)
 		// The row first, so the module's member check runs before any object is deleted.
 		.delete(path, async (c) => {
-			const objectId = objectOf(c).id;
+			const object = objectOf(c);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
-				connection.reducers.deleteMedicineArPin({ familyId, objectId }),
+				connection.reducers.deleteMedicineArPin({
+					familyId,
+					objectId: object.id,
+				}),
 			);
-			await storage?.remove(mapKey(familyId, objectId));
+			await deleteArPins(storage, familyId, [object]);
 			return c.body(null, 204);
 		});
 
@@ -177,14 +174,20 @@ export const medicineArPinRoutes = (storage?: R2Bucket): FamilyRoutes =>
 			routes(storage, "/medicine-memory/containers/:objectId/ar-pin"),
 		);
 
-/** Deletes the world maps of these objects of the family; the module deletes the rows. */
+/**
+ * Deletes the world maps of these objects of the family, at the member's key and at the key of a
+ * pin saved before #301; the module deletes the rows.
+ */
 export const deleteArPins = async (
 	storage: R2Bucket | undefined,
 	familyId: bigint,
-	objectIds: readonly bigint[],
+	objects: readonly { readonly id: bigint; readonly personId: Identity }[],
 ) => {
 	if (storage === undefined) return;
-	for (const id of objectIds) await storage.remove(mapKey(familyId, id));
+	for (const { id, personId } of objects) {
+		await storage.remove(mapKey(familyId, personId, id));
+		await storage.remove(mapKey(familyId, Identity.zero(), id));
+	}
 };
 
 /** Deletes every stored world map of the family; the module deletes the rows. */

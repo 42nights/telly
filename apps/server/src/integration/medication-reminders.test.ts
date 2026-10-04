@@ -87,7 +87,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 		family = await createFamily(owner, "Medication");
 	});
 
-	test("the creator turns on medicine memory and reads it back", async () => {
+	test("the creator sets the places to search and reads them back", async () => {
 		const places = ["kitchen counter", "bedside table"];
 		const saved = await json(
 			MedicineMemory,
@@ -96,7 +96,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 				places,
 			}),
 		);
-		expect(saved.permission).toMatchObject({ places, setBy: owner.identity });
+		expect(saved.places).toEqual(places);
 		const reread = await json(
 			MedicineMemory,
 			await owner.call("GET", `${family.path}/medicine-memory`),

@@ -82,21 +82,14 @@ const readMemory = (c: Ctx): MedicineMemory => {
 	const { person, people } = readPerson(c);
 	const mine = (row: { familyId: bigint; personId: Identity }) =>
 		row.familyId === familyId && row.personId.toHexString() === person;
-	const permission = [...connection.db.myMedicinePlaces.iter()].find(mine);
+	const places = [...connection.db.myMedicinePlaces.iter()].find(mine);
 	const pinned = new Set(
 		[...connection.db.myMedicineArPins.iter()].map((pin) => pin.containerId),
 	);
 	return {
 		personId: person,
 		people,
-		permission:
-			permission === undefined
-				? null
-				: {
-						places: permission.places,
-						setBy: permission.setBy.toHexString(),
-						setAt: permission.setAt.toISOString(),
-					},
+		places: places?.places ?? [],
 		sightings: [...connection.db.myMedicineSightings.iter()]
 			.filter(mine)
 			.map((row) => ({
@@ -145,18 +138,16 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 				await deleteArPins(
 					storage,
 					familyId,
-					sightings.map((s) => BigInt(s.id)),
+					sightings.map((s) => ({
+						id: BigInt(s.id),
+						personId: Identity.fromString(person),
+					})),
 				);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {
 			const seen = await decodeBody(c, RememberMedicine);
 			const memory = readMemory(c);
-			if (memory.permission === null)
-				throw new ApiFailure(
-					"conflict",
-					"Remembering where things were seen is off for this person",
-				);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
 				connection.reducers.rememberMedicine({
@@ -179,5 +170,20 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 			await callReducer(c.var.db, (connection) =>
 				connection.reducers.markMedicineNotFound({ id: BigInt(id) }),
 			);
+			return c.json(readMemory(c));
+		})
+		// Forgets one thing: the module deletes its sighting and pin, then the map goes.
+		.delete("/medicine-memory/sightings/:sightingId", async (c) => {
+			const id = c.req.param("sightingId");
+			const { personId, sightings } = readMemory(c);
+			if (!sightings.some((s) => s.id === id))
+				throw new ApiFailure("not_found", "No such sighting for this person");
+			const { db, familyId } = c.var;
+			await callReducer(db, (connection) =>
+				connection.reducers.forgetMedicineSighting({ id: BigInt(id) }),
+			);
+			await deleteArPins(storage, familyId, [
+				{ id: BigInt(id), personId: Identity.fromString(personId) },
+			]);
 			return c.json(readMemory(c));
 		});

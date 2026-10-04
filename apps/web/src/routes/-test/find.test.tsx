@@ -69,11 +69,7 @@ const MEMORY = "/api/families/fam-1/medicine-memory";
 const memory = (sightings: object[]) => ({
 	personId: "a".repeat(64),
 	people: ["a".repeat(64)],
-	permission: {
-		places: ["Kitchen"],
-		setBy: "user-1",
-		setAt: "2026-10-01T00:00:00.000Z",
-	},
+	places: ["Kitchen"],
 	sightings,
 });
 
@@ -111,6 +107,7 @@ test("names the asked thing first, Not this moves on, and Save keeps it at the n
 		},
 		[DETECT]: detections([PILLS, KEYS]),
 	});
+	// An old /medicine link still opens the finder, with its request.
 	renderRoute("/medicine?q=where%20are%20my%20keys");
 
 	expect(await screen.findByText("“where are my keys”")).toBeTruthy();
@@ -176,7 +173,7 @@ test("says nothing was found when the picture has no thing in it", async () => {
 		"GET /api/families": { families: [FAMILY] },
 		[DETECT]: detections([]),
 	});
-	renderRoute("/medicine");
+	renderRoute("/find");
 
 	await showVideo();
 	expect((await screen.findByText(/^I can't see/)).textContent).toBe(
@@ -196,11 +193,67 @@ test("explains that a caller who is not a member cannot check pictures", async (
 			message: "Not a member of this family.",
 		}),
 	});
-	renderRoute("/medicine?q=pills");
+	renderRoute("/find?q=pills");
 
 	await showVideo();
 	expect(
 		await screen.findByText("I can't check the picture right now."),
 	).toBeTruthy();
 	expect(screen.getByText(/Not a member of this family\./)).toBeTruthy();
+});
+
+test("Add a thing opens the save form for the main object at once", async () => {
+	installCamera();
+	signIn();
+	serve({
+		"GET /api/families": { families: [FAMILY] },
+		[`GET ${MEMORY}`]: memory([]),
+		[DETECT]: detections([KEYS, PILLS]),
+	});
+	renderRoute(`/find?mode=add&member=${"a".repeat(64)}&token=signed-link`);
+	expect(
+		await screen.findByRole("heading", { name: "Add a thing" }),
+	).toBeTruthy();
+	await showVideo();
+	await screen.findByRole("form", { name: "Save where it is" });
+	expect(screen.getByRole("textbox", { name: "What is it?" })).toHaveProperty(
+		"value",
+		"keys",
+	);
+});
+
+test("a link to one saved thing opens where it was last seen", async () => {
+	installCamera();
+	signIn();
+	const thing = (id: string, container: string, place: string) => ({
+		id,
+		familyId: "fam-1",
+		personId: "a".repeat(64),
+		savedBy: "a".repeat(64),
+		container,
+		place,
+		seenAt: new Date().toISOString(),
+		source: "camera_check",
+		confidence: 0.9,
+		labelRead: true,
+		category: "keys",
+		thumbnail: "",
+		notFoundAt: null,
+		usualPlace: null,
+		pinned: false,
+	});
+	serve({
+		"GET /api/families": { families: [FAMILY] },
+		[`GET ${MEMORY}`]: memory([
+			thing("8", "wallet", "Desk"),
+			thing("9", "keys", "Hall table"),
+		]),
+		[DETECT]: detections([]),
+	});
+	renderRoute("/find?object=9");
+	const region = await screen.findByRole("region", { name: "Where is my…?" });
+	await waitFor(() =>
+		expect(region.textContent).toContain("Last seen just now at Hall table."),
+	);
+	expect(region.textContent).not.toContain("at Desk.");
 });

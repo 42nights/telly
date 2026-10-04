@@ -169,7 +169,7 @@ const server = (history: () => ReminderOccurrence[], routes: Routes = {}) =>
 			json: {
 				personId: me,
 				people: [me],
-				permission: null,
+				places: [],
 				sightings: [sighting],
 			},
 		},
@@ -240,7 +240,7 @@ describe("MedicationReminders", () => {
 		]);
 		expect(
 			view.getByRole("link", { name: "Find it" }).getAttribute("href"),
-		).toBe("/medicine?q=find+my+Synthetic+Med+A");
+		).toBe("/find?q=find+my+Synthetic+Med+A");
 	});
 
 	test("records that a due prompt was shown, once per prompt, then reads again", async () => {
@@ -302,7 +302,7 @@ describe("MedicationReminders", () => {
 			// "Find it" searches for the reminder title when no instruction is in effect.
 			expect(
 				view.getByRole("link", { name: "Find it" }).getAttribute("href"),
-			).toBe("/medicine?q=find+my+Morning+tablet");
+			).toBe("/find?q=find+my+Morning+tablet");
 			fireEvent.click(view.getByRole("button", { name: "Why do I take it?" }));
 			expect(view.getByText(/^I have no verified instruction/)).toBeDefined();
 			view.unmount();

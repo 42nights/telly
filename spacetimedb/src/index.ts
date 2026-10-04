@@ -359,8 +359,8 @@ const medicineMemory = table(
 	},
 );
 
-// One member's permission to remember where their medicine containers were last seen (#29, #291).
-// Without this row no sighting of that member is stored, and removing it deletes their sightings.
+// One member's agreed familiar places to search when a thing moved (#29, #291). Remembering is on
+// for every member without it (#301); `setMedicineMemory` off deletes it with every sighting.
 const medicinePlaces = table(
 	{
 		name: "medicine_places",
@@ -416,8 +416,9 @@ const medicineSighting = table(
 
 // Where a remembered object sits in the room, pinned with ARKit on the person's iPhone (contract
 // telly-ar-pin, generalized in #301). The world map itself is in R2 at
-// `ar-pins/<familyId>/<objectId>.worldmap`; this row only says that it exists. One pin per object;
-// turning the member's memory off deletes them.
+// `ar-pins/<familyId>/<personId>/<objectId>.worldmap`, or `ar-pins/<familyId>/<objectId>.worldmap`
+// for a pin saved before #301; this row only says that it exists. One pin per object; forgetting
+// the object or the member's memory deletes it.
 const medicineArPin = table(
 	{ name: "medicine_ar_pin" },
 	{
@@ -430,6 +431,9 @@ const medicineArPin = table(
 		savedBy: t.identity(),
 		createdAt: t.timestamp(),
 		updatedAt: t.timestamp(),
+		// The member whose object this is (#301). Pins from before #301 hold the zero identity, and
+		// their map is at the first key.
+		personId: t.identity().default(Identity.zero()),
 	},
 );
 
@@ -2135,8 +2139,6 @@ export const rememberMedicine = spacetimedb.reducer(
 	},
 	(ctx, seen) => {
 		requireMedicineOf(ctx, seen.familyId, seen.personId);
-		if (placesOf(ctx, seen.familyId, seen.personId) === undefined)
-			throw new SenderError("medicine memory is off for this member");
 		requireText("container", seen.container);
 		requireText("category", seen.category);
 		if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
@@ -2169,15 +2171,31 @@ export const rememberMedicine = spacetimedb.reducer(
 	},
 );
 
+// One sighting the caller may change: a missing one fails like another family's, so ids leak nothing.
+const ownSighting = (ctx: Ctx, id: bigint) => {
+	const found = ctx.db.medicineSighting.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMedicineOf(ctx, found.familyId, found.personId);
+	return found;
+};
+
 // The person looked at the remembered place and the container was not there. The place stays as
 // the last sighting, marked outdated, until a new sighting replaces it.
 export const markMedicineNotFound = spacetimedb.reducer(
 	{ id: t.u64() },
 	(ctx, { id }) => {
-		const found = ctx.db.medicineSighting.id.find(id);
-		if (found === null) throw new SenderError("not a member of this family");
-		requireMedicineOf(ctx, found.familyId, found.personId);
+		const found = ownSighting(ctx, id);
 		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
+// Forgets one remembered object (#301): its sighting and its AR pin. The server deletes the map.
+export const forgetMedicineSighting = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		ownSighting(ctx, id);
+		ctx.db.medicineSighting.id.delete(id);
+		ctx.db.medicineArPin.containerId.delete(id);
 	},
 );
 
@@ -2201,8 +2219,6 @@ export const saveMedicineArPin = spacetimedb.reducer(
 		}
 		// The member rule of #291: the sighting's member, or a manager of everyone's things.
 		requireMedicineOf(ctx, pin.familyId, sighting.personId);
-		if (placesOf(ctx, pin.familyId, sighting.personId) === undefined)
-			throw new SenderError("medicine memory is off for this member");
 		requireText("anchorId", pin.anchorId);
 		if (pin.mapBytes === 0 || pin.mapBytes > MAX_WORLD_MAP_BYTES)
 			throw new SenderError("the world map must be 1 byte to 16 MB");
@@ -2211,6 +2227,7 @@ export const saveMedicineArPin = spacetimedb.reducer(
 			...pin,
 			containerId: objectId,
 			savedBy: ctx.sender,
+			personId: sighting.personId,
 			createdAt: old?.createdAt ?? ctx.timestamp,
 			updatedAt: ctx.timestamp,
 		};

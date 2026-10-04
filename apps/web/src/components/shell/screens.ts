@@ -57,7 +57,7 @@ export const familyScreens = [
 
 export const wearerScreens = [
 	{ to: "/hud", label: "Home", icon: House },
-	{ to: "/medicine", label: "Find things", icon: ScanSearch },
+	{ to: "/find", label: "Find things", icon: ScanSearch },
 	{ to: "/bedtime", label: "Bedtime", icon: Moon },
 	{ to: "/trip", label: "Going out", icon: DoorOpen },
 ] as const satisfies readonly Screen[];
@@ -69,7 +69,7 @@ export const settingsScreen = {
 	tabs: [
 		{ to: "/settings", label: "Phone numbers" },
 		{ to: "/settings/speaker", label: "Home speaker" },
-		{ to: "/settings/places", label: "Things and places" },
+		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
 		{ to: "/settings/family", label: "Delete family" },

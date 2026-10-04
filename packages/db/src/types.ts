@@ -439,6 +439,7 @@ export const MedicineArPin = __t.object("MedicineArPin", {
   savedBy: __t.identity(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  personId: __t.identity(),
 });
 export type MedicineArPin = __Infer<typeof MedicineArPin>;
 
