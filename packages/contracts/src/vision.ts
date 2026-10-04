@@ -9,7 +9,7 @@ const Pixels = Schema.Int.check(
 const Offset = Schema.Int.check(
 	Schema.isBetween({ minimum: 0, maximum: 16383 }),
 );
-const UtcTime = Schema.String.check(
+export const UtcTime = Schema.String.check(
 	Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/),
 );
 

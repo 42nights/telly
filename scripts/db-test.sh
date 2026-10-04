@@ -37,8 +37,16 @@ SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIM
 	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
 	apps/server/src/routes/alerts.test.ts apps/server/src/reliability.test.ts \
 	apps/server/src/routes/reports.test.ts apps/server/src/routes/finchnode.test.ts \
-	apps/server/src/routes/tools.test.ts apps/server/src/routes/trends.test.ts \
+	apps/server/src/routes/tools.test.ts apps/server/src/routes/healthkit.test.ts \
+	apps/server/src/routes/trends.test.ts \
+	apps/server/src/routes/appointments.test.ts \
+	apps/server/src/routes/medicine-memory.test.ts \
 	apps/server/src/routes/chat.test.ts apps/server/src/routes/care.test.ts \
 	apps/server/src/routes/meal-facts.test.ts apps/server/src/routes/care-profile.test.ts \
-	apps/server/src/routes/exercise.test.ts \
-	apps/server/src/routes/emergency.test.ts
+	apps/server/src/routes/exercise.test.ts apps/server/src/routes/reminders.test.ts \
+	apps/server/src/routes/emergency.test.ts \
+	apps/server/src/routes/speaker.test.ts \
+	apps/server/src/routes/trips.test.ts \
+	apps/server/src/routes/delivery.test.ts \
+	apps/server/src/routes/location.test.ts \
+	apps/server/src/routes/cooking.test.ts
