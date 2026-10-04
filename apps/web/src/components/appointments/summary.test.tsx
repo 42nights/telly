@@ -368,11 +368,14 @@ test("a simulated send shows progress, then reloads the consents and the screen"
 			.hasAttribute("disabled"),
 	).toBe(true);
 	finish({ status: 204 });
-	await waitFor(() => expect(changes()).toBe(1));
+	// The send reports the change, then reads the consents again.
+	await waitFor(() => {
+		expect(changes()).toBe(1);
+		expect(calls.filter((call) => call.path === `${BASE}/shares`)).toHaveLength(
+			2,
+		);
+	});
 	expect(view.queryByRole("status")).toBeNull();
-	expect(calls.filter((call) => call.path === `${BASE}/shares`)).toHaveLength(
-		2,
-	);
 });
 
 test("a refused revoke stays visible and the screen is not reloaded", async () => {

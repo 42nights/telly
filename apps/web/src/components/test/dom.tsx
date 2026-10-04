@@ -4,7 +4,7 @@
 // A side-effect import is never reordered, so Happy DOM is registered before the imports below load.
 import "./register";
 
-import { afterAll, afterEach, mock } from "bun:test";
+import { afterAll, afterEach, mock, setDefaultTimeout } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
 	createMemoryHistory,
@@ -22,8 +22,22 @@ import { registerDom } from "./register";
 // static imports, before `./register` runs, and React DOM checks for `document` once, when it loads
 // (without it, `onChange` never fires for text inputs). Bun shares that module across test files,
 // so a static import in any test file breaks every later one. Import these from here only.
-const { cleanup, ...rtl } = await import("@testing-library/react");
+const { cleanup, configure, ...rtl } = await import("@testing-library/react");
 export const { act, fireEvent, render, renderHook, waitFor, within } = rtl;
+
+// The shared CI host can be many times slower than a laptop, so allow slow hosts the time they need
+// (the 1 s Testing Library and 5 s Bun defaults failed there). Keep a failed query cheap: by default
+// each failed retry of `findBy` and `waitFor` formats the whole DOM, which slows a loaded host more.
+configure({
+	asyncUtilTimeout: 10_000,
+	getElementError: (message, container) => {
+		const error = new Error(
+			`${message}\n\nPage text: ${container.textContent?.slice(0, 2_000)}`,
+		);
+		error.name = "TestingLibraryElementError";
+		return error;
+	},
+});
 
 const SERVER = "http://server.test";
 
@@ -95,6 +109,7 @@ export const signIn = () => setSessionToken("test-token");
 export const setupDom = () => {
 	mock.module("@/env", () => ({ ENV: { VITE_SERVER_URL: SERVER } }));
 	registerDom();
+	setDefaultTimeout(30_000);
 	const realFetch = globalThis.fetch;
 	afterEach(() => {
 		cleanup();
