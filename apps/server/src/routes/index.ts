@@ -3,6 +3,7 @@ import type { ServerConfig } from "../config";
 import type { FamilyEnv, FamilyRoutes } from "../http";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { alertRoutes } from "./alerts";
+import { appointmentRoutes } from "./appointments";
 import { askRoutes } from "./ask";
 import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
@@ -39,6 +40,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", mealRoutes(config.gemini))
 		.route("/", reportRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
+		.route("/", appointmentRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())

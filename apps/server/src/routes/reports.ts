@@ -52,7 +52,7 @@ const generateMarkers = (samples: readonly HealthSample[]): ReportMarker[] => {
 	}));
 };
 
-const readReports = (c: Context<FamilyEnv>): Report[] =>
+export const readReports = (c: Context<FamilyEnv>): Report[] =>
 	[...c.var.db.connection.db.myReports.iter()]
 		.filter((row) => row.familyId === c.var.familyId)
 		.map((row) => ({
