@@ -16,6 +16,7 @@
 		"./ask": "./src/ask.ts",
 		"./care": "./src/care.ts",
 		"./reminders": "./src/reminders.ts",
+		"./speaker": "./src/speaker.ts",
 		"./trends": "./src/trends.ts"
 	},
 	"scripts": {

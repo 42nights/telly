@@ -136,12 +136,17 @@ export const ReminderResponse = Schema.Literals([
 ]);
 export type ReminderResponse = typeof ReminderResponse.Type;
 
-/** Where an answer came from. `scheduler` is the database itself; clients never send it. */
+/**
+ * Where an event came from. `scheduler` is the database itself; clients never send it. `speaker` is
+ * a home speaker that spoke the prompt (#46): it records only `delivered`, because a speaker cannot
+ * report whether the person heard it or did the task. The server records it; clients never send it.
+ */
 export const ReminderSource = Schema.Literals([
 	"scheduler",
 	"phone",
 	"web",
 	"glasses",
+	"speaker",
 ]);
 export type ReminderSource = typeof ReminderSource.Type;
 

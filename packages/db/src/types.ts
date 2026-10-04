@@ -291,6 +291,9 @@ export type MyReminders = __Infer<typeof MyReminders>;
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
 
+export const MySpeakerSettings = __t.object("MySpeakerSettings", {});
+export type MySpeakerSettings = __Infer<typeof MySpeakerSettings>;
+
 export const NeedFact = __t.object("NeedFact", {
   text: __t.string(),
   source: __t.string(),
@@ -435,6 +438,16 @@ export const SampleQuality = __t.enum("SampleQuality", {
   Unvalidated: __t.unit(),
 });
 export type SampleQuality = __Infer<typeof SampleQuality>;
+
+export const SpeakerSettings = __t.object("SpeakerSettings", {
+  familyId: __t.u64(),
+  enabled: __t.bool(),
+  room: __t.string(),
+  sharedRoomKinds: __t.array(__t.string()),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type SpeakerSettings = __Infer<typeof SpeakerSettings>;
 
 // The tagged union or sum type for the algebraic type `ThresholdDirection`.
 export const ThresholdDirection = __t.enum("ThresholdDirection", {

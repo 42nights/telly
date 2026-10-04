@@ -29,6 +29,7 @@ import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
 import SetContactLadderReducer from "../set_contact_ladder_reducer";
 import SetReminderSettingsReducer from "../set_reminder_settings_reducer";
+import SetSpeakerSettingsReducer from "../set_speaker_settings_reducer";
 import UpdateReportReducer from "../update_report_reducer";
 
 export type AcknowledgeAlertParams = __Infer<typeof AcknowledgeAlertReducer>;
@@ -54,5 +55,6 @@ export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
 export type SetContactLadderParams = __Infer<typeof SetContactLadderReducer>;
 export type SetReminderSettingsParams = __Infer<typeof SetReminderSettingsReducer>;
+export type SetSpeakerSettingsParams = __Infer<typeof SetSpeakerSettingsReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
 
