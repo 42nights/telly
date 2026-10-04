@@ -89,7 +89,7 @@ On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigne
 5. Deployment to the approved target.
 6. Optional glasses adapter, verified on hardware separately.
 
-Step 5 needs an approved deployment target. The production sign-in issuer, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication are separate decisions.
+Step 5 deploys to the team's Cloudflare account, with SpacetimeDB Maincloud and Google sign-in (decided 2026-10-04). Data retention, hospital delivery, the River base model and spend, live NOOP data, Photon iMessage access, and public source or agent publication are separate open decisions.
 
 ## Planning board
 

@@ -3,7 +3,8 @@ import { Schema } from "effect";
 import { CitedRecords } from "./chat";
 import { LanguageCode, VoiceTranscript } from "./voice";
 
-const isTimeZone = Schema.makeFilter((zone: string) => {
+/** An IANA time zone that this runtime knows, such as `Europe/Berlin`. */
+export const isTimeZone = Schema.makeFilter((zone: string) => {
 	try {
 		new Intl.DateTimeFormat("en", { timeZone: zone });
 		return true;

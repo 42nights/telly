@@ -15,6 +15,9 @@ import { useMeal } from "@/components/meal/use-meal";
 import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/meal")({
+	// `dish`: a meal the wearer made with guided cooking (#42) and chose to record.
+	validateSearch: (search: Record<string, unknown>): { dish?: string } =>
+		typeof search.dish === "string" ? { dish: search.dish.slice(0, 2000) } : {},
 	component: MealRoute,
 });
 
@@ -29,6 +32,7 @@ function MealRoute() {
  * correct. How much was eaten is a separate answer; the photo and the estimate never decide it.
  */
 function MealScreen({ familyId }: { familyId: string | null }) {
+	const { dish } = Route.useSearch();
 	const camera = useCamera(false);
 	const video = useRef<HTMLVideoElement | null>(null);
 	const meal = useMeal(familyId);
@@ -92,6 +96,7 @@ function MealScreen({ familyId }: { familyId: string | null }) {
 						</p>
 						<DescribeMeal
 							familyId={familyId}
+							initialText={dish ?? ""}
 							onDescribe={(text) =>
 								void meal.estimateFrom({ source: "description", text })
 							}

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Window } from "@/components/hud/window";
+import { LastSeen, RememberPlace } from "@/components/wearer/last-seen";
 import { itemFromRequest } from "@/components/wearer/logic";
 import { MedicineAnswer } from "@/components/wearer/medicine-answer";
 import {
@@ -14,6 +15,7 @@ import {
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
 import { Tip } from "@/components/win95";
 import { useFamily } from "@/lib/family";
+import { useMedicineMemory } from "@/lib/medicine-memory";
 
 export const Route = createFileRoute("/medicine")({
 	validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -27,6 +29,7 @@ function MedicineComponent() {
 	const familyId = family?.id ?? null;
 	const camera = useCamera(true);
 	const { check, look, stop } = usePictureCheck(familyId, families);
+	const { memory, change } = useMedicineMemory(familyId);
 	const video = useRef<HTMLVideoElement | null>(null);
 	const lookNow = () => void look(video.current);
 
@@ -100,6 +103,12 @@ function MedicineComponent() {
 						aria-live="polite"
 						className="grid min-w-0 content-start gap-3 text-[20px]"
 					>
+						<LastSeen
+							change={change}
+							familyId={familyId}
+							item={item}
+							memory={memory}
+						/>
 						<MedicineAnswer
 							best={best}
 							check={check}
@@ -111,6 +120,15 @@ function MedicineComponent() {
 							startCamera={camera.start}
 							stop={stop}
 						/>
+						{check !== null && best !== null && (
+							<RememberPlace
+								best={best}
+								change={change}
+								check={check}
+								key={check.id}
+								memory={memory}
+							/>
+						)}
 					</div>
 				</div>
 			</Window>
