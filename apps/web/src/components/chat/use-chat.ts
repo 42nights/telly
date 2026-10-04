@@ -1,10 +1,11 @@
 import type { FamilyMessage } from "@health/contracts";
-import { FamilyMessages } from "@health/contracts/chat";
+import { FamilyMessages, type SendFamilyMessage } from "@health/contracts/chat";
+import { VoiceTranscript } from "@health/contracts/voice";
 import { useEffect, useRef, useState } from "react";
 
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
-import { mergeMessages } from "./logic";
+import { failureText, mergeMessages, type Outbox, outboxFor } from "./logic";
 
 const POLL_MS = 5_000;
 /** The server returns at most this many messages after a cursor. */
@@ -13,14 +14,16 @@ const PAGE = 200;
 type ReadState = { readonly kind: "loading" | "ready" } | ApiFailure;
 
 /**
- * The family's person-to-person messages, read-only, caught up with `GET /messages?after=<last id>`
- * every `POLL_MS`. Mount one per family (key by family id): the cursor belongs to one family.
+ * The family's person-to-person messages, caught up with `GET /messages?after=<last id>` every
+ * `POLL_MS` and right after a send. Mount one per family (key by family id): the cursor belongs to
+ * one family.
  */
 export function useChat(familyId: string) {
 	const [messages, setMessages] = useState<FamilyMessage[]>([]);
 	const [read, setRead] = useState<ReadState>({ kind: "loading" });
 	const [refreshKey, setRefreshKey] = useState(0);
 	const last = useRef<string | null>(null);
+	const outbox = useRef<Outbox | null>(null);
 
 	useEffect(() => {
 		void refreshKey;
@@ -62,9 +65,31 @@ export function useChat(familyId: string) {
 		};
 	}, [familyId, refreshKey]);
 
-	return {
-		messages,
-		read,
-		retryRead: () => setRefreshKey((key) => key + 1),
+	const refresh = () => setRefreshKey((key) => key + 1);
+
+	/** Sends `body` to the family. Resolves null once stored, otherwise why it was not sent. */
+	const send = async (body: string): Promise<string | null> => {
+		const message: SendFamilyMessage = outboxFor(outbox.current, body);
+		outbox.current = message;
+		const result = await apiRequest(null, familyPath(familyId, "/messages"), {
+			method: "POST",
+			body: message,
+		});
+		if (result.kind !== "ready") {
+			console.error("Family message not sent:", result);
+			return failureText(result);
+		}
+		outbox.current = null;
+		refresh();
+		return null;
 	};
+
+	/** Turns a recording into text with `POST /voice/transcriptions`. */
+	const transcribe = (audio: Blob) =>
+		apiRequest(VoiceTranscript, familyPath(familyId, "/voice/transcriptions"), {
+			method: "POST",
+			rawBody: { data: audio, type: audio.type },
+		});
+
+	return { messages, read, refresh, send, transcribe };
 }

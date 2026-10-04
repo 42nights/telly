@@ -3,6 +3,8 @@ import { Button } from "@health/ui/components/button";
 import { CloudOff, Mic, Volume2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { useDemoWarning } from "@/lib/demo";
+
 import { evidenceLine } from "./logic";
 import { SpeechLine, useSpeech } from "./speech";
 import { useNow } from "./use-now";
@@ -40,6 +42,7 @@ function Asked({ asked }: { asked: string }) {
 /** Where the answer came from, briefly: up to three records, and what had no records. */
 function Sources({ answer }: { answer: FamilyAnswer }) {
 	const now = useNow();
+	useDemoWarning(answer.evidence, "The answer cites");
 	if (answer.evidence.length === 0 && answer.unavailable.length === 0)
 		return null;
 	return (

@@ -12,6 +12,7 @@ import { CloudOff, Glasses, Home, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ExerciseInvite } from "@/components/exercise/session";
+import { Alerts } from "@/components/hud/alerts";
 import { Window } from "@/components/hud/window";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
@@ -256,9 +257,17 @@ function HudComponent() {
 					</div>
 
 					<section
-						aria-label="Messages"
+						aria-label="Messages and alerts"
 						className="grid min-w-0 content-start gap-2 md:row-span-2"
 					>
+						<h2 className="font-bold text-[16px]">Alerts</h2>
+						{records === null ? (
+							<p className="win95-inset bg-card p-3 text-[18px]">
+								No person is paired yet, so there are no alerts.
+							</p>
+						) : (
+							<Alerts familyId={familyId} now={now} records={records} />
+						)}
 						<h2 className="font-bold text-[16px]">Messages</h2>
 						{records === null ? (
 							<p className="win95-inset bg-card p-3 text-[18px]">
