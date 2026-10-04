@@ -6,7 +6,7 @@
 # `health / required` the one required status check; never require the individual jobs.
 #
 # `check` and `structure` run on the runner named by the repository variable HEALTH_RUNNER (a
-# Namespace label, see health/README.md) and on ubuntu-latest when it is unset. `changes` and
+# Namespace label, see README.md) and on ubuntu-latest when it is unset. `changes` and
 # `required` always use ubuntu-latest, so the gate reports even when no Namespace runner is available.
 name: health
 

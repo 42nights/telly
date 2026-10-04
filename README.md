@@ -28,7 +28,7 @@ Not done (each item has a GitHub issue):
 - Provider integrations: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, and Gemma on River AI. No provider is connected.
 - Deployment. No hosted instance exists.
 - The optional Meta Ray-Ban Display glasses adapter.
-- Namespace CI runners ([#21](https://github.com/ayaangazali/telly/issues/21)). The Namespace Runners app is installed, but the `HEALTH_RUNNER` variable is not set yet, so CI still runs on GitHub-hosted runners.
+- Namespace CI runners ([#21](https://github.com/ayaangazali/telly/issues/21)). The Namespace Runners app is installed and `HEALTH_RUNNER` is set to `nscloud-ubuntu-24.04-amd64-2x4`. The first passing Namespace run is still to be recorded on #21.
 
 The product scope, owners, and build order are in [`docs/plan.md`](docs/plan.md). Open work is in the [GitHub issues](https://github.com/ayaangazali/telly/issues).
 
