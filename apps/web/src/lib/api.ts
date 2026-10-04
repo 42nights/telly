@@ -169,6 +169,53 @@ const coldStart = (failure: ApiFailure) =>
 		failure.message === "The API did not start");
 
 /**
+ * Retries while the API may be starting: after 1, 2, 4, then every 8 s, until `windowMs` has passed
+ * since the first failure. `schedule` is false once the window is over; `reset` after a success.
+ */
+type StartRetry = {
+	readonly schedule: () => boolean;
+	readonly reset: () => void;
+	readonly cancel: () => void;
+};
+
+const startRetry = (windowMs: number, retry: () => void): StartRetry => {
+	let since: number | undefined;
+	let attempt = 0;
+	let timer: number | undefined;
+	return {
+		schedule: () => {
+			since ??= Date.now();
+			if (Date.now() - since >= windowMs) return false;
+			window.clearTimeout(timer);
+			timer = window.setTimeout(retry, Math.min(1000 * 2 ** attempt++, 8000));
+			return true;
+		},
+		reset: () => {
+			since = undefined;
+			attempt = 0;
+		},
+		cancel: () => window.clearTimeout(timer),
+	};
+};
+
+/** The state a finished read shows, or undefined while a starting API is retried (`waiting`). */
+const settled = <T>(
+	result: ApiResult<T>,
+	retry: StartRetry,
+	waiting: () => void,
+): ApiState<T> | undefined => {
+	if (result.kind === "ready") {
+		retry.reset();
+		return { ...result, at: Date.now() };
+	}
+	if (coldStart(result) && retry.schedule()) {
+		waiting();
+		return undefined;
+	}
+	return result;
+};
+
+/**
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
  * its failure visible: the last good value is not shown as current. A new `path` (such as another
@@ -205,24 +252,14 @@ export function useApi<T>(
 		let controller = new AbortController();
 		// A poll waits for the read in flight, so a slow read can finish and a hung one can time out.
 		let pending = false;
-		// While the server may be starting: when the first failure came, and the next retry.
-		let failingSince: number | undefined;
-		let retries = 0;
-		let retry: number | undefined;
 		// Both local failures (no network, no answer in time) mean the server was not reached.
 		const fail = (message: string) =>
 			setRead({ path, state: { kind: "error", message, unreachable: true } });
-		// True when the failure is retried: the server may still be starting.
-		const starting = () => {
-			failingSince ??= Date.now();
-			if (Date.now() - failingSince >= connectMs) return false;
-			setRead({ path, state: { kind: "loading" } });
-			clearTimeout(retry);
-			retry = window.setTimeout(load, Math.min(1000 * 2 ** retries++, 8000));
-			return true;
-		};
+		const retry = startRetry(connectMs, () => load());
+		// While the server may be starting, the screen shows loading ("Waiting for the server").
+		const waiting = () => setRead({ path, state: { kind: "loading" } });
 		const load = () => {
-			clearTimeout(retry);
+			retry.cancel();
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
@@ -235,20 +272,14 @@ export function useApi<T>(
 			})
 				.then((result) => {
 					if (signal.aborted) return;
-					if (result.kind === "ready") {
-						failingSince = undefined;
-						retries = 0;
-					} else if (coldStart(result) && starting()) return;
-					setRead({
-						path,
-						state:
-							result.kind === "ready" ? { ...result, at: Date.now() } : result,
-					});
+					const state = settled(result, retry, waiting);
+					if (state !== undefined) setRead({ path, state });
 				})
 				.catch(() => {
 					// Only the timeout gets here without this read being replaced or unmounted.
-					if (signal.aborted || starting()) return;
-					fail("The server did not answer in time.");
+					if (signal.aborted) return;
+					if (retry.schedule()) waiting();
+					else fail("The server did not answer in time.");
 				})
 				.finally(() => {
 					if (!signal.aborted) pending = false;
@@ -290,7 +321,7 @@ export function useApi<T>(
 		document.addEventListener("visibilitychange", resume);
 		return () => {
 			stop();
-			clearTimeout(retry);
+			retry.cancel();
 			clearInterval(timer);
 			window.removeEventListener("offline", offline);
 			window.removeEventListener("online", load);
