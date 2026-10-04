@@ -21,7 +21,12 @@ import { tripRoutes } from "./trips";
 
 // Isolated local protocol servers stand in for Gemini, the Fetch.ai bridge, and ElevenLabs. Test
 // credentials and synthetic records only: local protocol proof, not live-provider proof.
-type Body = { input: unknown[]; system_instruction: string; store: boolean };
+type Body = {
+	model: string;
+	input: unknown[];
+	system_instruction: string;
+	store: boolean;
+};
 const geminiBodies: Body[] = [];
 let gemini: (body: Body, request: Request) => Response | Promise<Response>;
 const geminiServer = Bun.serve({
@@ -147,6 +152,8 @@ beforeEach(() => {
 const geminiConfig = {
 	apiKey: "test-gemini-key",
 	baseUrl: geminiServer.url.origin,
+	// Short waits keep the retry path real without slowing the suite.
+	overloadBackoffMs: [5, 5],
 };
 const fetchAgent = { bridgeUrl: bridge.url.origin, bridgeToken: "test-bridge" };
 const voice = elevenLabsVoice({
@@ -327,6 +334,33 @@ describe("POST /ask", () => {
 			expect((await errorOf(response)).message).not.toContain("quota detail");
 		}
 	});
+
+	test.each([503, 429])(
+		"an overloaded Gemini (HTTP %i) is tried again after a wait, and finished tool rounds are kept",
+		async (status) => {
+			let refusals = 3;
+			const answers = gemini;
+			// The second round (after the tool call) is refused three times, then answered.
+			gemini = (body, request) =>
+				body.input.length > 1 && refusals-- > 0
+					? new Response("high demand", { status })
+					: answers(body, request);
+			const response = await ask({ question: "How did Mom sleep?" });
+			expect(response.status).toBe(200);
+			expect(
+				Schema.decodeUnknownSync(FamilyAnswer)(await response.json()).answer,
+			).toBe("Mom slept 7.5 hours (synthetic).");
+			// One tool call: the retry resent only the refused round, not the whole question.
+			expect(bridgeCalls).toHaveLength(1);
+			expect(geminiBodies.map(({ model }) => model)).toEqual([
+				"gemini-3.8-flash",
+				"gemini-3.8-flash",
+				"gemini-3.5-flash",
+				"gemini-3.8-flash",
+				"gemini-3.5-flash",
+			]);
+		},
+	);
 
 	test("bad questions are rejected before any provider call", async () => {
 		for (const body of [
@@ -531,6 +565,17 @@ describe("POST /ask/voice", () => {
 			// Hangs (and the test times out) if the provider request stays open.
 			await hang.aborted;
 		});
+
+	test("when Gemini stays overloaded after every retry, the error says it is busy", async () => {
+		gemini = () => new Response("high demand detail", { status: 503 });
+		const response = await askVoice();
+		expect(response.status).toBe(502);
+		const { message } = await errorOf(response);
+		expect(message).toContain("busy");
+		expect(message).not.toContain("high demand detail");
+		// Both models, then both again after each of the two waits; nothing more.
+		expect(geminiBodies).toHaveLength(6);
+	});
 });
 
 // Needs the local SpacetimeDB that `bun run db:test` starts.
@@ -637,10 +682,12 @@ describe.skipIf(dbConfig === undefined)(
 							member: Identity.fromString(relative.identity),
 						}),
 					);
-					// Nothing saved: the model gets no saved-facts list at all.
-					expect(yield* prompt(wearer, familyId)).not.toContain(
-						"Saved facts you may repeat:",
-					);
+					// Nothing saved yet. The founder holds health_records (#188), so the model hears that the
+					// profile is empty, and no trip plan or request.
+					const empty = yield* prompt(wearer, familyId);
+					expect(empty).toContain("Their preferred name: not saved.");
+					expect(empty).not.toContain("Their latest trip plan");
+					expect(empty).not.toContain("They asked their family");
 
 					const trips = familyApp(wearer, familyId, tripRoutes());
 					const checkIn = yield* send(trips, "POST", "/trips/check-in", {

@@ -15,6 +15,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 import { trendRoutes } from "./trends";
@@ -128,14 +129,10 @@ describe.skipIf(dbConfig === undefined)("trend explanations", () => {
 					);
 
 				// No `health_records` grant: nothing is read and nothing leaks.
+				yield* setOwnScopes(db, familyId, ["health_records"], false);
 				expect((yield* ask()).status).toBe("not_shared");
 
-				for (const scope of ["health_records", "care_plan_edit"])
-					yield* send(app, "POST", "/care-access", {
-						identity: db.identity,
-						scope,
-						granted: true,
-					});
+				yield* setOwnScopes(db, familyId, ["health_records"], true);
 				yield* send(app, "PUT", "/care-profile", {
 					preferredName: null,
 					language: null,
