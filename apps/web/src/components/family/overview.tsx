@@ -1,5 +1,6 @@
-// Family screen sections that came from the old dashboard: key numbers with the health sources, the
-// newest messages, the alert history, and the alert thresholds.
+// The family screen's parts from the old dashboard (#209): key numbers, health sources, the
+// recent-alerts table, the newest messages, and the alert thresholds. Each shows only what the
+// server returned.
 import {
 	type Family,
 	type Loaded,
@@ -22,16 +23,13 @@ import { memberLabel, senderLabel } from "@/lib/members";
 
 import type { FamilyData } from "./data";
 import { clock, deliveryText, metricLabel } from "./logic";
-import { ReadingsGlance } from "./parts";
 
 export function KeyNumbers({
 	data,
 	family,
-	now,
 }: {
 	data: FamilyData;
 	family: Family;
-	now: number;
 }) {
 	const { alerts, records } = data;
 	const hrv =
@@ -40,37 +38,29 @@ export function KeyNumbers({
 			(s) => s.familyId === family.id && s.metric === "hrv" && !s.synthetic,
 		);
 	return (
-		<section aria-labelledby="numbers" className="grid gap-2">
-			<h3 id="numbers" className="font-bold">
-				Key numbers
-			</h3>
-			<div className="grid gap-2 sm:grid-cols-2">
-				{!hrv && (
-					<div className="win95-inset grid gap-0.5 bg-card p-2">
-						<span>HRV</span>
-						<b className="text-muted-foreground text-xl">Unavailable</b>
-						<span className="text-muted-foreground text-xs">
-							No real reading stored
-						</span>
-					</div>
-				)}
+		<div className="grid gap-2 sm:grid-cols-2">
+			{!hrv && (
 				<div className="win95-inset grid gap-0.5 bg-card p-2">
-					<span>Open alerts</span>
-					<b className="text-xl">
-						{alerts.kind === "ready"
-							? alerts.value.alerts.filter(
-									(a) => a.acknowledgements.length === 0,
-								).length
-							: "Unavailable"}
-					</b>
+					<span>HRV</span>
+					<b className="text-muted-foreground text-xl">Unavailable</b>
 					<span className="text-muted-foreground text-xs">
-						Not seen by anyone yet
+						No real reading stored
 					</span>
 				</div>
+			)}
+			<div className="win95-inset grid gap-0.5 bg-card p-2">
+				<span>Open alerts</span>
+				<b className="text-xl">
+					{alerts.kind === "ready"
+						? alerts.value.alerts.filter((a) => a.acknowledgements.length === 0)
+								.length
+						: "Unavailable"}
+				</b>
+				<span className="text-muted-foreground text-xs">
+					Not seen by anyone yet
+				</span>
 			</div>
-			<ReadingsGlance data={data} familyId={family.id} now={now} />
-			<SourceList />
-		</section>
+		</div>
 	);
 }
 
@@ -85,7 +75,7 @@ const statusText = {
 } satisfies Record<NoopConnection["status"], string>;
 
 /** Every health source from `/api/sources`, as the server reports it. */
-function SourceList() {
+export function SourceList() {
 	const [sources, setSources] = useState<Loaded<Sources>>();
 	useEffect(
 		() =>
@@ -201,6 +191,7 @@ function AlertRow({ item, me }: { item: FamilyAlert; me: string | null }) {
 	);
 }
 
+/** Each alert rule and its state now. A rule without a fresh validated reading is unavailable. */
 export function Thresholds({
 	state,
 	monitoring,

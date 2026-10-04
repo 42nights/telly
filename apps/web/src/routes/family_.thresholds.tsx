@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SlidersHorizontal } from "lucide-react";
 
 import { useFamilyData } from "@/components/family/data";
+import { Thresholds } from "@/components/family/overview";
 import { FamilyGate } from "@/components/family/parts";
-import { Thresholds } from "@/components/family/sections";
 import { Window } from "@/components/hud/window";
 
 // Family › Thresholds: each alert rule and its state now. Read-only.

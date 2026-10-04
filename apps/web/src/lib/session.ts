@@ -22,9 +22,20 @@ export const getSessionToken = (): string | null => {
 	return null;
 };
 
+// Inside the iOS shell (`apps/native`), sign-out also clears the session that the phone keeps.
+declare global {
+	var ReactNativeWebView:
+		| { readonly postMessage: (data: string) => void }
+		| undefined;
+}
+
 export const setSessionToken = (token: string | null) => {
-	if (token === null) storage()?.removeItem(KEY);
-	else storage()?.setItem(KEY, token);
+	if (token === null) {
+		storage()?.removeItem(KEY);
+		globalThis.ReactNativeWebView?.postMessage(
+			JSON.stringify({ type: "sign-out" }),
+		);
+	} else storage()?.setItem(KEY, token);
 	for (const listener of listeners) listener();
 };
 

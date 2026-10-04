@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 
 import { useFamilyData } from "@/components/family/data";
+import { RecentAlerts } from "@/components/family/overview";
 import { AlertSection, FamilyGate } from "@/components/family/parts";
-import { RecentAlerts } from "@/components/family/sections";
 import { Window } from "@/components/hud/window";
 
 // Family › Alerts: the alert to act on now, then every recorded alert with its delivery and who saw it.

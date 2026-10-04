@@ -1,26 +1,32 @@
+// Family › Overview (docs/board.html#wf-phone, #wf-dash): the alert to act on, today's readings,
+// monitoring, messages, and the plans. The other Family tabs are Alerts, Trends, and Thresholds.
 import type { Family } from "@health/contracts";
 import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users } from "lucide-react";
+
 import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
 import { type FamilyData, useFamilyData } from "@/components/family/data";
+import {
+	KeyNumbers,
+	RecentMessages,
+	SourceList,
+} from "@/components/family/overview";
 import {
 	AlertSection,
 	FamilyGate,
 	MonitoringBadge,
 	MonitoringList,
+	ReadingsGlance,
 } from "@/components/family/parts";
-import { KeyNumbers, RecentMessages } from "@/components/family/sections";
 import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
 import { PersonPicker } from "@/lib/family";
 
-// Family › Overview: the person's state at a glance. The other Family tabs are Alerts, Trends, and
-// Thresholds.
 export const Route = createFileRoute("/family")({
 	component: FamilyOverview,
 });
@@ -34,8 +40,9 @@ function FamilyOverview() {
 				icon={Users}
 				className="mx-auto w-full max-w-4xl"
 			>
+				<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
 				<FamilyGate data={data} emptyClassName="p-3 text-sm">
-					{(family) => <Overview data={data} family={family} />}
+					{(family) => <Overview key={family.id} data={data} family={family} />}
 				</FamilyGate>
 			</Window>
 		</main>
@@ -45,7 +52,7 @@ function FamilyOverview() {
 function Overview({ data, family }: { data: FamilyData; family: Family }) {
 	const now = Date.now();
 	return (
-		<div className="grid gap-4 p-2 text-sm">
+		<div className="grid grid-cols-[minmax(0,1fr)] gap-4 p-2 text-sm">
 			<header className="flex flex-wrap items-center gap-3">
 				<span
 					aria-hidden
@@ -53,11 +60,10 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				>
 					{family.name.charAt(0).toUpperCase()}
 				</span>
-				<h2 className="min-w-0 break-words font-bold text-2xl">
+				<h2 className="min-w-0 flex-[1_1_10rem] break-words font-bold text-2xl">
 					{family.name}
 				</h2>
 				<MonitoringBadge state={data.monitoring} />
-				<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
 			</header>
 
 			<AlertSection data={data} now={now} />
@@ -65,7 +71,14 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
 			<MealStatusSection familyId={family.id} />
 
-			<KeyNumbers data={data} family={family} now={now} />
+			<section aria-labelledby="glance" className="grid gap-2">
+				<h3 id="glance" className="font-bold">
+					Today at a glance
+				</h3>
+				<KeyNumbers data={data} family={family} />
+				<ReadingsGlance data={data} familyId={family.id} now={now} />
+				<SourceList />
+			</section>
 
 			<section aria-labelledby="monitoring" className="grid gap-2">
 				<h3 id="monitoring" className="font-bold">
@@ -81,8 +94,8 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 
 			<ReminderHistorySection familyId={family.id} me={data.me} />
 
-			<section aria-labelledby="messages" className="grid gap-2">
-				<h3 id="messages" className="font-bold">
+			<section aria-labelledby="chat" className="grid gap-2">
+				<h3 id="chat" className="font-bold">
 					Recent messages
 				</h3>
 				<RecentMessages data={data} familyId={family.id} />

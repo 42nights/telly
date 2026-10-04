@@ -1,47 +1,30 @@
-// The frame of the Care › Needs and Care › Contacts tabs: one window for the selected person, or why
-// there is none.
-import { Me } from "@health/contracts/families";
-import type { LucideIcon } from "lucide-react";
+// The frame of every Care tab: the person picker, then the tab's windows for the selected person,
+// or why there is no person.
 import type { ReactNode } from "react";
 
-import { Window } from "@/components/hud/window";
 import { ApiNotice } from "@/components/win95";
-import { familyPath, useApi } from "@/lib/api";
-import { useFamily } from "@/lib/family";
+import { PersonPicker, useFamily } from "@/lib/family";
 
 export function CareScreen({
-	title,
-	icon,
 	children,
 }: {
-	title: string;
-	icon: LucideIcon;
-	/** `base` is the family's `/care` API path; `me` is the caller's member identity. */
-	children: (base: string, me: string | null) => ReactNode;
+	children: (familyId: string) => ReactNode;
 }) {
-	const { state: familyState, family } = useFamily();
-	const meState = useApi(Me, "/api/me");
-	const me = meState.kind === "ready" ? meState.value.identity : null;
+	const { state, family } = useFamily();
 	return (
 		<main className="p-2 sm:p-4">
-			<Window
-				title={`${title} · ${family?.name ?? "No person"}`}
-				icon={icon}
-				className="mx-auto w-full max-w-2xl"
-				status="Calls are simulated. Only accepting and then confirming help closes a need."
-			>
-				{familyState.kind !== "ready" ? (
-					<ApiNotice state={familyState} what="your family" />
+			<div className="mx-auto grid w-full max-w-5xl gap-3">
+				<PersonPicker />
+				{state.kind !== "ready" ? (
+					<ApiNotice state={state} what="your family" />
 				) : family === null ? (
-					<p className="p-3 text-sm">
+					<p className="win95-raised p-3 text-sm">
 						No person is paired with this account yet.
 					</p>
 				) : (
-					<div className="grid gap-4 p-2 text-sm">
-						{children(familyPath(family.id, "/care"), me)}
-					</div>
+					children(family.id)
 				)}
-			</Window>
+			</div>
 		</main>
 	);
 }
