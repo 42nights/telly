@@ -11,6 +11,7 @@ import type { Schema } from "effect";
 import { CloudOff, Home, RotateCw, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ExerciseInvite } from "@/components/exercise/session";
 import { Alerts } from "@/components/hud/alerts";
 import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
@@ -255,6 +256,9 @@ function HudComponent() {
 							<Utensils aria-hidden />
 							Meal
 						</Link>
+						{familyId !== null && (
+							<ExerciseInvite familyId={familyId} now={now} />
+						)}
 					</div>
 
 					<section
