@@ -1,0 +1,9 @@
+[Unit]
+Description=Check origin/main of Telly every 2 minutes
+
+[Timer]
+OnBootSec=60
+OnUnitInactiveSec=120
+
+[Install]
+WantedBy=timers.target

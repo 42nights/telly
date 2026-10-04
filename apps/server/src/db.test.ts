@@ -1,18 +1,22 @@
 // Runs against a real local SpacetimeDB with the module published: `bun run db:test` starts an
 // isolated in-memory database, publishes, sets SPACETIMEDB_URI and SPACETIMEDB_DATABASE, and runs
 // this file. Each connection below is a separate identity issued by that database.
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { describe, expect, spyOn, test } from "bun:test";
+import { CareScope } from "@health/contracts/care-profile";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { Identity, Timestamp } from "spacetimedb";
 import {
 	callDb,
 	type DbConfig,
 	DbRejected,
 	DbUnavailable,
+	type FamilyDb,
 	openFamilyDb,
 	readFamilyRecords,
 } from "./db";
 import { closed, dbProxy } from "./db-proxy";
+import { sha256Hex } from "./http";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -168,6 +172,64 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 			),
 		));
 
+	test("a new family's founder holds every care scope, a later member none, and only the operator runs the backfill", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const token = process.env.SPACETIMEDB_OPERATOR_TOKEN;
+					if (token === undefined)
+						throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
+					const owner = yield* openFamilyDb(config);
+					const relative = yield* openFamilyDb(config);
+					const operator = yield* openFamilyDb({ ...config, token });
+					const mine = owner.connection.reducers;
+					yield* Effect.promise(() => mine.createFamily({ name: "Nakamura" }));
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					yield* Effect.promise(() =>
+						mine.addFamilyMember({
+							familyId,
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const grants = () =>
+						[...owner.connection.db.myCareGrants.iter()]
+							.filter((g) => g.familyId === familyId)
+							.map((g) => [g.member.toHexString(), g.scope, g.granted])
+							.sort();
+					const founder = CareScope.literals
+						.map((scope) => [owner.identity, scope, true])
+						.sort();
+					expect(grants()).toEqual(founder);
+
+					const refused = yield* Effect.promise(() =>
+						mine.backfillFounderCareGrants({}).then(String, String),
+					);
+					expect(refused).toBe("SenderError: not the delivery operator");
+					// A scope the founder revoked stays revoked, and no scope is granted twice.
+					yield* Effect.promise(() =>
+						mine.setCareGrant({
+							familyId,
+							member: Identity.fromString(owner.identity),
+							scope: "media",
+							granted: false,
+						}),
+					);
+					yield* Effect.promise(() =>
+						operator.connection.reducers.backfillFounderCareGrants({}),
+					);
+					// The owner's own call after the backfill sees every earlier commit.
+					yield* Effect.promise(() =>
+						mine.sendMessage({ familyId, clientId: "sync", body: "Synced" }),
+					);
+					expect(grants()).toEqual(
+						[...founder, [owner.identity, "media", false]].sort(),
+					);
+				}),
+			),
+		));
+
 	test("a dropped connection fails as unavailable, serves no stale rows, and a new connection sees every committed row", () =>
 		run((config) =>
 			Effect.gen(function* () {
@@ -217,6 +279,121 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 			}),
 		));
 
+	test("invites: members make them for at most 7 days, and an expired code admits no one", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const owner = yield* openFamilyDb(config);
+					const outsider = yield* openFamilyDb(config);
+					yield* callDb(owner, (c) =>
+						c.reducers.createFamily({ name: "Sato" }),
+					);
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					const inMs = (ms: number) =>
+						Timestamp.fromDate(new Date(Date.now() + ms));
+					const create = (db: FamilyDb, codeHash: string, ms: number) =>
+						callDb(db, (c) =>
+							c.reducers.createFamilyInvite({
+								familyId,
+								codeHash,
+								expiresAt: inMs(ms),
+							}),
+						);
+					const refused = (reason: string) => new DbRejected({ reason });
+					const code = () => sha256Hex(crypto.randomUUID());
+
+					expect(yield* Effect.flip(create(outsider, code(), 60_000))).toEqual(
+						refused("not a member of this family"),
+					);
+					expect(yield* Effect.flip(create(owner, "ABC", 60_000))).toEqual(
+						refused("codeHash must be 64 lowercase hex characters"),
+					);
+					for (const ms of [-1_000, 8 * 86_400_000])
+						expect(yield* Effect.flip(create(owner, code(), ms))).toEqual(
+							refused("expiresAt must be within the next 7 days"),
+						);
+
+					const expiring = code();
+					yield* create(owner, expiring, 1_000);
+					yield* Effect.sleep("1500 millis");
+					expect(
+						yield* Effect.flip(
+							callDb(outsider, (c) =>
+								c.reducers.joinFamilyByInvite({ codeHash: expiring }),
+							),
+						),
+					).toEqual(refused("this invite is unknown, used, or expired"));
+					expect(readFamilyRecords(outsider).families).toEqual([]);
+				}),
+			),
+		));
+
+	test("push tokens: only sharing setup sets one, a new one replaces it, and the ingest identity joins without grants", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const owner = yield* openFamilyDb(config);
+					const relative = yield* openFamilyDb(config);
+					const ingest = yield* openFamilyDb(config);
+					yield* callDb(owner, (c) =>
+						c.reducers.createFamily({ name: "Kowalski" }),
+					);
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					yield* callDb(owner, (c) =>
+						c.reducers.addFamilyMember({
+							familyId,
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const set = (db: FamilyDb, tokenHash: string) =>
+						callDb(db, (c) =>
+							c.reducers.setFamilyPushToken({
+								familyId,
+								tokenHash,
+								ingest: Identity.fromString(ingest.identity),
+							}),
+						);
+					const tokens = () =>
+						[...ingest.connection.db.myPushTokens.iter()].map(
+							({ familyId, tokenHash }) => ({ familyId, tokenHash }),
+						);
+					// Another identity's views update asynchronously.
+					const until = (done: () => boolean) =>
+						Effect.gen(function* () {
+							for (let tries = 0; !done() && tries < 100; tries++)
+								yield* Effect.sleep("20 millis");
+						});
+					const first = sha256Hex(crypto.randomUUID());
+					const second = sha256Hex(crypto.randomUUID());
+
+					expect(yield* Effect.flip(set(relative, first))).toEqual(
+						new DbRejected({ reason: "no care access: family_access" }),
+					);
+					yield* set(owner, first);
+					yield* until(() => tokens().length === 1);
+					expect(tokens()).toEqual([{ familyId, tokenHash: first }]);
+					expect(readFamilyRecords(ingest).families.map((f) => f.id)).toEqual([
+						home.id,
+					]);
+
+					yield* set(owner, second);
+					yield* until(() => tokens()[0]?.tokenHash === second);
+					expect(tokens()).toEqual([{ familyId, tokenHash: second }]);
+					// Family members never see the token hash; the ingest identity holds no grant.
+					expect([...owner.connection.db.myPushTokens.iter()]).toEqual([]);
+					expect(
+						[...owner.connection.db.myCareGrants.iter()].filter(
+							(grant) => grant.member.toHexString() === ingest.identity,
+						),
+					).toEqual([]);
+				}),
+			),
+		));
+
 	// Without a token the first socket is the WebSocket; with one, it is the SDK's token fetch.
 	test.each([
 		["the WebSocket handshake", {}],
@@ -252,4 +429,94 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 		expect(Date.now() - started).toBeLessThan(3000);
 		down.close();
 	});
+
+	test("a database that never answers an open fails as unavailable after three timed-out attempts", async () => {
+		if (config === undefined) throw new Error("no database configured");
+		const hung = await dbProxy(config.uri);
+		hung.setMode("freeze");
+		try {
+			const error = await Effect.runPromise(
+				Effect.gen(function* () {
+					const opening = yield* Effect.forkChild(
+						Effect.flip(
+							Effect.scoped(openFamilyDb({ ...config, uri: hung.uri })),
+						),
+					);
+					// Three 5 s attempts with 250 ms and 500 ms backoff: about 15.75 s of database silence.
+					let waited = 0;
+					while (opening.pollUnsafe() === undefined && waited < 60_000) {
+						yield* TestClock.adjust("250 millis");
+						waited += 250;
+						yield* Effect.yieldNow;
+					}
+					expect(opening.pollUnsafe()).toBeDefined();
+					expect(waited).toBeGreaterThanOrEqual(15_750);
+					return yield* Fiber.join(opening);
+				}).pipe(Effect.provide(TestClock.layer())),
+			);
+			expect(error).toEqual(new DbUnavailable({ reason: "connect timed out" }));
+		} finally {
+			hung.close();
+		}
+	});
+
+	test("a refused subscription fails the open at once as unavailable and closes its socket", async () => {
+		if (config === undefined) throw new Error("no database configured");
+		const link = await dbProxy(config.uri);
+		// As a module without the server's views would: the database refuses the subscription.
+		const builder = await Effect.runPromise(
+			Effect.scoped(
+				Effect.map(openFamilyDb(config), ({ connection }) =>
+					Object.getPrototypeOf(connection.subscriptionBuilder()),
+				),
+			),
+		);
+		const subscribe = builder.subscribe;
+		const refused = spyOn(builder, "subscribe").mockImplementation(function (
+			this: unknown,
+		) {
+			return subscribe.call(this, ["SELECT * FROM no_such_view"]);
+		});
+		try {
+			const accepted = link.nextSocket();
+			const started = Date.now();
+			const error = await Effect.runPromise(
+				Effect.flip(Effect.scoped(openFamilyDb({ ...config, uri: link.uri }))),
+			);
+			expect(error).toEqual(
+				new DbUnavailable({ reason: "subscription failed" }),
+			);
+			expect(refused).toHaveBeenCalledTimes(3);
+			// Far below one 5 s connect timeout: the refusal is not waited out.
+			expect(Date.now() - started).toBeLessThan(3000);
+			await closed(await accepted);
+		} finally {
+			refused.mockRestore();
+			link.close();
+		}
+	});
+
+	test("a call the database never answers fails as unavailable after 5 s", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const family = yield* openFamilyDb(config);
+					// The SDK never settles a call the database does not answer.
+					const call = yield* Effect.forkChild(
+						Effect.flip(callDb(family, () => new Promise<never>(() => {}))),
+					);
+					yield* Effect.yieldNow;
+					yield* TestClock.adjust("4999 millis");
+					expect(call.pollUnsafe()).toBeUndefined();
+					yield* TestClock.adjust("1 millis");
+					expect(yield* Fiber.join(call)).toEqual(
+						new DbUnavailable({ reason: "call timed out" }),
+					);
+					// A timed-out call leaves the connection usable.
+					yield* callDb(family, (c) =>
+						c.reducers.createFamily({ name: "After timeout" }),
+					);
+				}),
+			).pipe(Effect.provide(TestClock.layer())),
+		));
 });

@@ -12,6 +12,7 @@ import {
 import { Cause, Effect, Exit, Schema } from "effect";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import type { FamilyDb } from "../db";
 import { familyTools } from "../family-tools";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import { maxAudioBytes, type Voice } from "../integrations/elevenlabs";
@@ -157,7 +158,8 @@ const wearerFacts = (c: Context<FamilyEnv>): string[] => {
 
 /**
  * Answers one family question; the routes and the iMessage agent share it. `facts` gives the
- * saved facts a wearer may hear again; it is read only for a wearer's question.
+ * saved facts a wearer may hear again; it is read only for a wearer's question. `db` is the asking
+ * member's connection: without the Fetch.ai bridge, the tools read the records through it.
  */
 export const familyAnswer =
 	({ gemini, fetchAgent }: Pick<AskDeps, "gemini" | "fetchAgent">) =>
@@ -165,6 +167,7 @@ export const familyAnswer =
 		familyId: bigint,
 		question: FamilyQuestion,
 		facts: () => readonly string[] = () => [],
+		db?: FamilyDb,
 	) => {
 		const now = new Date();
 		// Checked before any provider, so help never waits on a model or a missing configuration.
@@ -181,12 +184,13 @@ export const familyAnswer =
 				urgent: true,
 			});
 		// Checked first, so Gemini never runs a question whose tools cannot read records.
-		if (fetchAgent === undefined)
+		const source = fetchAgent ?? db;
+		if (source === undefined)
 			throw new ApiFailure(
 				"unavailable",
 				"Fetch.ai tool routing is not configured",
 			);
-		const family = familyTools(fetchAgent, familyId, now, question.timeZone);
+		const family = familyTools(source, familyId, now, question.timeZone);
 		const rules =
 			question.asker === "wearer"
 				? [family.rules, wearerRules, ...facts()].join("\n")
@@ -224,7 +228,7 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 				checkAttachments(question);
 				const answer = await run(
 					c.req.raw.signal,
-					askFamily(c.var.familyId, question, () => wearerFacts(c)),
+					askFamily(c.var.familyId, question, () => wearerFacts(c), c.var.db),
 				);
 				if (answer === undefined) return gone();
 				c.header("cache-control", "no-store");
@@ -268,7 +272,12 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 					);
 				const answer = await run(
 					signal,
-					askFamily(c.var.familyId, question.value, () => wearerFacts(c)),
+					askFamily(
+						c.var.familyId,
+						question.value,
+						() => wearerFacts(c),
+						c.var.db,
+					),
 				);
 				if (answer === undefined) return gone();
 				// The text answer stands when speech fails; the reason stays explicit.

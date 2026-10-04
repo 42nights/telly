@@ -22,6 +22,7 @@
 		"check": "biome check --write .",
 		"lint": "biome ci .",
 		"test": "bun test",
+		"coverage": "rm -rf coverage && bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/unit && bun run db:test && bun scripts/coverage-summary.ts coverage/unit/lcov.info coverage/db/lcov.info",
 		"smoke": "bun run --filter server smoke",
 		"check:quality": "fallow --fail-on-issues --fail-on-parse-error",
 		"check:structure": "sh scripts/check-structure.sh",

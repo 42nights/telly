@@ -5,6 +5,7 @@
 // signature, issuer, audience, and expiry on every request.
 import {
 	authorizationUrl,
+	discoverAuthorizationEndpoint,
 	exchangeSignInCode,
 	tokenMatches,
 } from "@health/contracts/session";
@@ -16,11 +17,11 @@ import { setSessionToken } from "./session";
 
 const PENDING = "telly.sign-in.pending";
 
-const Discovery = Schema.Struct({ authorization_endpoint: Schema.String });
 const Pending = Schema.Struct({
 	verifier: Schema.String,
 	state: Schema.String,
 	nonce: Schema.String,
+	returnTo: Schema.String,
 });
 
 export type SignInConfig = {
@@ -45,24 +46,24 @@ const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 
 const redirectUri = () => `${location.origin}/sign-in`;
 
-/** Sends the browser to the issuer's sign-in page. */
-export const startSignIn = async (config: SignInConfig) => {
-	const response = await fetch(
-		`${config.issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
+/** Sends the browser to the issuer's sign-in page; `finishSignIn` gives back `returnTo`. */
+export const startSignIn = async (config: SignInConfig, returnTo: string) => {
+	const authorizationEndpoint = await discoverAuthorizationEndpoint(
+		config.issuer,
 	);
-	if (!response.ok)
-		throw new Error(`The sign-in server replied HTTP ${response.status}.`);
-	const { authorization_endpoint } = Schema.decodeUnknownSync(Discovery)(
-		await response.json(),
-	);
-	const pending = { verifier: random(), state: random(), nonce: random() };
+	const pending = {
+		verifier: random(),
+		state: random(),
+		nonce: random(),
+		returnTo,
+	};
 	sessionStorage.setItem(PENDING, JSON.stringify(pending));
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
 		new TextEncoder().encode(pending.verifier),
 	);
 	location.assign(
-		authorizationUrl(authorization_endpoint, {
+		authorizationUrl(authorizationEndpoint, {
 			clientId: config.clientId,
 			redirectUri: redirectUri(),
 			state: pending.state,
@@ -83,7 +84,10 @@ const takePending = () => {
 	}
 };
 
-/** Completes the issuer's `?code=&state=` return through the server and stores the ID token. */
+/**
+ * Completes the issuer's `?code=&state=` return through the server, stores the ID token, and
+ * returns the `returnTo` that `startSignIn` got.
+ */
 export const finishSignIn = async (
 	config: SignInConfig,
 	reply: { readonly code: string; readonly state: string },
@@ -91,12 +95,16 @@ export const finishSignIn = async (
 	const pending = takePending();
 	if (pending === null || pending.state !== reply.state)
 		throw new Error("This sign-in reply is not from this tab. Sign in again.");
-	const idToken = await exchangeSignInCode(ENV.VITE_SERVER_URL, {
-		code: reply.code,
-		codeVerifier: pending.verifier,
-		redirectUri: redirectUri(),
-	});
+	const { idToken, refreshToken } = await exchangeSignInCode(
+		ENV.VITE_SERVER_URL,
+		{
+			code: reply.code,
+			codeVerifier: pending.verifier,
+			redirectUri: redirectUri(),
+		},
+	);
 	if (!tokenMatches(idToken, config.issuer, pending.nonce))
 		throw new Error("The sign-in server sent a token for another sign-in.");
-	setSessionToken(idToken);
+	setSessionToken(idToken, refreshToken);
+	return pending.returnTo;
 };

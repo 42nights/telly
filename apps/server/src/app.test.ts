@@ -4,6 +4,8 @@ import { ApiError, Sources } from "@health/contracts";
 import { Exit, Schema } from "effect";
 import { createApp } from "./app";
 import { serverConfig } from "./config";
+import { DbUnavailable } from "./db";
+import { sha256Hex } from "./http";
 import type { NoopSample } from "./integrations/noop-ingest";
 
 // Sign-in is not configured, as in a fresh checkout.
@@ -44,11 +46,14 @@ describe("server boundaries", () => {
 	});
 
 	test("NOOP ingest records only an authorised, well-formed relay batch", async () => {
-		const recorded: NoopSample[][] = [];
+		const recorded: [bigint, NoopSample[]][] = [];
 		const ingest = createApp(config, {
-			key: "relay-key",
-			record: async (samples) => {
-				recorded.push([...samples]);
+			identity: "0".repeat(64),
+			legacy: { key: "relay-key", familyId: 7n },
+			tokenFamily: (hash) =>
+				hash === sha256Hex("family-token") ? 9n : undefined,
+			record: async (familyId, samples) => {
+				recorded.push([familyId, [...samples]]);
 			},
 		});
 		const minute = 1_789_999_980;
@@ -113,7 +118,7 @@ describe("server boundaries", () => {
 			).sources[0];
 		expect((await noopStatus())?.status).toBe("not_connected");
 
-		expect((await post(ingest, "?k=relay-key", batch)).status).toBe(204);
+		expect((await post(ingest, "?k=relay-key", batch)).status).toBe(200);
 		expect(await noopStatus()).toMatchObject({
 			source: "noop",
 			status: "connected",
@@ -128,25 +133,82 @@ describe("server boundaries", () => {
 		) => ({ metric, value, unit, time, source });
 		expect(recorded).toEqual([
 			[
-				sample("heart_rate", 61, "bpm", minute * 1000, "noop:my-whoop"),
-				sample("heart_rate", 70, "bpm", (minute + 60) * 1000, "noop:my-whoop"),
-				sample("on_wrist", 0, "boolean", (minute + 5) * 1000, "noop:my-whoop"),
-				sample("resting_heart_rate", 52, "bpm", day, "noop:my-whoop-noop"),
-				sample("sleep_efficiency", 50, "%", day, "noop:my-whoop-noop"),
-				sample(
-					"daily_strain",
-					29.6,
-					"noop effort (0-100)",
-					day,
-					"noop:my-whoop-noop",
-				),
+				7n,
+				[
+					sample(
+						"heart_rate",
+						64,
+						"bpm",
+						(minute + 30) * 1000,
+						"noop:my-whoop",
+					),
+					sample(
+						"heart_rate",
+						70,
+						"bpm",
+						(minute + 60) * 1000,
+						"noop:my-whoop",
+					),
+					sample(
+						"on_wrist",
+						0,
+						"boolean",
+						(minute + 5) * 1000,
+						"noop:my-whoop",
+					),
+					sample("resting_heart_rate", 52, "bpm", day, "noop:my-whoop-noop"),
+					sample("sleep_efficiency", 50, "%", day, "noop:my-whoop-noop"),
+					sample(
+						"daily_strain",
+						29.6,
+						"noop effort (0-100)",
+						day,
+						"noop:my-whoop-noop",
+					),
+				],
 			],
 		]);
 		recorded.length = 0;
 		expect((await post(ingest, "", batch, "Bearer relay-key")).status).toBe(
-			204,
+			200,
 		);
-		expect(recorded).toHaveLength(1);
+		expect(recorded.map(([familyId]) => familyId)).toEqual([7n]);
+
+		// A family push token (NOOP sends only the URL) records into that token's family.
+		recorded.length = 0;
+		expect((await post(ingest, "?k=family-token", batch)).status).toBe(200);
+		expect((await post(ingest, "?k=other-token", batch)).status).toBe(401);
+		expect(recorded.map(([familyId]) => familyId)).toEqual([9n]);
+	});
+
+	test("WHOOP push needs only the NOOP token; the legacy key and family stay a pair", () => {
+		const db = { uri: "ws://127.0.0.1:1", database: "health" };
+		const env = {
+			CORS_ORIGIN: "http://localhost:3001",
+			ELEVENLABS_VOICE_ID: "voice",
+			ELEVENLABS_API_URL: "http://127.0.0.1:1",
+			GEMINI_BASE_URL: "http://127.0.0.1:1",
+			REPORT_EMAIL_FROM: "Telly <reports@example.com>",
+			SPACETIMEDB_URI: db.uri,
+			SPACETIMEDB_DATABASE: db.database,
+			NOOP_SPACETIMEDB_TOKEN: "ingest-token",
+		};
+		expect(serverConfig(env).noop).toEqual({
+			db: { ...db, token: "ingest-token" },
+		});
+		expect(
+			serverConfig({ ...env, NOOP_INGEST_KEY: "k", NOOP_FAMILY_ID: "3" }).noop
+				?.legacy,
+		).toEqual({ key: "k", familyId: 3n });
+		expect(() => serverConfig({ ...env, NOOP_INGEST_KEY: "k" })).toThrow();
+		expect(() =>
+			serverConfig({
+				...env,
+				NOOP_SPACETIMEDB_TOKEN: undefined,
+				NOOP_INGEST_KEY: "k",
+				NOOP_FAMILY_ID: "3",
+			}),
+		).toThrow();
 	});
 
 	test("the request log never prints the NOOP ingest key", async () => {
@@ -171,6 +233,66 @@ describe("server boundaries", () => {
 		).toBe("not_found");
 	});
 
+	test("an unexpected failure answers a generic 500 and logs it, unless the client left", async () => {
+		const failing = createApp(config, {
+			identity: "0".repeat(64),
+			legacy: { key: "relay-key", familyId: 7n },
+			tokenFamily: () => undefined,
+			record: async () => {
+				throw new Error("row 7 of family 42 is corrupt");
+			},
+		});
+		const batch = deflateRawSync(JSON.stringify({ tables: {} }));
+		const errors = spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const response = await failing.request("/api/noop/ingest", {
+				method: "POST",
+				body: batch,
+				headers: { Authorization: "Bearer relay-key" },
+			});
+			expect(response.status).toBe(500);
+			expect(
+				Schema.decodeUnknownSync(ApiError)(await response.json(), strict),
+			).toEqual({ error: "internal", message: "Internal server error" });
+			expect(errors).toHaveBeenCalledTimes(1);
+
+			const gone = new AbortController();
+			gone.abort();
+			const cancelled = await failing.request(
+				new Request("http://localhost/api/noop/ingest", {
+					method: "POST",
+					body: batch,
+					headers: { Authorization: "Bearer relay-key" },
+					signal: gone.signal,
+				}),
+			);
+			expect(cancelled.status).toBe(500);
+			expect(errors).toHaveBeenCalledTimes(1);
+		} finally {
+			errors.mockRestore();
+		}
+	});
+
+	test("a closed database connection reads as an outage, not a server bug", async () => {
+		const outage = createApp(config, {
+			identity: "0".repeat(64),
+			legacy: { key: "relay-key", familyId: 7n },
+			tokenFamily: () => undefined,
+			record: async () => {
+				throw new DbUnavailable({ reason: "connection closed" });
+			},
+		});
+		const response = await outage.request("/api/noop/ingest", {
+			method: "POST",
+			body: deflateRawSync(JSON.stringify({ tables: {} })),
+			headers: { Authorization: "Bearer relay-key" },
+		});
+		expect(response.status).toBe(503);
+		expect(
+			Schema.decodeUnknownSync(ApiError)(await response.json(), strict).error,
+		).toBe("unavailable");
+	});
+
 	test("without sign-in configuration, protected routes are unavailable, not open", async () => {
 		const response = await app.request("/api/families/1", {
 			headers: { Authorization: "Bearer anything" },
@@ -189,6 +311,7 @@ describe("server boundaries", () => {
 				ELEVENLABS_VOICE_ID: "voice",
 				ELEVENLABS_API_URL: "http://127.0.0.1:1",
 				GEMINI_BASE_URL: "http://127.0.0.1:1",
+				REPORT_EMAIL_FROM: "Telly <reports@saintess.tech>",
 			}),
 		);
 		const allowed = async (origin: string) =>

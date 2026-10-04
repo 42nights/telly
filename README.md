@@ -79,16 +79,16 @@ flowchart LR
     q["Family question"] -->|"POST …/ask"| api
     meal["Meal photo"] -->|"…/meals"| api
     api -->|"store: false"| gem["Gemini<br/>gemini-3.8-flash"]
-    gem -.->|"429 or 503"| fb["gemini-3.5-flash<br/>one retry: vision, questions"]
+    gem -.->|"429 or 503, or slow (vision)"| fb["gemini-3.5-flash<br/>vision: after 12 s or a refusal<br/>questions: retries after 1 s, 3 s"]
     gem -->|"function calls"| tools["Family data tools<br/>via Fetch.ai"]
     gem --> out["Boxes in frame pixels ·<br/>cited answer · meal estimate"]
     out --> app["App draws the marker<br/>or shows the answer"]
 ```
 
-- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision and questions retry once on `gemini-3.5-flash`.
+- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. Vision has 30 s: `gemini-3.8-flash` gets the first 12 s, and when it answers 429 or 503 or is slower, `gemini-3.5-flash` gets the rest. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
 - **Code:** `apps/server/src/integrations/gemini.ts`, `gemini-chat.ts`, `gemini-meal.ts`. **Key:** `GEMINI_API_KEY`.
 - **Proof:** live medicine detection answered 200 ([#174](https://github.com/ayaangazali/telly/pull/174)). Live Gemini checks for calm support, meal photos, and medicine memory are in [#180](https://github.com/ayaangazali/telly/pull/180). A request with the stored key returned 200 ([#126](https://github.com/ayaangazali/telly/pull/126)).
-- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota, Telly shows "unavailable". A found box does not confirm that a dose was taken.
+- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota or overloaded, a question says "The assistant is busy right now", and a picture check says "The picture checker is busy right now". A found box does not confirm that a dose was taken.
 
 - **Screenshots:** No screenshot yet: a live answer needs a signed-in session and Gemini quota. The proof is the PR record.
 
@@ -178,16 +178,15 @@ flowchart LR
 flowchart LR
     data["datasets.py<br/>synthetic cues + open data"] --> train["train.py<br/>LoRA on River"]
     train --> ckpt[("river:// checkpoint<br/>Qwen/Qwen3.5-9B")]
-    ckpt --> serve["serve.py<br/>chat-completions, local"]
-    samples["Validated samples"] -->|"POST …/cues"| api["Telly API<br/>qwen.ts"]
-    api --> serve
-    serve --> cue["One health cue<br/>advice only, no alert change"]
+    samples["Health samples"] -->|"POST …/cues"| api["Telly API<br/>qwen.ts"]
+    api -->|"gRPC queued chat"| ckpt
+    ckpt --> cue["One health cue<br/>advice only, no alert change"]
 ```
 
-- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns validated samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
-- **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_DEPLOYMENT`, `QWEN_CHECKPOINT`.
-- **Proof:** training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452), and `serve.py` served cues to the server adapter ([#177](https://github.com/ayaangazali/telly/pull/177)).
-- **Limits:** no hosted deployment serves the model yet.
+- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns health samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. A cue from unvalidated samples, such as WHOOP readings, carries a `notice` that says so. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
+- **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_BASE_MODEL`, `QWEN_CHECKPOINT`.
+- **Proof:** training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452), and the server adapter gets cues from the checkpoint through River queued inference ([#177](https://github.com/ayaangazali/telly/pull/177)).
+- **Limits:** River approved no dedicated deployment for the base model, so each cue waits in River's queue (3 to 12 s).
 
 - **Screenshots:** No screenshot yet: the River console needs the account owner's login. The proof is the PR record.
 
@@ -199,7 +198,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     phone["iMessage sender"] --> spectrum["Photon Spectrum Cloud"]
-    spectrum --> agent["Telly API<br/>imessage agent"]
+    spectrum -->|"signed webhook POST"| agent["Telly API<br/>/api/imessage/webhook"]
     agent -->|"sender allowlist → family"| ask["Question flow<br/>urgent path · Gemini · tools"]
     agent -.->|"not allowlisted"| drop["No answer"]
     ask --> spectrum
@@ -207,7 +206,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. The server answers through the same question flow as the app, including the urgent-help path.
-- **Code:** `apps/server/src/imessage/`. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `TELLY_IMESSAGE_SENDERS`.
+- **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`, so the agent works while the API container sleeps between requests. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Proof:** a live round trip on 2026-10-04 at 06:38 UTC. "I need help" got the urgent reply. "How did I sleep last night?" got the designed "cannot answer" fallback, because Fetch.ai was off in that run ([#175](https://github.com/ayaangazali/telly/pull/175)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.
 
@@ -256,10 +255,10 @@ flowchart LR
     routes -->|"verify issuer keys"| db[("SpacetimeDB<br/>family membership")]
 ```
 
-- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership.
+- **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership. Without a valid session, every web page shows only the sign-in screen, which returns to the requested page after sign-in.
 - **Code:** `apps/server/src/auth.ts`, `routes/sign-in.ts`. **Keys:** `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_SECRET`.
 - **Proof:** real Google discovery and keys loaded, and a forged token got 401 ([#162](https://github.com/ayaangazali/telly/pull/162)). Web and phone flows: [#130](https://github.com/ayaangazali/telly/pull/130).
-- **Limits:** the consent screen is in Testing mode, so only listed test users can sign in. No phone sign-in has run on a device.
+- **Limits:** the consent screen is in production (External), so any Google account can sign in. No phone sign-in has run on a device.
 
 
 **Screenshots** (captured 2026-10-04 about 08:00 UTC):
@@ -310,7 +309,7 @@ flowchart LR
 ```
 
 - **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. Unvalidated samples never raise an alert. Screens and answers label them "WHOOP (via NOOP) · unvalidated".
-- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_INGEST_KEY`, `NOOP_FAMILY_ID`, `NOOP_SPACETIMEDB_TOKEN`.
+- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family push tokens: `POST /api/families/:familyId/whoop-token` makes one, and NOOP pushes to `/api/noop/ingest?k=<token>`. `NOOP_INGEST_KEY` with `NOOP_FAMILY_ID` keeps the single-family key. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
 - **Proof:** on a team Mac mini, a family question answered "Your most recent heart rate reading is 58 bpm · WHOOP (via NOOP) · unvalidated" ([#174](https://github.com/ayaangazali/telly/pull/174), with [#80](https://github.com/ayaangazali/telly/pull/80), [#81](https://github.com/ayaangazali/telly/pull/81), [#97](https://github.com/ayaangazali/telly/pull/97)).
 - **Limits:** the deployed API does not have NOOP ingest set up, so its `/api/sources` reports `not_connected`.
 
@@ -356,9 +355,9 @@ Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and 
 
 | Area | State |
 | --- | --- |
-| Web app | Merged and deployed at <https://telly.jerry-2c0.workers.dev>. Sign-in uses Google; only listed test users can sign in |
+| Web app | Merged and deployed at <https://app.saintess.tech>. Sign-in uses Google; the consent screen is in production |
 | Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud |
-| Phone app | Expo app with sign-in. An iOS WebView shell ([#95](https://github.com/ayaangazali/telly/pull/95)) is waiting for a decision. No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
+| Phone app | iOS shell: the web app <https://app.saintess.tech> full screen in a WebView, with native Google sign-in. CI builds an unsigned `.ipa` for SideStore (`.github/workflows/health-ios.yml`). No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
 | Providers | See [Providers](#providers): each one lists its live proof and limits |
 | Hospital report delivery | Not available: Finchnode only reads records. An email option is in progress ([#8](https://github.com/ayaangazali/telly/issues/8)) |
 | Meta glasses | Optional; needs hardware ([#18](https://github.com/ayaangazali/telly/issues/18), [#19](https://github.com/ayaangazali/telly/issues/19)) |
@@ -374,7 +373,7 @@ bun install
 bun run dev        # web on http://localhost:3001, server on http://localhost:3000
 ```
 
-Use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native` to start one app. Open the phone app in Expo Go. On a physical phone, set `EXPO_PUBLIC_SERVER_URL` to your computer's LAN address and start the server with `HOST=0.0.0.0`.
+Use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native` to start one app. Open the phone app in Expo Go. The phone app uses <https://app.saintess.tech> and <https://api.saintess.tech> by default. To use your computer, set `EXPO_PUBLIC_WEB_URL` and `EXPO_PUBLIC_SERVER_URL` to its LAN address in `apps/native/.env.local`, and start the server with `HOST=0.0.0.0`.
 
 Each app keeps its environment variables in `.env.schema` (Varlock). Copy the values you need into an ignored `.env` file; without a provider's key, its routes answer `503 unavailable` and the screens say so. After you change a schema, run `bun run env:generate`.
 
@@ -387,7 +386,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 
 | Area | Routes (relative to `/api/families/:familyId`) |
 | --- | --- |
-| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `GET /`, `POST /members`, `POST /samples` |
+| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `POST /api/invites/:code/join`, `GET /`, `POST /members`, `POST /invites`, `POST /whoop-token`, `POST /samples` |
 | Alerts | `/alerts`, `/alerts/:id/acknowledgements`, `/alert-thresholds`, `/monitoring` |
 | Questions, voice, chat | `/ask`, `/ask/voice`, `/voice/transcriptions`, `/voice/speech`, `/messages`, `/tools` ([docs/ask.md](docs/ask.md), [docs/chat.md](docs/chat.md)) |
 | Medicine and meals | `/vision/medicine-detections`, `/medicine-memory`, `/meals`, `/cooking/…`, `/delivery/…` |
@@ -397,7 +396,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 | Reports and appointments | `/reports/…`, `/report-pdfs/…`, `/appointments/…` |
 | Location and trips | `/location`, `/location/shares/:identity`, `/trips/…` |
 
-Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
+Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key or family push token), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
 
 </details>
 

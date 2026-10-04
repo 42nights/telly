@@ -9,7 +9,11 @@
 		"userInterfaceStyle": "automatic",
 		"ios": {
 			"supportsTablet": true,
-			"bundleIdentifier": "com.anonymous.health"
+			"bundleIdentifier": "com.anonymous.health",
+			"infoPlist": {
+				"NSCameraUsageDescription": "The medicine finder looks for a medicine box in the camera frame.",
+				"NSMicrophoneUsageDescription": "Voice requests are spoken to the app."
+			}
 		},
 		"android": {
 			"adaptiveIcon": {

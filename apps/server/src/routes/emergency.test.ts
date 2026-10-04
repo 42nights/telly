@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Handoff } from "@health/contracts/emergency";
 import { EmergencyOutcome } from "@health/contracts/emergency";
 import { Effect, Schema } from "effect";
-import { readFamilyRecords } from "../db";
+import { openFamilyDb, readFamilyRecords } from "../db";
 import { careProfileRoutes } from "./care-profile";
 import { type Dispatcher, emergencyRoutes } from "./emergency";
 import {
@@ -14,6 +14,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 
@@ -53,6 +54,7 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db, familyId } = yield* openFamily(config, "Emergency family");
+				yield* setOwnScopes(db, familyId, ["health_records"], false);
 				const calls: Handoff[] = [];
 				let answer: "connected" | "failed" = "connected";
 				const fake: Dispatcher = async (handoff) => {
@@ -212,16 +214,7 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 				// With health_records access, the handoff carries the saved care facts (#26): the
 				// profile's name when the device sends none, and only verified medicines.
 				const care = familyApp(db, familyId, careProfileRoutes());
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					yield* send(care, "POST", "/care-access", {
-						identity: db.identity,
-						scope,
-						granted: true,
-					});
+				yield* setOwnScopes(db, familyId, ["health_records"], true);
 				yield* send(care, "PUT", "/care-profile", {
 					preferredName: "Synthetic Sam",
 					language: "en",
@@ -287,6 +280,111 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 					summaries.filter((s) => s.includes("simulated call")),
 				).toHaveLength(6);
 				expect(summaries).toContain("Asked to reach the family.");
+				expect(outbound).toBe(0);
+			}),
+		));
+
+	test("an unclear reply asks again, and a failed alert or a thrown dialer never holds back the outcome", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Emergency faults");
+				const calls: Handoff[] = [];
+				const app = familyApp(
+					db,
+					familyId,
+					emergencyRoutes(async (handoff) => {
+						calls.push(handoff);
+						throw new Error("synthetic dialer fault");
+					}),
+				);
+				const post = (target: typeof app, path: string, body: unknown) =>
+					send(target, "POST", path, body).pipe(
+						Effect.map((r) => ({ status: r.status, outcome: decode(r.json) })),
+					);
+				const event = ouch();
+
+				// Neither help nor a denial: the check-in asks again, nothing dispatches or alerts.
+				const alertsBefore = readFamilyRecords(db).alerts.length;
+				const unclear = yield* post(app, "/emergency/check-in", {
+					event,
+					reply: { kind: "speech", speaker: "wearer", text: "what time is it" },
+					wearer,
+					location: fix(30),
+				});
+				expect(unclear.status).toBe(200);
+				expect(unclear.outcome).toEqual({
+					action: "check_in",
+					prompt: "I didn't catch that. Do you need help? Say yes or no.",
+					event: { ...event, kind: "ouch" },
+					reason: "unclear",
+				});
+				expect(calls).toHaveLength(0);
+				expect(readFamilyRecords(db).alerts).toHaveLength(alertsBefore);
+
+				// A dialer that throws is reported as a failed call; the family still hears.
+				const thrown = yield* post(app, "/emergency", {
+					kind: "help",
+					report: "Help",
+					wearer,
+					location: { status: "unavailable" },
+				});
+				expect(thrown.outcome).toMatchObject({
+					action: "dispatch",
+					call: { states: ["connecting", "failed"], outcome: "failed" },
+					family: { status: "raised" },
+				});
+				expect(calls).toHaveLength(1);
+
+				// "I don't need help" is a denial, though it contains "help".
+				const noHelp = yield* post(app, "/emergency/check-in", {
+					event,
+					reply: {
+						kind: "speech",
+						speaker: "wearer",
+						text: "I don't need help",
+					},
+					wearer,
+					location: fix(30),
+				});
+				expect(noHelp.outcome).toMatchObject({
+					action: "none",
+					reason: "denied",
+					family: { status: "raised" },
+				});
+				expect(calls).toHaveLength(1);
+
+				// A caller outside the family cannot raise the alert: the failure is reported, and the
+				// call (the default simulator, which reports connected) is still placed.
+				const outsider = yield* openFamilyDb(config);
+				const foreign = familyApp(outsider, familyId, emergencyRoutes());
+				const help = yield* post(foreign, "/emergency", {
+					kind: "help",
+					report: null,
+					wearer,
+					location: { status: "unavailable" },
+				});
+				expect(help.outcome).toMatchObject({
+					action: "dispatch",
+					call: { outcome: "connected" },
+					handoff: { care: { status: "unavailable" } },
+					family: {
+						status: "failed",
+						message: "not a member of this family",
+					},
+				});
+				const family = yield* post(foreign, "/emergency", {
+					kind: "family",
+					report: null,
+				});
+				expect(family.outcome).toEqual({
+					action: "family",
+					family: { status: "failed", message: "not a member of this family" },
+				});
+				expect(
+					readFamilyRecords(db).alerts.filter(
+						(a) => a.raisedBy === outsider.identity,
+					),
+				).toEqual([]);
 				expect(outbound).toBe(0);
 			}),
 		));

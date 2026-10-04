@@ -1,8 +1,12 @@
 // Family and health-data routes. Every write goes through a module reducer that checks membership
-// for the caller's database identity again, so these handlers add no access rule of their own.
+// for the caller's database identity again. Only the family delete checks access here as well, so a
+// refused caller never deletes stored files.
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import {
+	DeleteFamily,
+	type FamilyInvite,
 	type FamilyList,
+	type JoinedFamily,
 	type Me,
 	NewFamily,
 	NewFamilyMember,
@@ -11,7 +15,20 @@ import {
 import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import { readFamilyRecords } from "../db";
-import { type AuthEnv, callReducer, decodeBody, type FamilyEnv } from "../http";
+import {
+	ApiFailure,
+	type AuthEnv,
+	callReducer,
+	decodeBody,
+	type FamilyEnv,
+	newSecret,
+	sha256Hex,
+} from "../http";
+import type { R2Bucket } from "../integrations/r2";
+import { requireScope } from "./care-profile";
+import { familyPdfPrefix } from "./reports";
+
+const INVITE_TTL_MS = 7 * 24 * 3_600_000;
 
 // ponytail: a reducer returns no row, so the new row is the one that appeared during the call. Two
 // concurrent creates by the same caller can swap rows; return ids from a procedure if that matters.
@@ -32,11 +49,19 @@ export const accountRoutes = () =>
 		.get("/me", (c) =>
 			c.json({ ...c.var.identity, identity: c.var.db.identity } satisfies Me),
 		)
-		.get("/families", (c) =>
-			c.json({
-				families: readFamilyRecords(c.var.db).families,
-			} satisfies FamilyList),
-		)
+		.get("/families", (c) => {
+			const { families, samples } = readFamilyRecords(c.var.db);
+			const newest = new Map<string, string>();
+			for (const { familyId, sourceTime, synthetic } of samples)
+				if (!synthetic && sourceTime > (newest.get(familyId) ?? ""))
+					newest.set(familyId, sourceTime);
+			return c.json({
+				families: families.map((family) => ({
+					...family,
+					newestSampleAt: newest.get(family.id) ?? null,
+				})),
+			} satisfies FamilyList);
+		})
 		.post("/families", async (c) => {
 			const { name } = await decodeBody(c, NewFamily);
 			const before = readFamilyRecords(c.var.db).families;
@@ -46,10 +71,27 @@ export const accountRoutes = () =>
 				readFamilyRecords(c.var.db).families,
 			);
 			return c.json(family, 201);
+		})
+		// Any signed-in caller may join with a valid code; the module checks it is unused and current.
+		.post("/invites/:code/join", async (c) => {
+			const codeHash = sha256Hex(c.req.param("code"));
+			await callReducer(c.var.db, (db) =>
+				db.reducers.joinFamilyByInvite({ codeHash }),
+			);
+			const { families } = readFamilyRecords(c.var.db);
+			const invite = [...c.var.db.connection.db.myFamilyInvites.iter()].find(
+				(row) => row.codeHash === codeHash,
+			);
+			const family = families.find(
+				(row) => row.id === invite?.familyId.toString(),
+			);
+			if (family === undefined)
+				throw new Error("the joined family is not visible to its new member");
+			return c.json({ family } satisfies JoinedFamily);
 		});
 
 /** One family's routes, mounted at `/api/families/:familyId` behind the membership check. */
-export const familyRoutes = () =>
+export const familyRoutes = (storage?: R2Bucket) =>
 	new Hono<FamilyEnv>()
 		.get("/", (c) => {
 			const id = c.var.familyId.toString();
@@ -64,6 +106,29 @@ export const familyRoutes = () =>
 				),
 			} satisfies FamilyRecords);
 		})
+		// Checks access and the name before it touches storage, deletes the stored PDFs, then the
+		// records. The module checks both again. A failure after the PDFs leaves the records, so a
+		// retry finishes the job.
+		.delete("/", async (c) => {
+			const { name } = await decodeBody(c, DeleteFamily);
+			const { db, familyId } = c.var;
+			requireScope(c, "family_access");
+			const family = readFamilyRecords(db).families.find(
+				(row) => row.id === familyId.toString(),
+			);
+			if (family?.name !== name)
+				throw new ApiFailure(
+					"invalid_request",
+					"the name does not match this family",
+				);
+			if (storage !== undefined)
+				for (const { key } of await storage.list(familyPdfPrefix(familyId)))
+					await storage.remove(key);
+			await callReducer(db, (connection) =>
+				connection.reducers.deleteFamily({ familyId, name }),
+			);
+			return c.body(null, 204);
+		})
 		.post("/members", async (c) => {
 			const { identity } = await decodeBody(c, NewFamilyMember);
 			await callReducer(c.var.db, (db) =>
@@ -73,6 +138,21 @@ export const familyRoutes = () =>
 				}),
 			);
 			return c.body(null, 204);
+		})
+		.post("/invites", async (c) => {
+			const { secret: code, hash: codeHash } = newSecret();
+			const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+			await callReducer(c.var.db, (db) =>
+				db.reducers.createFamilyInvite({
+					familyId: c.var.familyId,
+					codeHash,
+					expiresAt: Timestamp.fromDate(expiresAt),
+				}),
+			);
+			return c.json(
+				{ code, expiresAt: expiresAt.toISOString() } satisfies FamilyInvite,
+				201,
+			);
 		})
 		.post("/samples", async (c) => {
 			const sample = await decodeBody(c, NewHealthSample);

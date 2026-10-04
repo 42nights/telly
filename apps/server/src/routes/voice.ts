@@ -6,7 +6,7 @@ import {
 import { Cause, Effect, Exit, Schema } from "effect";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
+import { ApiFailure, decodeBody, type FamilyEnv, typedFailure } from "../http";
 import {
 	maxAudioBytes,
 	type Voice,
@@ -24,9 +24,8 @@ const run = async <A>(
 	const exit = await Effect.runPromiseExit(effect, { signal });
 	if (Exit.isSuccess(exit)) return exit.value;
 	if (Cause.hasInterruptsOnly(exit.cause)) return undefined;
-	const failure = Cause.findErrorOption(exit.cause);
-	if (failure._tag === "None") throw Cause.squash(exit.cause);
-	throw new ApiFailure(failure.value.reason, failure.value.message);
+	const { reason, message } = typedFailure(exit.cause);
+	throw new ApiFailure(reason, message);
 };
 
 // 499: the client disconnected, so nobody reads this response.

@@ -1,4 +1,4 @@
-// The reads both family screens share, for the selected family, and the "Mark as seen" write.
+// The family screen's reads for the selected family, and the "Mark as seen" write.
 import { type Family, FamilyRecords } from "@health/contracts";
 import {
 	AcknowledgedAlert,
@@ -17,8 +17,11 @@ import { useFamily } from "@/lib/family";
 import { newestUnseen } from "./logic";
 
 const POLL_MS = 15_000;
+/** Records carry the live WHOOP heart rate, which the phone pushes every 15-30 s (#208). */
+// ponytail: every poll re-reads all family samples; read only the newest if the payload grows slow.
+export const RECORDS_POLL_MS = 5_000;
 
-/** The selected family and everything both family screens read about it. */
+/** The selected family and everything the family screen reads about it. */
 export type FamilyData = {
 	readonly familyState: ApiState<FamilyList>;
 	readonly family: Family | null;
@@ -49,7 +52,10 @@ export function useFamilyData(): FamilyData {
 		path("/alert-thresholds"),
 		options,
 	);
-	const records = useApi(FamilyRecords, path(""), options);
+	const records = useApi(FamilyRecords, path(""), {
+		pollMs: RECORDS_POLL_MS,
+		refreshKey,
+	});
 	const me = useApi(Me, "/api/me");
 	useDemoWarning(
 		records.kind === "ready" ? records.value.samples : null,

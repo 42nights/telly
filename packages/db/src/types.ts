@@ -300,6 +300,25 @@ export const Family = __t.object("Family", {
 });
 export type Family = __Infer<typeof Family>;
 
+export const FamilyDeletion = __t.object("FamilyDeletion", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  deletedBy: __t.identity(),
+  deletedAt: __t.timestamp(),
+});
+export type FamilyDeletion = __Infer<typeof FamilyDeletion>;
+
+export const FamilyInvite = __t.object("FamilyInvite", {
+  codeHash: __t.string(),
+  familyId: __t.u64(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  expiresAt: __t.timestamp(),
+  usedBy: __t.option(__t.identity()),
+  usedAt: __t.option(__t.timestamp()),
+});
+export type FamilyInvite = __Infer<typeof FamilyInvite>;
+
 export const FamilyMember = __t.object("FamilyMember", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -307,6 +326,15 @@ export const FamilyMember = __t.object("FamilyMember", {
   addedAt: __t.timestamp(),
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
+
+export const FamilyPushToken = __t.object("FamilyPushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+  ingest: __t.identity(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type FamilyPushToken = __Infer<typeof FamilyPushToken>;
 
 export const FinchnodeLink = __t.object("FinchnodeLink", {
   id: __t.u64(),
@@ -486,6 +514,9 @@ export type MyExercisePlans = __Infer<typeof MyExercisePlans>;
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
+export const MyFamilyInvites = __t.object("MyFamilyInvites", {});
+export type MyFamilyInvites = __Infer<typeof MyFamilyInvites>;
+
 export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
 export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
@@ -510,6 +541,9 @@ export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
 
+export const MyPushTokens = __t.object("MyPushTokens", {});
+export type MyPushTokens = __Infer<typeof MyPushTokens>;
+
 export const MyReminderEvents = __t.object("MyReminderEvents", {});
 export type MyReminderEvents = __Infer<typeof MyReminderEvents>;
 
@@ -521,6 +555,12 @@ export type MyReminderSettings = __Infer<typeof MyReminderSettings>;
 
 export const MyReminders = __t.object("MyReminders", {});
 export type MyReminders = __Infer<typeof MyReminders>;
+
+export const MyReportEmailSettings = __t.object("MyReportEmailSettings", {});
+export type MyReportEmailSettings = __Infer<typeof MyReportEmailSettings>;
+
+export const MyReportEmails = __t.object("MyReportEmails", {});
+export type MyReportEmails = __Infer<typeof MyReportEmails>;
 
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
@@ -599,6 +639,12 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const PushToken = __t.object("PushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+});
+export type PushToken = __Infer<typeof PushToken>;
 
 export const Reminder = __t.object("Reminder", {
   id: __t.u64(),
@@ -681,6 +727,28 @@ export const Report = __t.object("Report", {
   reviewedAt: __t.option(__t.timestamp()),
 });
 export type Report = __Infer<typeof Report>;
+
+export const ReportEmail = __t.object("ReportEmail", {
+  reportId: __t.string(),
+  familyId: __t.u64(),
+  sendId: __t.string(),
+  recipient: __t.string(),
+  status: __t.string(),
+  reason: __t.option(__t.string()),
+  automatic: __t.bool(),
+  requestedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmail = __Infer<typeof ReportEmail>;
+
+export const ReportEmailSettings = __t.object("ReportEmailSettings", {
+  familyId: __t.u64(),
+  enabled: __t.bool(),
+  recipient: __t.string(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmailSettings = __Infer<typeof ReportEmailSettings>;
 
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {

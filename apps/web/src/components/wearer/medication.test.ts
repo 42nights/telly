@@ -9,6 +9,7 @@ import {
 	instructionInEffect,
 	medicationPrompt,
 	medicationReason,
+	questionSummary,
 	uncertaintyAnswer,
 } from "./medication";
 
@@ -92,6 +93,22 @@ describe("instruction in effect", () => {
 		for (const plan of cases)
 			expect(instructionInEffect(occurrence, plan, now)).toBeNull();
 	});
+
+	test("a plan without a time zone uses this device's date", () => {
+		expect(
+			instructionInEffect(occurrence, [version("10", { timeZone: null })], now)
+				?.id,
+		).toBe("10");
+	});
+});
+
+describe("question summary", () => {
+	test("names the dose time and the time asked, but no medicine", () => {
+		const summary = questionSummary(occurrence, "2026-10-04T08:06:00.000Z");
+		expect(summary).toContain("scheduled 2026-10-04T08:00:00.000Z");
+		expect(summary).toContain("asked 2026-10-04T08:06:00.000Z");
+		expect(summary).not.toContain("Morning tablet");
+	});
 });
 
 describe("medication prompt", () => {
@@ -110,6 +127,12 @@ describe("medication prompt", () => {
 	test("an unknown reason is said as unknown, not guessed", () => {
 		expect(medicationReason(version("10", { reason: null }))).toContain(
 			"does not say why",
+		);
+	});
+
+	test("a saved reason is quoted from the plan", () => {
+		expect(medicationReason(version("10"))).toBe(
+			"Your saved plan says you take Synthetic Med A for: “blood pressure”.",
 		);
 	});
 });

@@ -7,10 +7,12 @@ import type {
 
 import {
 	BARRIERS,
+	barrierWords,
 	dueCheckIn,
 	familyStatus,
 	nextSteps,
 	reportsUrgentSymptom,
+	restrictionsFor,
 } from "./logic";
 
 const NOW = Date.parse("2026-10-04T12:30:00Z");
@@ -51,6 +53,43 @@ describe("next steps", () => {
 			expect(nextSteps(barrier, "hydration").map((s) => s.action)).toEqual([
 				"caregiver",
 			]);
+	});
+});
+
+describe("barrier words", () => {
+	test("meal and drink use their own words where they differ", () => {
+		expect(barrierWords("not_hungry", "meal")).toBe("I'm not hungry");
+		expect(barrierWords("not_hungry", "hydration")).toBe("I'm not thirsty");
+		expect(barrierWords("forgot", "hydration")).toBe("I forgot");
+	});
+});
+
+describe("saved notes", () => {
+	const profile = {
+		preferredName: null,
+		language: null,
+		timeZone: null,
+		accessibilityNeeds: null,
+		diagnoses: null,
+		allergies: ["peanuts"],
+		dietaryRestrictions: [],
+		fluidRestrictions: null,
+		activityRestrictions: null,
+		routines: null,
+		contacts: null,
+		familiarDestinations: null,
+		devices: null,
+		declinedPrompts: [],
+	};
+
+	test("a meal shows diet notes and allergies; a drink shows only fluid notes", () => {
+		expect(restrictionsFor(profile, "meal")).toEqual([
+			{ label: "Diet notes", items: [] },
+			{ label: "Allergies", items: ["peanuts"] },
+		]);
+		expect(restrictionsFor(profile, "hydration")).toEqual([
+			{ label: "Fluid notes", items: null },
+		]);
 	});
 });
 

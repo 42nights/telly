@@ -30,6 +30,8 @@ export type R2Bucket = {
 	) => Promise<string>;
 	/** Every object whose key starts with `prefix`. */
 	readonly list: (prefix: string) => Promise<StoredObject[]>;
+	/** Deletes one object; a missing object is already deleted. */
+	readonly remove: (key: string) => Promise<void>;
 };
 
 const failed = (action: string, status: number) =>
@@ -77,6 +79,12 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 			if (!response.ok) throw failed("read the PDF", response.status);
 			return true;
 		},
+		remove: async (key) => {
+			const response = await send(url(key), { method: "DELETE" });
+			await response.body?.cancel();
+			if (!response.ok && response.status !== 404)
+				throw failed("delete the PDF", response.status);
+		},
 		presign: async (key, filename, seconds) => {
 			const link = new URL(url(key));
 			link.searchParams.set("X-Amz-Expires", String(seconds));
@@ -105,8 +113,15 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 					const key = tag(entry, "Key");
 					const size = Number(tag(entry, "Size"));
 					const lastModified = tag(entry, "LastModified");
-					if (key === undefined || lastModified === undefined)
-						throw failed("list the PDFs", 502);
+					if (
+						key === undefined ||
+						lastModified === undefined ||
+						!Number.isFinite(size)
+					)
+						throw new ApiFailure(
+							"upstream_error",
+							"PDF storage sent an unreadable listing",
+						);
 					objects.push({ key, size, lastModified });
 				}
 				const next = tag(xml, "NextContinuationToken");

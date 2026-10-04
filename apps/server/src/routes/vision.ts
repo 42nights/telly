@@ -8,11 +8,12 @@ import {
 import { Cause, Effect, Exit } from "effect";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
+import { ApiFailure, decodeBody, type FamilyEnv, typedFailure } from "../http";
 import {
 	createGeminiDetector,
 	type GeminiBox,
 	type GeminiConfig,
+	overloaded,
 } from "../integrations/gemini";
 
 /** Below this model confidence a marker asks the user to check the label. */
@@ -143,15 +144,16 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 			// 499: the client closed the request; nobody reads this response.
 			if (Cause.hasInterruptsOnly(result.cause))
 				return new Response(null, { status: 499 });
-			const failure = Cause.findErrorOption(result.cause);
-			if (failure._tag === "None") throw Cause.squash(result.cause);
-			const { reason, status } = failure.value;
+			const { reason, status } = typedFailure(result.cause);
 			console.warn("gemini vision failed", { reason, status });
+			// The web screen shows this after "Something went wrong while checking the picture."
 			throw new ApiFailure(
 				"upstream_error",
 				reason === "timeout"
-					? "Medicine detection timed out"
-					: "Medicine detection failed",
+					? "The picture checker is busy right now and did not answer in time. Try again in a minute."
+					: status !== undefined && overloaded(status)
+						? `The picture checker is busy right now (Gemini HTTP ${status}). Try again in a minute.`
+						: "Medicine detection failed",
 			);
 		},
 	);

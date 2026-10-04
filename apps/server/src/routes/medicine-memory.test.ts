@@ -4,7 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { MedicineMemory } from "@health/contracts/medicine-memory";
 import { Effect, Schema } from "effect";
 import { Timestamp } from "spacetimedb";
-import { openFamilyDb } from "../db";
+import { DbUnavailable, openFamilyDb } from "../db";
+import { dbProxy } from "../db-proxy";
 import { medicineMemoryRoutes } from "./medicine-memory";
 import {
 	dbConfig,
@@ -108,6 +109,18 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					memory.sightings.map((s) => [s.id, s.place, s.notFoundAt]),
 				).toEqual([[stored.id, "Bedside table", null]]);
 
+				// Another container is its own sighting; the most recently seen lists first.
+				const second = yield* send(app, "POST", path, {
+					...sighting("Kitchen counter", minutesAgo(2)),
+					container: "Synthetic Metformin box",
+				});
+				expect(
+					decode(second.json).sightings.map((s) => [s.container, s.place]),
+				).toEqual([
+					[expect.stringMatching(/lisinopril/i), "Bedside table"],
+					["Synthetic Metformin box", "Kitchen counter"],
+				]);
+
 				// Turning the permission off deletes what was remembered.
 				const cleared = yield* send(app, "PUT", "/medicine-memory", {
 					enabled: false,
@@ -172,6 +185,52 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 
 				const after = yield* send(ownerApp, "GET", "/medicine-memory");
 				expect(after.json).toEqual(saved.json);
+			}),
+		));
+
+	test("a dropped connection serves no stale memory", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const link = yield* Effect.acquireRelease(
+					Effect.promise(() => dbProxy(config.uri)),
+					(proxy) => Effect.sync(() => proxy.close()),
+				);
+				const { db, familyId } = yield* openFamily(
+					{ ...config, uri: link.uri },
+					"Dropped memory",
+				);
+				const app = familyApp(db, familyId, medicineMemoryRoutes());
+				const permission = { enabled: true, places: ["Kitchen"] };
+				const saved = yield* send(app, "PUT", "/medicine-memory", permission);
+				expect(saved.status).toBe(200);
+
+				// The write fails once the socket is gone; `app.ts` answers both errors as 503.
+				link.drop();
+				const write = yield* Effect.promise(() =>
+					Promise.resolve(
+						app.request("/medicine-memory", {
+							method: "PUT",
+							body: JSON.stringify(permission),
+							headers: { "content-type": "application/json" },
+						}),
+					).then(
+						() => undefined,
+						(caught: unknown) => caught,
+					),
+				);
+				expect(write).toBeInstanceOf(DbUnavailable);
+				// The cached permission is stale now and never leaves the server.
+				const read = yield* Effect.promise(() =>
+					Promise.resolve(app.request("/medicine-memory")).then(
+						() => undefined,
+						(caught: unknown) => caught,
+					),
+				);
+				expect(read).toEqual(
+					new DbUnavailable({
+						reason: "connection closed; cached rows are stale",
+					}),
+				);
 			}),
 		));
 });

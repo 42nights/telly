@@ -3,15 +3,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChefHat, CloudOff, Home, RotateCw, Utensils } from "lucide-react";
 
 import { ExerciseInvite } from "@/components/exercise/session";
-import { Alerts } from "@/components/hud/alerts";
 import { StatusFooter } from "@/components/hud/status-footer";
 import { Window } from "@/components/hud/window";
 import { MealCheckIn } from "@/components/meal-check-in/check-in";
-import { DueReminders } from "@/components/reminders/due-reminders";
+import { SetupChecklist } from "@/components/onboarding/checklist";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
+import { WearerInbox } from "@/components/wearer/inbox";
 import { MedicationReminders } from "@/components/wearer/medication-reminder";
-import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
 import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
@@ -75,7 +74,8 @@ function HudComponent() {
 	});
 
 	return (
-		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
+		<main className="mx-auto grid w-full max-w-6xl gap-2 p-2 md:p-4">
+			<SetupChecklist />
 			<Window icon={Home} title={`Home · ${clock}`}>
 				<div className="grid gap-5 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
 					<div className="flex items-end justify-between gap-2 md:col-span-2">
@@ -144,28 +144,7 @@ function HudComponent() {
 						<Emergency emergency={emergency} familyId={familyId} />
 					</div>
 
-					<section
-						aria-label="Reminders, alerts, and messages"
-						className="grid min-w-0 content-start gap-2 md:row-span-2"
-					>
-						<DueReminders familyId={familyId} />
-						<h2 className="font-bold text-[16px]">Alerts</h2>
-						{records === null ? (
-							<p className="win95-inset bg-card p-3 text-[18px]">
-								No person is paired yet, so there are no alerts.
-							</p>
-						) : (
-							<Alerts familyId={familyId} now={now} records={records} />
-						)}
-						<h2 className="font-bold text-[16px]">Messages</h2>
-						{records === null ? (
-							<p className="win95-inset bg-card p-3 text-[18px]">
-								No person is paired yet, so there are no messages.
-							</p>
-						) : (
-							<Messages familyId={familyId} records={records} />
-						)}
-					</section>
+					<WearerInbox familyId={familyId} now={now} records={records} />
 
 					<StatusFooter now={now} records={records} />
 				</div>

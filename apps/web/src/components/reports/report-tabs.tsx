@@ -379,7 +379,7 @@ export function SendTab({
 				<legend className="px-1">Send and PDF</legend>
 				{sendFailure === null ? (
 					<p>
-						Not sent.
+						Hospital: not sent.
 						{!reviewed && " Mark the report as reviewed first."}
 					</p>
 				) : (
@@ -389,6 +389,7 @@ export function SendTab({
 							: `Not sent: ${failureText(sendFailure)}`}
 					</p>
 				)}
+				<EmailStatus email={report.email} />
 				<p>
 					A family review is not a clinician review. Sending a report does not
 					mean that a clinician has read it.
@@ -402,6 +403,14 @@ export function SendTab({
 					>
 						Send to hospital…
 					</Button>
+					<Button
+						type="button"
+						className="h-11 px-4 text-sm"
+						disabled={!reviewed || sheet.busy !== null}
+						onClick={() => void sheet.email()}
+					>
+						Send by email
+					</Button>
 					<PdfActions
 						familyId={familyId}
 						reportId={report.id}
@@ -410,6 +419,22 @@ export function SendTab({
 				</div>
 			</fieldset>
 		</>
+	);
+}
+
+/** The latest email of the report: not emailed, sending, sent, or failed with its reason. */
+function EmailStatus({ email }: { email: Report["email"] }) {
+	if (email === null) return <p role="status">Email: not emailed.</p>;
+	const at = formatTime(email.updatedAt);
+	return (
+		<p role="status">
+			Email:{" "}
+			{email.status === "queued"
+				? `sending to ${email.recipient}…`
+				: email.status === "sent"
+					? `sent to ${email.recipient} ${at}${email.automatic ? " (automatic)" : ""}.`
+					: `failed to ${email.recipient} ${at}: ${email.reason ?? "no reason given"}`}
+		</p>
 	);
 }
 

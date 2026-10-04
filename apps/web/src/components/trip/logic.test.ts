@@ -6,7 +6,14 @@ import {
 } from "@health/contracts/location";
 import { Schema } from "effect";
 
-import { helpMessage, tripReminder } from "./logic";
+import {
+	directionsUrl,
+	errorReport,
+	fixReport,
+	helpMessage,
+	mapUrl,
+	tripReminder,
+} from "./logic";
 
 const now = Date.parse("2026-01-01T08:00:00Z");
 const at = (minutesAgo: number) =>
@@ -108,5 +115,57 @@ describe("trip wording", () => {
 			dueAt: null,
 		};
 		expect(Schema.decodeUnknownSync(NewCareNeed)(need).summary).toBe(summary);
+	});
+});
+
+describe("maps links", () => {
+	test("directions ask the maps app for a walking route to the typed place", () => {
+		const url = new URL(directionsUrl("Café & Co, 5th Ave"));
+		expect(url.origin).toBe("https://www.google.com");
+		expect(url.searchParams.get("travelmode")).toBe("walking");
+		expect(url.searchParams.get("destination")).toBe("Café & Co, 5th Ave");
+	});
+
+	test("a shared fix opens a marker at its coordinates", () => {
+		expect(mapUrl(fix(0))).toBe(
+			"https://www.openstreetmap.org/?mlat=1&mlon=2#map=17/1/2",
+		);
+	});
+});
+
+describe("device reports", () => {
+	const position = (accuracy: number) => ({
+		coords: { latitude: 51.5, longitude: -0.12, accuracy },
+		timestamp: now,
+	});
+
+	test("a position becomes a fix with whole meters and the device time", () => {
+		expect(fixReport(position(12.6) as GeolocationPosition)).toEqual({
+			status: "fix",
+			fix: {
+				latitude: 51.5,
+				longitude: -0.12,
+				accuracyMeters: 13,
+				fixTime: "2026-01-01T08:00:00.000Z",
+			},
+		});
+	});
+
+	test("an accuracy under one meter still reports one meter, which the contract accepts", () => {
+		const report = fixReport(position(0.2) as GeolocationPosition);
+		expect(report.status === "fix" && report.fix.accuracyMeters).toBe(1);
+	});
+
+	test("a denied permission is its own state; a timeout or no signal is no fix", () => {
+		const error = (code: number) =>
+			({
+				code,
+				PERMISSION_DENIED: 1,
+				POSITION_UNAVAILABLE: 2,
+				TIMEOUT: 3,
+			}) as GeolocationPositionError;
+		expect(errorReport(error(1))).toEqual({ status: "gps_denied" });
+		expect(errorReport(error(2))).toEqual({ status: "no_fix" });
+		expect(errorReport(error(3))).toEqual({ status: "no_fix" });
 	});
 });

@@ -1,4 +1,4 @@
-// Pieces both family screens use: the alert card with its three actions, the monitoring badge and
+// Pieces of the family screen: the alert card with its three actions, the monitoring badge and
 // list, and today's newest readings. Each shows only what the server returned.
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type { FamilyAlert, Monitoring } from "@health/contracts/alerts";
@@ -42,7 +42,8 @@ export function FamilyGate({
 	if (data.family === null)
 		return (
 			<p className={emptyClassName}>
-				No person is paired with this account yet. People are paired manually.
+				No person is set up with this account yet.{" "}
+				<Link to="/welcome">Set up a person</Link>
 			</p>
 		);
 	return children(data.family);
@@ -271,10 +272,10 @@ function NoAlert({ monitoring }: { monitoring: ApiState<Monitoring> }) {
 				{level === null
 					? "Monitoring state is unknown, so an alert could be missed."
 					: level === "on"
-						? "Every threshold has a fresh validated reading."
+						? "Every threshold has a fresh validated or WHOOP reading."
 						: level === "partial"
-							? "Some thresholds have no fresh validated reading, so an alert could be missed."
-							: "Monitoring is stopped: no threshold has a fresh validated reading."}
+							? "Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed."
+							: "Monitoring is stopped: no threshold has a fresh validated or WHOOP reading."}
 			</p>
 		</div>
 	);

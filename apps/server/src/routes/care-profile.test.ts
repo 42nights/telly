@@ -86,8 +86,10 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 				const grant = (identity: string, scope: string, granted = true) =>
 					({ identity, scope, granted }) as const;
 
-				// Membership alone grants nothing, and only the founder may set sharing up.
-				expect(failure(yield* send(app, "GET", "/care-profile"))).toEqual([
+				// The founder holds every scope from the start (#188). Membership alone grants nothing,
+				// and a member without `family_access` cannot grant itself a scope.
+				expect((yield* send(app, "GET", "/care-profile")).status).toBe(200);
+				expect(failure(yield* send(theirs, "GET", "/care-profile"))).toEqual([
 					403,
 					"forbidden",
 				]);
@@ -95,19 +97,6 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 				expect(
 					failure(yield* send(theirs, "POST", "/care-access", grab)),
 				).toEqual([403, "forbidden"]);
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					expect(
-						(yield* send(
-							app,
-							"POST",
-							"/care-access",
-							grant(owner.identity, scope),
-						)).status,
-					).toBe(204);
 
 				// Before the first save every fact is unknown.
 				const empty = Schema.decodeUnknownSync(CareProfileRecord)(
@@ -135,6 +124,13 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 				expect(first?.verification).toBe("unverified");
 				expect(first?.timeZone).toBe("Europe/London");
 				expect(first?.editedBy).toBe(owner.identity);
+				const unverified = Schema.decodeUnknownSync(CarePrompt)(
+					(yield* send(app, "GET", "/care-profile/prompt")).json,
+				).lines;
+				expect(unverified).toContain(
+					"Synthetic A is in your plan, but nobody has verified its instruction. Please ask your caregiver.",
+				);
+				expect(unverified.join("\n")).not.toContain("1 tablet");
 				const verify = (id = "") =>
 					send(app, "POST", `/care-instructions/${id}/verify`);
 				expect((yield* verify(first?.id)).status).toBe(204);
@@ -225,16 +221,6 @@ describe.skipIf(dbConfig === undefined)("care profile", () => {
 					"Private care",
 				);
 				const app = familyApp(owner, familyId, careProfileRoutes());
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					yield* send(app, "POST", "/care-access", {
-						identity: owner.identity,
-						scope,
-						granted: true,
-					});
 				yield* send(app, "POST", "/care-instructions", dose("1 tablet"));
 				const [mine] = yield* instructions(app);
 
