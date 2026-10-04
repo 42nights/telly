@@ -21,11 +21,12 @@ export type ApiFailure =
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
-	/** The server could not be reached (`unreachable`), or it replied with something else. */
+	/** The server could not be reached (`unreachable`), or it replied with something else (`status`). */
 	| {
 			readonly kind: "error";
 			readonly message: string;
 			readonly unreachable?: true;
+			readonly status?: number;
 	  };
 
 export type ApiResult<T> =
@@ -55,7 +56,7 @@ export const failureFor = (status: number, body: unknown): ApiFailure => {
 	if (status === 401) return { kind: "signed_out" };
 	if (status === 403) return { kind: "forbidden", message };
 	if (status === 503) return { kind: "unavailable", message };
-	return { kind: "error", message };
+	return { kind: "error", message, status };
 };
 
 /** A non-2xx reply's failure. A 401 means the server rejected `token`, so it ends the session. */
