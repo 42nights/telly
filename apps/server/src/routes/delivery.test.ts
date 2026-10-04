@@ -259,4 +259,144 @@ describe.skipIf(dbConfig === undefined)("food delivery", () => {
 				expect([attempts, fake.orderCount()]).toEqual([3, 2]);
 			}),
 		));
+
+	test("menu, provider failures, bad input, a closed window, and an unknown order", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Edge family");
+				yield* purchases(db, familyId, true);
+				const fake = simulatedDelivery();
+				let down = false;
+				const provider: DeliveryProvider = {
+					...fake,
+					menu: () => (down ? Promise.reject(new Error("down")) : fake.menu()),
+					quote: (lines) =>
+						down ? Promise.reject(new Error("down")) : fake.quote(lines),
+					// The provider forgets every order, so a refresh cannot track one.
+					track: async () => "unknown",
+				};
+				const app = familyApp(db, familyId, deliveryRoutes(provider));
+				const propose = (body: unknown) =>
+					send(app, "POST", "/delivery/proposals", body);
+
+				const menu = yield* send(app, "GET", "/delivery/menu");
+				expect(menu.status).toBe(200);
+				expect(menu.json).toMatchObject({
+					provider: { simulated: true },
+					items: expect.arrayContaining([
+						expect.objectContaining({ id: "lentil-stew", priceCents: 1100 }),
+					]),
+				});
+
+				// A provider error is no answer: 503, never an empty menu or a proposal.
+				down = true;
+				expect(failure(yield* send(app, "GET", "/delivery/menu"))).toEqual([
+					503,
+					"unavailable",
+				]);
+				expect(failure(yield* propose(order("lentil-stew")))).toEqual([
+					503,
+					"unavailable",
+				]);
+				down = false;
+
+				// An item off the menu or a window already over refuses the proposal.
+				expect(failure(yield* propose(order("caviar")))).toEqual([
+					400,
+					"invalid_request",
+				]);
+				const past = {
+					...order("lentil-stew"),
+					requirements: {
+						...requirements,
+						window: {
+							start: new Date(Date.now() - 2 * hour).toISOString(),
+							end: new Date(Date.now() - hour).toISOString(),
+						},
+					},
+				};
+				expect(failure(yield* propose(past))).toEqual([400, "invalid_request"]);
+				const none = yield* send(app, "GET", "/delivery/proposals");
+				expect(none.json).toEqual({ proposals: [] });
+
+				// A substitution must name an item in the proposal; other lines stay as they were.
+				const pair = decode(
+					yield* propose({
+						requirements: { ...requirements, budgetCents: 5000 },
+						items: [
+							{ menuItemId: "chicken-rice", quantity: 1 },
+							{ menuItemId: "fruit-cup", quantity: 2 },
+						],
+						tipCents: 0,
+					}),
+				);
+				const pairPath = `/delivery/proposals/${pair.id}`;
+				const absent = { replace: "fish-pie", with: "lentil-stew" };
+				expect(
+					failure(
+						yield* send(app, "POST", `${pairPath}/substitutions`, absent),
+					),
+				).toEqual([400, "invalid_request"]);
+				expect(decode(yield* send(app, "GET", pairPath)).status).toBe(
+					"proposed",
+				);
+				const swapped = decode(
+					yield* send(app, "POST", `${pairPath}/substitutions`, {
+						replace: "fruit-cup",
+						with: "lentil-stew",
+					}),
+				);
+				expect(swapped.items.map(({ id, quantity }) => [id, quantity])).toEqual(
+					[
+						["chicken-rice", 1],
+						["lentil-stew", 2],
+					],
+				);
+
+				// A placed order the provider does not know is an upstream error; the status stays.
+				const placed = decode(yield* propose(order("lentil-stew")));
+				const placedPath = `/delivery/proposals/${placed.id}`;
+				yield* send(app, "POST", `${placedPath}/approval`, {
+					purchase: true,
+					totalCents: placed.costs.totalCents,
+				});
+				expect(
+					decode(yield* send(app, "POST", `${placedPath}/order`)).status,
+				).toBe("placed");
+				expect(
+					failure(yield* send(app, "POST", `${placedPath}/refresh`)),
+				).toEqual([502, "upstream_error"]);
+				expect(decode(yield* send(app, "GET", placedPath)).status).toBe(
+					"placed",
+				);
+
+				// An approval does not outlive its window: after the end, nothing is ordered.
+				const end = Date.now() + 1500;
+				const brief = decode(
+					yield* propose({
+						...order("lentil-stew"),
+						requirements: {
+							...requirements,
+							window: {
+								start: new Date().toISOString(),
+								end: new Date(end).toISOString(),
+							},
+						},
+					}),
+				);
+				const briefPath = `/delivery/proposals/${brief.id}`;
+				yield* send(app, "POST", `${briefPath}/approval`, {
+					purchase: true,
+					totalCents: brief.costs.totalCents,
+				});
+				yield* Effect.sleep(Math.max(0, end - Date.now()) + 50);
+				expect(failure(yield* send(app, "POST", `${briefPath}/order`))).toEqual(
+					[409, "conflict"],
+				);
+				expect(decode(yield* send(app, "GET", briefPath)).status).toBe(
+					"approved",
+				);
+				expect(fake.orderCount()).toBe(1);
+			}),
+		));
 });

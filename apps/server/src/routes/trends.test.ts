@@ -73,6 +73,41 @@ describe.skipIf(dbConfig === undefined)("trend explanations", () => {
 			}),
 		));
 
+	test("a lab outage leaves the labs unknown; the other records still answer", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Lab outage");
+				yield* Effect.promise(() =>
+					db.connection.reducers.linkFinchnodeSubject({
+						familyId: BigInt(familyId),
+						subject: "synthetic-subject",
+						synthetic: true,
+					}),
+				);
+				// Nothing listens on port 1, so the lab request fails at once.
+				const down = trendRoutes({
+					kind: "api",
+					baseUrl: "http://127.0.0.1:1",
+					apiKey: "ck_test_outage",
+					synthetic: true,
+				});
+				const reply = yield* send(
+					familyApp(db, familyId, down),
+					"POST",
+					"/trends",
+					{
+						question: "Is his sleep getting worse?",
+					},
+				);
+				expect(reply.status).toBe(200);
+				const trend = Schema.decodeUnknownSync(TrendExplanation)(reply.json);
+				expect(trend.unknown).toContain(
+					"Lab results: Finchnode did not respond",
+				);
+				expect(trend.observations.map((o) => o.label)).toEqual(["question"]);
+			}),
+		));
+
 	test("offer only agreed routines and verified care instructions, if shared", () =>
 		withDb((config) =>
 			Effect.gen(function* () {

@@ -217,6 +217,24 @@ describe.skipIf(dbConfig === undefined)("home-speaker handoff", () => {
 						}),
 					),
 				).toEqual([400, "invalid_request"]);
+
+				// An unknown occurrence, or one from another family, is not found and nothing is said.
+				const missing = yield* send(
+					app,
+					"POST",
+					"/reminder-occurrences/999999999/speaker-handoffs",
+					{ clientId: "h-missing" },
+				);
+				expect(failure(missing)).toEqual([404, "not_found"]);
+				const other = yield* openFamily(config, "Other speaker family");
+				const foreign = yield* send(
+					familyApp(other.db, other.familyId, speakerRoutes()),
+					"POST",
+					`${path(1)}/speaker-handoffs`,
+					{ clientId: "h-foreign" },
+				);
+				expect(failure(foreign)).toEqual([404, "not_found"]);
+				expect((yield* speaker).announcements).toHaveLength(3);
 			}),
 		));
 });

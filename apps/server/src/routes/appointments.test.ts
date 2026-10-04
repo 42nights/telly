@@ -3,6 +3,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import {
 	Appointment,
+	Appointments,
 	ClinicianShare,
 	ClinicianShares,
 	type NewAppointment,
@@ -115,6 +116,11 @@ describe.skipIf(dbConfig === undefined)("appointments", () => {
 				expect(suggested.suggestion.source).toBe("model");
 				expect(suggested.visit).toEqual(suggestion.visit);
 				const path = `/appointments/${suggested.id}`;
+				expect(
+					Schema.decodeUnknownSync(Appointments)(
+						(yield* send(app, "GET", "/appointments")).json,
+					).appointments,
+				).toEqual([suggested]);
 
 				// A suggestion cannot skip the request, by API or by direct reducer call.
 				const confirmation = { reference: "SYN-REF-1", receivedVia: "phone" };
@@ -184,6 +190,9 @@ describe.skipIf(dbConfig === undefined)("appointments", () => {
 					404,
 					"not_found",
 				]);
+				expect((yield* send(theirs, "GET", "/appointments")).json).toEqual({
+					appointments: [],
+				});
 			}),
 		));
 
@@ -221,7 +230,8 @@ describe.skipIf(dbConfig === undefined)("appointments", () => {
 				expect(failure(unreviewed)).toEqual([400, "invalid_request"]);
 				expect(JSON.stringify(unreviewed.json)).toContain("review the summary");
 
-				// Link a synthetic subject and review a lab report; the summary then carries both, dated.
+				// Link a synthetic subject and review two lab reports; the summary then carries the labs
+				// and the latest reviewed report, dated.
 				yield* Effect.promise(() =>
 					db.connection.reducers.linkFinchnodeSubject({
 						familyId: BigInt(familyId),
@@ -229,10 +239,15 @@ describe.skipIf(dbConfig === undefined)("appointments", () => {
 						synthetic: true,
 					}),
 				);
-				const report = Schema.decodeUnknownSync(Report)(
-					(yield* send(app, "POST", "/reports")).json,
-				);
-				yield* send(app, "POST", `/reports/${report.id}/review`);
+				const reviewedReport = Effect.gen(function* () {
+					const made = Schema.decodeUnknownSync(Report)(
+						(yield* send(app, "POST", "/reports")).json,
+					);
+					yield* send(app, "POST", `/reports/${made.id}/review`);
+					return made;
+				});
+				yield* reviewedReport;
+				const report = yield* reviewedReport;
 				const draft = Schema.decodeUnknownSync(PrepSummary)(
 					(yield* send(app, "GET", `${path}/summary`)).json,
 				);

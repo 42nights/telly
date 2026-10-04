@@ -114,6 +114,24 @@ describe.skipIf(dbConfig === undefined)("family location", () => {
 					status: "no_fix",
 				});
 				expect(failure(late)).toEqual([400, "invalid_request"]);
+
+				// A share target must be a 64-hex identity; nothing is changed for a malformed one.
+				for (const method of ["PUT", "DELETE"]) {
+					const malformed = yield* send(
+						app,
+						method,
+						"/location/shares/not-an-identity",
+					);
+					expect(failure(malformed)).toEqual([400, "invalid_request"]);
+					expect(malformed.json).toMatchObject({
+						message: "identity must be 64 hex characters",
+					});
+				}
+				const after = yield* send(app, "GET", "/location");
+				expect(Schema.decodeUnknownSync(FamilyLocations)(after.json)).toEqual({
+					locations: [],
+					shares: [],
+				});
 			}),
 		));
 });
