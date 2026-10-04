@@ -158,6 +158,21 @@ def error(status: int, code: str, message: str) -> Reply:
     return status, {"error": code, "message": message}
 
 
+def _server_headers(cfg: Config, delegation: str | None) -> dict[str, str] | None:
+    """The worker's sign-in, read from the token file on each call when set, and the delegation.
+    None when there is no token."""
+    try:
+        token = Path(cfg.token_file).read_text().strip() if cfg.token_file else cfg.token
+    except OSError:
+        return None
+    if not token:
+        return None
+    headers = {"Authorization": f"Bearer {token}"}
+    if delegation:
+        headers["X-Telly-Delegation"] = delegation
+    return headers
+
+
 async def handle_call(
     cfg: Config,
     sender: str,
@@ -173,17 +188,11 @@ async def handle_call(
         return error(403, "forbidden", "sender has no grant for this family")
     if not TOOL_REQUEST.is_valid(request):
         return error(400, "invalid_request", "request does not match the ToolRequest schema")
-
-    try:
-        token = Path(cfg.token_file).read_text().strip() if cfg.token_file else cfg.token
-    except OSError:
-        token = ""
-    if not token:
+    headers = _server_headers(cfg, delegation)
+    if headers is None:
         return error(503, "unavailable", "the worker has no server sign-in token")
+
     url = f"{cfg.server_url}/api/families/{quote(family_id, safe='')}/tools"
-    headers = {"Authorization": f"Bearer {token}"}
-    if delegation:
-        headers["X-Telly-Delegation"] = delegation
     try:
         async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
             # No redirects: a redirect must not carry the bearer token to another URL.
