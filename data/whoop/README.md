@@ -11,6 +11,11 @@ band was paired.
 To refresh, run `sh data/whoop/export.sh`. It reads `~/telly-host/live.sqlite`, or the database
 path you pass as the first argument.
 
+To put this history in a Telly family, open Setup → WHOOP → Connect for that family. Copy the
+`url=` part of the NOOP link (`https://api.saintess.tech/api/noop/ingest?k=…`), then run
+`bun data/whoop/push.ts '<that URL>'`. The script sends the daily scores, band events, and heart
+rate through the ingest that NOOP's live push uses. A second run adds nothing.
+
 ## Reading it
 
 - `ts`, `startTs` and `endTs` are Unix seconds (UTC). `day` is a local `YYYY-MM-DD`.
