@@ -109,6 +109,45 @@ export const HealthSample = __t.object("HealthSample", {
 });
 export type HealthSample = __Infer<typeof HealthSample>;
 
+export const Location = __t.object("Location", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  get status() {
+    return LocationStatus;
+  },
+  get fix() {
+    return __t.option(LocationFix);
+  },
+  reportedAt: __t.timestamp(),
+});
+export type Location = __Infer<typeof Location>;
+
+export const LocationFix = __t.object("LocationFix", {
+  latitude: __t.f64(),
+  longitude: __t.f64(),
+  accuracyMeters: __t.f64(),
+  fixTime: __t.timestamp(),
+});
+export type LocationFix = __Infer<typeof LocationFix>;
+
+export const LocationShare = __t.object("LocationShare", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  sharer: __t.identity(),
+  viewer: __t.identity(),
+  sharedAt: __t.timestamp(),
+});
+export type LocationShare = __Infer<typeof LocationShare>;
+
+// The tagged union or sum type for the algebraic type `LocationStatus`.
+export const LocationStatus = __t.enum("LocationStatus", {
+  Fix: __t.unit(),
+  GpsDenied: __t.unit(),
+  NoFix: __t.unit(),
+});
+export type LocationStatus = __Infer<typeof LocationStatus>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -139,6 +178,12 @@ export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
+
+export const MyLocationShares = __t.object("MyLocationShares", {});
+export type MyLocationShares = __Infer<typeof MyLocationShares>;
+
+export const MyLocations = __t.object("MyLocations", {});
+export type MyLocations = __Infer<typeof MyLocations>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;

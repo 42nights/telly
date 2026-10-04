@@ -1,6 +1,6 @@
 // Family-scoped health data. Every table is private: clients read only through the per-sender views
 // below, and every reducer checks the caller's family membership itself, independent of the server.
-import { Timestamp } from "spacetimedb";
+import { type Infer, Timestamp } from "spacetimedb";
 import {
 	type InferSchema,
 	type ReducerCtx,
@@ -230,6 +230,67 @@ const finchnodeLink = table(
 	},
 );
 
+// What a person's device last said about its position. `NoFix` covers a timeout or no signal.
+const LocationStatus = t.enum("LocationStatus", {
+	Fix: t.unit(),
+	GpsDenied: t.unit(),
+	NoFix: t.unit(),
+});
+
+// One position from a device; `fixTime` is when the device took it, by the device clock.
+const LocationFix = t.object("LocationFix", {
+	latitude: t.f64(),
+	longitude: t.f64(),
+	accuracyMeters: t.f64(),
+	fixTime: t.timestamp(),
+});
+
+// A person's latest location report in one family: one row per sharer, replaced by each report,
+// so no trail is kept. `fix` is the last good fix; a later GPS-denied or no-fix report changes
+// only `status` and `reportedAt`, so the fix stays readable as the last known location.
+const location = table(
+	{
+		name: "location",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		status: LocationStatus,
+		fix: t.option(LocationFix),
+		// When the database accepted the latest report.
+		reportedAt: t.timestamp(),
+	},
+);
+
+// One person allows one other family member to see their location. Deleting it revokes access.
+const locationShare = table(
+	{
+		name: "location_share",
+		indexes: [
+			{
+				accessor: "byFamilySharer",
+				algorithm: "btree",
+				columns: ["familyId", "sharer"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		sharer: t.identity().index("btree"),
+		viewer: t.identity().index("btree"),
+		sharedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -243,6 +304,8 @@ const spacetimedb = schema({
 	alertDelivery,
 	report,
 	finchnodeLink,
+	location,
+	locationShare,
 });
 export default spacetimedb;
 
@@ -654,6 +717,93 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+const sharesOf = (ctx: Ctx, familyId: bigint) => [
+	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
+];
+
+/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+export const shareLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		if (viewer.isEqual(ctx.sender))
+			throw new SenderError("viewer must be another family member");
+		const member = ctx.db.familyMember.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (member.next().done)
+			throw new SenderError("viewer is not a member of this family");
+		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
+		ctx.db.locationShare.insert({
+			id: 0n,
+			familyId,
+			sharer: ctx.sender,
+			viewer,
+			sharedAt: ctx.timestamp,
+		});
+	},
+);
+
+/** Stops one member seeing the sender's location. After the last revoke the stored location is deleted. */
+export const revokeLocationShare = spacetimedb.reducer(
+	{ familyId: t.u64(), viewer: t.identity() },
+	(ctx, { familyId, viewer }) => {
+		requireMember(ctx, familyId);
+		const shares = sharesOf(ctx, familyId);
+		for (const share of shares)
+			if (share.viewer.isEqual(viewer))
+				ctx.db.locationShare.id.delete(share.id);
+		if (shares.some((s) => !s.viewer.isEqual(viewer))) return;
+		for (const row of ctx.db.location.byFamilySharer.filter([
+			familyId,
+			ctx.sender,
+		]))
+			ctx.db.location.id.delete(row.id);
+	},
+);
+
+const requireValidFix = (ctx: Ctx, fix: Infer<typeof LocationFix>) => {
+	if (!(Math.abs(fix.latitude) <= 90 && Math.abs(fix.longitude) <= 180))
+		throw new SenderError("coordinates out of range");
+	if (!(fix.accuracyMeters > 0 && Number.isFinite(fix.accuracyMeters)))
+		throw new SenderError("accuracyMeters must be positive");
+	if (
+		fix.fixTime.microsSinceUnixEpoch >
+		ctx.timestamp.microsSinceUnixEpoch + MAX_CLOCK_AHEAD_MICROS
+	)
+		throw new SenderError("fixTime is in the future");
+};
+
+/**
+ * Stores the sender's latest location report. Refused while the sender shares with nobody, so
+ * nothing is collected without a share. A report without a fix keeps the last fix.
+ */
+export const reportLocation = spacetimedb.reducer(
+	{ familyId: t.u64(), status: LocationStatus, fix: t.option(LocationFix) },
+	(ctx, { familyId, status, fix }) => {
+		requireMember(ctx, familyId);
+		if (sharesOf(ctx, familyId).length === 0)
+			throw new SenderError("location is not shared with anyone");
+		if ((status.tag === "Fix") !== (fix !== undefined))
+			throw new SenderError("a fix is required exactly when status is Fix");
+		if (fix !== undefined) requireValidFix(ctx, fix);
+		const existing = ctx.db.location.byFamilySharer
+			.filter([familyId, ctx.sender])
+			.next().value;
+		const row = {
+			id: existing?.id ?? 0n,
+			familyId,
+			sharer: ctx.sender,
+			status,
+			fix: fix ?? existing?.fix,
+			reportedAt: ctx.timestamp,
+		};
+		if (existing === undefined) ctx.db.location.insert(row);
+		else ctx.db.location.id.update(row);
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -777,4 +927,27 @@ export const myFinchnodeLinks = spacetimedb.view(
 			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
 				m.familyId.eq(l.familyId),
 			),
+);
+
+// The caller's own locations, and those of people who share theirs with the caller. A revoked
+// share drops the row at once.
+export const myLocations = spacetimedb.view(
+	{ name: "my_locations", public: true },
+	t.array(location.rowType),
+	(ctx) => [
+		...ctx.db.location.sharer.filter(ctx.sender),
+		...[...ctx.db.locationShare.viewer.filter(ctx.sender)].flatMap((share) => [
+			...ctx.db.location.byFamilySharer.filter([share.familyId, share.sharer]),
+		]),
+	],
+);
+
+// Shares the caller gave or received.
+export const myLocationShares = spacetimedb.view(
+	{ name: "my_location_shares", public: true },
+	t.array(locationShare.rowType),
+	(ctx) => [
+		...ctx.db.locationShare.sharer.filter(ctx.sender),
+		...ctx.db.locationShare.viewer.filter(ctx.sender),
+	],
 );

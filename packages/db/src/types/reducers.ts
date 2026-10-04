@@ -18,8 +18,11 @@ import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavaila
 import RaiseAlertReducer from "../raise_alert_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
+import ReportLocationReducer from "../report_location_reducer";
+import RevokeLocationShareReducer from "../revoke_location_share_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
+import ShareLocationReducer from "../share_location_reducer";
 import UpdateReportReducer from "../update_report_reducer";
 
 export type AcknowledgeAlertParams = __Infer<typeof AcknowledgeAlertReducer>;
@@ -34,7 +37,10 @@ export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliver
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
+export type ReportLocationParams = __Infer<typeof ReportLocationReducer>;
+export type RevokeLocationShareParams = __Infer<typeof RevokeLocationShareReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;
+export type ShareLocationParams = __Infer<typeof ShareLocationReducer>;
 export type UpdateReportParams = __Infer<typeof UpdateReportReducer>;
 

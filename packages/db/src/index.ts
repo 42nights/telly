@@ -46,8 +46,11 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import ReportLocationReducer from "./report_location_reducer";
+import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
+import ShareLocationReducer from "./share_location_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 
 // Import all procedure arg schemas
@@ -60,6 +63,8 @@ import MyAlertsRow from "./my_alerts_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyLocationSharesRow from "./my_location_shares_table";
+import MyLocationsRow from "./my_locations_table";
 import MyMessagesRow from "./my_messages_table";
 import MyReportsRow from "./my_reports_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
@@ -117,6 +122,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myLocationShares: __table({
+    name: 'my_location_shares',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationSharesRow),
+  myLocations: __table({
+    name: 'my_locations',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyLocationsRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -154,8 +173,11 @@ const reducersSchema = __reducers(
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("report_location", ReportLocationReducer),
+  __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
+  __reducerSchema("share_location", ShareLocationReducer),
   __reducerSchema("update_report", UpdateReportReducer),
 );
 

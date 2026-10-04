@@ -8,6 +8,7 @@ import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
+import { locationRoutes } from "./location";
 import { reportRoutes } from "./reports";
 import { toolRoutes } from "./tools";
 import { visionRoutes } from "./vision";
@@ -36,5 +37,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", locationRoutes());
 };
