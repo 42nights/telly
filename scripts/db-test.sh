@@ -24,4 +24,4 @@ until spacetime server ping "$server" >/dev/null 2>&1; do
 done
 spacetime publish --server "$server" --module-path spacetimedb --anonymous --yes health-test
 SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test \
-	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts
+	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/routes/tools.test.ts

@@ -1,0 +1,248 @@
+{
+	"ToolRequest": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"anyOf": [
+			{
+				"$ref": "#/$defs/HealthSamplesTool"
+			},
+			{
+				"$ref": "#/$defs/AlertsTool"
+			}
+		],
+		"$defs": {
+			"HealthSamplesTool": {
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["health_samples"]
+					},
+					"input": {
+						"type": "object",
+						"properties": {
+							"metric": {
+								"type": "string",
+								"minLength": 1,
+								"description": "Only samples of this metric, such as heart_rate."
+							},
+							"limit": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 100,
+								"description": "Most records to return (default 20)."
+							}
+						},
+						"additionalProperties": false
+					}
+				},
+				"required": ["tool", "input"],
+				"additionalProperties": false,
+				"description": "The family's newest health samples, newest source time first."
+			},
+			"AlertsTool": {
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["alerts"]
+					},
+					"input": {
+						"type": "object",
+						"properties": {
+							"limit": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 100,
+								"description": "Most records to return (default 20)."
+							}
+						},
+						"additionalProperties": false
+					}
+				},
+				"required": ["tool", "input"],
+				"additionalProperties": false,
+				"description": "The family's newest alerts and the acknowledgements of those alerts."
+			}
+		}
+	},
+	"ToolResponse": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"anyOf": [
+			{
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["health_samples"]
+					},
+					"samples": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"familyId": {
+									"type": "string"
+								},
+								"metric": {
+									"type": "string",
+									"minLength": 1
+								},
+								"value": {
+									"type": "number"
+								},
+								"unit": {
+									"type": "string",
+									"minLength": 1
+								},
+								"sourceTime": {
+									"type": "string"
+								},
+								"receivedAt": {
+									"type": "string"
+								},
+								"source": {
+									"type": "string",
+									"minLength": 1
+								},
+								"synthetic": {
+									"type": "boolean"
+								},
+								"quality": {
+									"type": "string",
+									"enum": ["validated", "unvalidated"]
+								}
+							},
+							"required": [
+								"id",
+								"familyId",
+								"metric",
+								"value",
+								"unit",
+								"sourceTime",
+								"receivedAt",
+								"source",
+								"synthetic",
+								"quality"
+							],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["tool", "samples"],
+				"additionalProperties": false
+			},
+			{
+				"type": "object",
+				"properties": {
+					"tool": {
+						"type": "string",
+						"enum": ["alerts"]
+					},
+					"alerts": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"familyId": {
+									"type": "string"
+								},
+								"sampleId": {
+									"anyOf": [
+										{
+											"type": "string"
+										},
+										{
+											"type": "null"
+										}
+									]
+								},
+								"summary": {
+									"type": "string"
+								},
+								"raisedBy": {
+									"type": "string"
+								},
+								"createdAt": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"id",
+								"familyId",
+								"sampleId",
+								"summary",
+								"raisedBy",
+								"createdAt"
+							],
+							"additionalProperties": false
+						}
+					},
+					"acknowledgements": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"alertId": {
+									"type": "string"
+								},
+								"familyId": {
+									"type": "string"
+								},
+								"member": {
+									"type": "string"
+								},
+								"acknowledgedAt": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"id",
+								"alertId",
+								"familyId",
+								"member",
+								"acknowledgedAt"
+							],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": ["tool", "alerts", "acknowledgements"],
+				"additionalProperties": false
+			}
+		],
+		"$defs": {}
+	},
+	"ApiError": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type": "object",
+		"properties": {
+			"error": {
+				"type": "string",
+				"enum": [
+					"not_found",
+					"internal",
+					"unauthorized",
+					"forbidden",
+					"invalid_request",
+					"unavailable",
+					"upstream_error"
+				]
+			},
+			"message": {
+				"type": "string"
+			}
+		},
+		"required": ["error", "message"],
+		"additionalProperties": false,
+		"$defs": {}
+	}
+}
