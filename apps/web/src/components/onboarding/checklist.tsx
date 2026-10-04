@@ -8,6 +8,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
 import { useContacts } from "@/lib/contacts";
+import { useFamily } from "@/lib/family";
 
 import { useSetupStatus, WhoopStatus } from "./status";
 
@@ -47,7 +48,13 @@ function Item({
 	);
 }
 
-export function SetupChecklist({ family }: { family: Family }) {
+/** The checklist of the selected family, if any; it reads the family itself to keep Home's imports few. */
+export function SetupChecklist() {
+	const { family } = useFamily();
+	return family === null ? null : <Checklist family={family} key={family.id} />;
+}
+
+function Checklist({ family }: { family: Family }) {
 	const key = `telly.checklist.hidden.${family.id}`;
 	const [hidden, setHidden] = useState(true);
 	useEffect(() => setHidden(localStorage.getItem(key) !== null), [key]);
