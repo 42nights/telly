@@ -44,7 +44,7 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
 
   // A screen that goes away without an answer still settles the promise.
   deinit {
-    send(arError("cancelled", "The AR screen closed."))
+    reply?(arError("cancelled", "The AR screen closed."))
   }
 
   private var label: String {
