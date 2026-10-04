@@ -35,7 +35,8 @@ function Marker({
 	const stroke = Math.max(2, frame.width / 200);
 	const color = detection.needsVerification ? UNSURE : SURE;
 	const text = tagText(detection);
-	const size = Math.max(14, frame.width / 28);
+	// About 1/20 of the frame width: ≈16 px on a phone-width picture.
+	const size = Math.max(14, frame.width / 20);
 	// Above the box when it fits and the arrow does not come from there, else below; inside the frame.
 	const above = m.rect.y >= size * 1.6 && !(arrow && m.fromTop);
 	const tagY = above
@@ -152,6 +153,8 @@ export function CheckedPicture({
 				className="absolute inset-0 size-full bg-black object-contain"
 				src={check.picture}
 			/>
+			{/* Before the markers, so a marker's ✓/? tag stays on top where they overlap. */}
+			<PictureTag capturedAt={check.capturedAt} result={check.result} />
 			<svg
 				aria-hidden
 				className="pointer-events-none absolute inset-0 size-full"
@@ -167,7 +170,6 @@ export function CheckedPicture({
 					/>
 				))}
 			</svg>
-			<PictureTag capturedAt={check.capturedAt} result={check.result} />
 		</>
 	);
 }
