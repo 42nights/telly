@@ -7,8 +7,9 @@ import { DbId, UtcTime } from "./families";
 // keeps only its own evidence, linked by occurrence id, and never adds a second reminder model.
 //
 // The database schedules every prompt itself, so a server restart neither loses nor repeats one.
-// Silence never escalates: an unanswered occurrence ends `unresolved`, and nothing here contacts
-// anyone or dispatches help.
+// Silence never dispatches help: an unanswered occurrence ends `unresolved`. Only a `meal` or
+// `hydration` occurrence that ends `unresolved` (silence, `help`, or `unsure`) opens one `help` care
+// need for the family contact ladder (#30, `clientId` `reminder-<occurrenceId>`); other kinds contact nobody.
 
 /** A wall-clock time in the wearer's time zone, `HH:MM` (24-hour). */
 export const LocalTime = Schema.String.check(

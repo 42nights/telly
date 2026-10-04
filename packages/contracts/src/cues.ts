@@ -3,7 +3,7 @@ import cueFormat from "./cue-format.json" with { type: "json" };
 import { DbId } from "./families";
 
 /**
- * The prompt and output format that `training/gemma/train.py` trains and the server sends. Both
+ * The prompt and output format that `training/qwen/train.py` trains and the server sends. Both
  * sides read this one file, so a format change is a new `version` and a new trained checkpoint.
  */
 export { cueFormat };

@@ -2,10 +2,12 @@
 // protocol server in place of the Gemini Interactions API. All records and images are synthetic.
 import { afterAll, describe, expect, test } from "bun:test";
 import { Meal, MealEstimate, Meals } from "@health/contracts/meal-facts";
+import { ReminderHistory } from "@health/contracts/reminders";
 import { Effect, Schema } from "effect";
 import { Identity } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import { mealRoutes } from "./meal-facts";
+import { reminderRoutes } from "./reminders";
 import {
 	dbConfig,
 	failure,
@@ -76,14 +78,41 @@ afterAll(() => gemini.stop(true));
 const config = { apiKey: "test-key-not-a-secret", baseUrl: gemini.url.href };
 
 describe.skipIf(dbConfig === undefined)("meals", () => {
-	test("a photo and its estimate never report intake; only an intake report does", () =>
+	test("a photo and its estimate never report intake or complete the meal reminder; only an intake report does", () =>
 		withDb((db) =>
 			Effect.gen(function* () {
 				const family = yield* openFamily(db, "Meal family");
 				yield* grant(family, ["health_records", "media"]);
 				const app = familyApp(family.db, family.familyId, mealRoutes(config));
 
-				const estimated = yield* send(app, "POST", "/meals/lunch-1/estimates", {
+				// The meal is a #28 meal reminder's occurrence; its facts link to it by id.
+				const reminders = familyApp(
+					family.db,
+					family.familyId,
+					reminderRoutes(),
+				);
+				yield* send(reminders, "PUT", "/reminder-settings", {
+					timeZone: "UTC",
+					quietHours: null,
+					repeatEveryMinutes: 1,
+					maxPrompts: 1,
+					snoozeMinutes: 1,
+				});
+				yield* send(reminders, "POST", "/reminders", {
+					kind: "meal",
+					subjectId: null,
+					title: "Synthetic lunch",
+					times: ["12:00"],
+				});
+				const history = Effect.map(
+					send(reminders, "GET", "/reminder-occurrences"),
+					(r) => Schema.decodeUnknownSync(ReminderHistory)(r.json).occurrences,
+				);
+				const occurrenceId = (yield* history)[0]?.occurrence.id;
+				if (occurrenceId === undefined) throw new Error("no occurrence");
+				const meal = `/meals/${occurrenceId}`;
+
+				const estimated = yield* send(app, "POST", `${meal}/estimates`, {
 					source: "photo",
 					capturedAt: "2026-10-04T12:00:00.000Z",
 					image: photo,
@@ -93,7 +122,7 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 				expect(estimate.items[0]?.energyKcal).toEqual({ low: 180, high: 260 });
 
 				// The wearer corrects the food; the identity is theirs, the ranges are Gemini's.
-				const corrected = yield* send(app, "POST", "/meals/lunch-1/estimates", {
+				const corrected = yield* send(app, "POST", `${meal}/estimates`, {
 					source: "correction",
 					items: [
 						{ name: "Brown rice", preparation: null, portion: "half a cup" },
@@ -113,14 +142,14 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 					"food_estimate",
 				]);
 
-				const help = yield* send(app, "POST", "/meals/lunch-1/intake", {
+				const help = yield* send(app, "POST", `${meal}/intake`, {
 					type: "caregiver_assistance",
 					help: "Cut the food",
 				});
 				expect(Schema.decodeUnknownSync(Meal)(help.json).intake).toBe(
 					"not_reported",
 				);
-				const reported = yield* send(app, "POST", "/meals/lunch-1/intake", {
+				const reported = yield* send(app, "POST", `${meal}/intake`, {
 					type: "intake_report",
 					kind: "meal",
 					amount: "some",
@@ -131,7 +160,7 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 				expect(Schema.decodeUnknownSync(Meal)(reported.json).intake).toBe(
 					"reported",
 				);
-				const unknown = yield* send(app, "POST", "/meals/lunch-1/intake", {
+				const unknown = yield* send(app, "POST", `${meal}/intake`, {
 					type: "intake_report",
 					kind: "meal",
 					amount: "unknown",
@@ -142,6 +171,16 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 				expect(Schema.decodeUnknownSync(Meal)(unknown.json).intake).toBe(
 					"unknown",
 				);
+
+				// No meal fact touched the reminder: completion needs the wearer's answer or a
+				// caregiver's confirmation on the reminder itself.
+				expect(
+					(yield* history).map(({ occurrence, events }) => [
+						occurrence.id,
+						occurrence.state,
+						events.map((e) => e.state),
+					]),
+				).toEqual([[occurrenceId, "scheduled", ["scheduled"]]]);
 			}),
 		));
 

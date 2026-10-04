@@ -129,6 +129,7 @@ describe("did I take it?", () => {
 				event("2", "2026-10-04T08:01:00.000Z", "acknowledged", "me", "okay"),
 				event("1", "2026-10-04T08:00:00.000Z", "delivered", "scheduler"),
 			],
+			[],
 			(actor) => (actor === "scheduler" ? "Telly" : "You"),
 			time,
 		);
@@ -149,6 +150,7 @@ describe("did I take it?", () => {
 				event("1", "2026-10-04T08:02:00.000Z", "self_reported_complete", "me"),
 				event("2", "2026-10-04T08:30:00.000Z", "caregiver_confirmed", "cg"),
 			],
+			[],
 			(actor) => actor,
 			time,
 		).join("\n");
@@ -156,5 +158,36 @@ describe("did I take it?", () => {
 			"08:02, me: the dose was reported taken, by the wearer.",
 		);
 		expect(answer).toContain("08:30, cg: a caregiver confirmed the dose.");
+	});
+
+	test("a container sighting since the dose time reads as found, never taken", () => {
+		const sighting = (id: string, seenAt: string) => ({
+			id,
+			familyId: "1",
+			container: "SYNTHETIC A 10 mg tablets",
+			place: "Kitchen counter",
+			seenAt,
+			source: "camera_check" as const,
+			confidence: 0.9,
+			labelRead: true,
+			savedBy: "me",
+			notFoundAt: null,
+		});
+		const answer = uncertaintyAnswer(
+			occurrence,
+			[event("2", "2026-10-04T08:05:00.000Z", "unresolved", "me")],
+			[
+				sighting("9", "2026-10-04T08:03:00.000Z"),
+				// Before this dose time: not evidence for it.
+				sighting("8", "2026-10-03T20:00:00.000Z"),
+			],
+			(actor) => actor,
+			time,
+		);
+		expect(answer.slice(1, 3)).toEqual([
+			"08:03, me: container found, “SYNTHETIC A 10 mg tablets” at Kitchen counter; this does not say the dose was taken.",
+			"08:05, me: the reminder was left open.",
+		]);
+		expect(answer.join("\n")).not.toContain("20:00");
 	});
 });
