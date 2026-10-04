@@ -1,7 +1,7 @@
 # Health app plan
 
 This file summarizes the approved plan for the new health application in this repository.
-The full planning board is archived as [`board.html`](board.html). GitHub issues track all implementation work.
+The full planning board is [`board.html`](board.html). GitHub issues track all implementation work.
 The product name is not decided yet.
 
 ## Product
@@ -11,7 +11,7 @@ The app helps a person with memory loss and their family. Alzheimer's care is th
 - **Medicine:** find a medicine box in a phone or browser camera frame and draw a marker and an arrow on that frame.
 - **Requests:** accept voice or text requests. Reply with screen text and multilingual audio.
 - **Family:** send family messages and health alerts. Family members ask questions about available health records.
-- **Reports:** generate, review, fill, and send a lab report to the hospital.
+- **Reports:** generate, review, and fill a lab report. Send it to the hospital after a delivery path is chosen; Finchnode only reads records.
 - **Monitoring:** detect falls and breathing problems only from validated signals. Show missing signals as "unavailable", never as "all clear".
 
 Phone and web are the primary interfaces. Every feature works without glasses.
@@ -33,7 +33,8 @@ A 3D home map is not required.
 | Voice | ElevenLabs (required) | Multilingual speech |
 | Vision | Gemini | Object detection for medicine boxes |
 | Messaging | SpacetimeDB | Stores family messages (Muse is not used) |
-| Reports | Finchnode | Hospital report handoff |
+| Reports | Finchnode | Reads lab results for reports (read only; no delivery API) |
+| iMessage | Photon Spectrum (requested) | Provider path and account access are not decided |
 | WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
 
 ### NOOP boundary
@@ -73,9 +74,10 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Gemini family conversations, service reliability, optional glasses bridge |
-| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
-| Mahesh | `maheshwarmurugesan` | Web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, optional square glasses layout |
+| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, Gemma training and inference, service reliability, optional glasses bridge and square layout |
+| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode lab results, River setup |
+
+On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigned to `undeemed`. Mahesh wrote the October 3 backlog (#25–#51).
 
 ## Build order
 
@@ -85,6 +87,8 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 4. Real providers, then the synthetic sample-to-alert smoke test.
 5. Deployment to the approved target.
 6. Optional glasses adapter, verified on hardware separately.
+
+Step 5 needs an approved deployment target. The production sign-in issuer, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication are separate decisions.
 
 ## Coordination
 
