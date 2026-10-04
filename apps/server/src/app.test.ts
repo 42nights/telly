@@ -63,7 +63,7 @@ describe("server boundaries", () => {
 				tables: {
 					hrSample: [
 						{ deviceId: "my-whoop", ts: minute, bpm: 61 },
-						{ deviceId: "my-whoop", ts: minute + 30, bpm: 64 },
+						{ deviceId: "my-whoop", ts: minute + 10, bpm: 64 },
 						{ deviceId: "my-whoop", ts: minute + 60, bpm: 70 },
 					],
 					event: [
@@ -139,7 +139,7 @@ describe("server boundaries", () => {
 						"heart_rate",
 						64,
 						"bpm",
-						(minute + 30) * 1000,
+						(minute + 10) * 1000,
 						"noop:my-whoop",
 					),
 					sample(
