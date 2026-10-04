@@ -213,37 +213,6 @@ const report = table(
 	},
 );
 
-// Report email (#8), one row per family. Only a `family_access` holder changes it. No row means off.
-const reportEmailSettings = table(
-	{ name: "report_email_settings" },
-	{
-		familyId: t.u64().primaryKey(),
-		// Email each report automatically when a member marks it as reviewed.
-		enabled: t.bool(),
-		// Empty when no address is set.
-		recipient: t.string(),
-		updatedBy: t.identity(),
-		updatedAt: t.timestamp(),
-	},
-);
-
-// The latest email of one report. The server picks `sendId` per attempt; only that attempt settles it.
-const reportEmail = table(
-	{ name: "report_email" },
-	{
-		reportId: t.string().primaryKey(),
-		familyId: t.u64().index("btree"),
-		sendId: t.string(),
-		recipient: t.string(),
-		// "queued", "sent", or "failed".
-		status: t.string(),
-		reason: t.option(t.string()),
-		automatic: t.bool(),
-		requestedBy: t.identity(),
-		updatedAt: t.timestamp(),
-	},
-);
-
 // A FinchNode subject (one consenting patient) whose records the family may read. FinchNode checks
 // the patient's consent on every read; this link only says which family asked for the subject.
 const finchnodeLink = table(
@@ -866,6 +835,37 @@ const cookingProfile = table(
 	},
 );
 
+// Report email (#8), one row per family. Only a `family_access` holder changes it. No row means off.
+const reportEmailSettings = table(
+	{ name: "report_email_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		// Email each report automatically when a member marks it as reviewed.
+		enabled: t.bool(),
+		// Empty when no address is set.
+		recipient: t.string(),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+// The latest email of one report. The server picks `sendId` per attempt; only that attempt settles it.
+const reportEmail = table(
+	{ name: "report_email" },
+	{
+		reportId: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		sendId: t.string(),
+		recipient: t.string(),
+		// "queued", "sent", or "failed".
+		status: t.string(),
+		reason: t.option(t.string()),
+		automatic: t.bool(),
+		requestedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -878,8 +878,6 @@ const spacetimedb = schema({
 	thresholdTrigger,
 	alertDelivery,
 	report,
-	reportEmailSettings,
-	reportEmail,
 	finchnodeLink,
 	location,
 	locationShare,
@@ -907,6 +905,8 @@ const spacetimedb = schema({
 	appointment,
 	clinicianShare,
 	cookingProfile,
+	reportEmailSettings,
+	reportEmail,
 });
 export default spacetimedb;
 
@@ -1574,94 +1574,6 @@ export const updateReport = spacetimedb.reducer(
 			...found,
 			fields: fields ?? found.fields,
 			...(review ? { reviewedBy: ctx.sender, reviewedAt: ctx.timestamp } : {}),
-		});
-	},
-);
-
-const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// A queued send older than this lost its server, so a member may send again.
-const EMAIL_STALE_MS = 2 * 60_000;
-
-export const setReportEmailSettings = spacetimedb.reducer(
-	{ familyId: t.u64(), enabled: t.bool(), recipient: t.string() },
-	(ctx, settings) => {
-		requireMember(ctx, settings.familyId);
-		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
-			settings.familyId,
-			ctx.sender,
-		]);
-		if (
-			!holdsCareScope(mine, "family_access") &&
-			!maySetUpSharing(ctx, settings.familyId)
-		)
-			throw new SenderError("no care access: family_access");
-		if (
-			(settings.enabled || settings.recipient !== "") &&
-			!(
-				settings.recipient.length <= 254 &&
-				EMAIL_ADDRESS.test(settings.recipient)
-			)
-		)
-			throw new SenderError("recipient must be an email address");
-		const row = {
-			...settings,
-			updatedBy: ctx.sender,
-			updatedAt: ctx.timestamp,
-		};
-		if (ctx.db.reportEmailSettings.familyId.find(settings.familyId) === null)
-			ctx.db.reportEmailSettings.insert(row);
-		else ctx.db.reportEmailSettings.familyId.update(row);
-	},
-);
-
-// Queues an email of a reviewed report to the family's address. An automatic send happens at most
-// once per report and only while the setting is on; otherwise it does nothing.
-export const queueReportEmail = spacetimedb.reducer(
-	{ reportId: t.string(), sendId: t.string(), automatic: t.bool() },
-	(ctx, { reportId, sendId, automatic }) => {
-		const found = requireReport(ctx, reportId);
-		requireText("sendId", sendId);
-		if (found.reviewedAt === undefined)
-			throw new SenderError("review the report before you email it");
-		const settings = ctx.db.reportEmailSettings.familyId.find(found.familyId);
-		const existing = ctx.db.reportEmail.reportId.find(reportId);
-		if (automatic && (settings?.enabled !== true || existing !== null)) return;
-		if (settings === null || settings.recipient === "")
-			throw new SenderError("set a report email address in Settings first");
-		if (
-			existing?.status === "queued" &&
-			toMs(ctx.timestamp) - toMs(existing.updatedAt) < EMAIL_STALE_MS
-		)
-			throw new SenderError("this report email is already being sent");
-		const row = {
-			reportId,
-			familyId: found.familyId,
-			sendId,
-			recipient: settings.recipient,
-			status: "queued",
-			reason: undefined,
-			automatic,
-			requestedBy: ctx.sender,
-			updatedAt: ctx.timestamp,
-		};
-		if (existing === null) ctx.db.reportEmail.insert(row);
-		else ctx.db.reportEmail.reportId.update(row);
-	},
-);
-
-// Records the result of the queued attempt `sendId`. A failure carries its reason.
-export const settleReportEmail = spacetimedb.reducer(
-	{ reportId: t.string(), sendId: t.string(), failure: t.option(t.string()) },
-	(ctx, { reportId, sendId, failure }) => {
-		const row = ctx.db.reportEmail.reportId.find(reportId);
-		if (row === null) throw new SenderError("not a member of this family");
-		requireMember(ctx, row.familyId);
-		if (row.sendId !== sendId || row.status !== "queued") return;
-		ctx.db.reportEmail.reportId.update({
-			...row,
-			status: failure === undefined ? "sent" : "failed",
-			reason: failure,
-			updatedAt: ctx.timestamp,
 		});
 	},
 );
@@ -3344,26 +3256,6 @@ export const myReports = spacetimedb.view(
 			.rightSemijoin(ctx.from.report, (m, r) => m.familyId.eq(r.familyId)),
 );
 
-export const myReportEmailSettings = spacetimedb.view(
-	{ name: "my_report_email_settings", public: true },
-	t.array(reportEmailSettings.rowType),
-	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reportEmailSettings, (m, s) =>
-				m.familyId.eq(s.familyId),
-			),
-);
-
-export const myReportEmails = spacetimedb.view(
-	{ name: "my_report_emails", public: true },
-	t.array(reportEmail.rowType),
-	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reportEmail, (m, e) => m.familyId.eq(e.familyId)),
-);
-
 export const myFinchnodeLinks = spacetimedb.view(
 	{ name: "my_finchnode_links", public: true },
 	t.array(finchnodeLink.rowType),
@@ -3627,4 +3519,112 @@ export const myCookingProfiles = spacetimedb.view(
 			const row = ctx.db.cookingProfile.familyId.find(familyId);
 			return row === null ? [] : [row];
 		}),
+);
+
+const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// A queued send older than this lost its server, so a member may send again.
+const EMAIL_STALE_MS = 2 * 60_000;
+
+export const setReportEmailSettings = spacetimedb.reducer(
+	{ familyId: t.u64(), enabled: t.bool(), recipient: t.string() },
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
+			settings.familyId,
+			ctx.sender,
+		]);
+		if (
+			!holdsCareScope(mine, "family_access") &&
+			!maySetUpSharing(ctx, settings.familyId)
+		)
+			throw new SenderError("no care access: family_access");
+		if (
+			(settings.enabled || settings.recipient !== "") &&
+			!(
+				settings.recipient.length <= 254 &&
+				EMAIL_ADDRESS.test(settings.recipient)
+			)
+		)
+			throw new SenderError("recipient must be an email address");
+		const row = {
+			...settings,
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.reportEmailSettings.familyId.find(settings.familyId) === null)
+			ctx.db.reportEmailSettings.insert(row);
+		else ctx.db.reportEmailSettings.familyId.update(row);
+	},
+);
+
+// Queues an email of a reviewed report to the family's address. An automatic send happens at most
+// once per report and only while the setting is on; otherwise it does nothing.
+export const queueReportEmail = spacetimedb.reducer(
+	{ reportId: t.string(), sendId: t.string(), automatic: t.bool() },
+	(ctx, { reportId, sendId, automatic }) => {
+		const found = requireReport(ctx, reportId);
+		requireText("sendId", sendId);
+		if (found.reviewedAt === undefined)
+			throw new SenderError("review the report before you email it");
+		const settings = ctx.db.reportEmailSettings.familyId.find(found.familyId);
+		const existing = ctx.db.reportEmail.reportId.find(reportId);
+		if (automatic && (settings?.enabled !== true || existing !== null)) return;
+		if (settings === null || settings.recipient === "")
+			throw new SenderError("set a report email address in Settings first");
+		if (
+			existing?.status === "queued" &&
+			toMs(ctx.timestamp) - toMs(existing.updatedAt) < EMAIL_STALE_MS
+		)
+			throw new SenderError("this report email is already being sent");
+		const row = {
+			reportId,
+			familyId: found.familyId,
+			sendId,
+			recipient: settings.recipient,
+			status: "queued",
+			reason: undefined,
+			automatic,
+			requestedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (existing === null) ctx.db.reportEmail.insert(row);
+		else ctx.db.reportEmail.reportId.update(row);
+	},
+);
+
+// Records the result of the queued attempt `sendId`. A failure carries its reason.
+export const settleReportEmail = spacetimedb.reducer(
+	{ reportId: t.string(), sendId: t.string(), failure: t.option(t.string()) },
+	(ctx, { reportId, sendId, failure }) => {
+		const row = ctx.db.reportEmail.reportId.find(reportId);
+		if (row === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, row.familyId);
+		if (row.sendId !== sendId || row.status !== "queued") return;
+		ctx.db.reportEmail.reportId.update({
+			...row,
+			status: failure === undefined ? "sent" : "failed",
+			reason: failure,
+			updatedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const myReportEmailSettings = spacetimedb.view(
+	{ name: "my_report_email_settings", public: true },
+	t.array(reportEmailSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reportEmailSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myReportEmails = spacetimedb.view(
+	{ name: "my_report_emails", public: true },
+	t.array(reportEmail.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reportEmail, (m, e) => m.familyId.eq(e.familyId)),
 );
