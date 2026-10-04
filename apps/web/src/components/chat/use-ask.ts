@@ -7,6 +7,7 @@ import {
 import { useState } from "react";
 
 import { type ApiResult, apiRequest, familyPath } from "@/lib/api";
+import { play } from "@/lib/player";
 
 import {
 	type Ask,
@@ -94,9 +95,9 @@ export function useAsk(familyId: string) {
 			state: { kind: "answered", answer },
 		});
 		if (speech.status !== "ok") return `No spoken answer: ${speech.message}`;
-		await new Audio(`data:audio/mpeg;base64,${speech.audio}`)
-			.play()
-			.catch((error) => console.error("Spoken answer did not play:", error));
+		await play(`data:audio/mpeg;base64,${speech.audio}`).catch((error) =>
+			console.error("Spoken answer did not play:", error),
+		);
 		return null;
 	};
 

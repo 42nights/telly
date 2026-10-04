@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 
 import Loader from "./components/loader";
 import { startPendingSync } from "./lib/pending";
+import { unlockPlayer } from "./lib/player";
 import { queryClient } from "./lib/query";
 import { followSession } from "./lib/session";
 import { routeTree } from "./routeTree.gen";
@@ -38,5 +39,6 @@ if (!rootElement.innerHTML) {
 		</QueryClientProvider>,
 	);
 	startPendingSync();
+	unlockPlayer();
 	followSession(router);
 }
