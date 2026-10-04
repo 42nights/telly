@@ -12,6 +12,7 @@ import {
 	table,
 	type ViewCtx,
 } from "spacetimedb/server";
+import { afterQuietHours, nextLocalTime } from "./local-time";
 
 const family = table(
 	{ name: "family" },
@@ -405,6 +406,101 @@ const ladderTimer = table(
 	},
 );
 
+// The reminder lifecycle (issue #28). Kinds, states, responses, and sources are the strings of
+// `@health/contracts/reminders`; local times are minutes after local midnight.
+
+// The wearer's prompt rules: the settings row's columns and the reducer's arguments.
+const promptRules = () => ({
+	timeZone: t.string(),
+	quietStart: t.option(t.u16()),
+	quietEnd: t.option(t.u16()),
+	repeatEveryMinutes: t.u32(),
+	maxPrompts: t.u32(),
+	snoozeMinutes: t.u32(),
+});
+
+// One row per family.
+const reminderSettings = table(
+	{ name: "reminder_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		...promptRules(),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const reminder = table(
+	{ name: "reminder" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		times: t.array(t.u16()),
+		// Chosen by the server, so it finds the reminder it created.
+		clientId: t.string().unique(),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+	},
+);
+
+// One scheduled time of one reminder. `slot` (reminder and time) makes scheduling it idempotent.
+// Prompts have ended when `nextPromptAt` is none.
+const reminderOccurrence = table(
+	{ name: "reminder_occurrence" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		reminderId: t.u64().index("btree"),
+		slot: t.string().unique(),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		minuteOfDay: t.u16(),
+		scheduledFor: t.timestamp(),
+		state: t.string(),
+		promptDue: t.bool(),
+		prompts: t.u32(),
+		nextPromptAt: t.option(t.timestamp()),
+	},
+);
+
+// Append-only. A missing actor is the database scheduler.
+const reminderEvent = table(
+	{ name: "reminder_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		occurrenceId: t.u64().index("btree"),
+		familyId: t.u64().index("btree"),
+		state: t.string(),
+		response: t.option(t.string()),
+		at: t.timestamp(),
+		actor: t.option(t.identity()),
+		source: t.string(),
+		wording: t.option(t.string()),
+	},
+);
+
+// Each handled client request, keyed by occurrence, sender, and client id, so a retry records nothing new.
+const reminderRequest = table(
+	{ name: "reminder_request" },
+	{ key: t.string().primaryKey(), fingerprint: t.string() },
+);
+
+// Prompt deadlines, run by the database itself. A timer whose `dueAt` no longer matches the
+// occurrence's `nextPromptAt` was replaced and does nothing.
+const reminderTimer = table(
+	{ name: "reminder_timer" },
+	{
+		scheduledId: t.u64().primaryKey().autoInc(),
+		scheduledAt: t.scheduleAt(),
+		occurrenceId: t.u64(),
+		dueAt: t.timestamp(),
+	},
+);
+
 // The wearer's care profile (#26). Each save is a new version, so the history keeps who changed
 // it and when. JSON that the server validates against `@health/contracts/care-profile`.
 const careProfileVersion = table(
@@ -502,7 +598,6 @@ const exerciseEvent = table(
 		at: t.timestamp(),
 	},
 );
-
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -520,6 +615,12 @@ const spacetimedb = schema({
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	reminderSettings,
+	reminder,
+	reminderOccurrence,
+	reminderEvent,
+	reminderRequest,
+	reminderTimer,
 	mealFact,
 	careProfileVersion,
 	careInstruction,
@@ -1483,6 +1584,425 @@ export const runLadderTimer = spacetimedb.reducer(
 	},
 );
 
+// Reminder lifecycle (issue #28). The database runs every prompt on its own timers, so a server
+// restart neither loses nor repeats one. Silence only ever ends an occurrence `unresolved`.
+
+const REMINDER_KINDS = [
+	"medication",
+	"meal",
+	"hydration",
+	"appointment",
+	"charging",
+	"routine",
+];
+const REMINDER_RESPONSES = [
+	"okay",
+	"dismissed",
+	"done",
+	"already_did_it",
+	"later",
+	"not_now",
+	"stop",
+	"help",
+	"unsure",
+	"repeat",
+];
+const CLIENT_SOURCES = ["phone", "web", "glasses"];
+const COMPLETE_STATES = ["self_reported_complete", "caregiver_confirmed"];
+const MINUTES_PER_DAY = 24 * 60;
+
+type ReminderSettingsRow = Infer<typeof reminderSettings.rowType>;
+type ReminderRow = Infer<typeof reminder.rowType>;
+type OccurrenceRow = Infer<typeof reminderOccurrence.rowType>;
+
+const toMs = (at: Timestamp) => Number(at.microsSinceUnixEpoch / 1000n);
+const fromMs = (ms: number) => new Timestamp(BigInt(ms) * 1000n);
+
+const quietHours = (s: ReminderSettingsRow) =>
+	s.quietStart === undefined || s.quietEnd === undefined
+		? undefined
+		: { start: s.quietStart, end: s.quietEnd };
+
+const requireReminderSettings = (ctx: Ctx, familyId: bigint) => {
+	const found = ctx.db.reminderSettings.familyId.find(familyId);
+	if (found === null) throw new SenderError("save the reminder settings first");
+	return found;
+};
+
+/** The prompt time `minutes` from now, held until quiet hours end. */
+const promptAfter = (ctx: Ctx, s: ReminderSettingsRow, minutes: number) =>
+	fromMs(
+		afterQuietHours(
+			toMs(ctx.timestamp) + minutes * 60_000,
+			quietHours(s),
+			s.timeZone,
+		),
+	);
+
+const scheduleReminderTimer = (ctx: Ctx, occurrenceId: bigint, at: Timestamp) =>
+	ctx.db.reminderTimer.insert({
+		scheduledId: 0n,
+		scheduledAt: ScheduleAt.time(at.microsSinceUnixEpoch),
+		occurrenceId,
+		dueAt: at,
+	});
+
+const recordReminderEvent = (
+	ctx: Ctx,
+	occurrence: OccurrenceRow,
+	state: string,
+	answer: {
+		response?: string | undefined;
+		source: string;
+		wording?: string | undefined;
+	},
+) =>
+	ctx.db.reminderEvent.insert({
+		id: 0n,
+		occurrenceId: occurrence.id,
+		familyId: occurrence.familyId,
+		state,
+		response: answer.response,
+		at: ctx.timestamp,
+		actor: answer.source === "scheduler" ? undefined : ctx.sender,
+		source: answer.source,
+		wording: answer.wording,
+	});
+
+/** Schedules the reminder's next occurrence at local `minute` after `afterMs`, once per slot. */
+const scheduleOccurrence = (
+	ctx: Ctx,
+	r: ReminderRow,
+	minute: number,
+	afterMs: number,
+) => {
+	const s = requireReminderSettings(ctx, r.familyId);
+	const at = nextLocalTime(afterMs, minute, s.timeZone);
+	const slot = `${r.id}:${at}`;
+	if (ctx.db.reminderOccurrence.slot.find(slot) !== null) return;
+	const firstPrompt = fromMs(afterQuietHours(at, quietHours(s), s.timeZone));
+	const occurrence = ctx.db.reminderOccurrence.insert({
+		id: 0n,
+		familyId: r.familyId,
+		reminderId: r.id,
+		slot,
+		kind: r.kind,
+		subjectId: r.subjectId,
+		title: r.title,
+		minuteOfDay: minute,
+		scheduledFor: fromMs(at),
+		state: "scheduled",
+		promptDue: false,
+		prompts: 0,
+		nextPromptAt: firstPrompt,
+	});
+	recordReminderEvent(ctx, occurrence, "scheduled", { source: "scheduler" });
+	scheduleReminderTimer(ctx, occurrence.id, firstPrompt);
+};
+
+const requireOccurrence = (ctx: Ctx, occurrenceId: bigint) => {
+	const found = ctx.db.reminderOccurrence.id.find(occurrenceId);
+	// A missing occurrence fails like another family's, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	return found;
+};
+
+const requireClientSource = (source: string) => {
+	if (!CLIENT_SOURCES.includes(source))
+		throw new SenderError("source must be phone, web, or glasses");
+};
+
+const requireWording = (wording: string | undefined) => {
+	if (wording !== undefined && wording.length > 2000)
+		throw new SenderError("wording must be at most 2000 characters");
+};
+
+/**
+ * True when the sender already sent `clientId` for this occurrence with the same `fingerprint`: a
+ * retry after a lost reply, which records nothing new. The same id with other content fails.
+ */
+const seenRequest = (
+	ctx: Ctx,
+	occurrenceId: bigint,
+	clientId: string,
+	fingerprint: string,
+) => {
+	requireText("clientId", clientId);
+	const key = `${occurrenceId}:${ctx.sender.toHexString()}:${clientId}`;
+	const seen = ctx.db.reminderRequest.key.find(key);
+	if (seen === null) {
+		ctx.db.reminderRequest.insert({ key, fingerprint });
+		return false;
+	}
+	if (seen.fingerprint !== fingerprint)
+		throw new SenderError("clientId is already used for another request");
+	return true;
+};
+
+export const setReminderSettings = spacetimedb.reducer(
+	{ familyId: t.u64(), ...promptRules() },
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		try {
+			new Intl.DateTimeFormat("en", { timeZone: settings.timeZone });
+		} catch {
+			throw new SenderError("timeZone is not a known IANA time zone");
+		}
+		if (
+			(settings.quietStart === undefined) !==
+			(settings.quietEnd === undefined)
+		)
+			throw new SenderError("quiet hours need both a start and an end");
+		if (
+			(settings.quietStart ?? 0) >= MINUTES_PER_DAY ||
+			(settings.quietEnd ?? 0) >= MINUTES_PER_DAY
+		)
+			throw new SenderError("quiet hours must be times of day");
+		for (const minutes of [settings.repeatEveryMinutes, settings.snoozeMinutes])
+			if (minutes < 1 || minutes > 240)
+				throw new SenderError(
+					"repeat spacing and snooze must be 1 to 240 minutes",
+				);
+		if (settings.maxPrompts < 1 || settings.maxPrompts > 10)
+			throw new SenderError("maxPrompts must be 1 to 10");
+		const row = {
+			...settings,
+			quietStart: settings.quietStart,
+			quietEnd: settings.quietEnd,
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.reminderSettings.familyId.find(settings.familyId) === null)
+			ctx.db.reminderSettings.insert(row);
+		else ctx.db.reminderSettings.familyId.update(row);
+	},
+);
+
+export const createReminder = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		clientId: t.string(),
+		kind: t.string(),
+		subjectId: t.option(t.string()),
+		title: t.string(),
+		times: t.array(t.u16()),
+	},
+	(ctx, input) => {
+		requireMember(ctx, input.familyId);
+		requireReminderSettings(ctx, input.familyId);
+		requireText("clientId", input.clientId);
+		requireText("title", input.title);
+		if (!REMINDER_KINDS.includes(input.kind))
+			throw new SenderError("kind is not a reminder kind");
+		if (
+			input.times.length === 0 ||
+			input.times.length > 12 ||
+			input.times.some((minute) => minute >= MINUTES_PER_DAY)
+		)
+			throw new SenderError("times must be 1 to 12 times of day");
+		// The server resends after a lost reply; the first stored reminder stands.
+		if (ctx.db.reminder.clientId.find(input.clientId) !== null) return;
+		const created = ctx.db.reminder.insert({
+			...input,
+			subjectId: input.subjectId,
+			id: 0n,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+		});
+		for (const minute of new Set(input.times))
+			scheduleOccurrence(ctx, created, minute, toMs(ctx.timestamp));
+	},
+);
+
+/** Stops the reminder. Occurrences that are not yet due go with it; every other one stays as history. */
+export const deleteReminder = spacetimedb.reducer(
+	{ reminderId: t.u64() },
+	(ctx, { reminderId }) => {
+		const found = ctx.db.reminder.id.find(reminderId);
+		if (found === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, found.familyId);
+		ctx.db.reminder.id.delete(reminderId);
+		const now = ctx.timestamp.microsSinceUnixEpoch;
+		for (const occurrence of [
+			...ctx.db.reminderOccurrence.reminderId.filter(reminderId),
+		]) {
+			if (
+				occurrence.state !== "scheduled" ||
+				occurrence.prompts > 0 ||
+				occurrence.scheduledFor.microsSinceUnixEpoch <= now
+			)
+				continue;
+			for (const event of [
+				...ctx.db.reminderEvent.occurrenceId.filter(occurrence.id),
+			])
+				ctx.db.reminderEvent.id.delete(event.id);
+			ctx.db.reminderOccurrence.id.delete(occurrence.id);
+		}
+	},
+);
+
+/** A device showed or spoke the due prompt. Without a due prompt it records nothing. */
+export const recordReminderDelivery = spacetimedb.reducer(
+	{ occurrenceId: t.u64(), clientId: t.string(), source: t.string() },
+	(ctx, { occurrenceId, clientId, source }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		requireClientSource(source);
+		if (seenRequest(ctx, occurrenceId, clientId, `delivery:${source}`)) return;
+		if (!occurrence.promptDue) return;
+		recordReminderEvent(ctx, occurrence, "delivered", { source });
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "delivered",
+			promptDue: false,
+		});
+	},
+);
+
+/** The wearer's answer. See `ReminderResponse` in `@health/contracts/reminders` for each state. */
+export const answerReminder = spacetimedb.reducer(
+	{
+		occurrenceId: t.u64(),
+		clientId: t.string(),
+		source: t.string(),
+		response: t.string(),
+		wording: t.option(t.string()),
+	},
+	(ctx, { occurrenceId, clientId, source, response, wording }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		requireClientSource(source);
+		requireWording(wording);
+		if (!REMINDER_RESPONSES.includes(response))
+			throw new SenderError("response is not a reminder response");
+		const fingerprint = `answer:${source}:${response}:${wording ?? ""}`;
+		if (seenRequest(ctx, occurrenceId, clientId, fingerprint)) return;
+		const answer = (state: string, change: Partial<OccurrenceRow>) => {
+			recordReminderEvent(ctx, occurrence, state, {
+				response,
+				source,
+				wording,
+			});
+			ctx.db.reminderOccurrence.id.update({ ...occurrence, ...change, state });
+		};
+		const end = { promptDue: false, nextPromptAt: undefined };
+		if (response === "done" || response === "already_did_it") {
+			// A dose or meal is recorded once, however often it is reported.
+			if (COMPLETE_STATES.includes(occurrence.state)) return;
+			return answer("self_reported_complete", end);
+		}
+		if (occurrence.nextPromptAt === undefined)
+			throw new SenderError("prompts have ended for this occurrence");
+		const settings = requireReminderSettings(ctx, occurrence.familyId);
+		switch (response) {
+			case "okay":
+			case "dismissed":
+				// Seen, not done: follow-up prompts continue.
+				return answer("acknowledged", { promptDue: false });
+			case "later":
+			case "not_now": {
+				const next = promptAfter(
+					ctx,
+					settings,
+					response === "later"
+						? settings.snoozeMinutes
+						: settings.repeatEveryMinutes,
+				);
+				answer("deferred", {
+					promptDue: false,
+					prompts: 0,
+					nextPromptAt: next,
+				});
+				scheduleReminderTimer(ctx, occurrenceId, next);
+				return;
+			}
+			case "stop":
+				return answer("declined", end);
+			case "repeat":
+				return answer(occurrence.state, { promptDue: true });
+			default:
+				// `help` and `unsure`: a person takes over; prompting again could cause a second dose.
+				return answer("unresolved", end);
+		}
+	},
+);
+
+/** A family member confirms the task was done. Separate from the wearer's own report; once per occurrence. */
+export const confirmReminder = spacetimedb.reducer(
+	{
+		occurrenceId: t.u64(),
+		clientId: t.string(),
+		source: t.string(),
+		wording: t.option(t.string()),
+	},
+	(ctx, { occurrenceId, clientId, source, wording }) => {
+		const occurrence = requireOccurrence(ctx, occurrenceId);
+		requireClientSource(source);
+		requireWording(wording);
+		const fingerprint = `confirm:${source}:${wording ?? ""}`;
+		if (seenRequest(ctx, occurrenceId, clientId, fingerprint)) return;
+		if (occurrence.state === "caregiver_confirmed") return;
+		recordReminderEvent(ctx, occurrence, "caregiver_confirmed", {
+			source,
+			wording,
+		});
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			state: "caregiver_confirmed",
+			promptDue: false,
+			nextPromptAt: undefined,
+		});
+	},
+);
+
+/**
+ * Gives the next prompt, or ends the occurrence `unresolved` after `maxPrompts` prompts that no answer
+ * settled. The first run also schedules the reminder's next occurrence for the same time of day.
+ */
+export const runReminderTimer = spacetimedb.reducer(
+	{ onSchedule: reminderTimer },
+	{ timer: reminderTimer.rowType },
+	(ctx, { timer }) => {
+		if (!ctx.sender.isEqual(ctx.databaseIdentity))
+			throw new SenderError("only the database runs reminder timers");
+		const occurrence = ctx.db.reminderOccurrence.id.find(timer.occurrenceId);
+		if (
+			occurrence?.nextPromptAt?.microsSinceUnixEpoch !==
+			timer.dueAt.microsSinceUnixEpoch
+		)
+			return;
+		const owner = ctx.db.reminder.id.find(occurrence.reminderId);
+		if (owner !== null)
+			scheduleOccurrence(
+				ctx,
+				owner,
+				occurrence.minuteOfDay,
+				Math.max(toMs(occurrence.scheduledFor), toMs(ctx.timestamp)),
+			);
+		const settings = requireReminderSettings(ctx, occurrence.familyId);
+		if (occurrence.prompts >= settings.maxPrompts) {
+			// Silence settles nothing and contacts nobody: the occurrence stays visibly open.
+			recordReminderEvent(ctx, occurrence, "unresolved", {
+				source: "scheduler",
+			});
+			ctx.db.reminderOccurrence.id.update({
+				...occurrence,
+				state: "unresolved",
+				promptDue: false,
+				nextPromptAt: undefined,
+			});
+			return;
+		}
+		const next = promptAfter(ctx, settings, settings.repeatEveryMinutes);
+		ctx.db.reminderOccurrence.id.update({
+			...occurrence,
+			promptDue: true,
+			prompts: occurrence.prompts + 1,
+			nextPromptAt: next,
+		});
+		scheduleReminderTimer(ctx, occurrence.id, next);
+	},
+);
+
 export const saveCareProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
@@ -1698,7 +2218,6 @@ export const recordExerciseEvent = spacetimedb.reducer(
 		});
 	},
 );
-
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1860,6 +2379,48 @@ export const myContactAttempts = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.contactAttempt, (m, a) =>
 				m.familyId.eq(a.familyId),
+			),
+);
+
+export const myReminderSettings = spacetimedb.view(
+	{ name: "my_reminder_settings", public: true },
+	t.array(reminderSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myReminders = spacetimedb.view(
+	{ name: "my_reminders", public: true },
+	t.array(reminder.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminder, (m, r) => m.familyId.eq(r.familyId)),
+);
+
+export const myReminderOccurrences = spacetimedb.view(
+	{ name: "my_reminder_occurrences", public: true },
+	t.array(reminderOccurrence.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderOccurrence, (m, o) =>
+				m.familyId.eq(o.familyId),
+			),
+);
+
+export const myReminderEvents = spacetimedb.view(
+	{ name: "my_reminder_events", public: true },
+	t.array(reminderEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.reminderEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
 			),
 );
 

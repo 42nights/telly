@@ -364,6 +364,18 @@ export type MyMealFacts = __Infer<typeof MyMealFacts>;
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
 
+export const MyReminderEvents = __t.object("MyReminderEvents", {});
+export type MyReminderEvents = __Infer<typeof MyReminderEvents>;
+
+export const MyReminderOccurrences = __t.object("MyReminderOccurrences", {});
+export type MyReminderOccurrences = __Infer<typeof MyReminderOccurrences>;
+
+export const MyReminderSettings = __t.object("MyReminderSettings", {});
+export type MyReminderSettings = __Infer<typeof MyReminderSettings>;
+
+export const MyReminders = __t.object("MyReminders", {});
+export type MyReminders = __Infer<typeof MyReminders>;
+
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
 
@@ -422,6 +434,76 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const Reminder = __t.object("Reminder", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  kind: __t.string(),
+  subjectId: __t.option(__t.string()),
+  title: __t.string(),
+  times: __t.array(__t.u16()),
+  clientId: __t.string(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type Reminder = __Infer<typeof Reminder>;
+
+export const ReminderEvent = __t.object("ReminderEvent", {
+  id: __t.u64(),
+  occurrenceId: __t.u64(),
+  familyId: __t.u64(),
+  state: __t.string(),
+  response: __t.option(__t.string()),
+  at: __t.timestamp(),
+  actor: __t.option(__t.identity()),
+  source: __t.string(),
+  wording: __t.option(__t.string()),
+});
+export type ReminderEvent = __Infer<typeof ReminderEvent>;
+
+export const ReminderOccurrence = __t.object("ReminderOccurrence", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  reminderId: __t.u64(),
+  slot: __t.string(),
+  kind: __t.string(),
+  subjectId: __t.option(__t.string()),
+  title: __t.string(),
+  minuteOfDay: __t.u16(),
+  scheduledFor: __t.timestamp(),
+  state: __t.string(),
+  promptDue: __t.bool(),
+  prompts: __t.u32(),
+  nextPromptAt: __t.option(__t.timestamp()),
+});
+export type ReminderOccurrence = __Infer<typeof ReminderOccurrence>;
+
+export const ReminderRequest = __t.object("ReminderRequest", {
+  key: __t.string(),
+  fingerprint: __t.string(),
+});
+export type ReminderRequest = __Infer<typeof ReminderRequest>;
+
+export const ReminderSettings = __t.object("ReminderSettings", {
+  familyId: __t.u64(),
+  timeZone: __t.string(),
+  quietStart: __t.option(__t.u16()),
+  quietEnd: __t.option(__t.u16()),
+  repeatEveryMinutes: __t.u32(),
+  maxPrompts: __t.u32(),
+  snoozeMinutes: __t.u32(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReminderSettings = __Infer<typeof ReminderSettings>;
+
+export const ReminderTimer = __t.object("ReminderTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  occurrenceId: __t.u64(),
+  dueAt: __t.timestamp(),
+});
+export type ReminderTimer = __Infer<typeof ReminderTimer>;
 
 export const Report = __t.object("Report", {
   id: __t.string(),

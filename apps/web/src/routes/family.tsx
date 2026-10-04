@@ -14,6 +14,7 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
+import { ReminderHistorySection } from "@/components/reminders/history";
 import { ApiNotice } from "@/components/win95";
 import { senderLabel } from "@/lib/members";
 
@@ -70,6 +71,8 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList state={data.monitoring} />
 			</section>
+
+			<ReminderHistorySection familyId={family.id} me={data.me} />
 
 			<section aria-labelledby="chat" className="grid gap-2">
 				<h3 id="chat" className="font-bold">
