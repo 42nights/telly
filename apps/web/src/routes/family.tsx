@@ -14,6 +14,7 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
+import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
 import { ApiNotice } from "@/components/win95";
@@ -60,6 +61,7 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 			<AlertSection data={data} now={now} />
 
 			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
+			<MealStatusSection familyId={family.id} />
 
 			<section aria-labelledby="glance" className="grid gap-2">
 				<h3 id="glance" className="font-bold">
