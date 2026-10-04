@@ -9,7 +9,7 @@ It is slice D of the AR pin contract and supports the medicine finder in the [pl
 uv venv -p 3.12 tools/ar-sim/.venv   # or: python3.12 -m venv tools/ar-sim/.venv
 uv pip install -p tools/ar-sim/.venv -r tools/ar-sim/requirements.txt
 tools/ar-sim/.venv/bin/python tools/ar-sim/run.py           # 50 baseline trials and 20 trials per failure case
-tools/ar-sim/.venv/bin/python tools/ar-sim/run.py --quick   # CI size: 30 baseline trials and 4 per failure case
+tools/ar-sim/.venv/bin/python tools/ar-sim/run.py --quick   # CI size: 24 baseline trials only (the gate); the full run adds the failure cases
 ```
 
 The run prints a metrics table and writes `out/results.json`, `out/results.md`, and marker frames (`out/<case>-<seed>.jpg`).
@@ -22,34 +22,35 @@ Each trial uses its index as the seed, so two runs with the same pinned versions
 2. **Camera.** The camera is iPhone-like: 960 x 720 with fx = 750 px (the ARKit 1920 x 1440 wide camera at half resolution, about 65 degrees horizontal FOV). It adds lighting level, gradient, and colour cast, motion blur up to 6 px, shot and read noise, and auto exposure that amplifies the noise in dim light.
 3. **Session 1 (save).** The camera walks an arc around the box (24 frames over 120 degrees). Its VIO poses drift by 1 percent of the distance and 0.05 degrees per frame. ORB features from frame pairs are triangulated into a map. Only points with at least 6 degrees of parallax stay in the map. A tap at the box casts a ray into the map. The anchor goes at the median depth of the map points around the tap, as an ARKit hit test does.
 4. **Saved shape.** The map and the anchor go into the app's `ar.pinSaved` reply: anchor id `telly-pin-<containerId>`, and `worldMap` is base64 of a zlib-compressed archive. The trial sends that reply and the `ar.findPin` request through JSON. A baseline map is 160 to 470 KB, well under the 16 MB storage limit.
-5. **Session 2 (find).** The camera starts at a different pose with its own origin. The light is 0.6 to 1.4 times the light of session 1, with a gradient and a colour cast. An object covers 15 to 35 percent of every frame. In 12 frames, the camera turns from a random direction toward the box.
-6. **Relocalize.** Each frame matches ORB features to the map and solves PnP with RANSAC (`solvePnPRansac`, 3 px), then refines the pose with Levenberg-Marquardt. A frame gives a fix when it has at least 50 inliers. Relocalization counts only when two fixes put the anchor within 5 cm of each other. One fix from far, almost flat points can be confidently wrong. The anchor is the mean of the largest group of fixes that agree.
-7. **Guide, then pin.** Each session-2 frame is in one of three stages:
-   - **No fix yet:** the app shows "Move your phone slowly around the room".
-   - **Arrow:** after the first fix, the app shows an arrow toward its best guess of the anchor. The arrow also shows while the anchor is off screen. The trial measures the angle between the arrow and the true direction to the box.
-   - **Marker:** when two fixes agree and the anchor is on screen, the app shows the marker.
-8. **Project.** The session-2 VIO carries the anchor to the last frame, which looks at the box. The trial measures the 3D error (cm) and the screen error (px) against the true point on the box.
+5. **Session 2 (find).** The person starts at a different pose, facing any direction, with a new origin. The light is 0.6 to 1.4 times the light of session 1, with a gradient and a colour cast. An object covers 15 to 35 percent of every frame. The person does only what the app shows, so the path depends on the app's own estimates, not on the true position of the box.
+6. **Relocalize.** Each frame matches ORB features to the map and solves PnP with RANSAC (`solvePnPRansac`, 3 px), then refines the pose with Levenberg-Marquardt. A frame gives a fix when it has at least 50 inliers and the inliers spread at least 50 px in every direction. Inliers in a thin strip, such as one shelf edge, let PnP rotate about the strip and give a wrong pose that still fits.
+7. **Pairing mode, then arrow, then marker.** Each session-2 frame is in one of three stages:
+   - **Pairing mode (no fix yet):** the app has no idea where the box is, so it can only ask for a look around. Pairing must complete before anything else. The app shows "Turn slowly and look around the room", and the person turns on the spot at 15 degrees per frame. After one full turn with no fix, the app shows "Walk closer to where you pinned the medicine and look around". The person walks toward the spot they remember, which is up to about 0.5 m off, and keeps turning. The trial stops counting after 48 frames (two turns). An app does not stop: it keeps pairing mode on.
+   - **Arrow:** after the first fix, the app shows an arrow toward its best guess of the anchor. The person turns toward it (up to 30 degrees per frame) and walks toward it. The arrow also shows while the anchor is off screen. The trial measures the angle between the view ray to the app's guess and the view ray to the box.
+   - **Marker:** when two fixes put the anchor within 5 cm of each other and the anchor is on screen, the app shows the marker. One fix can be confidently wrong, so the marker waits for a second fix that agrees. The anchor is the mean of the largest group of fixes that agree.
+8. **Project.** Ten frames after pairing, the trial measures the 3D error (cm) and the screen error (px) of the marker against the true point on the box.
 
 ## Results
 
 Full run, 50 baseline trials and 20 trials per failure case:
 
-| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max) | within 5 cm and 20 px | arrow frames | arrow error deg (median / p95) |
-|---|---|---|---|---|---|---|---|---|
-| baseline | 50 | 100% | 96% | 1.00 / 2.16 / 2.79 | 1.8 / 5.4 / 8.6 | 96% | 86 | 0.4 / 7.0 |
-| short-scan | 20 | 85% | 35% | 1.63 / 3.42 / 3.75 | 1.7 / 5.1 / 6.1 | 35% | 38 | 0.6 / 8.7 |
-| featureless-walls | 20 | 100% | 70% | 1.17 / 3.90 / 4.32 | 2.5 / 5.6 / 7.1 | 70% | 30 | 0.8 / 3.3 |
-| big-lighting-change | 20 | 100% | 85% | 1.10 / 2.62 / 2.64 | 2.2 / 5.1 / 7.4 | 85% | 49 | 0.9 / 5.7 |
-| far-start | 20 | 100% | 95% | 1.47 / 3.25 / 3.70 | 1.8 / 3.9 / 5.1 | 95% | 32 | 0.3 / 1.5 |
+| case | trials | map saved | pairing done | pairing turn deg (median / p95) | marker shown | 3D error cm (median / p95 / max) | screen error px (median / p95 / max) | within 5 cm and 20 px | arrow frames | arrow error deg (median / p95) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| baseline | 50 | 100% | 100% | 90 / 263 | 100% | 1.05 / 2.45 / 3.31 | 3.9 / 10.8 / 14.2 | 100% | 76 | 0.3 / 0.8 |
+| short-scan | 20 | 85% | 35% | 345 / 634 | 25% | 1.27 / 2.41 / 2.44 | 2.6 / 4.2 / 4.3 | 25% | 44 | 0.3 / 0.7 |
+| featureless-walls | 20 | 100% | 45% | 135 / 498 | 20% | 1.04 / 3.65 / 4.10 | 4.0 / 11.0 / 12.3 | 20% | 66 | 0.2 / 0.7 |
+| big-lighting-change | 20 | 100% | 90% | 172 / 409 | 70% | 1.22 / 1.69 / 1.98 | 5.6 / 10.3 / 12.1 | 70% | 67 | 0.4 / 14.8 |
+| far-start | 20 | 100% | 90% | 112 / 481 | 90% | 1.32 / 2.72 / 3.17 | 4.4 / 11.2 / 17.4 | 90% | 23 | 0.1 / 1.0 |
 
-The bar applies to the baseline: relocalization in at least 90 percent of trials, the p95 error at most 5 cm and at most 20 px, and the arrow p95 error at most 45 degrees (it points into the correct quarter). The baseline passes.
-The arrow guides the person earlier and more often than the marker does. In 49 of 50 baseline trials, the trial showed an arrow or a marker. In the failure cases, the arrow showed in some trials that never relocalized (short scan 2, big lighting change 1). The largest arrow error in any trial was 36.5 degrees: one baseline trial got only one fix, so it showed the arrow to the end while VIO drift built up.
-A trial that does not relocalize shows no marker. No trial put a wrong marker on the screen: every relocalized trial, failure cases included, is within 5 cm and 20 px.
+The bar applies to the baseline: pairing completes in at least 95 percent of trials, the marker shows in at least 90 percent, the marker p95 error is at most 5 cm and at most 20 px, and the arrow p95 error is at most 15 degrees. The baseline passes.
+In the baseline, pairing completed in all 50 trials, after a median turn of 90 degrees. The marker showed in all 50 trials, and every marker was within 5 cm and 20 px.
+No trial in any case put a wrong marker on the screen: every marker that showed is within 5 cm and 20 px. When the second fix does not come, the app keeps the arrow and shows no marker.
+The 15-degree arrow p95 error in big-lighting-change comes from one dark trial. Its only fix was 15 degrees off, and no second fix came, so the app kept the arrow on and showed no marker.
 The 5 cm bar is the marker error, not a room size: the box is 8 x 12 cm, so the marker must land on it. The `far-start` case starts session 2 3 to 4 m from the box, across the room from it.
 
 ![baseline](evidence/baseline-1.jpg)
 ![big lighting change](evidence/big-lighting-change-1.jpg)
-![featureless walls](evidence/featureless-walls-0.jpg)
+![featureless walls](evidence/featureless-walls-2.jpg)
 ![baseline, second trial](evidence/baseline-2.jpg)
 ![arrow before the marker, far start](evidence/far-start-0-arrow.jpg)
 ![arrow before the marker, baseline](evidence/baseline-1-arrow.jpg)
@@ -60,9 +61,12 @@ Green ring: the projected pin. Red cross: the true point on the box. In the arro
 
 | Case | Change | Result | Guidance for the app |
 |---|---|---|---|
-| short-scan | 4 frames over 8 degrees | Few map points; some saves fail and most finds fail | Save only when ARKit reports `.mapped` or `.extending`. If not, show "Move your phone slowly around the box". |
-| featureless-walls | Plain walls, floor, and ceiling | Relocalization drops; furniture carries the map | When the find takes too long, show "Point your phone at furniture or objects near the medicine". |
-| big-lighting-change | 5 to 10 percent of the light, warm cast, strong gradient | Relocalization drops because of noise | Show "Turn on a light" and keep the save in good light. |
+| short-scan | 4 frames over 8 degrees | Few map points. Some saves fail, and pairing often does not complete. | Save only when ARKit reports `.mapped` or `.extending`. If not, show "Move your phone slowly around the box". |
+| featureless-walls | Plain walls, floor, and ceiling | Pairing often does not complete; only the furniture carries the map. | During the save, show "Point your phone at furniture or objects near the medicine". |
+| big-lighting-change | 5 to 10 percent of the light, warm cast, strong gradient | Pairing drops because of noise. | In pairing mode, show "Turn on a light". Save in good light. |
+| far-start | Session 2 starts 3 to 4 m away | Pairing takes longer. It completes more often with more time. | Keep pairing mode on, and show "Walk closer to where you pinned the medicine". |
+
+More time does not help a bad map. With pairing allowed four turns (96 frames) instead of two, far-start pairing completed in 7 of 8 trials. Featureless walls completed in only 2 of 8 trials, and short scans in only 3 of 8. Pairing for those cases is fixed at save time, not at find time.
 
 ## Limits
 

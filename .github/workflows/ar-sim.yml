@@ -1,6 +1,7 @@
 # Telly AR pin simulation (tools/ar-sim): save -> relocalize -> project over seeded, randomized trials.
-# The quick run (30 baseline trials, 4 per failure case; about 2 minutes on 4 cores) fails when the
-# baseline misses the bar (relocalization >= 90 percent, p95 <= 5 cm and <= 20 px). Seeds are fixed, so a
+# The quick run (24 baseline trials; about 2 minutes on 4 loaded cores) fails when the
+# baseline misses the bar (pairing >= 95 percent, marker >= 90 percent, p95 <= 5 cm and <= 20 px, arrow p95 <= 15
+# degrees). Seeds are fixed, so a
 # red run is a regression, not chance. It runs on the HEALTH_RUNNER (see health.yml) like the app checks.
 name: ar-sim
 
