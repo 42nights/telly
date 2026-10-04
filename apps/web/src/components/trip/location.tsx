@@ -1,7 +1,6 @@
 // Shared location display, trip notices (#302), and per-person sharing (issue #40). A location
 // always shows its label, accuracy, fix time, and report time; nothing here says the person is safe.
-// People show by name (`useMemberNames`), never by identity.
-import { CareAccess } from "@health/contracts/care-profile";
+// People show by name (`useMemberNames`).
 import {
 	describeLocation,
 	FamilyLocations,
@@ -64,8 +63,7 @@ export function LocationCard({
 
 /**
  * "Who sees where I am": every other member of the family with an on/off box. On shares the
- * caller's location with that person (#40); they see it only while they also hold Location access
- * (#26), and the row says so when they do not.
+ * caller's location with that person (#40) and grants them Location access (#26) in the same step.
  */
 export function WhoSeesMe({
 	familyId,
@@ -77,7 +75,6 @@ export function WhoSeesMe({
 	locations: FamilyLocations;
 }) {
 	const { state, members, nameOf } = useMemberNames(familyId);
-	const access = useApi(CareAccess, familyPath(familyId, "/care-access"));
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const shared = new Set(
@@ -115,12 +112,6 @@ export function WhoSeesMe({
 			) : (
 				others.map(({ identity }) => {
 					const on = shared.has(identity);
-					const blocked =
-						on &&
-						access.kind === "ready" &&
-						!access.value.grants.some(
-							(g) => g.identity === identity && g.scope === "location",
-						);
 					return (
 						<label key={identity} className="flex min-h-11 items-center gap-3">
 							<input
@@ -132,15 +123,7 @@ export function WhoSeesMe({
 								}
 								type="checkbox"
 							/>
-							<span className="min-w-0">
-								{nameOf(identity)}
-								{blocked && (
-									<span className="block text-[14px]">
-										Cannot see it yet: turn on Location for them in Care ›
-										Sharing.
-									</span>
-								)}
-							</span>
+							<span className="min-w-0">{nameOf(identity)}</span>
 						</label>
 					);
 				})
