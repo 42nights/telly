@@ -3,7 +3,7 @@
 // send and its report leaves the claim to expire, so the delivery is sent again with the same
 // idempotency key. Alert gating never happens here: the database raised the alert already.
 import { Data, Duration, Effect, Schedule } from "effect";
-import { type DbConfig, type FamilyDb, openFamilyDb } from "../db";
+import { callDb, type DbConfig, type FamilyDb, openFamilyDb } from "../db";
 
 /** What a transport delivers to the family. Pass `idempotencyKey` on to the provider. */
 export type AlertMessage = {
@@ -23,7 +23,7 @@ export class DeliveryFailure extends Data.TaggedError("DeliveryFailure")<{
 	readonly reason: string;
 }> {}
 
-/** A family delivery channel, such as the Grokbot family agent. */
+/** A family delivery channel, such as family messages in the app. */
 export type AlertTransport = (
 	message: AlertMessage,
 ) => Effect.Effect<void, DeliveryFailure>;
@@ -47,11 +47,10 @@ const NO_TRANSPORT = "No family delivery transport is configured";
 const retryDelaySeconds = (attempt: number) =>
 	Math.min(5 * 2 ** (attempt - 1), 300);
 
-const call = (operation: () => Promise<void>) =>
-	Effect.tryPromise({ try: operation, catch: (error) => error });
-
+// Each step is bounded and fails at once when the operator connection drops, so a dropped
+// connection never stalls the loop; the next poll sees it closed and the worker reopens it.
 const deliver = (
-	{ connection: { reducers } }: FamilyDb,
+	db: FamilyDb,
 	transport: AlertTransport | undefined,
 	row: PendingDelivery,
 ) =>
@@ -59,7 +58,7 @@ const deliver = (
 		const { alertId } = row;
 		if (transport === undefined) {
 			if (row.status.tag !== "Unavailable")
-				yield* call(() =>
+				yield* callDb(db, ({ reducers }) =>
 					reducers.markAlertDeliveryUnavailable({
 						alertId,
 						reason: NO_TRANSPORT,
@@ -69,7 +68,7 @@ const deliver = (
 		}
 		// Another worker holds the delivery, or it is not due: leave it to that worker.
 		const claim = yield* Effect.result(
-			call(() =>
+			callDb(db, ({ reducers }) =>
 				reducers.claimAlertDelivery({ alertId, leaseSeconds: LEASE_SECONDS }),
 			),
 		);
@@ -94,15 +93,17 @@ const deliver = (
 			),
 		);
 		if (sent._tag === "Success")
-			return yield* call(() => reducers.markAlertDeliverySent({ alertId }));
+			return yield* callDb(db, ({ reducers }) =>
+				reducers.markAlertDeliverySent({ alertId }),
+			);
 		const { kind, reason } = sent.failure;
 		if (kind === "unavailable")
-			return yield* call(() =>
+			return yield* callDb(db, ({ reducers }) =>
 				reducers.markAlertDeliveryUnavailable({ alertId, reason }),
 			);
 		const attempt = row.attempts + 1;
 		const retry = kind === "retryable" && attempt < MAX_ATTEMPTS;
-		yield* call(() =>
+		yield* callDb(db, ({ reducers }) =>
 			reducers.markAlertDeliveryFailed({
 				alertId,
 				error: reason,

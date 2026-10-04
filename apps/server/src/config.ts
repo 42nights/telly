@@ -1,6 +1,10 @@
 import type { AuthConfig } from "./auth";
 import type { DbConfig } from "./db";
 import type { ElevenLabsConfig } from "./integrations/elevenlabs";
+import type { FetchAgentConfig } from "./integrations/fetch";
+import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
+import type { GeminiConfig } from "./integrations/gemini";
+import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
 
 export type NoopConfig = {
 	readonly key: string;
@@ -15,6 +19,14 @@ export type ServerConfig = {
 	/** Without `apiKey`, voice routes answer `unavailable`. */
 	readonly voice: ElevenLabsConfig;
 	readonly noop?: NoopConfig | undefined;
+	/** Undefined without `GEMINI_API_KEY`: vision and question routes then answer `unavailable`. */
+	readonly gemini?: GeminiConfig | undefined;
+	/** Undefined when FinchNode is off: its routes then answer `unavailable`. */
+	readonly finchnode?: Finchnode;
+	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
+	readonly fetchAgent?: FetchAgentConfig | undefined;
+	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
+	readonly gemma?: GemmaConfig | undefined;
 };
 
 type Env = {
@@ -29,6 +41,26 @@ type Env = {
 	readonly NOOP_INGEST_KEY?: string | undefined;
 	readonly NOOP_FAMILY_ID?: string | undefined;
 	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
+	readonly GEMINI_API_KEY?: string | undefined;
+	readonly GEMINI_BASE_URL: string;
+	readonly FINCHNODE_MODE?: "off" | "demo" | "api" | undefined;
+	readonly FINCHNODE_API_KEY?: string | undefined;
+	readonly TELLY_FETCH_BRIDGE_URL?: string | undefined;
+	readonly TELLY_FETCH_BRIDGE_TOKEN?: string | undefined;
+} & Parameters<typeof gemmaConfigFrom>[0];
+
+/** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
+const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
+	const {
+		TELLY_FETCH_BRIDGE_URL: bridgeUrl,
+		TELLY_FETCH_BRIDGE_TOKEN: bridgeToken,
+	} = env;
+	if (bridgeUrl && bridgeToken) return { bridgeUrl, bridgeToken };
+	if (bridgeUrl || bridgeToken)
+		throw new Error(
+			"Set both TELLY_FETCH_BRIDGE_URL and TELLY_FETCH_BRIDGE_TOKEN, or neither",
+		);
+	return undefined;
 };
 
 const allOrNone = <T>(
@@ -77,10 +109,24 @@ export const serverConfig = (env: Env): ServerConfig => {
 	);
 	if ((uri || database) && !auth && !noop)
 		throw new Error(`Set all of ${SIGN_IN}, or none`);
-	const voice = {
-		apiKey: env.ELEVENLABS_API_KEY,
-		voiceId: env.ELEVENLABS_VOICE_ID,
-		baseUrl: env.ELEVENLABS_API_URL,
+	const finchnode = finchnodeFromEnv(
+		env.FINCHNODE_MODE ?? "off",
+		env.FINCHNODE_API_KEY,
+	);
+	return {
+		corsOrigin: env.CORS_ORIGIN,
+		voice: {
+			apiKey: env.ELEVENLABS_API_KEY,
+			voiceId: env.ELEVENLABS_VOICE_ID,
+			baseUrl: env.ELEVENLABS_API_URL,
+		},
+		...(finchnode === undefined ? {} : { finchnode }),
+		fetchAgent: fetchAgentConfig(env),
+		gemini: env.GEMINI_API_KEY
+			? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
+			: undefined,
+		gemma: gemmaConfigFrom(env),
+		auth,
+		noop,
 	};
-	return { corsOrigin: env.CORS_ORIGIN, auth, voice, noop };
 };

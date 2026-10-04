@@ -32,8 +32,8 @@ export const alertRoutes = () =>
 			);
 			if (!found)
 				throw new ApiFailure("not_found", "No such alert in this family");
-			await callReducer(
-				db.connection.reducers.acknowledgeAlert({ alertId: BigInt(alertId) }),
+			await callReducer(db, (connection) =>
+				connection.reducers.acknowledgeAlert({ alertId: BigInt(alertId) }),
 			);
 			const acknowledgement = readFamilyRecords(db).acknowledgements.find(
 				(ack) => ack.alertId === alertId && ack.member === db.identity,
@@ -50,8 +50,8 @@ export const alertRoutes = () =>
 		.put("/alert-thresholds", async (c) => {
 			const { db, familyId } = c.var;
 			const input = await decodeBody(c, AlertThresholdInput);
-			await callReducer(
-				db.connection.reducers.setAlertThreshold({
+			await callReducer(db, (connection) =>
+				connection.reducers.setAlertThreshold({
 					...input,
 					familyId,
 					direction: { tag: directionTag[input.direction] },
@@ -73,8 +73,8 @@ export const alertRoutes = () =>
 			);
 			if (!found)
 				throw new ApiFailure("not_found", "No such threshold in this family");
-			await callReducer(
-				db.connection.reducers.removeAlertThreshold({
+			await callReducer(db, (connection) =>
+				connection.reducers.removeAlertThreshold({
 					thresholdId: BigInt(thresholdId),
 				}),
 			);

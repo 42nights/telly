@@ -82,6 +82,16 @@ export const FamilyMember = __t.object("FamilyMember", {
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
 
+export const FinchnodeLink = __t.object("FinchnodeLink", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  subject: __t.string(),
+  synthetic: __t.bool(),
+  linkedBy: __t.identity(),
+  linkedAt: __t.timestamp(),
+});
+export type FinchnodeLink = __Infer<typeof FinchnodeLink>;
+
 export const HealthSample = __t.object("HealthSample", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -105,6 +115,7 @@ export const Message = __t.object("Message", {
   sender: __t.identity(),
   body: __t.string(),
   sentAt: __t.timestamp(),
+  clientId: __t.string(),
 });
 export type Message = __Infer<typeof Message>;
 
@@ -123,11 +134,17 @@ export type MyAlerts = __Infer<typeof MyAlerts>;
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
+export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
+export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
+
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
+
+export const MyReports = __t.object("MyReports", {});
+export type MyReports = __Infer<typeof MyReports>;
 
 export const Operator = __t.object("Operator", {
   identity: __t.identity(),
@@ -149,6 +166,18 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const Report = __t.object("Report", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  markers: __t.string(),
+  fields: __t.string(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  reviewedBy: __t.option(__t.identity()),
+  reviewedAt: __t.option(__t.timestamp()),
+});
+export type Report = __Infer<typeof Report>;
 
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {

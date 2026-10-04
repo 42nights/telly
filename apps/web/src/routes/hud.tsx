@@ -1,25 +1,24 @@
-import { Health, type Loaded, loadDecoded, Sources } from "@health/contracts";
 import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@health/ui/components/empty";
+	FamilyRecords,
+	Health,
+	type Loaded,
+	loadDecoded,
+	Sources,
+} from "@health/contracts";
+import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import {
-	BellOff,
-	Camera,
-	HeartPulse,
-	MessageSquareOff,
-	MicOff,
-} from "lucide-react";
+import { CloudOff, Glasses, Home, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { CameraPreview } from "@/components/hud/camera-preview";
 import { Window } from "@/components/hud/window";
+import { HeartReading } from "@/components/wearer/heart";
+import { Messages } from "@/components/wearer/messages";
+import { Request } from "@/components/wearer/request";
+import { useNow } from "@/components/wearer/use-now";
 import { ENV } from "@/env";
+import { type ApiState, familyPath, useApi } from "@/lib/api";
+import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/hud")({
 	component: HudComponent,
@@ -100,107 +99,173 @@ function monitoringStatus(sources: Polled<Sources>) {
 		return "Monitoring: unknown · the server did not answer";
 	if (sources.latest.value.sources.length === 0)
 		return "Monitoring: stopped · no health source configured";
-	return `Monitoring: stopped · ${sources.latest.value.sources
-		.map(
-			({ source, status }) =>
-				`${source.toUpperCase()} ${status.replace("_", " ")}`,
-		)
-		.join(" · ")}`;
+	return "Monitoring: stopped";
+}
+
+/** The WHOOP chip: WHOOP data arrives only through the NOOP bridge, so it shows NOOP's status. */
+function whoopStatus(sources: Polled<Sources>) {
+	if (sources.latest === undefined) return "WHOOP · checking NOOP…";
+	if (sources.latest.kind === "error") return "WHOOP · NOOP status unknown";
+	return `WHOOP · ${
+		sources.latest.value.sources
+			.map(
+				({ source, status }) =>
+					`${source.toUpperCase()} ${status.replace("_", " ")}`,
+			)
+			.join(" · ") || "no source configured"
+	}`;
+}
+
+const chip = "win95-inset bg-card px-2 py-1 text-[15px]";
+
+/** Footer chips: optional glasses, the WHOOP/NOOP source, monitoring, and the server line. */
+function StatusFooter({ now }: { now: number }) {
+	const health = usePolled(Health, "/health");
+	const sources = usePolled(Sources, "/api/sources");
+	const server = serverStatus(health, now);
+	return (
+		<footer className="flex flex-wrap gap-1.5 self-end md:col-span-2">
+			<span className={`${chip} flex items-center gap-1.5`}>
+				<Glasses aria-hidden className="size-4" />
+				Glasses not paired · optional
+			</span>
+			<span className={chip}>{whoopStatus(sources)}</span>
+			<span className={chip}>{monitoringStatus(sources)}</span>
+			<span
+				className={`${chip} flex items-center gap-1.5 ${server.live ? "" : "text-destructive"}`}
+				title={server.detail}
+			>
+				<span
+					aria-hidden
+					className={`win95-inset size-3 shrink-0 ${server.live ? "bg-[#008000]" : "bg-destructive"}`}
+				/>
+				{server.text}
+			</span>
+		</footer>
+	);
+}
+
+function OfflineBanner({
+	message,
+	onRetry,
+}: {
+	message: string;
+	onRetry: () => void;
+}) {
+	return (
+		<div
+			className="win95-raised grid grid-cols-[auto_1fr] gap-3 p-4"
+			role="alert"
+		>
+			<CloudOff aria-hidden className="size-8 text-destructive" />
+			<div className="grid gap-2">
+				<p className="font-semibold text-[22px]">I can't connect right now.</p>
+				<p className="text-[18px]">
+					Questions and new messages are paused. Your family is not told that
+					you are fine.
+				</p>
+				<p className="break-words text-[15px] text-muted-foreground">
+					{message}
+				</p>
+				<Button
+					className="win95-primary h-14 text-[20px] [&_svg]:size-6"
+					onClick={onRetry}
+				>
+					<RotateCw aria-hidden />
+					Try again
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+/** Why Talk is off, by the family list's state, while no family is selected. */
+const talkNote = {
+	loading: "Talk is getting ready…",
+	signed_out: "Sign in to use Talk. You can still type.",
+	ready: "Talk needs a paired person. You can still type.",
+	forbidden: "Talk is not available right now. You can still type.",
+	unavailable: "Talk is not available right now. You can still type.",
+	error: "Talk is not available right now. You can still type.",
+} as const;
+
+/**
+ * The selected family's records. Without a family, the family list's own state explains why;
+ * with none paired, null.
+ */
+function useWearerRecords() {
+	const { state: families, family } = useFamily();
+	const [retry, setRetry] = useState(0);
+	const familyRecords = useApi(
+		FamilyRecords,
+		family === null ? null : familyPath(family.id),
+		{ pollMs: 30_000, refreshKey: retry },
+	);
+	let records: ApiState<FamilyRecords> | null = familyRecords;
+	if (families.kind !== "ready") records = families;
+	else if (family === null) records = null;
+	return {
+		familyId: family?.id ?? null,
+		familiesKind: families.kind,
+		records,
+		retry: () => setRetry((n) => n + 1),
+	};
 }
 
 function HudComponent() {
-	const health = usePolled(Health, "/health");
-	const sources = usePolled(Sources, "/api/sources");
-	const [now, setNow] = useState(Date.now);
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), 1_000);
-		return () => clearInterval(timer);
-	}, []);
-
-	const server = serverStatus(health, now);
+	const now = useNow();
+	const { familyId, familiesKind, records, retry } = useWearerRecords();
+	const clock = new Date(now).toLocaleTimeString([], {
+		hour: "numeric",
+		minute: "2-digit",
+	});
 
 	return (
-		<main className="win95-desktop grid min-h-0 content-start gap-2 overflow-y-auto p-2 md:grid-cols-[minmax(0,1fr)_20rem] md:grid-rows-[auto_1fr] md:content-stretch">
-			{/* Regions 1 and 2 from the board sketch: status and request. */}
-			<div className="flex flex-wrap gap-2 md:col-start-1">
-				<Window className="flex-[1_1_16rem]" icon={HeartPulse} title="Status">
-					<div className="grid gap-1 px-1 text-sm">
-						<p className="flex flex-wrap items-center gap-x-2 font-bold">
-							<span>Heart rate unavailable</span>
-							<span aria-hidden>·</span>
-							<time dateTime={new Date(now).toISOString()}>
-								{new Date(now).toLocaleTimeString([], {
-									hour: "numeric",
-									minute: "2-digit",
-								})}
-							</time>
-						</p>
-						<p className="flex items-center gap-2">
-							<span
-								aria-hidden
-								className={`win95-inset size-3 shrink-0 ${server.live ? "bg-[#008000]" : "bg-destructive"}`}
-							/>
-							<span
-								className={server.live ? undefined : "text-destructive"}
-								title={server.detail}
+		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
+			<Window icon={Home} title={`Home · ${clock}`}>
+				<div className="grid gap-5 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
+					<div className="flex items-end justify-between gap-2 md:col-span-2">
+						<div>
+							<time
+								className="block font-semibold text-[34px] leading-none tracking-tight sm:text-[40px]"
+								dateTime={new Date(now).toISOString()}
 							>
-								{server.text}
-							</span>
-						</p>
-						<p>{monitoringStatus(sources)}</p>
+								{clock}
+							</time>
+							<p className="mt-1.5 text-[18px] text-muted-foreground">
+								{new Date(now).toLocaleDateString([], {
+									weekday: "long",
+									day: "numeric",
+									month: "long",
+								})}
+							</p>
+						</div>
+						<HeartReading familyId={familyId} now={now} records={records} />
 					</div>
-				</Window>
-				<Window className="flex-[2_1_16rem]" icon={MicOff} title="Request">
-					<p className="win95-inset bg-card px-2 py-2 text-muted-foreground text-sm">
-						Voice and text requests are not available yet.
-					</p>
-				</Window>
-			</div>
 
-			{/* Region 3: the camera scene that object markers will draw on. */}
-			<Window
-				className="min-h-[24rem] md:col-start-1"
-				icon={Camera}
-				title="Camera"
-			>
-				<div className="win95-inset relative flex-1 overflow-hidden bg-card">
-					<CameraPreview />
-				</div>
-			</Window>
+					<div className="min-w-0">
+						{records?.kind === "unavailable" || records?.kind === "error" ? (
+							<OfflineBanner message={records.message} onRetry={retry} />
+						) : (
+							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
+						)}
+					</div>
 
-			{/* Region 4: chat and notifications. */}
-			<Window
-				className="md:col-start-2 md:row-span-2 md:row-start-1"
-				icon={MessageSquareOff}
-				status="Not connected"
-				title="Messages and alerts"
-			>
-				<div className="win95-inset grid flex-1 content-start bg-card">
-					<Empty className="p-4 md:p-6">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<MessageSquareOff />
-							</EmptyMedia>
-							<EmptyTitle>Messages unavailable</EmptyTitle>
-							<EmptyDescription>
-								No message service is connected. Family messages and replies are
-								not available yet.
-							</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
-					<hr className="mx-2" />
-					<Empty className="p-4 md:p-6">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<BellOff />
-							</EmptyMedia>
-							<EmptyTitle>Health alerts unavailable</EmptyTitle>
-							<EmptyDescription>
-								No health source is connected, so the HUD cannot detect a
-								problem. No alert does not mean all clear.
-							</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
+					<section
+						aria-label="Messages"
+						className="grid min-w-0 content-start gap-2 md:row-span-2"
+					>
+						<h2 className="font-bold text-[16px]">Messages</h2>
+						{records === null ? (
+							<p className="win95-inset bg-card p-3 text-[18px]">
+								No person is paired yet, so there are no messages.
+							</p>
+						) : (
+							<Messages familyId={familyId} records={records} />
+						)}
+					</section>
+
+					<StatusFooter now={now} />
 				</div>
 			</Window>
 		</main>

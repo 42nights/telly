@@ -5,26 +5,23 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { authenticate, requireFamilyMember } from "./auth";
 import type { ServerConfig } from "./config";
+import { DbUnavailable } from "./db";
 import {
 	ApiFailure,
 	errorStatus,
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
-import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
 import { type NoopIngest, noopIngestRoute } from "./integrations/noop-ingest";
-import { alertRoutes } from "./routes/alerts";
-import { accountRoutes, familyRoutes } from "./routes/families";
-import { voiceRoutes } from "./routes/voice";
+import { accountRoutes } from "./routes/families";
+import { familyDomainRoutes } from "./routes/index";
 
 export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
-	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
+	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes())
-		.route("/", alertRoutes())
-		.route("/", voiceRoutes(elevenLabsVoice(config.voice)));
+		.route("/", familyDomainRoutes(config));
 
 	const app = new Hono()
 		.use(logger())
@@ -60,13 +57,19 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 			404,
 		),
 	);
-	app.onError((error, c) => {
+	app.onError((caught, c) => {
+		// A closed database connection must read as an outage, never as an empty result.
+		const error =
+			caught instanceof DbUnavailable
+				? new ApiFailure("unavailable", "The database is not reachable")
+				: caught;
 		if (error instanceof ApiFailure)
 			return c.json(
 				{ error: error.code, message: error.message } satisfies ApiError,
 				errorStatus[error.code],
 			);
-		console.error(error);
+		// A cancelled request arrives here as an interruption; the client is gone, so do not log it.
+		if (!c.req.raw.signal.aborted) console.error(error);
 		return c.json(
 			{
 				error: "internal",

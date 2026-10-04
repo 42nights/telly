@@ -40,7 +40,7 @@ export const accountRoutes = () =>
 		.post("/families", async (c) => {
 			const { name } = await decodeBody(c, NewFamily);
 			const before = readFamilyRecords(c.var.db).families;
-			await callReducer(c.var.db.connection.reducers.createFamily({ name }));
+			await callReducer(c.var.db, (db) => db.reducers.createFamily({ name }));
 			const family: Family = added(
 				before,
 				readFamilyRecords(c.var.db).families,
@@ -66,8 +66,8 @@ export const familyRoutes = () =>
 		})
 		.post("/members", async (c) => {
 			const { identity } = await decodeBody(c, NewFamilyMember);
-			await callReducer(
-				c.var.db.connection.reducers.addFamilyMember({
+			await callReducer(c.var.db, (db) =>
+				db.reducers.addFamilyMember({
 					familyId: c.var.familyId,
 					member: Identity.fromString(identity),
 				}),
@@ -77,8 +77,8 @@ export const familyRoutes = () =>
 		.post("/samples", async (c) => {
 			const sample = await decodeBody(c, NewHealthSample);
 			const before = readFamilyRecords(c.var.db).samples;
-			await callReducer(
-				c.var.db.connection.reducers.recordSample({
+			await callReducer(c.var.db, (db) =>
+				db.reducers.recordSample({
 					...sample,
 					familyId: c.var.familyId,
 					sourceTime: Timestamp.fromDate(new Date(sample.sourceTime)),

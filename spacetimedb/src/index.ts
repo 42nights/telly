@@ -77,13 +77,24 @@ const alert = table(
 );
 
 const message = table(
-	{ name: "message" },
+	{
+		name: "message",
+		indexes: [
+			{
+				accessor: "bySenderClientId",
+				algorithm: "btree",
+				columns: ["familyId", "sender", "clientId"],
+			},
+		],
+	},
 	{
 		id: t.u64().primaryKey().autoInc(),
 		familyId: t.u64().index("btree"),
 		sender: t.identity(),
 		body: t.string(),
 		sentAt: t.timestamp(),
+		// The sender's own id for the message, so a retried send stores it once.
+		clientId: t.string(),
 	},
 );
 
@@ -177,6 +188,48 @@ const alertDelivery = table(
 	},
 );
 
+// A lab report. The markers are the evidence generated from the family's samples: set once at
+// creation, never changed. Only the fillable fields change, and only until a member reviews it.
+const report = table(
+	{ name: "report" },
+	{
+		// Chosen by the server, so it knows which report it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts` report schemas.
+		markers: t.string(),
+		fields: t.string(),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+		reviewedBy: t.option(t.identity()),
+		reviewedAt: t.option(t.timestamp()),
+	},
+);
+
+// A FinchNode subject (one consenting patient) whose records the family may read. FinchNode checks
+// the patient's consent on every read; this link only says which family asked for the subject.
+const finchnodeLink = table(
+	{
+		name: "finchnode_link",
+		indexes: [
+			{
+				accessor: "byFamilySubject",
+				algorithm: "btree",
+				columns: ["familyId", "subject"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		subject: t.string(),
+		// From the keyless demo or a sandbox key: fictional patient data.
+		synthetic: t.bool(),
+		linkedBy: t.identity(),
+		linkedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -188,6 +241,8 @@ const spacetimedb = schema({
 	alertThreshold,
 	thresholdTrigger,
 	alertDelivery,
+	report,
+	finchnodeLink,
 });
 export default spacetimedb;
 
@@ -347,16 +402,28 @@ export const raiseAlert = spacetimedb.reducer(
 );
 
 export const sendMessage = spacetimedb.reducer(
-	{ familyId: t.u64(), body: t.string() },
-	(ctx, { familyId, body }) => {
+	{ familyId: t.u64(), clientId: t.string(), body: t.string() },
+	(ctx, { familyId, clientId, body }) => {
 		requireMember(ctx, familyId);
+		requireText("clientId", clientId);
 		requireText("body", body);
+		// A client resends after a lost reply; the first stored copy stands.
+		for (const sent of ctx.db.message.bySenderClientId.filter([
+			familyId,
+			ctx.sender,
+			clientId,
+		])) {
+			if (sent.body !== body)
+				throw new SenderError("clientId is already used for another message");
+			return;
+		}
 		ctx.db.message.insert({
 			id: 0n,
 			familyId,
 			sender: ctx.sender,
 			body,
 			sentAt: ctx.timestamp,
+			clientId,
 		});
 	},
 );
@@ -517,6 +584,76 @@ export const markAlertDeliveryUnavailable = spacetimedb.reducer(
 	},
 );
 
+const requireReport = (ctx: Ctx, id: string) => {
+	const found = ctx.db.report.id.find(id);
+	// A missing report fails like another family's report, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	return found;
+};
+
+export const createReport = spacetimedb.reducer(
+	{
+		id: t.string(),
+		familyId: t.u64(),
+		markers: t.string(),
+		fields: t.string(),
+	},
+	(ctx, created) => {
+		requireMember(ctx, created.familyId);
+		requireText("id", created.id);
+		requireText("markers", created.markers);
+		requireText("fields", created.fields);
+		if (ctx.db.report.id.find(created.id) !== null)
+			throw new SenderError("report id already exists");
+		ctx.db.report.insert({
+			...created,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+			reviewedBy: undefined,
+			reviewedAt: undefined,
+		});
+	},
+);
+
+// Changes a draft: new `fields`, a review, or both. Review freezes the report as it then stands.
+// Reviewing a reviewed report again, without fields, keeps the first review.
+export const updateReport = spacetimedb.reducer(
+	{ id: t.string(), fields: t.option(t.string()), review: t.bool() },
+	(ctx, { id, fields, review }) => {
+		const found = requireReport(ctx, id);
+		if (found.reviewedAt !== undefined) {
+			if (review && fields === undefined) return;
+			throw new SenderError("report is already reviewed");
+		}
+		if (fields !== undefined) requireText("fields", fields);
+		ctx.db.report.id.update({
+			...found,
+			fields: fields ?? found.fields,
+			...(review ? { reviewedBy: ctx.sender, reviewedAt: ctx.timestamp } : {}),
+		});
+	},
+);
+
+export const linkFinchnodeSubject = spacetimedb.reducer(
+	{ familyId: t.u64(), subject: t.string(), synthetic: t.bool() },
+	(ctx, link) => {
+		requireMember(ctx, link.familyId);
+		requireText("subject", link.subject);
+		const rows = ctx.db.finchnodeLink.byFamilySubject.filter([
+			link.familyId,
+			link.subject,
+		]);
+		if (!rows.next().done) return;
+		ctx.db.finchnodeLink.insert({
+			...link,
+			id: 0n,
+			linkedBy: ctx.sender,
+			linkedAt: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -620,4 +757,24 @@ export const pendingAlertDeliveries = spacetimedb.view(
 						notBefore: d.notBefore,
 						updatedAt: d.updatedAt,
 					})),
+);
+
+export const myReports = spacetimedb.view(
+	{ name: "my_reports", public: true },
+	t.array(report.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.report, (m, r) => m.familyId.eq(r.familyId)),
+);
+
+export const myFinchnodeLinks = spacetimedb.view(
+	{ name: "my_finchnode_links", public: true },
+	t.array(finchnodeLink.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
+				m.familyId.eq(l.familyId),
+			),
 );

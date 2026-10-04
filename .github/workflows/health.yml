@@ -1,4 +1,4 @@
-# Checks for the health application at the repository root (apps/, packages/, root manifests).
+# Checks for the health application at the repository root (apps/, packages/, agents/, root manifests).
 # NOOP's own workflows are separate and cover noop/.
 #
 # Every job runs on every PR so that `health / required` always reports: it passes when the app is
@@ -48,6 +48,7 @@ jobs:
             health:
               - 'apps/**'
               - 'packages/**'
+              - 'agents/**'
               - 'spacetimedb/**'
               - 'patches/**'
               - 'package.json'
@@ -80,14 +81,25 @@ jobs:
             run: bun run check:quality
           - name: build-smoke
             run: bun run --filter server build && bun run smoke && bun run --filter web build
-          # Fails when packages/db is stale against spacetimedb/, then runs the family-access
-          # tests against an isolated in-memory local database.
+          # Fails when packages/db is stale against spacetimedb/, then runs the family-access,
+          # connection-recovery, and server-lifecycle tests (the built server under Node) against an
+          # isolated in-memory local database, then the crash-restart and backup/restore drill.
           - name: db
             run: >-
               bun run db:generate &&
               git diff --exit-code -- packages/db &&
               test -z "$(git status --porcelain -- packages/db)" &&
-              bun run db:test
+              bun run db:test &&
+              bun run db:drill
+          # Fails when agents/fetch/contract.json is stale against the shared schemas, then runs the
+          # Python worker's tests with its pinned requirements.
+          - name: fetch-agent
+            run: >-
+              bun run --filter @health/contracts agent-contract &&
+              git diff --exit-code -- agents/fetch/contract.json &&
+              python -m venv agents/fetch/.venv &&
+              agents/fetch/.venv/bin/pip install -r agents/fetch/requirements.txt &&
+              cd agents/fetch && .venv/bin/python -m unittest -v
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -95,9 +107,13 @@ jobs:
         with:
           bun-version-file: package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: matrix.name == 'build-smoke'
+        if: matrix.name == 'build-smoke' || matrix.name == 'db'
         with:
           node-version: 24
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: matrix.name == 'fetch-agent'
+        with:
+          python-version: "3.12"
       - name: Install SpacetimeDB CLI (checksum-verified)
         if: matrix.name == 'db'
         run: |

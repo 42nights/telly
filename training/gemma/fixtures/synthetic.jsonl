@@ -1,0 +1,4 @@
+{"readings":[{"metric":"steps","value":420,"unit":"count","sourceTime":"2026-10-04T09:00:00.000000Z"}],"cue":{"kind":"walk","text":"You have been sitting for a while. A short walk around the room may feel good."}}
+{"readings":[{"metric":"water_intake","value":250,"unit":"ml","sourceTime":"2026-10-04T13:00:00.000000Z"}],"cue":{"kind":"hydrate","text":"Time for a glass of water."}}
+{"readings":[{"metric":"sleep_duration","value":4.5,"unit":"h","sourceTime":"2026-10-04T07:00:00.000000Z"},{"metric":"heart_rate","value":88,"unit":"bpm","sourceTime":"2026-10-04T14:00:00.000000Z"}],"cue":{"kind":"rest","text":"You slept less last night. Sit down and rest for a few minutes."}}
+{"readings":[{"metric":"steps","value":6200,"unit":"count","sourceTime":"2026-10-04T16:00:00.000000Z"}],"cue":{"kind":"none","text":"No cue right now."}}

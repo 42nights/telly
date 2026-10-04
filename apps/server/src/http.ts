@@ -2,10 +2,11 @@
 // `routes/<domain>.ts` typed with `FamilyEnv`; `app.ts` mounts them under `/api/families/:familyId`,
 // behind sign-in and the family membership check, so a handler only ever sees a verified caller.
 import type { ApiErrorCode } from "@health/contracts";
-import { Exit, Schema } from "effect";
+import type { DbConnection } from "@health/db";
+import { Effect, Exit, Schema } from "effect";
 import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { FamilyDb } from "./db";
+import { callDb, DbRejected, type FamilyDb } from "./db";
 
 /** The caller, as verified from the OIDC token. It never carries the token itself. */
 export type CallerIdentity = {
@@ -35,6 +36,7 @@ export const errorStatus = {
 	unauthorized: 401,
 	forbidden: 403,
 	not_found: 404,
+	conflict: 409,
 	internal: 500,
 	upstream_error: 502,
 	unavailable: 503,
@@ -74,19 +76,25 @@ export const decodeBody = async <T>(
 };
 
 /**
- * Awaits a reducer call. The database's membership rejection becomes `forbidden`; its other
- * rejections are validation messages written by the module, so they become `invalid_request`.
+ * Runs one reducer call through `callDb`: at most 5 s, and it fails at once when the connection
+ * drops. Use it as `callReducer(c.var.db, (db) => db.reducers.createFamily({ name }))`. The
+ * database's membership rejection becomes `forbidden`; its other refusals are validation messages
+ * written by the module, so they become `invalid_request`. An outage stays `DbUnavailable`, which
+ * `app.onError` answers as `503 unavailable`.
  */
-export const callReducer = async (call: Promise<void>): Promise<void> => {
+export const callReducer = async (
+	db: FamilyDb,
+	call: (connection: DbConnection) => Promise<void>,
+): Promise<void> => {
 	try {
-		await call;
+		await Effect.runPromise(callDb(db, call));
 	} catch (error) {
-		if (error instanceof Error && error.name === "SenderError")
+		if (error instanceof DbRejected)
 			throw new ApiFailure(
-				error.message === "not a member of this family"
+				error.reason === "not a member of this family"
 					? "forbidden"
 					: "invalid_request",
-				error.message,
+				error.reason,
 			);
 		throw error;
 	}

@@ -108,10 +108,10 @@ const slot = (source: string, metric: string, time: number) =>
 		: `${source}|${metric}|${time}`;
 
 export const recordNoopSamples =
-	({ connection }: FamilyDb, familyId: bigint) =>
+	(db: FamilyDb, familyId: bigint) =>
 	async (samples: readonly NoopSample[]) => {
 		const latest = new Map<string, number>();
-		const rows = [...connection.db.myHealthSamples.iter()]
+		const rows = [...db.connection.db.myHealthSamples.iter()]
 			.filter((row) => row.familyId === familyId)
 			.sort(
 				(a, b) =>
@@ -131,7 +131,7 @@ export const recordNoopSamples =
 			)
 				continue;
 			latest.set(key, sample.value);
-			await callReducer(
+			await callReducer(db, (connection) =>
 				connection.reducers.recordSample({
 					familyId,
 					metric: sample.metric,
