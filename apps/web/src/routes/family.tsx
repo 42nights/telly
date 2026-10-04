@@ -11,51 +11,53 @@ import {
 	FamilyGate,
 	MonitoringBadge,
 	MonitoringList,
-	ReadingsGlance,
 } from "@/components/family/parts";
+import { KeyNumbers, RecentMessages } from "@/components/family/sections";
 import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
-import { ApiNotice } from "@/components/win95";
-import { senderLabel } from "@/lib/members";
+import { PersonPicker } from "@/lib/family";
 
+// Family › Overview: the person's state at a glance. The other Family tabs are Alerts, Trends, and
+// Thresholds.
 export const Route = createFileRoute("/family")({
-	component: FamilyPhone,
+	component: FamilyOverview,
 });
 
-function FamilyPhone() {
+function FamilyOverview() {
 	const data = useFamilyData();
 	return (
-		<main className="win95-desktop min-h-0 overflow-y-auto p-2 sm:p-4">
+		<main className="p-2 sm:p-4">
 			<Window
 				title={`Family · ${data.family?.name ?? "No person"}`}
 				icon={Users}
-				className="mx-auto w-full max-w-xl"
+				className="mx-auto w-full max-w-4xl"
 			>
 				<FamilyGate data={data} emptyClassName="p-3 text-sm">
-					{(family) => <FamilyBody data={data} family={family} />}
+					{(family) => <Overview data={data} family={family} />}
 				</FamilyGate>
 			</Window>
 		</main>
 	);
 }
 
-function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
+function Overview({ data, family }: { data: FamilyData; family: Family }) {
 	const now = Date.now();
 	return (
 		<div className="grid gap-4 p-2 text-sm">
-			<header className="flex items-center gap-3">
+			<header className="flex flex-wrap items-center gap-3">
 				<span
 					aria-hidden
 					className="win95-raised grid size-12 shrink-0 place-items-center bg-primary font-bold text-primary-foreground text-xl"
 				>
 					{family.name.charAt(0).toUpperCase()}
 				</span>
-				<h2 className="min-w-0 flex-1 break-words font-bold text-2xl">
+				<h2 className="min-w-0 break-words font-bold text-2xl">
 					{family.name}
 				</h2>
 				<MonitoringBadge state={data.monitoring} />
+				<PersonPicker className="ml-auto max-w-full [&_select]:min-w-0 [&_select]:flex-1" />
 			</header>
 
 			<AlertSection data={data} now={now} />
@@ -63,12 +65,7 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 			<FamilyLocationSection familyId={family.id} me={data.me} now={now} />
 			<MealStatusSection familyId={family.id} />
 
-			<section aria-labelledby="glance" className="grid gap-2">
-				<h3 id="glance" className="font-bold">
-					Today at a glance
-				</h3>
-				<ReadingsGlance data={data} familyId={family.id} now={now} />
-			</section>
+			<KeyNumbers data={data} family={family} now={now} />
 
 			<section aria-labelledby="monitoring" className="grid gap-2">
 				<h3 id="monitoring" className="font-bold">
@@ -84,29 +81,18 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 
 			<ReminderHistorySection familyId={family.id} me={data.me} />
 
-			<section aria-labelledby="chat" className="grid gap-2">
-				<h3 id="chat" className="font-bold">
-					Family chat
+			<section aria-labelledby="messages" className="grid gap-2">
+				<h3 id="messages" className="font-bold">
+					Recent messages
 				</h3>
-				<div className="win95-inset grid gap-2 bg-card p-2">
-					{data.records.kind !== "ready" ? (
-						<ApiNotice state={data.records} what="messages" />
-					) : (
-						<ChatPreview
-							messages={data.records.value.messages.filter(
-								(m) => m.familyId === family.id,
-							)}
-							me={data.me}
-						/>
-					)}
-					<Link
-						to="/chat"
-						data-slot="button"
-						className={cn(buttonVariants(), "h-11 justify-self-start")}
-					>
-						Open chat
-					</Link>
-				</div>
+				<RecentMessages data={data} familyId={family.id} />
+				<Link
+					to="/chat"
+					data-slot="button"
+					className={cn(buttonVariants(), "h-11 justify-self-start")}
+				>
+					Open chat
+				</Link>
 			</section>
 
 			<section aria-labelledby="exercise" className="grid gap-2">
@@ -125,34 +111,5 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 				</div>
 			</section>
 		</div>
-	);
-}
-
-function ChatPreview({
-	messages,
-	me,
-}: {
-	messages: readonly {
-		sender: string;
-		clientId: string;
-		body: string;
-		sentAt: string;
-	}[];
-	me: string | null;
-}) {
-	const newest = messages.reduce<(typeof messages)[number] | null>(
-		(best, m) =>
-			best === null || Date.parse(m.sentAt) > Date.parse(best.sentAt)
-				? m
-				: best,
-		null,
-	);
-	if (newest === null) return <p>No messages yet.</p>;
-	return (
-		<p className="line-clamp-3 break-words">
-			<b>{senderLabel(newest, me)}</b>
-			{": "}
-			{newest.body}
-		</p>
 	);
 }

@@ -115,6 +115,6 @@ describe("sign-in gate", () => {
 			"/\\evil.test/",
 			"/sign-in?redirect=/hud",
 		])
-			expect(returnPath(unsafe)).toBe("/hud");
+			expect(returnPath(unsafe)).toBe("/");
 	});
 });

@@ -1,61 +1,31 @@
-// Care: the family contact ladder (issue #30). Every family client polls the same needs, so each
-// shows the same state. Calls are simulated; Telly places no real calls or texts.
+// Care › Needs (issue #30): the family's open needs and the ask form. Every family client polls the
+// same needs, so each shows the same state. Calls are simulated; Telly places no real calls or texts.
 import {
 	CareNeed,
 	CareNeeds,
 	type CareResponse,
-	ContactLadderReply,
 	type NewCareNeed,
 } from "@health/contracts/care";
-import { Me } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { HeartHandshake } from "lucide-react";
 import { useState } from "react";
 
-import { LadderForm } from "@/components/care/ladder-form";
 import { NeedCard } from "@/components/care/need-card";
-import { Window } from "@/components/hud/window";
+import { CareScreen } from "@/components/care/screen";
 import { ApiNotice } from "@/components/win95";
-import { apiRequest, familyPath, useApi } from "@/lib/api";
-import { useFamily } from "@/lib/family";
+import { apiRequest, useApi } from "@/lib/api";
 
 export const Route = createFileRoute("/care")({
-	component: Care,
+	component: () => (
+		<CareScreen title="Care needs" icon={HeartHandshake}>
+			{(base, me) => <NeedsSection base={base} me={me} />}
+		</CareScreen>
+	),
 });
 
 const POLL_MS = 5_000;
 const field = "win95-inset win95-field h-11 min-w-0 bg-card px-2 text-sm";
-
-function Care() {
-	const { state: familyState, family } = useFamily();
-	const meState = useApi(Me, "/api/me");
-	const me = meState.kind === "ready" ? meState.value.identity : null;
-	const base = family === null ? null : familyPath(family.id, "/care");
-	return (
-		<main className="win95-desktop min-h-0 overflow-y-auto p-2 sm:p-4">
-			<Window
-				title={`Care · ${family?.name ?? "No person"}`}
-				icon={HeartHandshake}
-				className="mx-auto w-full max-w-2xl"
-				status="Calls are simulated. Only accepting and then confirming help closes a need."
-			>
-				{familyState.kind !== "ready" ? (
-					<ApiNotice state={familyState} what="your family" />
-				) : base === null ? (
-					<p className="p-3 text-sm">
-						No person is paired with this account yet.
-					</p>
-				) : (
-					<div className="grid gap-4 p-2 text-sm">
-						<NeedsSection base={base} me={me} />
-						<LadderSection base={base} me={me} />
-					</div>
-				)}
-			</Window>
-		</main>
-	);
-}
 
 /** The family's needs, polled so every family client shows the same state, and the ask form. */
 function NeedsSection({ base, me }: { base: string; me: string | null }) {
@@ -123,29 +93,6 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 				<NewNeedForm path={`${base}/needs`} onSaved={refresh} />
 			</section>
 		</>
-	);
-}
-
-function LadderSection({ base, me }: { base: string; me: string | null }) {
-	const [refreshKey, setRefreshKey] = useState(0);
-	const ladder = useApi(ContactLadderReply, `${base}/ladder`, { refreshKey });
-	return (
-		<section aria-labelledby="ladder" className="grid gap-2">
-			<h3 id="ladder" className="font-bold">
-				Contact ladder
-			</h3>
-			{ladder.kind !== "ready" ? (
-				<ApiNotice state={ladder} what="the contact ladder" />
-			) : (
-				<LadderForm
-					key={ladder.value.ladder?.updatedAt ?? "none"}
-					path={`${base}/ladder`}
-					ladder={ladder.value.ladder}
-					me={me}
-					onSaved={() => setRefreshKey((key) => key + 1)}
-				/>
-			)}
-		</section>
 	);
 }
 

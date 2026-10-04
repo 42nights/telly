@@ -174,7 +174,7 @@ input[type="checkbox"]:focus-visible {
 	outline-offset: 2px;
 }
 
-/* Taskbar buttons for the screens. The current screen shows pressed in, with bold text. */
+/* Taskbar and toolbar buttons. The current screen shows pressed in, with bold text. */
 .win95-tab {
 	display: inline-flex;
 	flex: none;
@@ -203,6 +203,153 @@ input[type="checkbox"]:focus-visible {
 .win95-tab:focus-visible {
 	outline: 2px dotted #000000;
 	outline-offset: -7px;
+}
+.win95-tab:disabled {
+	color: var(--win95-shadow);
+	text-shadow: 1px 1px 0 var(--win95-highlight);
+}
+
+/* The page behind the app window: teal, so an overscroll or a browser toolbar tint is never gray. */
+html,
+body {
+	background-color: var(--win95-desktop);
+}
+
+/* Close button in a phone title bar: a raised face at touch size. Layout utilities place it. */
+.win95-close {
+	width: 2.75rem;
+	height: 2.75rem;
+	background-color: var(--win95-face);
+	color: #000000;
+	box-shadow:
+		inset -2px -2px 0 var(--win95-dark-shadow),
+		inset 2px 2px 0 var(--win95-highlight),
+		inset -4px -4px 0 var(--win95-shadow),
+		inset 4px 4px 0 var(--win95-light);
+}
+.win95-close:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: -7px;
+}
+
+/* One row of the screen tree and the Start menu. The current screen is navy, like a selection. */
+.win95-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-height: 2.75rem;
+	padding: 0 0.75rem;
+	color: #000000;
+	font-size: 0.9375rem;
+	text-align: left;
+}
+.win95-menu-item:hover,
+.win95-menu-item[aria-current="page"] {
+	background-color: var(--win95-title);
+	color: #ffffff;
+}
+.win95-menu-item:focus-visible {
+	outline: 2px dotted currentColor;
+	outline-offset: -3px;
+}
+.win95-menu-head {
+	padding: 0.5rem 0.75rem 0.125rem;
+	color: var(--muted-foreground);
+	font-size: 0.75rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+[data-view="wearer"] .win95-menu-item {
+	min-height: 3.5rem;
+	font-size: 1.125rem;
+}
+
+/* Property-sheet tabs for a screen's pages. The current tab is raised and joins the page. */
+.win95-sheet-tab {
+	flex: none;
+	min-height: 2.75rem;
+	margin-top: 3px;
+	padding: 0.6rem 0.9rem 0.4rem;
+	background-color: var(--win95-face);
+	color: #000000;
+	font-size: 0.9375rem;
+	white-space: nowrap;
+	box-shadow:
+		inset 2px 2px 0 var(--win95-highlight),
+		inset -2px 0 0 var(--win95-dark-shadow),
+		inset -3px 0 0 var(--win95-shadow);
+}
+.win95-sheet-tab[aria-current="page"] {
+	margin-top: 0;
+	padding-bottom: 0.6rem;
+	font-weight: 700;
+}
+.win95-sheet-tab:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: -6px;
+}
+
+/* Status bar fields: a shallow one-pixel well. */
+.win95-status {
+	box-shadow:
+		inset 1px 1px 0 var(--win95-shadow),
+		inset -1px -1px 0 var(--win95-highlight);
+}
+
+/* Phone taskbar: Start and 3 pinned screens, icon over label. The wearer view is taller. */
+.win95-taskbar {
+	padding-top: 2px;
+	box-shadow: inset 0 1px 0 var(--win95-light);
+}
+.win95-taskbar-button {
+	flex-direction: column;
+	justify-content: center;
+	gap: 0.125rem;
+	min-height: 4rem;
+	padding: 0.25rem;
+	font-size: 0.875rem;
+}
+[data-view="wearer"] .win95-taskbar-button {
+	min-height: 4.5rem;
+	font-size: 1rem;
+}
+.win95-logo {
+	display: inline-grid;
+	place-items: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	background-color: var(--win95-title);
+	color: #ffffff;
+	font-weight: 700;
+	box-shadow:
+		inset -1px -1px 0 #000000,
+		inset 1px 1px 0 var(--win95-title-end);
+}
+
+/* Start menu: opens above the phone taskbar, with the navy side band of the Win95 Start menu. */
+.win95-start-menu {
+	position: fixed;
+	inset: auto 0.25rem 5rem;
+	max-height: calc(100svh - 7rem);
+	margin: 0;
+	border: 0;
+	padding: 0.25rem;
+}
+.win95-start-menu:popover-open {
+	display: flex;
+}
+[data-view="wearer"] .win95-start-menu {
+	bottom: 5.5rem;
+}
+.win95-start-band {
+	flex: none;
+	padding: 0.5rem 0.25rem;
+	background: linear-gradient(0deg, var(--win95-title), var(--win95-title-end));
+	color: #ffffff;
+	font-size: 1.25rem;
+	font-weight: 700;
+	transform: rotate(180deg);
+	writing-mode: vertical-rl;
 }
 
 @layer components {

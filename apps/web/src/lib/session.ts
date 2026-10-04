@@ -35,11 +35,11 @@ export const onSessionChange = (listener: () => void) => {
 	};
 };
 
-/** The app page to open after sign-in: `path` when it is a page of this app, otherwise Home. */
+/** The app page to open after sign-in: `path` when it is a page of this app, otherwise the start screen. */
 export const returnPath = (path: string | undefined): string =>
 	path !== undefined && /^\/(?![/\\])/.test(path) && !path.startsWith(SIGN_IN)
 		? path
-		: "/hud";
+		: "/";
 
 /** Root `beforeLoad`: with no session, every page except sign-in goes to sign-in, which returns here. */
 export const requireSession = ({ location }: { location: ParsedLocation }) => {
