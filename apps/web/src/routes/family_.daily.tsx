@@ -1,11 +1,10 @@
-// Family › Daily: where the person is, their meal and drink check-ins, and their reminders today.
+// Family › Daily: where the person is, and their reminders today.
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarCheck } from "lucide-react";
 
 import { familyReads, useFamilyData } from "@/components/family/data";
 import { FamilyGate } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
-import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
 import { loadFamilyReads } from "@/lib/family";
@@ -31,7 +30,6 @@ function FamilyDaily() {
 							me={data.me}
 							now={Date.now()}
 						/>
-						<MealStatusSection familyId={family.id} />
 						<ReminderHistorySection familyId={family.id} me={data.me} />
 					</div>
 				)}
