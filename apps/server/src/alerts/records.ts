@@ -1,4 +1,4 @@
-import type { HealthSample } from "@health/contracts";
+import { drivesMonitoring, type HealthSample } from "@health/contracts";
 import type {
 	AlertThreshold,
 	FamilyAlert,
@@ -68,7 +68,7 @@ export const readAlerts = (db: FamilyDb, familyId: string): FamilyAlert[] => {
 const MAX_CLOCK_AHEAD_MS = 60_000;
 
 /**
- * Each threshold's state from its newest validated sample in the threshold's unit. A missing or stale
+ * Each threshold's state from its newest sample that drives monitoring (`drivesMonitoring`) in the threshold's unit. A missing or stale
  * sample makes the threshold `unavailable`; nothing here reports in range without fresh data.
  */
 export const monitor = (
@@ -84,7 +84,7 @@ export const monitor = (
 					s.familyId === threshold.familyId &&
 					s.metric === threshold.metric &&
 					s.unit === threshold.unit &&
-					s.quality === "validated",
+					drivesMonitoring(s),
 			)
 			.reduce<HealthSample | null>(
 				(newest, s) =>
