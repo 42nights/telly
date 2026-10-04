@@ -42,7 +42,8 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Sign-in check and family data API (server only) | OIDC token check and family access on every `/api` route except `/api/sources`. Tested with a local test issuer only. The production issuer is not chosen, and no sign-in screen exists ([#4](https://github.com/ayaangazali/telly/issues/4)) |
 | Threshold alerts and durable delivery (server only) | Rules, alerts, outbox, and acknowledgement routes are ready and tested on a local database. No family delivery transport exists yet, so deliveries show `unavailable` ([#5](https://github.com/ayaangazali/telly/issues/5)) |
 | Product features from the overview | Planned |
-| Providers: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
+| Gemini medicine detection (server only) | Route, frame mapping, and errors are tested against a local protocol server. No live Gemini call is verified yet, and no client draws the markers ([#15](https://github.com/ayaangazali/telly/issues/15)) |
+| Providers: ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, Gemma on River AI | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
 | Optional glasses adapter | Planned |
 
@@ -93,12 +94,21 @@ All signed-in routes need `Authorization: Bearer <OIDC token>`. Set `OIDC_ISSUER
 | `GET`, `PUT /api/families/:familyId/alert-thresholds` | List the alert rules; set one rule per metric and direction |
 | `DELETE /api/families/:familyId/alert-thresholds/:thresholdId` | Remove a rule |
 | `GET /api/families/:familyId/monitoring` | Each rule's state from the newest validated sample: `in_range`, `out_of_range`, or `unavailable` (`missing` or `stale`) |
+| `POST /api/families/:familyId/vision/medicine-detections` | Find medicine containers in one camera frame with Gemini. See below |
 
 A caller who is not a member of the family gets `403 forbidden`. The database decides membership from the caller's token, never from the request.
 
 When the database records a validated sample, it checks the family's rules in the same transaction. A fresh sample in the rule's unit that is strictly beyond the limit writes the alert and its queued delivery together. A replayed sample (same rule, source, and source time) raises nothing new. A stale sample raises nothing, and monitoring shows it as `unavailable`, never in range. No model takes part in this check.
 
 The alert outbox sends each delivery at least once, with the idempotency key `alert-<alertId>`. It runs as the identity that published the module: set `ALERT_OPERATOR_TOKEN` to that identity's SpacetimeDB token. Without it, deliveries stay `queued`. Without a delivery transport, they become `unavailable`, never `sent`. Delivery (`queued`, `sent`, `failed`, `unavailable`) and family acknowledgement are separate.
+
+#### Medicine detection
+
+The body is `MedicineDetectionRequest` from `@health/contracts/vision`: the frame (`id`, `capturedAt`, `width`, `height`, `crop`, `rotation`) and one base64 JPEG or PNG image of at most 4 MiB. The client crops `crop` from the camera frame, rotates it clockwise by `rotation` degrees, and may scale it. The server checks the image bytes, type, and aspect ratio against that provenance. The reply is `MedicineDetections`: the same frame, with each box in camera-frame pixels. Draw a marker only on the frame with that `id`.
+
+Set `GEMINI_API_KEY` in `apps/server/.env`. Without it, the route answers `503 unavailable`. `GEMINI_BASE_URL` changes the API origin, for example to a gateway. The server calls the Gemini Interactions API with `store: false` and a 20-second limit. It stops the call when the client disconnects. A provider failure is `502 upstream_error`, without provider text.
+
+`needsVerification` is `true` when the model could not read the label or its confidence is below 0.7. The user must then check the label. A found box does not confirm a dose was taken.
 
 ## Checks
 

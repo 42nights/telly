@@ -16,6 +16,7 @@ import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
 import { alertRoutes } from "./routes/alerts";
 import { accountRoutes, familyRoutes } from "./routes/families";
+import { visionRoutes } from "./routes/vision";
 import { voiceRoutes } from "./routes/voice";
 
 export const createApp = (config: ServerConfig) => {
@@ -24,7 +25,8 @@ export const createApp = (config: ServerConfig) => {
 		.use(requireFamilyMember)
 		.route("/", familyRoutes())
 		.route("/", alertRoutes())
-		.route("/", voiceRoutes(elevenLabsVoice(config.voice)));
+		.route("/", voiceRoutes(elevenLabsVoice(config.voice)))
+		.route("/vision", visionRoutes(config.gemini));
 
 	const app = new Hono()
 		.use(logger())
