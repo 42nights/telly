@@ -1,5 +1,6 @@
 import type { AuthConfig } from "./auth";
 import type { ElevenLabsConfig } from "./integrations/elevenlabs";
+import type { GeminiConfig } from "./integrations/gemini";
 
 export type ServerConfig = {
 	readonly corsOrigin: string;
@@ -7,6 +8,8 @@ export type ServerConfig = {
 	readonly auth: AuthConfig | undefined;
 	/** Without `apiKey`, voice routes answer `unavailable`. */
 	readonly voice: ElevenLabsConfig;
+	/** Undefined without `GEMINI_API_KEY`: vision routes then answer `unavailable`. */
+	readonly gemini?: GeminiConfig | undefined;
 };
 
 type Env = {
@@ -18,6 +21,8 @@ type Env = {
 	readonly ELEVENLABS_API_KEY?: string | undefined;
 	readonly ELEVENLABS_VOICE_ID: string;
 	readonly ELEVENLABS_API_URL: string;
+	readonly GEMINI_API_KEY?: string | undefined;
+	readonly GEMINI_BASE_URL: string;
 };
 
 /** Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. */
@@ -33,15 +38,19 @@ export const serverConfig = (env: Env): ServerConfig => {
 		voiceId: env.ELEVENLABS_VOICE_ID,
 		baseUrl: env.ELEVENLABS_API_URL,
 	};
+	const gemini = env.GEMINI_API_KEY
+		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
+		: undefined;
 	if (issuer && audience && uri && database)
 		return {
 			corsOrigin: env.CORS_ORIGIN,
 			auth: { issuer, audience, db: { uri, database } },
 			voice,
+			gemini,
 		};
 	if (issuer || audience || uri || database)
 		throw new Error(
 			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none",
 		);
-	return { corsOrigin: env.CORS_ORIGIN, auth: undefined, voice };
+	return { corsOrigin: env.CORS_ORIGIN, auth: undefined, voice, gemini };
 };

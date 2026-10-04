@@ -1,4 +1,4 @@
-import type { MedicineDetectionRequest } from "@health/contracts";
+import type { MedicineDetectionRequest } from "@health/contracts/vision";
 import { Data, Effect, Schema } from "effect";
 
 /** Pinned so a provider alias change cannot silently change detection behavior. */
@@ -25,7 +25,7 @@ export type GeminiBox = {
 	readonly confidence: number;
 };
 
-export type MedicineDetector = (
+type MedicineDetector = (
 	image: MedicineDetectionRequest["image"],
 ) => Effect.Effect<readonly GeminiBox[], VisionUpstreamError>;
 

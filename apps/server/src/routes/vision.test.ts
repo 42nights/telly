@@ -1,16 +1,12 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { crc32, deflateSync } from "node:zlib";
-import {
-	ApiError,
-	MedicineDetections,
-	type VisionFrame,
-} from "@health/contracts";
+import { ApiError } from "@health/contracts";
+import { MedicineDetections, type VisionFrame } from "@health/contracts/vision";
 import { Schema } from "effect";
-import {
-	createGeminiDetector,
-	GEMINI_VISION_MODEL,
-} from "../integrations/gemini";
-import { createVisionRoutes, imageSize, toFramePixels } from "./vision";
+import { Hono } from "hono";
+import { ApiFailure, errorStatus } from "../http";
+import { GEMINI_VISION_MODEL, type GeminiConfig } from "../integrations/gemini";
+import { imageSize, toFramePixels, visionRoutes } from "./vision";
 
 // Synthetic test frames only: a flat gray PNG and a header-only JPEG. No real camera image.
 const png = (width: number, height: number) => {
@@ -76,14 +72,17 @@ const interaction = (text: string, status = "completed") =>
 		steps: [{ type: "model_output", content: [{ type: "text", text }] }],
 	});
 
+// The app's onError turns a thrown ApiFailure into its typed body; the bare route needs the same.
+const mount = (gemini: GeminiConfig | undefined) =>
+	new Hono().route("/", visionRoutes(gemini)).onError((failure, c) => {
+		if (!(failure instanceof ApiFailure)) throw failure;
+		return c.json(
+			{ error: failure.code, message: failure.message },
+			errorStatus[failure.code],
+		);
+	});
 const routesWithTimeout = (timeout: number) =>
-	createVisionRoutes(
-		createGeminiDetector({
-			apiKey: "test-key-not-a-secret",
-			baseUrl: gemini.url.href,
-			timeout,
-		}),
-	);
+	mount({ apiKey: "test-key-not-a-secret", baseUrl: gemini.url.href, timeout });
 // Real clock on purpose: the slow-provider case exercises the actual timeout.
 const routes = routesWithTimeout(200);
 const post = (payload: string, signal?: AbortSignal, app = routes) =>
@@ -98,10 +97,7 @@ const errorOf = async (response: Response) =>
 
 describe("medicine detection route", () => {
 	test("answers unavailable without a Gemini key, never an empty result", async () => {
-		const response = await createVisionRoutes(undefined).request(
-			"/medicine-detections",
-			{ method: "POST", body: body() },
-		);
+		const response = await post(body(), undefined, mount(undefined));
 		expect(response.status).toBe(503);
 		expect((await errorOf(response)).error).toBe("unavailable");
 	});
@@ -137,7 +133,7 @@ describe("medicine detection route", () => {
 		const response = await post(
 			body({ image: { type: "image/png", data: "A".repeat(6 * 1024 * 1024) } }),
 		);
-		expect(response.status).toBe(413);
+		expect(response.status).toBe(400);
 		expect((await errorOf(response)).error).toBe("invalid_request");
 	});
 
@@ -200,14 +196,15 @@ describe("medicine detection route", () => {
 		});
 	});
 
-	test.each<[string, Reply, number]>([
+	const failed = "Medicine detection failed";
+	test.each<[string, Reply, string]>([
 		[
 			"an HTTP error",
 			() => new Response("quota exceeded for key AIza-secret", { status: 429 }),
-			502,
+			failed,
 		],
-		["a failed interaction", () => interaction("{}", "failed"), 502],
-		["non-JSON model text", () => interaction("I see a box"), 502],
+		["a failed interaction", () => interaction("{}", "failed"), failed],
+		["non-JSON model text", () => interaction("I see a box"), failed],
 		[
 			"an inverted box",
 			() =>
@@ -223,18 +220,23 @@ describe("medicine detection route", () => {
 						],
 					}),
 				),
-			502,
+			failed,
 		],
-		["a slow provider", () => new Promise<Response>(() => {}), 504],
+		[
+			"a slow provider",
+			() => new Promise<Response>(() => {}),
+			"Medicine detection timed out",
+		],
 	])(
 		"reports %s as upstream_error without provider text",
-		async (_name, next, status) => {
+		async (_name, next, message) => {
 			reply = next;
 			const response = await post(body());
-			expect(response.status).toBe(status);
-			const failure = await errorOf(response);
-			expect(failure.error).toBe("upstream_error");
-			expect(failure.message).not.toContain("AIza");
+			expect(response.status).toBe(502);
+			expect(await errorOf(response)).toEqual({
+				error: "upstream_error",
+				message,
+			});
 		},
 	);
 
