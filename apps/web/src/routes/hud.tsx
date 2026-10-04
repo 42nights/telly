@@ -92,11 +92,6 @@ function serverStatus(health: Polled<Health>, now: number) {
 	};
 }
 
-/**
- * The monitoring line, from health sources only, never from server liveness. The `Sources`
- * contract allows only `not_connected`, so monitoring is stopped whenever the list is known;
- * "partial" and "on" need a connected source in the contract first.
- */
 function monitoringStatus(sources: Polled<Sources>) {
 	if (sources.latest === undefined) return "Monitoring: checking…";
 	if (sources.latest.kind === "error")

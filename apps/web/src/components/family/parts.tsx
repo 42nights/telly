@@ -1,6 +1,6 @@
 // Pieces both family screens use: the alert card with its three actions, the monitoring badge and
 // list, and today's newest readings. Each shows only what the server returned.
-import type { Family, HealthSample } from "@health/contracts";
+import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type { FamilyAlert, Monitoring } from "@health/contracts/alerts";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
@@ -21,6 +21,7 @@ import {
 	type MonitoringLevel,
 	metricLabel,
 	monitoringLevel,
+	newestNoopSample,
 	newestPerMetric,
 	seenText,
 } from "./logic";
@@ -332,8 +333,21 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 	);
 }
 
-/** Each threshold's live state from `/monitoring`, plus the source that is not connected. */
-export function MonitoringList({ state }: { state: ApiState<Monitoring> }) {
+export function MonitoringList({
+	state,
+	records,
+	familyId,
+	now,
+}: {
+	state: ApiState<Monitoring>;
+	records: ApiState<FamilyRecords>;
+	familyId: string;
+	now: number;
+}) {
+	const whoop =
+		records.kind === "ready"
+			? newestNoopSample(records.value.samples, familyId)
+			: null;
 	return (
 		<ul className="win95-inset grid divide-y divide-border bg-card text-sm">
 			{state.kind !== "ready" ? (
@@ -368,7 +382,11 @@ export function MonitoringList({ state }: { state: ApiState<Monitoring> }) {
 			)}
 			<li className="flex justify-between gap-2 p-2">
 				<span>WHOOP</span>
-				<span>NOOP not connected</span>
+				<span>
+					{whoop === null
+						? "NOOP not connected"
+						: `Connected · ${ago(whoop.sourceTime, now)} · unvalidated`}
+				</span>
 			</li>
 		</ul>
 	);
