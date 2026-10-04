@@ -13,7 +13,7 @@ Plan: [`docs/board.html`](../docs/board.html) (`sys-training`, `sys-models`). Is
 | `gemma/fixtures/synthetic.jsonl` | Four synthetic examples. They prove the format only. Do not train a release on them |
 | `../packages/contracts/src/cue-format.json` | The prompt and output format. Training and the server read this one file |
 
-Git ignores `gemma/data/` (datasets), `gemma/runs/` (run manifests), and model weight files. Do not commit training data, recordings, or weights.
+Git ignores `gemma/data/` (datasets), `gemma/runs/` (run manifests), audio and video recordings under `training/`, and model weight files. Do not commit training data, recordings, or weights.
 
 ## Prerequisites (not yet confirmed)
 

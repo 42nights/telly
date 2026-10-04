@@ -12,6 +12,7 @@ import { finchnodeRoutes } from "./finchnode";
 import { medicineMemoryRoutes } from "./medicine-memory";
 import { reportRoutes } from "./reports";
 import { toolRoutes } from "./tools";
+import { trendRoutes } from "./trends";
 import { visionRoutes } from "./vision";
 import { voiceRoutes } from "./voice";
 
@@ -38,6 +39,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", reportRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
+		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())
 		.route("/", cueRoutes(config.gemma));

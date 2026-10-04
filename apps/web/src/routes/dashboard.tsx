@@ -20,6 +20,7 @@ import {
 	LayoutDashboard,
 	MessageCircle,
 	SlidersHorizontal,
+	TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -96,6 +97,9 @@ function DashboardNav() {
 			</Link>
 			<Link to="/reports" className={navClass}>
 				<FileText aria-hidden className="size-4" /> Reports
+			</Link>
+			<Link to="/trends" className={navClass}>
+				<TrendingUp aria-hidden className="size-4" /> Trends
 			</Link>
 			<a href="#thresholds" className={navClass}>
 				<SlidersHorizontal aria-hidden className="size-4" /> Thresholds
