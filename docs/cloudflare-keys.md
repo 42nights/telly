@@ -28,7 +28,7 @@ The teammate who holds the provider account owns its key. Record the owner and k
 Secrets Store gives values only to a Worker binding; the dashboard and the API return metadata. Cloudflare bindings do not reach the Node server. So the one retrieval path is:
 
 1. The Worker `telly-secrets` (`apps/server/scripts/cloudflare-keys-worker.ts`) at `https://telly-secrets.telly-keys.workers.dev/` binds every server key in the store and answers `GET` with `NAME=value` lines.
-2. Only a request with `Authorization: Bearer <pull token>` gets an answer. The pull token is the store secret `TELLY_SECRETS_PULL_TOKEN` (32 random bytes). The Worker compares SHA-256 digests in constant time, never serves the pull token, and answers anything else with `403`.
+2. Only a request with the pull token in the header `X-Telly-Pull-Token` gets an answer. The pull token is the store secret `TELLY_SECRETS_PULL_TOKEN` (32 random bytes). The Worker compares SHA-256 digests in constant time, never serves the pull token, and answers anything else with `403`. It does not use `Authorization`, because requests from a Cloudflare Container arrive without that header.
 3. `bun run secrets:pull` writes the lines to a mode-600 env file, plus `TELLY_REQUIRED_KEYS` with each key it wrote.
 4. The server loads that file. If a key in `TELLY_REQUIRED_KEYS` is missing or empty, startup fails and names the key, never the value.
 

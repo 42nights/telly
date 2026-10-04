@@ -23,7 +23,7 @@ const ask = (
 
 describe("telly-secrets Worker", () => {
 	test("returns every upper-case secret binding, never the pull token", async () => {
-		const response = await ask({ Authorization: `Bearer ${pull}` });
+		const response = await ask({ "X-Telly-Pull-Token": pull });
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Cache-Control")).toBe("no-store");
 		expect(await response.text()).toBe(
@@ -33,9 +33,9 @@ describe("telly-secrets Worker", () => {
 
 	test.each([
 		["no token", {}],
-		["a wrong token", { Authorization: `Bearer ${"q".repeat(64)}` }],
-		["a token prefix", { Authorization: `Bearer ${pull.slice(0, 63)}` }],
-		["another scheme", { Authorization: `Basic ${pull}` }],
+		["a wrong token", { "X-Telly-Pull-Token": "q".repeat(64) }],
+		["a token prefix", { "X-Telly-Pull-Token": pull.slice(0, 63) }],
+		["the token as Authorization", { Authorization: `Bearer ${pull}` }],
 	])("refuses %s", async (_, headers) => {
 		const response = await ask(headers);
 		expect(response.status).toBe(403);
@@ -43,16 +43,16 @@ describe("telly-secrets Worker", () => {
 	});
 
 	test("refuses other methods, and serves nothing without a long pull token", async () => {
-		expect(
-			(await ask({ Authorization: `Bearer ${pull}` }, "POST")).status,
-		).toBe(403);
+		expect((await ask({ "X-Telly-Pull-Token": pull }, "POST")).status).toBe(
+			403,
+		);
 		const short = { ...env, pull_token: secret("short") };
 		expect(
-			(await ask({ Authorization: "Bearer short" }, "GET", short)).status,
+			(await ask({ "X-Telly-Pull-Token": "short" }, "GET", short)).status,
 		).toBe(403);
 		const { pull_token: _, ...unbound } = env;
 		expect(
-			(await ask({ Authorization: `Bearer ${pull}` }, "GET", unbound)).status,
+			(await ask({ "X-Telly-Pull-Token": pull }, "GET", unbound)).status,
 		).toBe(403);
 	});
 });

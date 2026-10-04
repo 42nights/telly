@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 const worker = "telly-secrets";
 const comment = "telly";
-// The store secret that the Worker accepts as `Authorization: Bearer …`; never served itself.
+// The store secret that the Worker accepts in `X-Telly-Pull-Token`; never served itself.
 const pullToken = "TELLY_SECRETS_PULL_TOKEN";
 const config = join(homedir(), ".config/telly");
 const schemaPath = fileURLToPath(new URL("../.env.schema", import.meta.url));
@@ -248,7 +248,7 @@ const pull = async (dest: string, only?: readonly string[]) => {
 	const url = need(creds, "TELLY_SECRETS_URL", credsFile);
 	const response = await fetch(url, {
 		headers: {
-			Authorization: `Bearer ${need(creds, pullToken, credsFile)}`,
+			"X-Telly-Pull-Token": need(creds, pullToken, credsFile),
 		},
 		redirect: "manual",
 	});

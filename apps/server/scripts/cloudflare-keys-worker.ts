@@ -1,7 +1,8 @@
 // Cloudflare Worker `telly-secrets`: answers GET with one `NAME=value` line per server key in the
 // account Secrets Store. Secrets Store gives values only to a Worker binding, so this is the one way
 // the Node server receives them (docs/cloudflare-keys.md). Only a request that carries the pull
-// token (`Authorization: Bearer …`) gets an answer. Never log request data or secret values here.
+// token in `X-Telly-Pull-Token` gets an answer. Not `Authorization`: requests from a Cloudflare
+// Container arrive without it. Never log request data or secret values here.
 // `bun run secrets:push` uploads this file with one Secrets Store binding per server key, named
 // after its variable, plus `pull_token`, bound to the store secret TELLY_SECRETS_PULL_TOKEN.
 
@@ -30,9 +31,7 @@ export default {
 		if (request.method !== "GET") return deny();
 		try {
 			const token = env.pull_token;
-			const given = /^Bearer (\S+)$/.exec(
-				request.headers.get("Authorization") ?? "",
-			)?.[1];
+			const given = request.headers.get("X-Telly-Pull-Token");
 			if (!isSecret(token) || !given) return deny();
 			const expected = await token.get();
 			// A short token would make guessing practical; refuse to serve with one.
