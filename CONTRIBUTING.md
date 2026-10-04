@@ -1,139 +1,69 @@
-# Contributing to NOOP
+# Contributing to the health app
 
-Thanks for your interest in contributing. NOOP is a standalone, fully **offline**
-companion app for WHOOP 4.0 and 5.0 / MG straps — it pairs over Bluetooth, stores
-everything on-device in SQLite, and computes recovery / strain / HRV / sleep
-locally. No servers, no accounts, no data leaving the device.
+These rules apply to `health/` and to the health issues. NOOP's own rules are in the repository root
+`AGENTS.md` and `docs/CONTRIBUTING.md`. The plan is [`docs/plan.md`](../docs/plan.md).
 
-This file is a quick orientation. The **full contributing guide** —
-repository layout, the design-system rules, the BLE safety contract, how to add a
-metric / screen / command / migration, and the commit conventions — lives in
-[`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md). Read that before opening a
-non-trivial PR.
+## Issue-first coordination
 
-> NOOP is not affiliated with, endorsed by, or connected to WHOOP, Inc., and is
-> not a medical device. See [`DISCLAIMER.md`](DISCLAIMER.md).
+GitHub issues are the message board for people and their agents. Every change starts from an issue.
 
----
+1. **Find or open an issue.** Use the "Health task" template. One issue is one bounded task, with an
+   owner, affected paths, acceptance criteria, dependencies, and verification.
+2. **Claim before you edit.** Comment `claim: <who>, <paths>` and assign yourself. Do not edit paths
+   that another open, claimed issue lists. To share a file such as `packages/contracts`, agree in both
+   issues first and record who owns the change.
+3. **Post progress on the issue.** Comment when you start, when you are blocked (say on what), and
+   when you hand off (state what is done, what is not, and how to continue). Agents post the same way.
+4. **Open a pull request that references the issue** with `Refs #N`. Leave issue closure to the owner
+   or a maintainer; do not use auto-closing keywords.
+5. **Post the verification on the issue** before you close it: the commands you ran and what you saw.
 
-## Quick start
+Never put secret values, real health records, or personal data in issues, comments, logs, or commits.
+Name the variable and where it lives (for example "`GEMINI_API_KEY` in the server's Cloudflare
+secrets"), never its value.
 
-The codebase is reusable Swift packages (`Packages/`) plus a thin macOS app
-(`Strand/`) and a full Android app (`android/`). The fastest feedback loop is the
-packages — they build and test on their own, no Xcode project and no strap needed.
+## Before you push
 
-### Swift packages
-
-```bash
-# Test just the package you touched (substitute the name):
-cd Packages/WhoopProtocol && swift build && swift test
-```
-
-The five packages are `WhoopProtocol` (BLE framing / decode), `WhoopStore`
-(SQLite persistence), `StrandAnalytics` (recovery / strain / HRV / sleep math),
-`StrandImport` (WHOOP CSV + Apple Health importers), and `StrandDesign` (the
-SwiftUI design system).
-
-### macOS app
-
-The Xcode project is generated from `project.yml` and is **not** committed.
+Run from `health/`:
 
 ```bash
-brew install xcodegen
-xcodegen generate         # regenerate after any project.yml or file add/remove
-open Strand.xcodeproj     # build and run from Xcode
+bun install
+bun run check          # Biome format + lint, writes fixes
+bun run check-types    # strict TypeScript across every workspace
+bun run test           # behavior tests
+bun run check:quality  # Fallow
+sentrux check . && sentrux gate .   # if sentrux is installed; CI runs it anyway
 ```
 
-For a runnable, ad-hoc-signed `NOOP.app` without an Apple ID, see
-[`docs/BUILD.md`](docs/BUILD.md).
+CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single required status is
+`health / required`. It fails if any check fails, is cancelled, or is skipped while `health/` changed.
 
-### Android app
+## Rules the gates enforce
 
-```bash
-cd android
-./gradlew assembleFullDebug      # the real app (full flavour); JDK 17 required
-./gradlew assembleDemoDebug      # demo flavour — 120 days of synthetic data, no strap
-./gradlew testFullDebugUnitTest  # unit tests
-```
+- **Types:** `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes` are on. Do not use
+  `any`, unchecked casts, or `@ts-ignore` to get past an error.
+- **Contracts:** request and response shapes live once, in `packages/contracts` (Effect Schema).
+  Clients decode every response with `loadDecoded`; the server's replies use `satisfies <Contract>`.
+- **Boundaries:** `apps/web` imports only `@health/contracts` and `@health/ui`. `apps/native` imports
+  only `@health/contracts`. Only `apps/server` may import database code (`packages/db`). Contracts and
+  database code import no app. Fallow (`.fallowrc.json`) checks package and relative imports; Sentrux
+  (`.sentrux/rules.toml`) checks relative imports, cycles, and god files.
+- **No dead code:** Fallow fails on unused files, exports, and dependencies, and on duplicated blocks.
+  Delete what you do not use; do not add suppressions to make the check pass.
+- **Sentrux baseline:** `sentrux gate .` fails when the structure gets worse than
+  `.sentrux/baseline.json`. If a change makes the structure legitimately different, run
+  `sentrux gate --save .` and commit the new baseline in the same pull request, with the reason in the
+  description. Never move the baseline only to turn a red check green. Sentrux reads only files that
+  git tracks: `git add` new files before you run it locally.
+- **Tests:** keep the suite small. Add a test only for a real boundary: family access, data quality,
+  durable delivery, or a contract that must reject bad input. Do not test wording, wiring, or
+  configuration.
 
-**After switching branches, add `--no-build-cache --rerun-tasks`:**
+## Product rules
 
-```bash
-./gradlew testFullDebugUnitTest --no-build-cache --rerun-tasks
-```
-
-Gradle's cache is keyed on inputs it can see, and a branch switch can leave generated sources (Room
-DAOs, KSP output) from the previous branch in place, so the suite can run against code that is not the
-code you have checked out.
-
-If a failure looks unrelated to your change, re-run with those flags before concluding it is
-pre-existing on `main`. CI always builds clean, so a red test only you can see is worth one clean
-re-run before you write a note about it: several such failures have turned out not to reproduce.
-
----
-
-## What CI checks
-
-Some GitHub Actions workflows run on *every* PR; others are path-filtered and only run when
-you touch what they cover. All of them compile and run unit tests only — no code signing, no
-secrets, no release. The table is the source of truth, deliberately — the section this
-replaced led with a count, and a count in prose is what goes stale while the list below it
-looks fine.
-
-The check names GitHub shows you are **job** names, which do not resemble the workflow
-names. That column is why this table exists:
-
-| Check you see | Workflow | Runs when |
-|---|---|---|
-| `check` | **i18n Coverage** (`i18n-coverage.yml`) | every PR |
-| `doc-comments` | **Source Hygiene** (`source-hygiene.yml`) | every PR |
-| `linux-capture` | **Tools Python CI** (`tools-python.yml`) | every PR |
-| `windows-capture` | **Tools Python CI (Windows)** (`tools-python-windows.yml`) | `Tools/linux-capture/**` |
-| `build-and-test` | **Android CI** (`android.yml`) | `android/**`, the protocol/store test resources, `Strand/Resources/Localizable.xcstrings` |
-| `test (…)`, `tools (…)` | **Swift Packages CI** (`swift-packages.yml`) | `Packages/**`, the `Tools/SleepBench`, `Tools/SleepPSG` and `Tools/Backfill` packages, `android/app/src/test/resources/**`, `Strand/Liquid/LiquidCore.swift` |
-
-Read that as a worked example: an Android-only PR runs Android CI plus the three that always
-run, so a short list of checks does not mean little was checked.
-
-**App build** (`app-build.yml`, app-target compile + the `StrandTests` macOS suite) is
-`disabled_manually` and is **not** in that list. App-target code — SwiftUI views,
-`BLEManager`, `Repository`, Compose screens — is compiled by **nothing** on a normal PR, so
-build it locally before you push, or ask a maintainer to dispatch `app-build.yml`. See
-[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#what-ci-gates--and-what-it-deliberately-doesnt)
-for why the lean setup is deliberate and what else is gated at release time instead.
-
-If CI fails on your PR, fix the cause rather than working around it. Never commit
-generated output (`Strand.xcodeproj/`) or any secrets, keystores, or `local.properties`.
-
----
-
-## Submitting a PR
-
-1. One concern per PR where practical (keep protocol, schema, UI, and Android
-   changes separate).
-2. Fill in the [PR template](.github/PULL_REQUEST_TEMPLATE.md).
-3. For anything on the BLE path, state what you tested **on real hardware** and on
-   which strap. A green build is not proof a command behaves correctly.
-4. For analytics changes, add a test and cite the method. If the change alters a
-   scoring output, follow [`docs/VALIDATION_PROTOCOL.md`](docs/VALIDATION_PROTOCOL.md)
-   and paste its checklist into the PR — a scoring change with no held-out number
-   may ship behind a flag, but may not be described as an improvement.
-5. For UI changes, use `StrandDesign` tokens only — no hardcoded colors, fonts,
-   or spacing.
-
-By opening a pull request you agree your contribution is licensed under the same
-terms as the project — see [`LICENSE`](LICENSE).
-
----
-
-## Reporting issues
-
-- **Bugs and feature requests:** open an issue using the templates in
-  [`.github/ISSUE_TEMPLATE`](.github/ISSUE_TEMPLATE). NOOP is on-device, so please
-  leave out anything that identifies you.
-- **Security issues:** see [`SECURITY.md`](SECURITY.md).
-
-## Code of conduct
-
-This project follows a [Code of Conduct](CODE_OF_CONDUCT.md). Be respectful and
-keep discussion focused on the technical work.
+- Every feature works on the phone and the web without glasses. Glasses (Meta DAT) are an optional
+  adapter and never gate startup or a feature.
+- The NOOP-to-server connection stays a stub (`apps/server/src/integrations/noop.ts`) until the
+  friend who owns NOOP hands it off. Never return readings, zeros, or WHOOP-based nudges from it.
+- Show missing data as unavailable, never as "all clear".
+- Provider keys stay on the server. `VITE_*` and `EXPO_PUBLIC_*` values are public.
