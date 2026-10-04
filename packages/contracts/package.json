@@ -11,7 +11,8 @@
 		"./vision": "./src/vision.ts",
 		"./reports": "./src/reports.ts",
 		"./tools": "./src/tools.ts",
-		"./chat": "./src/chat.ts"
+		"./chat": "./src/chat.ts",
+		"./cues": "./src/cues.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
