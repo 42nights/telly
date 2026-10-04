@@ -79,7 +79,7 @@ function Found({
 					{labelRule}
 				</p>
 			)}
-			<div className="grid gap-2 sm:grid-cols-2">
+			<div className="grid grid-cols-2 gap-2">
 				<Button className={`win95-primary ${xl}`} onClick={choice.save}>
 					<Save aria-hidden />
 					Save
@@ -88,21 +88,26 @@ function Found({
 					<X aria-hidden />
 					Not this
 				</Button>
+				<Button
+					className={lg}
+					disabled={speech.kind === "loading"}
+					onClick={() => void say(`${check.id}:${choice.skipped}`, spoken)}
+					variant="outline"
+				>
+					<Volume2 aria-hidden />
+					{saidThis ? "Say it again" : "Read it aloud"}
+				</Button>
+				<Button
+					className={lg}
+					disabled={!live}
+					onClick={look}
+					variant="outline"
+				>
+					<Camera aria-hidden />
+					Look again
+				</Button>
 			</div>
-			<Button
-				className={lg}
-				disabled={speech.kind === "loading"}
-				onClick={() => void say(`${check.id}:${choice.skipped}`, spoken)}
-				variant="outline"
-			>
-				<Volume2 aria-hidden />
-				{saidThis ? "Say it again" : "Read it aloud"}
-			</Button>
 			{saidThis && <SpeechLine speech={speech} />}
-			<Button className={lg} disabled={!live} onClick={look} variant="outline">
-				<Camera aria-hidden />
-				Look again
-			</Button>
 		</>
 	);
 }

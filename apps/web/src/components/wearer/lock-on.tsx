@@ -11,12 +11,13 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import {
 	edgeHint,
 	guideWords,
+	lockedGuide,
 	type Orientation,
 	roomDirection,
 	seenAt,
 	type Vec,
 } from "./guide";
-import { direction, objectName } from "./logic";
+import { objectName } from "./logic";
 import { capture, detect, type PictureCheck } from "./medicine-check";
 import { Marker } from "./medicine-picture";
 import {
@@ -33,12 +34,16 @@ import {
 
 type Size = { readonly width: number; readonly height: number };
 
+/** One instruction on the camera view: an arrow (screen angle, radians) and its words. */
+type Guide = { readonly angle: number; readonly words: string };
+
 type View = {
 	readonly frame: Size;
 	/** Frame pixels; null while the object is off screen. */
 	readonly box: Box | null;
 	readonly state: "starting" | "locked" | "lost";
-	readonly guide: { readonly angle: number; readonly words: string } | null;
+	/** Where to look or walk; null while there is no direction to give. */
+	readonly guide: Guide | null;
 };
 
 /** Each gray pixel averages BLOCK×BLOCK drawn pixels, so camera noise averages out. */
@@ -201,12 +206,8 @@ export function LockOn({
 		const show = (next: View) => {
 			setView(next);
 			const way =
-				next.state === "locked" && next.box !== null
-					? direction(next.box, next.frame)
-					: next.guide !== null
-						? `${next.guide.words}.`
-						: `Looking for ${name}…`;
-			if (next.state !== "starting" && way !== said) {
+				next.guide !== null ? `${next.guide.words}.` : `Looking for ${name}…`;
+			if (way !== said) {
 				said = way;
 				onWay(way);
 			}
@@ -262,7 +263,8 @@ export function LockOn({
 					held === null
 						? null
 						: roomDirection(held, center, frame, screenAngle);
-				return show({ frame, box, state: "locked", guide: null });
+				const guide = lockedGuide(center, frame);
+				return show({ frame, box, state: "locked", guide });
 			}
 			lostAt ??= Date.now();
 			const lost = lostView(box, frame, held, room, screenAngle);
@@ -292,7 +294,10 @@ export function LockOn({
 			? "Locking on…"
 			: view.state === "locked"
 				? "✓ Locked on"
-				: `Looking for ${name}…${view.guide === null ? "" : ` ${view.guide.words}`}`;
+				: `Looking for ${name}…`;
+	const turn = (guide: Guide) => ({
+		transform: `rotate(${guide.angle + Math.PI / 2}rad)`,
+	});
 	return (
 		<>
 			<svg
@@ -311,18 +316,29 @@ export function LockOn({
 					</g>
 				)}
 			</svg>
-			{view.guide !== null && (
+			{view.state === "lost" && view.guide !== null && (
 				<div
 					aria-hidden
 					className="pointer-events-none absolute inset-0 grid place-items-center"
 				>
 					<ArrowUp
-						className="size-32 text-[#ffd400] drop-shadow-[0_0_3px_#000]"
+						className="size-32 text-[#ffd400] drop-shadow-[0_0_3px_#000] md:size-44"
 						strokeWidth={3}
-						style={{
-							transform: `rotate(${view.guide.angle + Math.PI / 2}rad)`,
-						}}
+						style={turn(view.guide)}
 					/>
+				</div>
+			)}
+			{view.guide !== null && (
+				<div className="pointer-events-none absolute inset-x-0 top-12 flex justify-center px-2">
+					<p className="flex items-center gap-3 border-2 border-[#ffd400] bg-black/85 px-4 py-2 font-bold text-[#ffd400] text-[26px] md:text-[32px]">
+						<ArrowUp
+							aria-hidden
+							className="size-10 shrink-0"
+							strokeWidth={3}
+							style={turn(view.guide)}
+						/>
+						{view.guide.words}
+					</p>
 				</div>
 			)}
 			<span className="win95-raised absolute top-2 left-2 bg-[#ffffe1] px-2 py-1 text-[15px] text-black">
@@ -330,7 +346,7 @@ export function LockOn({
 			</span>
 			{orientation.ask && (
 				<Button
-					className="absolute top-12 left-2 h-12 text-[16px]"
+					className="absolute bottom-2 left-2 h-12 text-[16px]"
 					onClick={orientation.allow}
 				>
 					<Compass aria-hidden />

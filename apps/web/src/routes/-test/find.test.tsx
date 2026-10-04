@@ -14,6 +14,8 @@ const DETECT = "POST /api/families/fam-1/vision/object-detections";
 // A fake camera: one stream, frames painted at once, and a canvas that encodes a tiny JPEG.
 // The tracker asks for a readable context; none is given, so the lock-on waits at "Locking on…".
 function installCamera() {
+	// The camera ran on this device before, so the finder opens it at once.
+	localStorage.setItem("telly.camera.allowed", "1");
 	Object.defineProperty(navigator, "mediaDevices", {
 		configurable: true,
 		value: {

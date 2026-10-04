@@ -1,7 +1,7 @@
 // First: registers Happy DOM before React DOM and the router load.
 import "../test/dom-routed";
 
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 
 import { act, fireEvent, render, setupDom } from "../test/dom-routed";
 import { CameraPreview, useCamera } from "./camera-preview";
@@ -46,14 +46,38 @@ const stubCamera = () => {
 };
 
 const realMedia = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+const realPermissions = Object.getOwnPropertyDescriptor(
+	navigator,
+	"permissions",
+);
+
+/** What the browser says about the camera permission. */
+const browserSays = (state: PermissionState) =>
+	Object.defineProperty(navigator, "permissions", {
+		configurable: true,
+		value: { query: async () => ({ state }) },
+	});
+
+// Each test is a new device: the camera never ran here, and the browser has not been asked.
+beforeEach(() => {
+	localStorage.clear();
+	browserSays("prompt");
+});
 afterEach(() => {
+	jest.useRealTimers();
 	if (realMedia) Object.defineProperty(navigator, "mediaDevices", realMedia);
 	else Reflect.deleteProperty(navigator, "mediaDevices");
+	if (realPermissions)
+		Object.defineProperty(navigator, "permissions", realPermissions);
+	else Reflect.deleteProperty(navigator, "permissions");
 	Reflect.deleteProperty(
 		HTMLVideoElement.prototype,
 		"requestVideoFrameCallback",
 	);
 });
+
+/** The camera ran on this device before, so auto start opens it at once. */
+const ranBefore = () => localStorage.setItem("telly.camera.allowed", "1");
 
 function Scene({
 	autoStart,
@@ -123,6 +147,7 @@ test("a frame without an onVideo listener is ignored", async () => {
 			},
 		},
 	);
+	ranBefore();
 	const view = render(<Scene autoStart />);
 	await camera.grant();
 	fireEvent.loadedData(view.getByLabelText("Live camera preview"));
@@ -131,8 +156,9 @@ test("a frame without an onVideo listener is ignored", async () => {
 	expect(view.getByLabelText("Live camera preview")).toBeDefined();
 });
 
-test("auto start asks on mount, and a lost feed is announced with a retry", async () => {
+test("auto start opens a camera that ran before, and a lost feed is announced with a retry", async () => {
 	const camera = stubCamera();
+	ranBefore();
 	const view = render(<Scene autoStart />);
 	expect(view.getByText("Waiting for camera permission…")).toBeDefined();
 	await camera.grant();
@@ -147,8 +173,80 @@ test("auto start asks on mount, and a lost feed is announced with a retry", asyn
 	expect(camera.requests).toHaveLength(2);
 });
 
+test("a first visit shows the start button and asks nothing; the next visit starts at once", async () => {
+	const camera = stubCamera();
+	const first = render(<Scene autoStart />);
+	await act(async () => {});
+	expect(first.getByText("Camera is off")).toBeDefined();
+	expect(camera.requests).toHaveLength(0);
+	fireEvent.click(first.getByRole("button", { name: "Turn on camera" }));
+	await camera.grant();
+	first.unmount();
+
+	const next = render(<Scene autoStart />);
+	expect(next.getByText("Waiting for camera permission…")).toBeDefined();
+	expect(camera.requests).toHaveLength(2);
+});
+
+test("auto start opens the camera when the browser already allows it", async () => {
+	const camera = stubCamera();
+	browserSays("granted");
+	const view = render(<Scene autoStart />);
+	await act(async () => {});
+	expect(view.getByText("Waiting for camera permission…")).toBeDefined();
+	expect(camera.requests).toHaveLength(1);
+});
+
+test("a lost feed opens again by itself, a few times", async () => {
+	jest.useFakeTimers();
+	const camera = stubCamera();
+	ranBefore();
+	const view = render(<Scene autoStart />);
+	await camera.grant();
+	act(() => {
+		camera.tracks[0]?.dispatchEvent(new Event("ended"));
+	});
+	expect(view.getByText("Camera stopped")).toBeDefined();
+	act(() => jest.advanceTimersByTime(1_500));
+	expect(camera.requests).toHaveLength(2);
+	expect(view.getByText("Waiting for camera permission…")).toBeDefined();
+
+	// A camera that keeps failing stops retrying, and Try again stays.
+	for (let i = 0; i < 5; i++) {
+		await camera.deny(new DOMException("busy", "NotReadableError"));
+		act(() => jest.advanceTimersByTime(1_500));
+	}
+	expect(camera.requests).toHaveLength(4);
+	expect(view.getByRole("button", { name: "Try again" })).toBeDefined();
+});
+
+test("coming back to the page opens a camera that ended while away", async () => {
+	const camera = stubCamera();
+	ranBefore();
+	render(<Scene autoStart />);
+	await camera.grant();
+	// iPhone ends a backgrounded page's tracks without an `ended` event.
+	Object.assign(camera.tracks[0] ?? {}, { readyState: "ended" });
+	act(() => {
+		document.dispatchEvent(new Event("visibilitychange"));
+	});
+	expect(camera.requests).toHaveLength(2);
+});
+
+test("a denied camera is not opened again by itself", async () => {
+	jest.useFakeTimers();
+	const camera = stubCamera();
+	ranBefore();
+	render(<Scene autoStart />);
+	await camera.deny(new DOMException("no", "NotAllowedError"));
+	act(() => jest.advanceTimersByTime(10_000));
+	expect(camera.requests).toHaveLength(1);
+	expect(localStorage.getItem("telly.camera.allowed")).toBeNull();
+});
+
 test("unmounting releases a live camera", async () => {
 	const camera = stubCamera();
+	ranBefore();
 	const view = render(<Scene autoStart />);
 	await camera.grant();
 	view.unmount();
@@ -164,6 +262,7 @@ test.each([
 	"a %s failure is announced and Try again asks again",
 	async (name, title, hint) => {
 		const camera = stubCamera();
+		ranBefore();
 		const view = render(<Scene autoStart />);
 		await camera.deny(new DOMException("no", name));
 		expect(view.getByText(title)).toBeDefined();
@@ -179,6 +278,7 @@ test("without a secure context the camera is reported unavailable", () => {
 		configurable: true,
 		value: undefined,
 	});
+	ranBefore();
 	const view = render(<Scene autoStart />);
 	expect(view.getByText("Camera unavailable in this browser")).toBeDefined();
 	expect(view.getByRole("alert").textContent).toContain("HTTPS or localhost");

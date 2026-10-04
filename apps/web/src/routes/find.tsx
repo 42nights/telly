@@ -104,7 +104,7 @@ function FindThingsPage({
 				icon={ScanSearch}
 				title={mode === "add" ? "Add a thing" : "Find things"}
 			>
-				<div className="grid gap-4 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
+				<div className="grid gap-4 p-2 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:gap-x-6 md:p-4">
 					<div className="flex flex-wrap items-end justify-between gap-3 md:col-span-2">
 						<Link
 							className={buttonVariants({
@@ -125,7 +125,8 @@ function FindThingsPage({
 						<YouAsked q={q} />
 					</div>
 
-					<div className="win95-inset relative aspect-[4/3] min-w-0 overflow-hidden bg-card md:row-span-2">
+					{/* The camera is the finder: edge to edge on a phone, the large left area on a desktop. */}
+					<div className="win95-inset relative -mx-2 h-[64dvh] min-h-80 min-w-0 overflow-hidden bg-card md:row-span-2 md:mx-0 md:h-[calc(100dvh-18rem)] md:min-h-[28rem]">
 						<CameraPreview
 							camera={camera}
 							onVideo={(element) => {

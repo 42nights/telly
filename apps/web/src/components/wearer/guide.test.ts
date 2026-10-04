@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { edgeHint, guideWords, roomDirection, seenAt } from "./guide";
+import {
+	edgeHint,
+	guideWords,
+	lockedGuide,
+	roomDirection,
+	seenAt,
+} from "./guide";
 
 const FRAME = { width: 480, height: 640 };
 const center = { x: 240, y: 320 };
@@ -48,6 +54,14 @@ describe("the guide arrow", () => {
 		const turned = seenAt(nearRight, { ...upright, alpha: -10 }, FRAME, 0);
 		expect(turned.kind).toBe("in");
 		if (turned.kind === "in") expect(turned.x).toBeLessThan(400);
+	});
+});
+
+describe("lockedGuide", () => {
+	test("says walk forward when the object is ahead, else turn toward it", () => {
+		expect(lockedGuide({ x: 240, y: 600 }, FRAME).words).toBe("Walk forward");
+		expect(lockedGuide({ x: 100, y: 320 }, FRAME).words).toBe("Turn left");
+		expect(lockedGuide({ x: 400, y: 320 }, FRAME).words).toBe("Turn right");
 	});
 });
 

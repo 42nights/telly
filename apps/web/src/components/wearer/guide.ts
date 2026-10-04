@@ -136,3 +136,17 @@ export const guideWords = (angle: number, behind: boolean) => {
 	if (Math.abs(x) >= Math.abs(y)) return turn;
 	return y < 0 ? "Tilt up" : "Tilt down";
 };
+
+/**
+ * While locked on: walk toward an object in the middle third of the view, else turn toward it.
+ */
+// ponytail: no distance; the web camera has no depth. Add meters from AR when the shell sends them.
+export const lockedGuide = (
+	center: { readonly x: number; readonly y: number },
+	frame: Frame,
+) => {
+	const u = center.x / frame.width;
+	if (u < 1 / 3) return { angle: Math.PI, words: "Turn left" };
+	if (u > 2 / 3) return { angle: 0, words: "Turn right" };
+	return { angle: -Math.PI / 2, words: "Walk forward" };
+};
