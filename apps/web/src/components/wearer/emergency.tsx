@@ -266,7 +266,7 @@ export function Emergency({
 					</p>
 					<div className="grid grid-cols-2 gap-2">
 						<Button
-							className={`win95-primary ${xl} font-bold text-destructive!`}
+							className={`${xl} font-bold text-destructive!`}
 							onClick={() =>
 								void reply(step.event, step.deadline, "I need help")
 							}
@@ -284,7 +284,7 @@ export function Emergency({
 			) : (
 				<div className="grid gap-2 sm:grid-cols-2">
 					<Button
-						className={`win95-primary ${xl} font-bold text-destructive!`}
+						className={`${xl} font-bold text-destructive!`}
 						disabled={off}
 						onClick={() => void help(null)}
 					>
