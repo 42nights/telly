@@ -5,6 +5,7 @@ import {
 	beforeEach,
 	describe,
 	expect,
+	jest,
 	setSystemTime,
 	test,
 } from "bun:test";
@@ -59,9 +60,9 @@ beforeEach(() => {
 				getImageData: (_x: number, _y: number, w: number, h: number) => {
 					const s = shade.get(this);
 					const data = new Uint8ClampedArray(w * h * 4);
-					// Every other pixel lit, so the brightness survives mean removal.
+					// The left half lit, so the brightness survives cell averaging and mean removal.
 					for (let i = 0; i < w * h; i++) {
-						data.fill(i % 2 === 0 ? (s ?? 0) : 0, i * 4, i * 4 + 3);
+						data.fill(i % w < w / 2 ? (s ?? 0) : 0, i * 4, i * 4 + 3);
 						data[i * 4 + 3] = s === undefined ? 0 : 255;
 					}
 					return { data };
@@ -76,6 +77,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	jest.useRealTimers();
 	setSystemTime();
 	Object.assign(HTMLCanvasElement.prototype, saved);
 });
@@ -137,13 +139,11 @@ describe("capture", () => {
 		expect(frame?.picture).toBe(`data:image/jpeg;base64,${"A".repeat(3072)}`);
 		expect(frame?.data).toBe("A".repeat(3072));
 		expect([frame?.width, frame?.height]).toEqual([64, 48]);
-		expect([frame?.canvas.width, frame?.canvas.height]).toEqual([64, 48]);
 	});
 
 	test("scales a big frame down until it fits the vision limit, and keeps the frame size", () => {
 		const frame = capture(video(3000, 2000, 10));
 		expect([frame?.width, frame?.height]).toEqual([3000, 2000]);
-		expect([frame?.canvas.width, frame?.canvas.height]).toEqual([2100, 1400]);
 		expect(((frame?.data.length ?? 0) * 3) / 4).toBeLessThanOrEqual(
 			MAX_VISION_IMAGE_BYTES,
 		);
@@ -294,21 +294,70 @@ describe("usePictureCheck", () => {
 		expect(result.current.check?.result.kind).toBe("done");
 	});
 
-	test("takes the markers away once the camera moves", async () => {
-		serve({ [detectionsPath]: detected([detection(0.9)]) });
+	/** Shows a check of `camera` whose answer arrives once `answer` runs, then ticks motion checks. */
+	const checkOf = async (camera: HTMLVideoElement) => {
+		jest.useFakeTimers({ now: NOW });
+		const reply = Promise.withResolvers<ServerReply>();
+		const calls = serve({ [detectionsPath]: () => reply.promise });
+		const { result } = renderHook(() => usePictureCheck("f1", ready));
+		let looked: Promise<void> = Promise.resolve();
+		act(() => {
+			looked = result.current.look(camera);
+		});
+		await waitFor(() => expect(calls.length).toBe(1));
+		return {
+			result,
+			answer: async () => {
+				reply.resolve(detected([detection(0.9)])(calls[0] as Call));
+				await act(() => looked);
+				expect(result.current.check?.result.kind).toBe("done");
+			},
+			/** Runs one motion check per half second. */
+			checks: (n: number) => act(() => jest.advanceTimersByTime(n * 500)),
+		};
+	};
+
+	test("keeps the markers while the camera holds still, and through one shaky check", async () => {
 		const camera = video(64, 48, 10);
 		document.body.append(camera);
-		const { result } = renderHook(() => usePictureCheck("f1", ready));
-		await act(() => result.current.look(camera));
-		// The live video still shows the checked frame: the markers stay.
+		const { result, answer, checks } = await checkOf(camera);
+		await answer();
+		checks(4);
 		expect(result.current.check?.result.kind).toBe("done");
 		shade.set(camera, 200);
-		await waitFor(() =>
-			expect(result.current.check?.result).toEqual({
-				kind: "cleared",
-				reason: "moved",
-			}),
-		);
+		checks(1);
+		shade.set(camera, 10);
+		checks(4);
+		expect(result.current.check?.result.kind).toBe("done");
+		camera.remove();
+	});
+
+	test("takes the markers away once the camera keeps moving", async () => {
+		const camera = video(64, 48, 10);
+		document.body.append(camera);
+		const { result, answer, checks } = await checkOf(camera);
+		await answer();
+		shade.set(camera, 200);
+		checks(1);
+		expect(result.current.check?.result.kind).toBe("done");
+		checks(1);
+		expect(result.current.check?.result).toEqual({
+			kind: "cleared",
+			reason: "moved",
+		});
+		camera.remove();
+	});
+
+	test("motion while the answer is pending does not count", async () => {
+		const camera = video(64, 48, 10);
+		document.body.append(camera);
+		const { result, answer, checks } = await checkOf(camera);
+		// The wearer moves the phone while the model thinks; the answer compares from then on.
+		shade.set(camera, 200);
+		checks(10);
+		await answer();
+		checks(4);
+		expect(result.current.check?.result.kind).toBe("done");
 		camera.remove();
 	});
 

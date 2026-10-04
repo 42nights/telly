@@ -33,7 +33,8 @@ const Jwks = Schema.Struct({
 	keys: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
 });
 // `exp` is required here; the JWT check only rejects an expired `exp` that is present. The profile
-// claims come with Google's `email profile` scopes; they are shown to the caller, never stored.
+// claims come with Google's `email profile` scopes. Only `name` is stored (`GET /api/me`), for the
+// members of the caller's families; the others are shown to the caller only.
 const Claims = Schema.Struct({
 	iss: Schema.String,
 	sub: Schema.NonEmptyString,
