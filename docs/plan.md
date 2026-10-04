@@ -27,7 +27,7 @@ A 3D home map is not required.
 | Service | Node, Hono, Effect 4 | HTTP routing (Hono), service logic and resources (Effect) |
 | Data | SpacetimeDB | Health data, alerts, messages, acknowledgements |
 | Contracts | Effect Schema in `@health/contracts` | One source for request and response shapes |
-| Model training | Gemma on River AI | Health cues; inference runs in the cloud, not on the glasses |
+| Model training | Qwen (`Qwen/Qwen3.5-9B`) on River AI | Health cues; inference runs in the cloud, not on the glasses |
 | Family agents | Gemini | Family chat agents; their data tools run through Fetch.ai |
 | Tool routing | Fetch.ai Agentverse (required) | Routes agent tool requests to the service API |
 | Voice | ElevenLabs (required) | Multilingual speech |
@@ -69,13 +69,13 @@ packages/ui/          Generated shadcn/ui components for the web app
 noop/                 NOOP (separate project)
 ```
 
-Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings, server-only), `agents/fetch/` (Python Agentverse worker), and `training/gemma/` (Python training).
+Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings, server-only), `agents/fetch/` (Python Agentverse worker), and `training/qwen/` (Python training).
 
 ## Owners
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, SpacetimeDB, threshold alerts and durable delivery, data quality, Fetch.ai Agentverse, Finchnode lab results, River setup, Gemma training and inference, service reliability |
+| Jerry | `undeemed` | Workspace and CI, web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, phone app, family dashboard, Gemini family conversations, SpacetimeDB, threshold alerts and durable delivery, data quality, Fetch.ai Agentverse, Finchnode lab results, River setup, Qwen training and inference, service reliability |
 | Ayaan | `ayaangazali` | NOOP connection boundary, optional Meta glasses SDK bridge and square layout |
 
 On 2026-10-04 every issue that Mahesh (`maheshwarmurugesan`) owned was reassigned to `undeemed`. Mahesh wrote the October 3 backlog (#25–#51). The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK, and his other issues moved to `undeemed`.

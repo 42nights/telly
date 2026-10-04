@@ -4,7 +4,7 @@ import type { ElevenLabsConfig } from "./integrations/elevenlabs";
 import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
-import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
+import { type QwenConfig, qwenConfigFrom } from "./integrations/qwen";
 import type { R2Config } from "./integrations/r2";
 
 export type NoopConfig = {
@@ -25,8 +25,8 @@ export type ServerConfig = {
 	readonly finchnode?: Finchnode;
 	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
 	readonly fetchAgent?: FetchAgentConfig | undefined;
-	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
-	readonly gemma?: GemmaConfig | undefined;
+	/** Undefined when no Qwen deployment is configured: the cue route then answers `unavailable`. */
+	readonly qwen?: QwenConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
 	readonly noop?: NoopConfig | undefined;
@@ -69,7 +69,7 @@ type Env = {
 	readonly SPECTRUM_PROJECT_ID?: string | undefined;
 	readonly SPECTRUM_PROJECT_SECRET?: string | undefined;
 	readonly TELLY_IMESSAGE_SENDERS?: string | undefined;
-} & Parameters<typeof gemmaConfigFrom>[0];
+} & Parameters<typeof qwenConfigFrom>[0];
 
 /** `bun run secrets:pull` lists every key it wrote in TELLY_REQUIRED_KEYS. A listed key that is
  * missing or empty, such as one blanked by a stale host variable, fails startup by name only. */
@@ -210,7 +210,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		gemini: env.GEMINI_API_KEY
 			? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 			: undefined,
-		gemma: gemmaConfigFrom(env),
+		qwen: qwenConfigFrom(env),
 		auth,
 		noop,
 		imessage: imessageConfig(env),
