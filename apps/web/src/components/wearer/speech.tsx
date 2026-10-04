@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { type ApiResult, apiBlob, familyPath } from "@/lib/api";
+import { play, player } from "@/lib/player";
 
 export type Speech =
 	/** `key` is the text spoken last, so its button can offer "Say it again". */
@@ -110,16 +111,13 @@ export function useSpeech(familyId: string | null) {
 			kept.current = { key, url: result.value };
 			url = result.value;
 		}
-		const audio = new Audio(url);
-		audio.defaultPlaybackRate = options.slow === true ? SLOW_RATE : 1;
-		audio.playbackRate = audio.defaultPlaybackRate;
-		audio.onended = () => {
+		player.onended = () => {
 			if (playing.current === now) playing.current = null;
 			setSpeech({ kind: "idle", key });
 		};
-		now.audio = audio;
+		now.audio = player;
 		setSpeech({ kind: "speaking", key });
-		await audio.play().catch(() => {
+		await play(url, options.slow === true ? SLOW_RATE : 1).catch(() => {
 			if (signal.aborted) return;
 			halt();
 			setSpeech({
