@@ -54,10 +54,10 @@ export const createApp = (
 				? imessageWebhook(c.req.raw)
 				: c.json(
 						{
-							error: "not_found",
-							message: "iMessage is not configured",
+							error: "unavailable",
+							message: "iMessage is not running",
 						} satisfies ApiError,
-						404,
+						503,
 					),
 		)
 		// Sign-in itself cannot require sign-in.
