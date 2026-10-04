@@ -259,7 +259,7 @@ flowchart LR
 - **Use:** OpenID Connect sign-in with PKCE. The server exchanges the code (`/api/sign-in/token`, `/api/sign-in/callback`), and the phone stores the session in SecureStore. Every `/api/families/…` route checks the token and the family membership. Without a valid session, every web page shows only the sign-in screen, which returns to the requested page after sign-in.
 - **Code:** `apps/server/src/auth.ts`, `routes/sign-in.ts`. **Keys:** `OIDC_ISSUER`, `OIDC_AUDIENCE`, `OIDC_CLIENT_SECRET`.
 - **Proof:** real Google discovery and keys loaded, and a forged token got 401 ([#162](https://github.com/ayaangazali/telly/pull/162)). Web and phone flows: [#130](https://github.com/ayaangazali/telly/pull/130).
-- **Limits:** the consent screen is in Testing mode, so only listed test users can sign in. No phone sign-in has run on a device.
+- **Limits:** the consent screen is in production (External), so any Google account can sign in. No phone sign-in has run on a device.
 
 
 **Screenshots** (captured 2026-10-04 about 08:00 UTC):
@@ -356,7 +356,7 @@ Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and 
 
 | Area | State |
 | --- | --- |
-| Web app | Merged and deployed at <https://telly.jerry-2c0.workers.dev>. Sign-in uses Google; only listed test users can sign in |
+| Web app | Merged and deployed at <https://app.saintess.tech>. Sign-in uses Google; the consent screen is in production |
 | Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud |
 | Phone app | Expo app with sign-in. An iOS WebView shell ([#95](https://github.com/ayaangazali/telly/pull/95)) is waiting for a decision. No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
 | Providers | See [Providers](#providers): each one lists its live proof and limits |
