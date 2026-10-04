@@ -32,6 +32,9 @@ const emptyFields: ReportFields = {
 	physician: null,
 	hospital: null,
 	notes: null,
+	observations: null,
+	questions: null,
+	corrections: [],
 };
 
 /**
@@ -107,6 +110,13 @@ export const reportRoutes = () =>
 			const report = findReport(c);
 			if (report.review !== null)
 				throw new ApiFailure("conflict", "A reviewed report cannot change");
+			const measured = report.markers.filter((m) => m.sample !== null);
+			for (const { metric } of fields.corrections)
+				if (!measured.some((m) => m.metric === metric))
+					throw new ApiFailure(
+						"invalid_request",
+						`No measured ${metric} marker to correct`,
+					);
 			await callReducer(c.var.db, (connection) =>
 				connection.reducers.updateReport({
 					id: report.id,

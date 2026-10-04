@@ -140,6 +140,11 @@ function ReportHeader({
 		<div className="flex flex-wrap items-center justify-between gap-2">
 			<h2 className="font-bold text-base">
 				Lab report · {report.fields.patientName ?? "Patient not named"}
+				{report.markers.some((m) => m.sample?.synthetic) && (
+					<span className="win95-inset ml-2 bg-card px-1.5 py-0.5 font-bold text-sm">
+						Demo data
+					</span>
+				)}
 			</h2>
 			<div className="flex flex-wrap items-center gap-2">
 				{reports.length > 1 && (
@@ -231,7 +236,7 @@ function ReportSheet({
 				>
 					{tab === "Patient" && <PatientTab sheet={sheet} report={report} />}
 					{tab === "Markers" && (
-						<MarkersTab report={report} familyId={familyId} />
+						<MarkersTab report={report} familyId={familyId} sheet={sheet} />
 					)}
 					{tab === "Notes" && <NotesTab sheet={sheet} />}
 					{tab === "Send" && (

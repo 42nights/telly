@@ -23,6 +23,9 @@ const fields = {
 	physician: "Dr. Synthetic",
 	hospital: "Synthetic General",
 	notes: null,
+	observations: "Seemed tired after lunch.",
+	questions: null,
+	corrections: [{ metric: "hrv", value: 45, reason: "Typed at the source" }],
 };
 
 const recordSamples = (db: FamilyDb, familyId: string) =>
@@ -70,10 +73,18 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				const extra = { ...fields, diagnosis: "x" };
 				const bad = yield* send(app, "POST", `${path}/fields`, extra);
 				expect(failure(bad)).toEqual([400, "invalid_request"]);
+				// An unavailable marker never gets a value, not even as a correction.
+				const invented = {
+					...fields,
+					corrections: [{ metric: "falls", value: 0, reason: "None seen" }],
+				};
+				const unmeasured = yield* send(app, "POST", `${path}/fields`, invented);
+				expect(failure(unmeasured)).toEqual([400, "invalid_request"]);
 				const filled = yield* send(app, "POST", `${path}/fields`, fields);
-				expect(Schema.decodeUnknownSync(Report)(filled.json).fields).toEqual(
-					fields,
-				);
+				const saved = Schema.decodeUnknownSync(Report)(filled.json);
+				expect(saved.fields).toEqual(fields);
+				// The correction sits beside the generated sample, which stays as it was.
+				expect(saved.markers).toEqual(draft.markers);
 
 				const early = yield* send(app, "POST", `${path}/submit`);
 				expect(failure(early)).toEqual([409, "conflict"]);
