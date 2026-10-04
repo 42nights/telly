@@ -355,7 +355,7 @@ export function SendTab({
 	familyId: string;
 	onAsk: () => void;
 }) {
-	const { reviewed, sendFailure } = sheet;
+	const { reviewed, sendFailure, sentTo } = sheet;
 	return (
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
@@ -366,7 +366,9 @@ export function SendTab({
 				</legend>
 				{sendFailure === null ? (
 					<p>
-						Hospital: not sent.
+						{sentTo === null
+							? "Hospital: not sent."
+							: `Hospital: sent by email to ${sentTo}.`}
 						{!reviewed && " Mark the report as reviewed first."}
 					</p>
 				) : (

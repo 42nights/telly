@@ -215,8 +215,12 @@ describe("useReportSheet", () => {
 		expect(calls).toHaveLength(1);
 	});
 
-	test("a success reply to submit is still not a delivery receipt", async () => {
-		const calls = serve({ [`${BASE}/submit`]: { status: 204 } });
+	test("a delivered submit says where the report went", async () => {
+		const calls = serve({
+			[`${BASE}/submit`]: {
+				json: { recipient: "family@example.com", route: "email" },
+			},
+		});
 		const { hook } = sheetOf(report());
 		let sending = Promise.resolve();
 		act(() => {
@@ -225,13 +229,8 @@ describe("useReportSheet", () => {
 		expect(hook.result.current.status).toBe("Sending…");
 		await act(() => sending);
 		expect(calls).toHaveLength(1);
-		expect(hook.result.current.sendFailure).toEqual({
-			kind: "error",
-			message: "The server replied, but gave no delivery receipt.",
-		});
-		expect(hook.result.current.status).toBe(
-			"The server replied, but gave no delivery receipt.",
-		);
+		expect(hook.result.current.sendFailure).toBeNull();
+		expect(hook.result.current.sentTo).toBe("family@example.com");
 	});
 
 	test("an unavailable delivery path is kept as the send failure", async () => {

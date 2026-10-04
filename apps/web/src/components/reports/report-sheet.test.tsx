@@ -319,7 +319,9 @@ describe("ReportScreen with reports", () => {
 					],
 				},
 			},
-			"POST /api/families/1/reports/r1/submit": { status: 204 },
+			"POST /api/families/1/reports/r1/submit": {
+				json: { recipient: "family@example.com", route: "email" },
+			},
 		});
 		const send = await waitFor(() =>
 			view.getByRole("button", { name: "Send to hospital…" }),
@@ -334,9 +336,7 @@ describe("ReportScreen with reports", () => {
 		fireEvent.click(view.getByRole("button", { name: "Send" }));
 		expect(view.queryByRole("alertdialog")).toBeNull();
 		await waitFor(() =>
-			expect(view.getByRole("alert").textContent).toBe(
-				"Not sent: The server replied, but gave no delivery receipt.",
-			),
+			view.getByText("Hospital: sent by email to family@example.com."),
 		);
 		expect(
 			calls.filter((call) => call.method === "POST").map((call) => call.path),

@@ -1,5 +1,6 @@
 import {
 	type Report,
+	ReportDelivery,
 	type ReportEmail,
 	ReportFields,
 	type ReportReview,
@@ -54,6 +55,7 @@ export type ReportSheetState = {
 	readonly confirmed: boolean;
 	readonly setConfirmed: (confirmed: boolean) => void;
 	readonly sendFailure: ApiFailure | null;
+	readonly sentTo: string | null;
 	readonly save: () => Promise<void>;
 	readonly review: () => Promise<void>;
 	readonly submit: () => Promise<void>;
@@ -79,6 +81,7 @@ export function useReportSheet(
 	}
 	const [confirmed, setConfirmed] = useState(false);
 	const [sendFailure, setSendFailure] = useState<ApiFailure | null>(null);
+	const [sentTo, setSentTo] = useState<string | null>(null);
 	const [savedAt, setSavedAt] = useState<number | null>(null);
 
 	const errors = fieldErrors(draft);
@@ -117,19 +120,12 @@ export function useReportSheet(
 
 	const submit = async () => {
 		setBusy("Sending…");
-		const result = await apiRequest(null, `${base}/submit`, {
+		const result = await apiRequest(ReportDelivery, `${base}/submit`, {
 			method: "POST",
 		});
 		setBusy(null);
-		// The server has no delivery path; any other reply is still not a delivery receipt.
-		setSendFailure(
-			result.kind === "ready"
-				? {
-						kind: "error",
-						message: "The server replied, but gave no delivery receipt.",
-					}
-				: result,
-		);
+		setSendFailure(result.kind === "ready" ? null : result);
+		setSentTo(result.kind === "ready" ? result.value.recipient : null);
 	};
 
 	return {
@@ -144,6 +140,7 @@ export function useReportSheet(
 		confirmed,
 		setConfirmed,
 		sendFailure,
+		sentTo,
 		save,
 		review,
 		submit,
