@@ -1,4 +1,5 @@
 import type { HealthSample } from "@health/contracts";
+import { urgentRequest } from "@health/contracts/ask";
 
 /** A heart-rate reading older than this is not shown as current. */
 // ponytail: fixed 10 min window; read it from the family's alert threshold if they ever differ.
@@ -97,6 +98,20 @@ export const itemFromRequest = (request: string): string => {
 	const named = MY_MEDICINE.exec(request)?.[1] ?? MEDICINE.exec(request)?.[0];
 	if (named === undefined) return "your medicine";
 	return `your ${named.toLowerCase().replace(/\bmeds?\b/, "medicine")}`;
+};
+
+// "Ouch" and the like: maybe hurt, maybe not. Not urgent by itself, so it gets a check-in.
+const OUCH = /\b(ouch|ow|owie|ay)\b/i;
+
+export type EmergencyIntent = "help" | "ouch";
+
+/**
+ * What a request means for emergencies. An urgent request (`urgentRequest`, the same rule as the
+ * server's) dispatches at once; an "ouch" starts a check-in; null is an ordinary request.
+ */
+export const emergencyIntent = (request: string): EmergencyIntent | null => {
+	if (urgentRequest(request) !== null) return "help";
+	return OUCH.test(request) ? "ouch" : null;
 };
 
 type Box = {

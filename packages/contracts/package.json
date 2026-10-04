@@ -20,7 +20,8 @@
 		"./care-profile": "./src/care-profile.ts",
 		"./exercise": "./src/exercise.ts",
 		"./trends": "./src/trends.ts",
-		"./reminders": "./src/reminders.ts"
+		"./reminders": "./src/reminders.ts",
+		"./emergency": "./src/emergency.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
