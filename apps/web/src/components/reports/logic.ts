@@ -5,6 +5,8 @@ import type {
 	ReportMarker,
 } from "@health/contracts/reports";
 
+import { readingValue } from "@/lib/readings";
+
 /** The text fields of `ReportFields`. */
 export type FieldName = Exclude<keyof ReportFields, "corrections">;
 
@@ -84,17 +86,9 @@ export const fieldErrors = (
 	return errors;
 };
 
-/** `heart_rate` → `Heart rate`. */
-export const metricLabel = (metric: string): string => {
-	const words = metric.replace(/_/g, " ");
-	return words.charAt(0).toUpperCase() + words.slice(1);
-};
-
 /** A marker without a sample is unavailable, never normal. */
 export const markerValue = (marker: ReportMarker): string =>
-	marker.sample === null
-		? "Unavailable"
-		: `${marker.sample.value} ${marker.sample.unit}`;
+	marker.sample === null ? "Unavailable" : readingValue(marker.sample);
 
 /** A lab value with its unit, exactly as the source reported it. */
 export const labValue = (lab: FinchnodeLab): string => {

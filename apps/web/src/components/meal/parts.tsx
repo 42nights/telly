@@ -356,10 +356,10 @@ export function IntakeReport({
 			aria-label="What you ate"
 			className="grid min-w-0 grid-cols-1 gap-3"
 		>
-			<h2 className="font-bold text-[22px]">How much did you eat?</h2>
-			<p className="text-[16px] text-muted-foreground">
-				Only your answer counts here. A photo never decides it.
-			</p>
+			<h2 className="flex items-center gap-1 font-bold text-[22px]">
+				How much did you eat?
+				<Tip text="Only your answer counts here. A photo never decides it." />
+			</h2>
 			<div className="grid grid-cols-2 gap-2">
 				{amounts.map(([amount, label]) => (
 					<Button

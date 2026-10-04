@@ -2,6 +2,15 @@ import { cn } from "@health/ui/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+type WindowProps = {
+	title: string;
+	icon: LucideIcon;
+	className?: string;
+	children: ReactNode;
+	/** Text for the status bar under the window body. */
+	status?: ReactNode;
+};
+
 /**
  * A Win95 window frame for one HUD region. It has no minimize, maximize, or close buttons,
  * because the HUD regions cannot do those actions and a control must not pretend.
@@ -12,14 +21,7 @@ export function Window({
 	className,
 	children,
 	status,
-}: {
-	title: string;
-	icon: LucideIcon;
-	className?: string;
-	children: ReactNode;
-	/** Text for the status bar under the window body. */
-	status?: ReactNode;
-}) {
+}: WindowProps) {
 	return (
 		<section
 			aria-label={title}
@@ -37,5 +39,17 @@ export function Window({
 				<p className="win95-inset mx-0.5 mb-0.5 px-2 py-1 text-xs">{status}</p>
 			)}
 		</section>
+	);
+}
+
+/**
+ * One screen: a window that fills the area inside the app frame with a small even gap (captain: no
+ * page scroll). Content that does not fit is compacted or split into tabs, not scrolled.
+ */
+export function Page({ className, ...window }: WindowProps) {
+	return (
+		<main className="flex h-full min-h-0 p-2">
+			<Window {...window} className={cn("mx-auto h-full w-full", className)} />
+		</main>
 	);
 }

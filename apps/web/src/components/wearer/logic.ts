@@ -1,6 +1,7 @@
 import { urgentRequest } from "@health/contracts/ask";
 import type { ObjectCategory } from "@health/contracts/vision";
 
+import { metricLabel, readingValue, sourceName } from "@/lib/readings";
 /** "just now", "42 s ago", "3 min ago", "2 h ago". */
 export const ago = (ms: number): string => {
 	const s = Math.round(ms / 1000);
@@ -10,7 +11,7 @@ export const ago = (ms: number): string => {
 	return `${Math.round(s / 3600)} h ago`;
 };
 
-/** One answer source in wearer words: "Heart rate 72 bpm · from phone · 3 min ago". */
+/** One answer source in wearer words: "Heart rate 72 bpm · from WHOOP · 3 min ago". */
 export const evidenceLine = (
 	sample: {
 		readonly metric: string;
@@ -23,15 +24,13 @@ export const evidenceLine = (
 	},
 	now: number,
 ): string => {
-	const metric = sample.metric.replaceAll("_", " ");
-	const name = `${metric.charAt(0).toUpperCase()}${metric.slice(1)}`;
 	const age = ago(now - Date.parse(sample.sourceTime));
 	const flag = sample.synthetic
 		? " (demo, not real)"
 		: sample.stale
 			? " (old)"
 			: "";
-	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${flag}`;
+	return `${metricLabel(sample.metric)} ${readingValue(sample)} · from ${sourceName(sample.source)} · ${age}${flag}`;
 };
 
 // The words for each object the finder knows (#301), medicine first: "where are my keys?" opens it.

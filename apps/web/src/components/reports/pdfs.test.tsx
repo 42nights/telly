@@ -69,9 +69,12 @@ describe("Save as PDF", () => {
 			[SAVE]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const view = renderActions();
-		expect(view.getByRole("status").textContent).toBe(
-			"Saving a PDF does not send it to anyone.",
-		);
+		expect(view.getByRole("status").textContent).toBe("");
+		expect(
+			view.getByRole("button", {
+				name: "Saving a PDF does not send it to anyone.",
+			}),
+		).toBeDefined();
 		fireEvent.click(view.getByRole("button", { name: "Save as PDF" }));
 		const busy = await view.findByRole("button", { name: "Saving PDF…" });
 		expect(busy.hasAttribute("disabled")).toBe(true);
