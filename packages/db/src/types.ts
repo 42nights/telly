@@ -163,6 +163,20 @@ export const ContactStep = __t.object("ContactStep", {
 });
 export type ContactStep = __Infer<typeof ContactStep>;
 
+export const DeliveryEvent = __t.object("DeliveryEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  proposalId: __t.string(),
+  get status() {
+    return OrderStatus;
+  },
+  proposal: __t.option(__t.string()),
+  note: __t.string(),
+  actor: __t.identity(),
+  at: __t.timestamp(),
+});
+export type DeliveryEvent = __Infer<typeof DeliveryEvent>;
+
 // The tagged union or sum type for the algebraic type `DeliveryStatus`.
 export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Queued: __t.unit(),
@@ -264,6 +278,9 @@ export type MyContactAttempts = __Infer<typeof MyContactAttempts>;
 export const MyContactLadders = __t.object("MyContactLadders", {});
 export type MyContactLadders = __Infer<typeof MyContactLadders>;
 
+export const MyDeliveryEvents = __t.object("MyDeliveryEvents", {});
+export type MyDeliveryEvents = __Infer<typeof MyDeliveryEvents>;
+
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
@@ -318,6 +335,19 @@ export const Operator = __t.object("Operator", {
   identity: __t.identity(),
 });
 export type Operator = __Infer<typeof Operator>;
+
+// The tagged union or sum type for the algebraic type `OrderStatus`.
+export const OrderStatus = __t.enum("OrderStatus", {
+  Proposed: __t.unit(),
+  Approved: __t.unit(),
+  Replaced: __t.unit(),
+  Placed: __t.unit(),
+  Uncertain: __t.unit(),
+  Failed: __t.unit(),
+  Delivered: __t.unit(),
+  Eaten: __t.unit(),
+});
+export type OrderStatus = __Infer<typeof OrderStatus>;
 
 export const PendingAlertDeliveries = __t.object("PendingAlertDeliveries", {});
 export type PendingAlertDeliveries = __Infer<typeof PendingAlertDeliveries>;

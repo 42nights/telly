@@ -1,12 +1,14 @@
 import { Hono } from "hono";
 import type { ServerConfig } from "../config";
 import type { FamilyEnv, FamilyRoutes } from "../http";
+import { simulatedDelivery } from "../integrations/delivery";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
 import { careRoutes } from "./care";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
+import { deliveryRoutes } from "./delivery";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
 import { reportRoutes } from "./reports";
@@ -38,5 +40,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", deliveryRoutes(simulatedDelivery()));
 };

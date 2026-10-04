@@ -17,6 +17,7 @@ import MarkAlertDeliverySentReducer from "../mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavailable_reducer";
 import OpenCareNeedReducer from "../open_care_need_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
+import RecordDeliveryEventReducer from "../record_delivery_event_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
 import RespondToCareNeedReducer from "../respond_to_care_need_reducer";
@@ -36,6 +37,7 @@ export type MarkAlertDeliverySentParams = __Infer<typeof MarkAlertDeliverySentRe
 export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliveryUnavailableReducer>;
 export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
+export type RecordDeliveryEventParams = __Infer<typeof RecordDeliveryEventReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
 export type RespondToCareNeedParams = __Infer<typeof RespondToCareNeedReducer>;
