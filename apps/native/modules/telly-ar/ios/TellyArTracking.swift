@@ -17,6 +17,8 @@ enum Tracking {
   static let reachDistance: Float = 0.5
   /// A Vision lock below this confidence is lost; the world anchor guides alone until it locks again.
   static let lockConfidence: Float = 0.3
+  /// The spoken guide waits until its words hold this long (#384).
+  static let speechDelay: TimeInterval = 0.8
 
   /// Where to look for an object that is not on the screen.
   enum Look: Equatable {
@@ -44,6 +46,23 @@ enum Tracking {
     case (3 * Float.pi / 4)...: return .down
     default: return angle > 0 ? .right : .left
     }
+  }
+
+  /// The guide card's words for the searched object. `look` is nil when it is on the screen.
+  static func guideWords(look: Look?, distance: Float, reached: Bool) -> (title: String, walk: String) {
+    let title = reached ? "You're there" : look?.words ?? "In view"
+    let meters = String(format: "%.1f", distance)
+    return (title, reached ? "\(meters) m away" : "Walk \(meters) m")
+  }
+
+  /// What the voice says for the same guide state as the card. The distance is rounded to half a
+  /// meter, so walking does not change the words on every step and the voice still speaks.
+  static func spokenGuide(look: Look?, distance: Float, reached: Bool) -> String {
+    let title = guideWords(look: look, distance: distance, reached: reached).title
+    if reached { return "\(title)." }
+    let half = max((distance * 2).rounded() / 2, 0.5)
+    let meters = half == half.rounded() ? String(Int(half)) : String(format: "%.1f", half)
+    return "\(title). Walk about \(meters) meters."
   }
 
   /// A box in camera-image pixels (origin top-left) as Vision's normalized box (origin bottom-left).
@@ -186,5 +205,26 @@ struct Tracker {
 
   mutating func checked(_ ids: [String], at now: TimeInterval) {
     for id in ids { objects[id]?.lastCheck = now }
+  }
+}
+
+/// The screen's one voice (#384). It gets the words of the drawn guide on every frame and speaks
+/// them once they hold for `speechDelay`, so a turn that is still changing is not spoken. The
+/// screen speaks each returned text at once and interrupts older speech.
+struct Voice {
+  private(set) var spoken: String?
+  private var pending: String?
+  private var since: TimeInterval = 0
+
+  /// The text to speak now, or nil.
+  mutating func update(_ text: String?, at now: TimeInterval) -> String? {
+    if text != pending {
+      pending = text
+      since = now
+      return nil
+    }
+    guard let text, text != spoken, now - since >= Tracking.speechDelay else { return nil }
+    spoken = text
+    return text
   }
 }
