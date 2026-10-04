@@ -1,9 +1,10 @@
 import type { FamilyMessage } from "@health/contracts";
 import { Button } from "@health/ui/components/button";
 import { Reply, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { Tip } from "@/components/win95";
+import { useDemoWarning } from "@/lib/demo";
 import { memberLabel } from "@/lib/members";
 
 import { type Ask, evidenceLine, type TimelineItem } from "./logic";
@@ -178,6 +179,7 @@ function Sources({
 }: {
 	answer: Extract<Ask["state"], { kind: "answered" }>["answer"];
 }) {
+	useDemoWarning(answer.evidence, "The answer cites");
 	if (answer.evidence.length === 0 && answer.unavailable.length === 0)
 		return null;
 	return (
@@ -211,6 +213,19 @@ export function ChatLog({
 	onReply: (label: string) => void;
 	onFollowUp: (question: string) => void;
 }) {
+	const log = useRef<HTMLDivElement>(null);
+	const last = items.at(-1);
+	// The user's own new entry: a family message from them, or an ask (asks are always theirs).
+	const ownLast =
+		last?.kind === "ask"
+			? last.ask.id
+			: last?.message.sender === identity
+				? last?.message.id
+				: null;
+	useEffect(() => {
+		// column-reverse puts the newest entry at scrollTop 0; reading older entries is not interrupted by others' messages.
+		if (ownLast != null) log.current?.scrollTo({ top: 0 });
+	}, [ownLast]);
 	const messageItem = (message: FamilyMessage) => {
 		const label = memberLabel(message.sender, identity);
 		const other = identity !== null && message.sender !== identity;
@@ -225,6 +240,7 @@ export function ChatLog({
 	};
 	return (
 		<div
+			ref={log}
 			role="log"
 			aria-label="Messages"
 			className="win95-inset flex h-[340px] flex-col-reverse overflow-y-auto bg-white p-2"
