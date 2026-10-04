@@ -15,6 +15,7 @@
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
 		"./care": "./src/care.ts",
+		"./care-profile": "./src/care-profile.ts",
 		"./exercise": "./src/exercise.ts",
 		"./trends": "./src/trends.ts"
 	},

@@ -43,15 +43,13 @@ const HttpServer = Layer.effectDiscard(
 );
 
 const db = config.auth?.db;
-// ponytail: no family delivery transport exists yet, so every delivery becomes `unavailable`.
-// Pass the family delivery transport here when it lands (issue #11).
+// Delivers alerts to each family's in-app message thread.
 const AlertOutbox = Layer.effectDiscard(
 	Effect.forkScoped(
 		alertOutboxWorker(
 			ENV.ALERT_OPERATOR_TOKEN && db
 				? { ...db, token: ENV.ALERT_OPERATOR_TOKEN }
 				: undefined,
-			undefined,
 		),
 	),
 );
