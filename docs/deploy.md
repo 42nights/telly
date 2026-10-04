@@ -8,7 +8,7 @@ Issue #2. Target (captain decision `telly-cd-target`): the 42nights Cloudflare a
 | Landing page | `https://saintess.tech`, also a custom domain of the Worker `telly`. On `LANDING_HOST` the Worker serves the static files in `deploy/cloudflare/landing/`, including `/privacy` and `/terms` for the Google OAuth consent screen, and sends any other path (an app route) to `https://app.saintess.tech`. |
 | Domain | Zone `saintess.tech` on 42nights (Free plan), registered at get.tech with the zone's Cloudflare nameservers. A zone redirect rule sends `www.saintess.tech` to `https://saintess.tech` (301). The Fetch agents use an Agentverse mailbox and expose no public port, so they have no subdomain. |
 | Database | SpacetimeDB Maincloud, database `telly` (`wss://maincloud.spacetimedb.com`), published by the captain's SpacetimeDB login. |
-| Sign-in | Google (`https://accounts.google.com`), OAuth client `telly-web` in the Google Cloud project `Telly`. Its redirect URIs are `/sign-in` on each web host and `/api/sign-in/callback` on each API host. The consent screen is in Testing mode: only listed test users can sign in. |
+| Sign-in | Google (`https://accounts.google.com`), OAuth client `telly-web` in the Google Cloud project `Telly`. Its redirect URIs are `/sign-in` on each web host and `/api/sign-in/callback` on each API host. The consent screen is in production (External): any Google account can sign in. |
 | Keys | The shared key store (docs/cloudflare-keys.md). The container pulls only the keys in `TELLY_PULL_KEYS` at start. |
 | Reports bucket | R2 bucket `telly-reports` on 42nights, private. Its bucket-only token is `TELLY_R2_*` in the shared key store. |
 
@@ -36,7 +36,7 @@ If the module change needs a data wipe or breaks clients, the publish stops at i
 
 ### Auto-deploy from the operator host
 
-The systemd user timer `telly-autodeploy` checks `origin/main` every 60 s. When main moved, `deploy/cloudflare/autodeploy.sh` runs `release.sh` from its own clone (`~/.local/share/telly-autodeploy/telly`), one run at a time. It does not retry a failed commit. It needs `gh` signed in.
+The systemd user timer `telly-autodeploy` checks `origin/main` every 2 minutes, so its GitHub API calls stay under the account rate limit. When main moved, `deploy/cloudflare/autodeploy.sh` runs `release.sh` from its own clone (`~/.local/share/telly-autodeploy/telly`), one run at a time. It does not retry a failed commit. It needs `gh` signed in.
 
 - It waits while the commit's `health-deploy` run is unfinished. If that run's `deploy` job succeeded, it publishes only the module (`TELLY_RELEASE_PART=module`), so CI and the host never deploy the same Worker twice.
 - After a healthy release it keeps the artifact. If a release fails and `/health` is not 200, it deploys that last healthy artifact again.
