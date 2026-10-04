@@ -321,7 +321,10 @@ describe("usePictureCheck", () => {
 	});
 
 	/** Shows a check of `camera` whose answer arrives once `answer` runs, then ticks motion checks. */
-	const checkOf = async (camera: HTMLVideoElement) => {
+	const checkOf = async (
+		camera: HTMLVideoElement,
+		found = [detection(0.9)],
+	) => {
 		jest.useFakeTimers({ now: NOW });
 		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({ [detectionsPath]: () => reply.promise });
@@ -334,7 +337,7 @@ describe("usePictureCheck", () => {
 		return {
 			result,
 			answer: async () => {
-				reply.resolve(detected([detection(0.9)])(calls[0] as Call));
+				reply.resolve(detected(found)(calls[0] as Call));
 				await act(() => looked);
 				expect(result.current.check?.result.kind).toBe("done");
 			},
@@ -370,6 +373,22 @@ describe("usePictureCheck", () => {
 		expect(result.current.check?.result).toEqual({
 			kind: "cleared",
 			reason: "moved",
+		});
+		camera.remove();
+	});
+
+	test("a check that found nothing keeps its answer when the camera moves or the picture ages (#342)", async () => {
+		const camera = video(64, 48, 10);
+		document.body.append(camera);
+		const { result, answer, checks } = await checkOf(camera, []);
+		await answer();
+		shade.set(camera, 200);
+		checks(4);
+		setSystemTime(NOW + 61_000);
+		checks(4);
+		expect(result.current.check?.result).toEqual({
+			kind: "done",
+			detections: [],
 		});
 		camera.remove();
 	});

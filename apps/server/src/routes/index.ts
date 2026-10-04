@@ -14,6 +14,7 @@ import { chatRoutes } from "./chat";
 import { cookingRoutes } from "./cooking";
 import { cueRoutes } from "./cues";
 import { deliveryRoutes } from "./delivery";
+import { demoRoutes } from "./demo";
 import { emergencyRoutes } from "./emergency";
 import { exerciseRoutes } from "./exercise";
 import { familyRoutes } from "./families";
@@ -83,5 +84,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", deliveryRoutes(simulatedDelivery()))
 		.route("/", healthKitRoutes())
 		.route("/", locationRoutes())
-		.route("/", cookingRoutes());
+		.route("/", cookingRoutes())
+		.route("/", demoRoutes());
 };

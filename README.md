@@ -210,7 +210,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>Photon Spectrum</strong> · family questions over iMessage</summary>
+<summary><strong>Photon Spectrum</strong> · family questions and wearer texts over iMessage</summary>
 
 ```mermaid
 flowchart LR
@@ -223,6 +223,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. Telly marks the message Read and shows typing at once, then answers through the same question flow as the app, including the urgent-help path. A greeting, thanks, or goodbye gets one Gemini call without tools, so it calls no Fetch.ai tool; the tools that one answer calls run in parallel.
+- **Wearer texts ([#308](https://github.com/undeemed/telly/issues/308)):** when a family has exactly one sender address, that address is the wearer's phone. The agent texts it each reminder (medicine, meal, drink, charging) at its time, a missed dose, each alert, and trip and help confirmations: one text per event, after quiet hours. A reply such as "done" or "I ate" records the reminder as done in the wearer's words. "Where are my keys?" gets the last saved place and a finder link (`/find?person=…&member=…&object=…&token=…`). The link opens without sign-in, once, for 15 minutes, and shows only that person's places; then it asks for sign-in. A photo sent by text saves where an item is. The delivery operator (`ALERT_OPERATOR_TOKEN`) sends the texts.
 - **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`. A cron request every 5 minutes keeps the API warm, so a reply does not wait for a cold start ([docs/deploy.md](docs/deploy.md), [#322](https://github.com/undeemed/telly/pull/322)). **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Used at:** iMessage to the Telly Photon line, which posts to `https://api.saintess.tech/api/imessage/webhook`.
 - **Proof:** on production (commit `e6275e3`), the owner sent "What medicines are due today?" at 2026-10-04 11:59:59 UTC, and Telly replied at 12:00:18 UTC through the signed webhook ([#285](https://github.com/undeemed/telly/pull/285), [#267](https://github.com/undeemed/telly/pull/267)).

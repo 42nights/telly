@@ -10,6 +10,7 @@ import {
 	SavedThings,
 	useArSupported,
 } from "@/components/wearer/last-seen";
+import { LinkedFinder } from "@/components/wearer/linked-finder";
 import { categoryOfRequest, itemFromRequest } from "@/components/wearer/logic";
 import { ObjectAnswer } from "@/components/wearer/medicine-answer";
 import { useArrow, usePictureCheck } from "@/components/wearer/medicine-check";
@@ -22,7 +23,8 @@ import {
 } from "@/lib/medicine-memory";
 
 /** The finder's address: `q` is the request, `object` opens one saved thing, `member` chooses whose
- * things, `mode=add` opens Add a thing, and `token` is a signed link token another screen checks. */
+ * things, `mode=add` opens Add a thing, and `token` is a finder link token from a text (#308): the page then
+ * opens without sign-in (`LinkedFinder`). */
 type FindSearch = {
 	q?: string;
 	object?: string;
@@ -48,7 +50,30 @@ export const Route = createFileRoute("/find")({
 });
 
 function FindThingsComponent() {
-	const { q = "", object, member, mode } = Route.useSearch();
+	const { q = "", object, member, mode, token, person } = Route.useSearch();
+	return token === undefined ? (
+		<FindThingsPage member={member} mode={mode} object={object} q={q} />
+	) : (
+		<LinkedFinder
+			add={mode === "add"}
+			link={{ person, member, object }}
+			q={q}
+			token={token}
+		/>
+	);
+}
+
+function FindThingsPage({
+	q,
+	object,
+	member,
+	mode,
+}: {
+	q: string;
+	object: string | undefined;
+	member: string | undefined;
+	mode: "add" | undefined;
+}) {
 	const { state: families, family } = useFamily();
 	const familyId = family?.id ?? null;
 	const camera = useCamera(true);

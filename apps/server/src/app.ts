@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { authenticate, requireFamilyMember } from "./auth";
 import type { ServerConfig } from "./config";
-import { DbUnavailable } from "./db";
+import { type DbConfig, DbUnavailable } from "./db";
 import {
 	ApiFailure,
 	errorStatus,
@@ -13,6 +13,7 @@ import {
 } from "./http";
 import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
 import { accountRoutes } from "./routes/families";
+import { finderLinkRoutes } from "./routes/finder-link";
 import { familyDomainRoutes } from "./routes/index";
 import { signInRoutes } from "./routes/sign-in";
 import { toolRoutes } from "./routes/tools";
@@ -22,6 +23,8 @@ export const createApp = (
 	ingest?: NoopIngest,
 	// Photon Spectrum Cloud webhook (src/imessage/cloud.ts); undefined without the iMessage configuration.
 	imessageWebhook?: (request: Request) => Promise<Response>,
+	// The delivery operator (src/server.ts); undefined: finder links answer `unavailable`.
+	operator?: DbConfig,
 ) => {
 	const noop = noopRoutes(ingest);
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
@@ -63,6 +66,8 @@ export const createApp = (
 		)
 		// Sign-in itself cannot require sign-in.
 		.route("/api/sign-in", signInRoutes(config.auth))
+		// A finder link texted to the wearer is its own credential (#308).
+		.route("/api/finder-link", finderLinkRoutes(operator, config.gemini))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())
