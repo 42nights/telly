@@ -12,7 +12,6 @@ const app = createApp({
 		voiceId: "unused",
 		baseUrl: "http://127.0.0.1:1",
 	},
-	fetchAgent: undefined,
 });
 
 // Excess keys fail decoding, so a reading or nudge added to a source cannot slip through unseen.
