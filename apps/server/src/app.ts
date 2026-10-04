@@ -16,7 +16,12 @@ import { accountRoutes } from "./routes/families";
 import { familyDomainRoutes } from "./routes/index";
 import { signInRoutes } from "./routes/sign-in";
 
-export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
+export const createApp = (
+	config: ServerConfig,
+	ingest?: NoopIngest,
+	// Photon Spectrum Cloud webhook (src/imessage/cloud.ts); undefined without the iMessage configuration.
+	imessageWebhook?: (request: Request) => Promise<Response>,
+) => {
 	const noop = noopRoutes(ingest);
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
@@ -42,6 +47,18 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 			c.json({ sources: [noop.status(Date.now())] } satisfies Sources),
 		)
 		.post("/api/noop/ingest", noop.ingest)
+		// Spectrum signs each delivery; the handler verifies it instead of a sign-in.
+		.post("/api/imessage/webhook", (c) =>
+			imessageWebhook
+				? imessageWebhook(c.req.raw)
+				: c.json(
+						{
+							error: "not_found",
+							message: "iMessage is not configured",
+						} satisfies ApiError,
+						404,
+					),
+		)
 		// Sign-in itself cannot require sign-in.
 		.route("/api/sign-in", signInRoutes(config.auth))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
