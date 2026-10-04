@@ -1,7 +1,9 @@
 // Family and health-data routes. Every write goes through a module reducer that checks membership
-// for the caller's database identity again, so these handlers add no access rule of their own.
+// for the caller's database identity again. Only the family delete checks access here as well, so a
+// refused caller never deletes stored files.
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import {
+	DeleteFamily,
 	type FamilyInvite,
 	type FamilyList,
 	type JoinedFamily,
@@ -14,6 +16,7 @@ import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import { readFamilyRecords } from "../db";
 import {
+	ApiFailure,
 	type AuthEnv,
 	callReducer,
 	decodeBody,
@@ -21,6 +24,9 @@ import {
 	newSecret,
 	sha256Hex,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
+import { requireScope } from "./care-profile";
+import { familyPdfPrefix } from "./reports";
 
 const INVITE_TTL_MS = 7 * 24 * 3_600_000;
 
@@ -77,7 +83,7 @@ export const accountRoutes = () =>
 		});
 
 /** One family's routes, mounted at `/api/families/:familyId` behind the membership check. */
-export const familyRoutes = () =>
+export const familyRoutes = (storage?: R2Bucket) =>
 	new Hono<FamilyEnv>()
 		.get("/", (c) => {
 			const id = c.var.familyId.toString();
@@ -91,6 +97,29 @@ export const familyRoutes = () =>
 					(row) => row.familyId === id,
 				),
 			} satisfies FamilyRecords);
+		})
+		// Checks access and the name before it touches storage, deletes the stored PDFs, then the
+		// records. The module checks both again. A failure after the PDFs leaves the records, so a
+		// retry finishes the job.
+		.delete("/", async (c) => {
+			const { name } = await decodeBody(c, DeleteFamily);
+			const { db, familyId } = c.var;
+			requireScope(c, "family_access");
+			const family = readFamilyRecords(db).families.find(
+				(row) => row.id === familyId.toString(),
+			);
+			if (family?.name !== name)
+				throw new ApiFailure(
+					"invalid_request",
+					"the name does not match this family",
+				);
+			if (storage !== undefined)
+				for (const { key } of await storage.list(familyPdfPrefix(familyId)))
+					await storage.remove(key);
+			await callReducer(db, (connection) =>
+				connection.reducers.deleteFamily({ familyId, name }),
+			);
+			return c.body(null, 204);
 		})
 		.post("/members", async (c) => {
 			const { identity } = await decodeBody(c, NewFamilyMember);
