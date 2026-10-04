@@ -14,8 +14,10 @@ import { ENV } from "@/src/env";
 const ID_KEY = "telly.session.token";
 const REFRESH_KEY = "telly.session.refresh";
 const RENEW_BEFORE_MS = 5 * 60_000;
+// After the first unlock, not only while unlocked: the background location task (#302) sends the
+// position with this session while the phone is locked in a pocket. It never leaves this device.
 const keychain = {
-	keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+	keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
 /** Stores a new session, or deletes it (`null`). */
