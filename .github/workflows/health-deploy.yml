@@ -30,6 +30,7 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'patches/**'
+      - 'spacetimedb/**'
       - 'package.json'
       - 'bun.lock'
       - 'bunfig.toml'
@@ -77,6 +78,8 @@ jobs:
   deploy:
     needs: build
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
+    env:
+      HAS_SPACETIMEDB_TOKEN: ${{ secrets.SPACETIMEDB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -93,6 +96,21 @@ jobs:
           grep ' go-containerregistry_Linux_x86_64.tar.gz$' checksums.txt | sed 's/ .*/  crane.tgz/' | sha256sum -c
           mkdir -p "$RUNNER_TEMP/bin" && tar -xzf crane.tgz -C "$RUNNER_TEMP/bin" crane
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      # The same module publish as deploy/cloudflare/release.sh, before the Worker: never deletes data;
+      # a publish that needs a wipe or breaks clients stops at its prompt (stdin closed) and fails the
+      # job. Runs only with the secret SPACETIMEDB_TOKEN (a login that owns Maincloud `telly`);
+      # without it the operator host's telly-autodeploy publishes the module (docs/deploy.md).
+      - name: Publish the SpacetimeDB module to Maincloud
+        if: env.HAS_SPACETIMEDB_TOKEN == 'true'
+        env:
+          SPACETIMEDB_TOKEN: ${{ secrets.SPACETIMEDB_TOKEN }}
+        run: |
+          curl -sSf https://install.spacetimedb.com | sh -s -- --yes
+          export PATH="$HOME/.local/bin:$PATH"
+          spacetime version install 2.10.2 --use --yes
+          spacetime login --token "$SPACETIMEDB_TOKEN"
+          bun install --frozen-lockfile
+          spacetime publish telly -s maincloud --module-path spacetimedb --yes=remote </dev/null
       - run: sh deploy/cloudflare/deploy.sh health.tar.gz
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.TELLY_DEPLOY_CLOUDFLARE_API_TOKEN }}
