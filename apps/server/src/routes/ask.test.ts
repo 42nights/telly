@@ -14,6 +14,7 @@ import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { askRoutes } from "./ask";
 import { careProfileRoutes } from "./care-profile";
+import { familyRoutes } from "./families";
 import { dbConfig, familyApp, openFamily, send, withDb } from "./test-family";
 
 // Isolated local protocol servers stand in for Gemini, the Fetch.ai bridge, and ElevenLabs. Test
@@ -217,7 +218,7 @@ describe("POST /ask", () => {
 		expect(old.evidence[0]?.stale).toBe(true);
 	});
 
-	test("without Gemini or Fetch.ai, nothing is answered or read", async () => {
+	test("without Gemini, or with neither Fetch.ai nor a database, nothing is answered or read", async () => {
 		for (const configured of [
 			{ gemini: false, fetch: true },
 			{ gemini: true, fetch: false },
@@ -565,3 +566,38 @@ describe.skipIf(dbConfig === undefined)(
 			));
 	},
 );
+
+// Needs the local SpacetimeDB that `bun run db:test` starts.
+describe.skipIf(dbConfig === undefined)("without the Fetch.ai bridge", () => {
+	test("the tools read the asking member's own records, and no bridge call is made", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "In-process");
+				const sourceTime = new Date().toISOString();
+				const recorded = yield* send(
+					familyApp(db, familyId, familyRoutes()),
+					"POST",
+					"/samples",
+					{
+						metric: "sleep_hours",
+						value: 6.5,
+						unit: "h",
+						sourceTime,
+						source: "synthetic-demo",
+						synthetic: true,
+						quality: "unvalidated",
+					},
+				);
+				expect(recorded.status).toBe(201);
+				const deps = { gemini: geminiConfig, fetchAgent: undefined, voice };
+				const app = familyApp(db, familyId, askRoutes(deps));
+				const asked = yield* send(app, "POST", "/ask", { question: "Sleep?" });
+				expect(asked.status).toBe(200);
+				const reply = Schema.decodeUnknownSync(FamilyAnswer)(asked.json);
+				expect(reply.evidence.map((e) => [e.familyId, e.value])).toEqual([
+					[familyId, 6.5],
+				]);
+				expect(bridgeCalls).toEqual([]);
+			}),
+		));
+});
