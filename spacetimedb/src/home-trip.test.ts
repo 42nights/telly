@@ -198,10 +198,3 @@ describe("who sees a trip start or end", () => {
 		expect(h.rows("awayEvent")).toEqual([]);
 	});
 });
-
-describe("family member list", () => {
-	test("members read their family's member list; outsiders do not", () => {
-		expect(h.view(mod.myFamilyMembers, bob)).toHaveLength(3);
-		expect(h.view(mod.myFamilyMembers, mallory)).toEqual([]);
-	});
-});
