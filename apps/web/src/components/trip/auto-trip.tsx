@@ -7,13 +7,7 @@ import {
 	type HomeInput,
 	HomeWatch,
 } from "@health/contracts/location";
-import {
-	createContext,
-	type ReactNode,
-	useContext,
-	useEffect,
-	useState,
-} from "react";
+import { createContext, type ReactNode, useContext, useEffect } from "react";
 
 import {
 	type ApiResult,
@@ -30,14 +24,15 @@ type AutoTrip = {
 	readonly familyId: string | null;
 	readonly home: ApiState<HomeWatch>;
 	readonly reporting: Reporting;
-	/** Saves home settings (`PUT /location/home`) or starts or ends a trip (`POST /location/away`). */
+	/**
+	 * Saves home settings (`PUT /location/home`) or starts or ends a trip (`POST /location/away`).
+	 * The write marks every `/location` read stale, so the screens read again by themselves.
+	 */
 	readonly change: (
 		request:
 			| { readonly path: "/location/home"; readonly body: HomeInput }
 			| { readonly path: "/location/away"; readonly body: AwayInput },
 	) => Promise<ApiResult<HomeWatch>>;
-	/** Reads the settings again, such as after a share changed. */
-	readonly refresh: () => void;
 };
 
 const Context = createContext<AutoTrip | null>(null);
@@ -45,11 +40,10 @@ const Context = createContext<AutoTrip | null>(null);
 export function AutoTripProvider({ children }: { children: ReactNode }) {
 	const { family } = useFamily();
 	const familyId = family?.id ?? null;
-	const [refreshKey, setRefreshKey] = useState(0);
 	const home = useApi(
 		HomeWatch,
 		familyId === null ? null : familyPath(familyId, "/location/home"),
-		{ pollMs: 60_000, refreshKey },
+		{ pollMs: 60_000 },
 	);
 	const active =
 		home.kind === "ready" &&
@@ -68,20 +62,19 @@ export function AutoTripProvider({ children }: { children: ReactNode }) {
 		);
 	}, [known, active, familyId]);
 
-	const refresh = () => setRefreshKey((n) => n + 1);
-	const change: AutoTrip["change"] = async ({ path, body }) => {
-		if (familyId === null)
-			return { kind: "error", message: "No family is set up on this device." };
-		const result = await apiRequest(HomeWatch, familyPath(familyId, path), {
-			method: path === "/location/home" ? "PUT" : "POST",
-			body,
-		});
-		if (result.kind === "ready") refresh();
-		return result;
-	};
+	const change: AutoTrip["change"] = ({ path, body }) =>
+		familyId === null
+			? Promise.resolve({
+					kind: "error",
+					message: "No family is set up on this device.",
+				})
+			: apiRequest(HomeWatch, familyPath(familyId, path), {
+					method: path === "/location/home" ? "PUT" : "POST",
+					body,
+				});
 
 	return (
-		<Context.Provider value={{ familyId, home, reporting, change, refresh }}>
+		<Context.Provider value={{ familyId, home, reporting, change }}>
 			{children}
 		</Context.Provider>
 	);

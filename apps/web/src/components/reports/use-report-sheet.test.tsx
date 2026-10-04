@@ -1,13 +1,6 @@
 import "../test/setup";
 
-import {
-	afterEach,
-	describe,
-	expect,
-	mock,
-	setSystemTime,
-	test,
-} from "bun:test";
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { Report } from "@health/contracts/reports";
 import type { ApiFailure } from "@/lib/api";
 import {
@@ -54,13 +47,9 @@ const report = (over: Partial<Report> = {}): Report => ({
 
 const BASE = "POST /api/families/1/reports/r%2F1";
 
-const sheetOf = (value: Report, createFailure: ApiFailure | null = null) => {
-	const onChanged = mock(() => {});
-	const hook = renderHook(() =>
-		useReportSheet(value, "1", onChanged, createFailure),
-	);
-	return { hook, onChanged };
-};
+const sheetOf = (value: Report, createFailure: ApiFailure | null = null) => ({
+	hook: renderHook(() => useReportSheet(value, "1", createFailure)),
+});
 
 describe("failureText", () => {
 	test("asks a signed-out person to sign in again and shows other messages as sent", () => {
@@ -95,7 +84,7 @@ describe("useReportSheet", () => {
 		const value = report();
 		const initialProps: { failure: ApiFailure | null } = { failure: null };
 		const hook = renderHook(
-			({ failure }) => useReportSheet(value, "1", () => {}, failure),
+			({ failure }) => useReportSheet(value, "1", failure),
 			{ initialProps },
 		);
 		expect(hook.result.current.status).toBe("Draft · not sent");
@@ -145,7 +134,7 @@ describe("useReportSheet", () => {
 	test("save sends the fields with empty boxes as null and stays busy until the reply", async () => {
 		const reply = Promise.withResolvers<ServerReply>();
 		const calls = serve({ [`${BASE}/fields`]: () => reply.promise });
-		const { hook, onChanged } = sheetOf(report());
+		const { hook } = sheetOf(report());
 		act(() =>
 			hook.result.current.setDraft({
 				...hook.result.current.draft,
@@ -173,7 +162,6 @@ describe("useReportSheet", () => {
 			questions: null,
 			corrections: [],
 		});
-		expect(onChanged).toHaveBeenCalledTimes(1);
 		// The report prop is still the old one until the parent reloads it.
 		expect(hook.result.current.status).toBe("Draft · changes not saved");
 		expect(hook.result.current.busy).toBeNull();
@@ -182,9 +170,8 @@ describe("useReportSheet", () => {
 	test("after a save of the saved fields, the status gives the save time", async () => {
 		setSystemTime(new Date("2026-10-03T12:00:00.000Z"));
 		serve({ [`${BASE}/fields`]: { status: 204 } });
-		const { hook, onChanged } = sheetOf(report());
+		const { hook } = sheetOf(report());
 		await act(() => hook.result.current.save());
-		expect(onChanged).toHaveBeenCalledTimes(1);
 		expect(hook.result.current.status).toBe(
 			`Draft · saved ${formatTime(Date.parse("2026-10-03T12:00:00.000Z"))}`,
 		);
@@ -197,9 +184,8 @@ describe("useReportSheet", () => {
 				body: { error: "internal", message: "Database down." },
 			},
 		});
-		const { hook, onChanged } = sheetOf(report());
+		const { hook } = sheetOf(report());
 		await act(() => hook.result.current.save());
-		expect(onChanged).not.toHaveBeenCalled();
 		expect(hook.result.current.status).toBe("Database down.");
 	});
 
@@ -209,26 +195,23 @@ describe("useReportSheet", () => {
 			body: { error: "internal", message: "Database down." },
 		};
 		const calls = serve({ [`${BASE}/review`]: () => reply });
-		const { hook, onChanged } = sheetOf(report());
+		const { hook } = sheetOf(report());
 		await act(() => hook.result.current.review());
 		expect(hook.result.current.status).toBe("Database down.");
-		expect(onChanged).not.toHaveBeenCalled();
 		reply = { status: 204 };
 		await act(() => hook.result.current.review());
-		expect(onChanged).toHaveBeenCalledTimes(1);
 		expect(hook.result.current.status).toBe("Draft · not sent");
 		expect(calls.map((call) => call.body)).toEqual([undefined, undefined]);
 	});
 
 	test("a 401 to review ends the session, so a later review is not sent", async () => {
 		const calls = serve({ [`${BASE}/review`]: { status: 401 } });
-		const { hook, onChanged } = sheetOf(report());
+		const { hook } = sheetOf(report());
 		await act(() => hook.result.current.review());
 		expect(hook.result.current.status).toBe("Sign in again.");
 		await act(() => hook.result.current.review());
 		expect(hook.result.current.status).toBe("Sign in again.");
 		expect(calls).toHaveLength(1);
-		expect(onChanged).not.toHaveBeenCalled();
 	});
 
 	test("a success reply to submit is still not a delivery receipt", async () => {

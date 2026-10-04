@@ -51,19 +51,9 @@ const appointment = (over: Partial<Appointment> = {}): Appointment => ({
 	...over,
 });
 
-const show = (value: Appointment) => {
-	let changes = 0;
-	const view = render(
-		<VisitCard
-			appointment={value}
-			familyId="f1"
-			onChanged={() => {
-				changes += 1;
-			}}
-		/>,
-	);
-	return { view, changes: () => changes };
-};
+const show = (value: Appointment) => ({
+	view: render(<VisitCard appointment={value} familyId="f1" />),
+});
 
 /** The term → value pairs of the visit's facts list. */
 const facts = (view: RenderResult) =>
@@ -196,7 +186,7 @@ test("a request needs explicit agreement, says nothing is sent, and closes once 
 				finish = resolve;
 			}),
 	});
-	const { view, changes } = show(appointment());
+	const { view } = show(appointment());
 	fireEvent.click(view.getByRole("button", { name: "Request this visit…" }));
 	const panel = within(view.getByRole("group", { name: "Request this visit" }));
 	expect(panel.getByText(/nothing is sent to the provider/)).toBeDefined();
@@ -228,7 +218,6 @@ test("a request needs explicit agreement, says nothing is sent, and closes once 
 			throw new Error("request panel still open");
 	});
 	expect(view.queryByRole("status")).toBeNull();
-	expect(changes()).toBe(1);
 });
 
 test("the request names the clinician when one is recorded, and Close discards it", () => {
@@ -261,7 +250,7 @@ test("a provider confirmation needs a reference; a refusal stays visible and kee
 			json: { error: "conflict", message: "Visit is not requested." },
 		},
 	});
-	const { view, changes } = show(
+	const { view } = show(
 		appointment({
 			status: "requested",
 			request: { by: ME, at: "2026-09-02T08:00:00.000Z" },
@@ -300,13 +289,12 @@ test("a provider confirmation needs a reference; a refusal stays visible and kee
 	expect(
 		view.getByRole("group", { name: "Provider confirmation" }),
 	).toBeDefined();
-	expect(changes()).toBe(0);
 });
 
 test("preparation edits start from the recorded prep and save it whole", async () => {
 	signIn();
 	const calls = serve({ ...SHARES, [`PUT ${BASE}/prep`]: { status: 204 } });
-	const { view, changes } = show(
+	const { view } = show(
 		appointment({
 			prep: {
 				transportation: "Bus 12",
@@ -352,18 +340,18 @@ test("preparation edits start from the recorded prep and save it whole", async (
 			questions: ["Dose time?"],
 		},
 	});
-	expect(changes()).toBe(1);
 });
 
-test("Cancel visit posts the cancellation and asks the screen to reload", async () => {
+test("Cancel visit posts the cancellation", async () => {
 	signIn();
 	const calls = serve({ ...SHARES, [`POST ${BASE}/cancel`]: { status: 204 } });
-	const { view, changes } = show(appointment());
+	const { view } = show(appointment());
 	fireEvent.click(view.getByRole("button", { name: "Cancel visit" }));
-	await waitFor(() => expect(changes()).toBe(1));
-	expect(
-		calls.some(
-			(call) => call.method === "POST" && call.path === `${BASE}/cancel`,
-		),
-	).toBe(true);
+	await waitFor(() =>
+		expect(
+			calls.some(
+				(call) => call.method === "POST" && call.path === `${BASE}/cancel`,
+			),
+		).toBe(true),
+	);
 });

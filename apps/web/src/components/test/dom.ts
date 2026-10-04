@@ -35,11 +35,19 @@ export type Routes = Record<
 
 /** Call at the top of a component test file. */
 export function installDom() {
-	beforeAll(registerDom);
-	afterEach(() => {
+	beforeAll(async () => {
+		registerDom();
+		// Dynamic for the same reason as React DOM: the query library checks for `window` on load.
+		const { prepareQueryCache } = await import("@/lib/test/query");
+		prepareQueryCache();
+	});
+	afterEach(async () => {
 		cleanup();
 		setSessionToken(null);
 		localStorage.clear();
+		// Public reads (server status) outlive a sign-out; each test starts with an empty cache.
+		const { queryClient } = await import("@/lib/query");
+		queryClient.clear();
 	});
 	afterAll(async () => {
 		// React's scheduler runs work queued by the last test (such as effects after an update) on

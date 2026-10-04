@@ -12,11 +12,12 @@ import {
 	useApi,
 } from "@/lib/api";
 import { memberLabel } from "@/lib/members";
+import { freshRead } from "@/lib/query";
 import { useView } from "@/lib/view";
 
 const KEY = "telly.medicine-person";
 
-/** Changes the memory with one request; a `ready` reply also re-reads it. */
+/** Changes the memory with one request; a `ready` reply marks the read stale, so it reads again. */
 export type MedicineMemoryChange = (
 	method: "PUT" | "POST",
 	path: string,
@@ -24,30 +25,26 @@ export type MedicineMemoryChange = (
 ) => Promise<ApiResult<MedicineMemory>>;
 
 /**
- * Reads `GET /medicine-memory` for one member of the family and re-reads it after each change.
+ * Reads `GET /medicine-memory` for one member of the family; each kept change makes it read again.
  * `person` null is the signed-in member.
  */
 export function useMedicineMemory(
 	familyId: string | null,
 	person: string | null = null,
 ) {
-	const [refreshKey, setRefreshKey] = useState(0);
 	const query = person === null ? "" : `?person=${person}`;
 	const memory = useApi(
 		MedicineMemory,
 		familyId === null ? null : familyPath(familyId, `/medicine-memory${query}`),
-		{ refreshKey },
 	);
 	const change: MedicineMemoryChange = async (method, path, body) => {
 		if (familyId === null)
 			return { kind: "error", message: "No person is paired yet." };
-		const result = await apiRequest(
+		return apiRequest(
 			MedicineMemory,
 			familyPath(familyId, `/medicine-memory${path}${query}`),
 			{ method, body },
 		);
-		if (result.kind === "ready") setRefreshKey((key) => key + 1);
-		return result;
 	};
 	return { memory, change };
 }
@@ -70,6 +67,8 @@ export function useChosenMedicineMemory(familyId: string | null) {
 		reread((n) => n + 1);
 	}, [lost, key]);
 	const choose = (next: string) => {
+		// Another member's medicines show only once read now, never from an earlier visit.
+		if (familyId !== null) freshRead(familyPath(familyId, "/medicine-memory"));
 		localStorage.setItem(key, next);
 		reread((n) => n + 1);
 	};

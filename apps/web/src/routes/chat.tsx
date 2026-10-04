@@ -18,9 +18,12 @@ import { useChat } from "@/components/chat/use-chat";
 import { Window } from "@/components/hud/window";
 import { ApiNotice, SUPPORT_MAILTO, Tip } from "@/components/win95";
 import { type ApiFailure, useApi } from "@/lib/api";
-import { useFamily } from "@/lib/family";
+import { loadFamilyReads, useFamily } from "@/lib/family";
 
-export const Route = createFileRoute("/chat")({ component: ChatRoute });
+export const Route = createFileRoute("/chat")({
+	loader: loadFamilyReads(() => [[Me, "/api/me"]]),
+	component: ChatRoute,
+});
 
 function ChatRoute() {
 	const { state, family } = useFamily();

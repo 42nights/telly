@@ -46,7 +46,7 @@ const shareWithFamily = async (familyId: string) => {
 };
 
 export function ThisIsHome({ className }: { className: string }) {
-	const { familyId, home, change, refresh } = useAutoTrip();
+	const { familyId, home, change } = useAutoTrip();
 	const first =
 		home.kind === "ready" && home.value.home === null && !home.value.sharing;
 	const [step, setStep] = useState<Step>({ kind: "idle" });
@@ -89,10 +89,8 @@ export function ThisIsHome({ className }: { className: string }) {
 				autoTrip: true,
 			},
 		});
-		if (result.kind === "ready" && first && familyId !== null) {
+		if (result.kind === "ready" && first && familyId !== null)
 			await shareWithFamily(familyId);
-			refresh();
-		}
 		setStep(
 			result.kind === "ready"
 				? { kind: "idle" }

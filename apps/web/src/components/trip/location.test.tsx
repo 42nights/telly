@@ -1,6 +1,6 @@
 import "../test/setup";
 
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type {
 	FamilyLocations,
 	LocationShare,
@@ -141,13 +141,11 @@ describe("WhoSeesMe", () => {
 			"GET /api/families/1/care-access": access,
 			[`DELETE ${sharesPath(sister)}`]: ok,
 		});
-		const onChange = mock(() => {});
 		const view = render(
 			<WhoSeesMe
 				familyId="1"
 				locations={locations([share(sister), share(brother)])}
 				me={me}
-				onChange={onChange}
 			/>,
 		);
 		await waitFor(() =>
@@ -171,7 +169,6 @@ describe("WhoSeesMe", () => {
 		expect(calls.map((c) => `${c.method} ${c.path}`)).toContain(
 			`DELETE ${sharesPath(sister)}`,
 		);
-		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
 	test("a refused change shows why and changes nothing", async () => {
@@ -183,21 +180,14 @@ describe("WhoSeesMe", () => {
 				body: { error: "forbidden", message: "Not a member." },
 			},
 		});
-		const onChange = mock(() => {});
 		const view = render(
-			<WhoSeesMe
-				familyId="1"
-				locations={locations([])}
-				me={me}
-				onChange={onChange}
-			/>,
+			<WhoSeesMe familyId="1" locations={locations([])} me={me} />,
 		);
 		const [rosa] = await view.findAllByRole("checkbox");
 		await act(async () => rosa?.click());
-		expect(view.getByRole("alert").textContent).toBe(
+		expect((await view.findByRole("alert")).textContent).toBe(
 			"Not changed: Not a member.",
 		);
-		expect(onChange).not.toHaveBeenCalled();
 	});
 });
 
@@ -330,7 +320,7 @@ describe("FamilyLocationSection", () => {
 				body: { error: "unavailable", message: "Location is off." },
 			}),
 		);
-		const alert = view.getByRole("alert");
+		const alert = await view.findByRole("alert");
 		expect(alert.textContent).toContain("Location unavailable");
 		expect(alert.textContent).toContain("Location is off.");
 		expect(view.queryByRole("article")).toBeNull();

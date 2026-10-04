@@ -2,8 +2,9 @@
 // notices a trip from the phone's location (`AutoTripProvider`); this screen shows it, offers "Help
 // me get home" and a call, keeps "I'm going out" as an optional button, and lists who sees where
 // the wearer is.
-import { Me } from "@health/contracts/families";
-import { FamilyLocations, type HomeWatch } from "@health/contracts/location";
+import { CareAccess } from "@health/contracts/care-profile";
+import { FamilyMembers, Me } from "@health/contracts/families";
+import { FamilyLocations, HomeWatch } from "@health/contracts/location";
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import { Footprints } from "lucide-react";
@@ -19,19 +20,27 @@ import type { Reporting } from "@/components/trip/use-trip";
 import { useNow } from "@/components/wearer/use-now";
 import { ApiNotice } from "@/components/win95";
 import { familyPath, useApi } from "@/lib/api";
+import { loadFamilyReads } from "@/lib/family";
 
-export const Route = createFileRoute("/trip")({ component: TripScreen });
+export const Route = createFileRoute("/trip")({
+	loader: loadFamilyReads((familyId) => [
+		[Me, "/api/me"],
+		[HomeWatch, familyPath(familyId, "/location/home")],
+		[FamilyLocations, familyPath(familyId, "/location")],
+		[FamilyMembers, familyPath(familyId, "/members")],
+		[CareAccess, familyPath(familyId, "/care-access")],
+	]),
+	component: TripScreen,
+});
 const big = "h-14 text-[18px]";
 
 function TripScreen() {
-	const { familyId, home, reporting, refresh } = useAutoTrip();
-	const [shareChange, setShareChange] = useState(0);
-	// Shares also change from "This is home" (the first one shares with the family).
-	const sharing = home.kind === "ready" && home.value.sharing;
+	const { familyId, home, reporting } = useAutoTrip();
+	// A share change, here or from the first "This is home", marks this read stale (`apiRequest`).
 	const locations = useApi(
 		FamilyLocations,
 		familyId === null ? null : familyPath(familyId, "/location"),
-		{ pollMs: 30_000, refreshKey: `${shareChange}-${sharing}` },
+		{ pollMs: 30_000 },
 	);
 	const me = useApi(Me, "/api/me");
 
@@ -66,10 +75,6 @@ function TripScreen() {
 							familyId={familyId}
 							me={me.value.identity}
 							locations={locations.value}
-							onChange={() => {
-								setShareChange((n) => n + 1);
-								refresh();
-							}}
 						/>
 					)}
 				</div>

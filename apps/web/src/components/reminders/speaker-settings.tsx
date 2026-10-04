@@ -35,12 +35,10 @@ const MODE_TEXT: Record<SimulatedSpeakerMode, string> = {
 
 export function SpeakerSettingsWindow() {
 	const { family } = useFamily();
-	const [refreshKey, setRefreshKey] = useState(0);
 	const path = family === null ? null : familyPath(family.id);
 	const saved = useApi(
 		SavedSpeakerSettings,
 		path === null ? null : `${path}/speaker-settings`,
-		{ refreshKey },
 	);
 	return (
 		<Window
@@ -59,7 +57,6 @@ export function SpeakerSettingsWindow() {
 						path={path}
 						saved={saved.value.settings}
 						savedAt={saved.value.updatedAt}
-						onSaved={() => setRefreshKey((k) => k + 1)}
 					/>
 					<SimulatorGroup path={path} />
 				</div>
@@ -72,12 +69,10 @@ function SpeakerForm({
 	path,
 	saved,
 	savedAt,
-	onSaved,
 }: {
 	path: string;
 	saved: SpeakerSettings;
 	savedAt: string | null;
-	onSaved: () => void;
 }) {
 	const [draft, setDraft] = useState(saved);
 	const [status, setStatus] = useState<string | null>(null);
@@ -90,8 +85,7 @@ function SpeakerForm({
 			`${path}/speaker-settings`,
 			{ method: "PUT", body: draft },
 		);
-		if (result.kind === "ready") onSaved();
-		else
+		if (result.kind !== "ready")
 			setStatus(
 				result.kind === "signed_out"
 					? "Sign in to save."
@@ -178,10 +172,8 @@ function SpeakerForm({
 
 /** The simulator's state and what it said, newest first. */
 function SimulatorGroup({ path }: { path: string }) {
-	const [refreshKey, setRefreshKey] = useState(0);
 	const speaker = useApi(SpeakerStatus, `${path}/speaker`, {
 		pollMs: 15_000,
-		refreshKey,
 	});
 	const [error, setError] = useState<string | null>(null);
 	const setMode = async (mode: SimulatedSpeakerMode) => {
@@ -198,7 +190,6 @@ function SimulatorGroup({ path }: { path: string }) {
 				? null
 				: result.message,
 		);
-		setRefreshKey((k) => k + 1);
 	};
 	return (
 		<fieldset className="grid gap-2 border border-border p-2">

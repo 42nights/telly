@@ -71,12 +71,10 @@ export function WhoSeesMe({
 	familyId,
 	me,
 	locations,
-	onChange,
 }: {
 	familyId: string;
 	me: string;
 	locations: FamilyLocations;
-	onChange: () => void;
 }) {
 	const { state, members, nameOf } = useMemberNames(familyId);
 	const access = useApi(CareAccess, familyPath(familyId, "/care-access"));
@@ -96,8 +94,7 @@ export function WhoSeesMe({
 			{ method: on ? "PUT" : "DELETE" },
 		);
 		setBusy(false);
-		if (result.kind === "ready") onChange();
-		else
+		if (result.kind !== "ready")
 			setError(
 				result.kind === "signed_out"
 					? "Not changed: sign in again."

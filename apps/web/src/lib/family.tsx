@@ -4,18 +4,22 @@
 // remembered on this device as the default. A new person gets their own family through onboarding.
 import type { Family } from "@health/contracts";
 import { FamilyList } from "@health/contracts/families";
+import type { QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import type { Schema } from "effect";
 import {
 	createContext,
 	type ReactNode,
 	useContext,
 	useEffect,
+	useRef,
 	useState,
 } from "react";
 
 import { Tip } from "@/components/win95";
 
-import { type ApiState, useApi } from "./api";
+import { type ApiState, apiQuery, familyPath, useApi } from "./api";
+import { freshRead } from "./query";
 
 const KEY = "telly.family";
 
@@ -52,8 +56,6 @@ type FamilyContext = {
 	/** The selected family, or null while loading, on failure, or when the caller has none. */
 	readonly family: Family | null;
 	readonly select: (familyId: string) => void;
-	/** Reads the list again; it shows loading until the new reply, so a new family is never missing. */
-	readonly reload: () => void;
 };
 
 const Context = createContext<FamilyContext | null>(null);
@@ -72,10 +74,9 @@ export function FamilyProvider({
 	/** Without it (tests outside a router), the pick lives in this provider only. */
 	person?: PersonPick;
 }) {
-	const [reloadAt, setReloadAt] = useState(0);
-	const read = useApi(FamilyList, "/api/families", { refreshKey: reloadAt });
-	const state: ApiState<FamilyList> =
-		read.kind === "ready" && read.at <= reloadAt ? { kind: "loading" } : read;
+	// A new family or a joined one resets this list (`invalidateAfterWrite`): it shows loading until
+	// the new reply, so a new family is never missing.
+	const state = useApi(FamilyList, "/api/families");
 	const [remembered, setRemembered] = useState<string | null>(null);
 	const [localPick, setLocalPick] = useState<string | null>(null);
 	useEffect(() => setRemembered(localStorage.getItem(KEY)), []);
@@ -84,18 +85,64 @@ export function FamilyProvider({
 		state.kind === "ready"
 			? chooseFamily(state.value.families, picked, remembered)
 			: null;
+	// A switch to another person drops that person's cached replies before the screens render, so
+	// they show loading until the person's current data arrives, never data from an earlier visit.
+	// It runs during render, not in an effect: an effect would paint the old data first.
+	const shown = useRef<string | null>(null);
+	if (family !== null && family.id !== shown.current) {
+		if (shown.current !== null) freshRead(familyPath(family.id));
+		shown.current = family.id;
+	}
 	const select = (familyId: string) => {
 		localStorage.setItem(KEY, familyId);
 		setRemembered(familyId);
 		(person?.pick ?? setLocalPick)(familyId);
 	};
-	const reload = () => setReloadAt(Date.now());
 	return (
-		<Context.Provider value={{ state, family, select, reload }}>
+		<Context.Provider value={{ state, family, select }}>
 			{children}
 		</Context.Provider>
 	);
 }
+
+/** One read of a screen: its contract and its path. */
+type Read = readonly [schema: Schema.Decoder<unknown>, path: string];
+
+const warm = async (
+	queryClient: QueryClient,
+	picked: string | null,
+	reads: (familyId: string) => readonly Read[],
+) => {
+	const list = await queryClient.ensureQueryData(
+		apiQuery(FamilyList, "/api/families"),
+	);
+	const family = chooseFamily(list.families, picked, localStorage.getItem(KEY));
+	if (family === null) return;
+	await Promise.all(
+		reads(family.id).map(([schema, path]) =>
+			queryClient.ensureQueryData(apiQuery(schema, path)),
+		),
+	);
+};
+
+/**
+ * A route loader that starts a screen's `reads` for the person the screen will show (`?person=`, or
+ * the default). The router preloads on intent, so a hover or tap on a menu item starts the reads
+ * before the screen opens. The loader does not wait for them: the screen opens at once, with cached
+ * data or its loading state, and it shows any failure itself.
+ */
+export const loadFamilyReads =
+	(reads: (familyId: string) => readonly Read[]) =>
+	({
+		context,
+		location,
+	}: {
+		context: { queryClient: QueryClient };
+		location: { search: { person?: string | undefined } };
+	}) => {
+		const picked = location.search.person ?? null;
+		warm(context.queryClient, picked, reads).catch(() => {});
+	};
 
 export function useFamily(): FamilyContext {
 	const context = useContext(Context);

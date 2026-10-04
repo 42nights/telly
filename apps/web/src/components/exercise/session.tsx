@@ -412,10 +412,8 @@ export function ExerciseInvite({
 	familyId: string;
 	now: number;
 }) {
-	const [refresh, setRefresh] = useState(0);
 	const records = useApi(ExerciseRecords, familyPath(familyId, "/exercise"), {
 		pollMs: 60_000,
-		refreshKey: refresh,
 	});
 	const [active, setActive] = useState<ExercisePlan | null>(null);
 	const [answered, setAnswered] = useState<readonly string[]>([]);
@@ -443,7 +441,6 @@ export function ExerciseInvite({
 			onClose={() => {
 				setAnswered((ids) => [...ids, plan.id]);
 				setActive(null);
-				setRefresh((n) => n + 1);
 			}}
 		/>
 	);
