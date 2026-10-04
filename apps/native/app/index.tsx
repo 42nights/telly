@@ -57,7 +57,13 @@ export default function WebApp() {
 
 	useFocusEffect(
 		useCallback(() => {
-			void readSession().then(setSession);
+			// An unreadable Keychain shows the sign-in page, not a blank screen.
+			void readSession()
+				.catch((error: unknown) => {
+					console.warn("Could not read the session", error);
+					return null;
+				})
+				.then(setSession);
 		}, []),
 	);
 
