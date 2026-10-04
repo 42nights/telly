@@ -12,7 +12,10 @@ import {
 	ATTACHMENT_ACCEPT,
 	type Attached,
 	attachFiles,
+	type ChatTarget,
 	failureText,
+	sendsToFamily,
+	setFamilyOnly,
 	toAttachment,
 } from "./logic";
 import { FileTray, X_BUTTON } from "./tray";
@@ -40,7 +43,7 @@ async function dictate(
 	return null;
 }
 
-/** "Reply to <member> · family only" with a × that returns the composer to the family agent. */
+/** "Reply to <member>" with a × that ends the reply. The mode line above says it is family only. */
 function ReplyLine({
 	label,
 	onCancel,
@@ -50,9 +53,7 @@ function ReplyLine({
 }) {
 	return (
 		<p className="flex min-h-11 items-center gap-1 pl-2 font-bold text-[13px]">
-			<span className="min-w-0 break-words">
-				Reply to {label} · family only
-			</span>
+			<span className="min-w-0 break-words">Reply to {label}</span>
 			<Tip text={FILES_TIP} align="end" />
 			<span className="grow" />
 			<button
@@ -68,17 +69,44 @@ function ReplyLine({
 	);
 }
 
+/** The "Family only" toggle and where Send goes now, so the mode is never ambiguous. */
+function ModeLine({
+	toFamily,
+	onToggle,
+}: {
+	toFamily: boolean;
+	onToggle: (on: boolean) => void;
+}) {
+	return (
+		<div className="flex min-h-11 flex-wrap items-center gap-x-3 pl-2 text-[13px]">
+			<label className="flex min-h-11 items-center gap-2 font-bold">
+				<input
+					type="checkbox"
+					checked={toFamily}
+					aria-describedby="chat-mode"
+					onChange={(event) => onToggle(event.currentTarget.checked)}
+				/>
+				Family only
+			</label>
+			<span id="chat-mode" className="min-w-0">
+				{toFamily ? "To: family, not Gemini" : "To: family agent · Gemini"}
+			</span>
+		</div>
+	);
+}
+
 /**
- * One recessed box: the message text, the attachment tray, and exactly three buttons (attach,
- * voice, send). Without a reply target, Send asks the family agent with the attached files. With
- * one, Send writes to the family and the mic fills the message box. The draft clears once sent.
+ * One recessed box: the "Family only" toggle, the message text, the attachment tray, and exactly
+ * three buttons (attach, voice, send). With the toggle off, Send asks the family agent with the
+ * attached files. With it on (or while replying), Send writes only to the family thread and the mic
+ * fills the message box, so nothing reaches Gemini. The draft clears once sent.
  */
 export function Composer({
 	draft,
 	setDraft,
 	input,
-	replyTo,
-	onCancelReply,
+	target,
+	onTarget,
 	placeholder,
 	offline,
 	agent,
@@ -87,9 +115,9 @@ export function Composer({
 	draft: string;
 	setDraft: (update: (current: string) => string) => void;
 	input: RefObject<HTMLTextAreaElement | null>;
-	/** The member label of the family message being answered, or null to ask the family agent. */
-	replyTo: string | null;
-	onCancelReply: () => void;
+	/** The "Family only" toggle and the family message being answered, if any. */
+	target: ChatTarget;
+	onTarget: (update: (current: ChatTarget) => ChatTarget) => void;
 	placeholder: string;
 	/** The server is down: Send is disabled so the outage banner holds the one primary action. */
 	offline: boolean;
@@ -112,7 +140,8 @@ export function Composer({
 	const [files, setFiles] = useState<Attached[]>([]);
 	const [status, setStatus] = useState<string | null>(null);
 	const picker = useRef<HTMLInputElement>(null);
-	const toFamily = replyTo !== null;
+	const toFamily = sendsToFamily(target);
+	const endReply = () => onTarget((current) => ({ ...current, replyTo: null }));
 
 	const addFiles = (picked: FileList | null) => {
 		const next = attachFiles(files, picked ?? []);
@@ -149,7 +178,7 @@ export function Composer({
 			setStatus(
 				"Saved on this device. It will be sent once, when the connection returns.",
 			);
-		onCancelReply();
+		endReply();
 		return true;
 	};
 
@@ -176,7 +205,7 @@ export function Composer({
 				void submit();
 			}}
 			onKeyDown={(event) => {
-				if (event.key === "Escape" && toFamily) onCancelReply();
+				if (event.key === "Escape" && target.replyTo !== null) endReply();
 			}}
 		>
 			<FileTray
@@ -196,8 +225,12 @@ export function Composer({
 					event.currentTarget.value = "";
 				}}
 			/>
-			{replyTo !== null && (
-				<ReplyLine label={replyTo} onCancel={onCancelReply} />
+			<ModeLine
+				toFamily={toFamily}
+				onToggle={(on) => onTarget((current) => setFamilyOnly(current, on))}
+			/>
+			{target.replyTo !== null && (
+				<ReplyLine label={target.replyTo} onCancel={endReply} />
 			)}
 			<label htmlFor="chat-message" className="sr-only">
 				Message
@@ -235,7 +268,7 @@ export function Composer({
 	);
 }
 
-/** Exactly three buttons: attach (off for a family reply), voice, and send. */
+/** Exactly three buttons: attach (off when Send goes to the family), voice, and send. */
 function ComposerBar({
 	toFamily,
 	disabled,
