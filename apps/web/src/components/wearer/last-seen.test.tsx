@@ -33,12 +33,15 @@ const now = Date.now();
 const minutesAgo = (minutes: number) =>
 	new Date(now - minutes * 60_000).toISOString();
 
+const ME = "a".repeat(64);
+
 const sighting = (
 	id: string,
 	extra: Partial<MedicineSighting> = {},
 ): MedicineSighting => ({
 	id,
 	familyId: "1",
+	personId: ME,
 	savedBy: "a",
 	container: "Lisinopril bottle",
 	place: "Kitchen counter",
@@ -56,9 +59,11 @@ const permission = {
 	setAt: minutesAgo(600),
 };
 
-const ready = (value: MedicineMemory): ApiState<MedicineMemory> => ({
+const ready = (
+	value: Omit<MedicineMemory, "personId" | "people">,
+): ApiState<MedicineMemory> => ({
 	kind: "ready",
-	value,
+	value: { personId: ME, people: [ME], ...value },
 	at: now,
 });
 
@@ -79,7 +84,12 @@ const changes = () => {
 	};
 };
 
-const memory: MedicineMemory = { permission, sightings: [sighting("s1")] };
+const memory: MedicineMemory = {
+	personId: ME,
+	people: [ME],
+	permission,
+	sightings: [sighting("s1")],
+};
 
 describe("LastSeen", () => {
 	test("shows nothing while loading or with no paired person", () => {

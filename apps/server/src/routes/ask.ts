@@ -13,6 +13,7 @@ import { Cause, Effect, Exit, Schema } from "effect";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { FamilyDb } from "../db";
+import { delegate } from "../delegation";
 import { familyTools } from "../family-tools";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import { maxAudioBytes, type Voice } from "../integrations/elevenlabs";
@@ -190,22 +191,38 @@ export const familyAnswer =
 				"unavailable",
 				"Fetch.ai tool routing is not configured",
 			);
-		const family = familyTools(source, familyId, now, question.timeZone);
-		const rules =
-			question.asker === "wearer"
-				? [family.rules, wearerRules, ...facts()].join("\n")
-				: family.rules;
-		return askGemini(gemini, question, { ...family, rules }).pipe(
-			Effect.map(
-				({ text, model, followUps }): FamilyAnswer => ({
-					answer: text,
-					...family.cited(),
-					model,
-					answeredAt: now.toISOString(),
-					followUps,
-					urgent: false,
-				}),
-			),
+		const answer = (delegation?: string) => {
+			const family = familyTools(
+				source,
+				familyId,
+				now,
+				question.timeZone,
+				delegation,
+			);
+			const rules =
+				question.asker === "wearer"
+					? [family.rules, wearerRules, ...facts()].join("\n")
+					: family.rules;
+			return askGemini(gemini, question, { ...family, rules }).pipe(
+				Effect.map(
+					({ text, model, followUps }): FamilyAnswer => ({
+						answer: text,
+						...family.cited(),
+						model,
+						answeredAt: now.toISOString(),
+						followUps,
+						urgent: false,
+					}),
+				),
+			);
+		};
+		// Through Fetch.ai, the worker reads through the asker's connection for this family while the
+		// question runs (`delegation.ts`), so it needs no standing access to any family.
+		if (fetchAgent === undefined || db === undefined) return answer();
+		return Effect.acquireUseRelease(
+			Effect.sync(() => delegate(db, familyId)),
+			({ token }) => answer(token),
+			({ release }) => Effect.sync(release),
 		);
 	};
 

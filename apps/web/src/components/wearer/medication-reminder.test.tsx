@@ -88,6 +88,7 @@ const event = (
 const sighting: MedicineSighting = {
 	id: "9",
 	familyId: "1",
+	personId: me,
 	container: "SYNTHETIC A 10 mg tablets",
 	place: "Kitchen counter",
 	seenAt: minutesAgo(5),
@@ -161,7 +162,12 @@ const server = (history: () => ReminderOccurrence[], routes: Routes = {}) =>
 			},
 		},
 		[`GET ${BASE}/medicine-memory`]: {
-			json: { permission: null, sightings: [sighting] },
+			json: {
+				personId: me,
+				people: [me],
+				permission: null,
+				sightings: [sighting],
+			},
 		},
 		...routes,
 	});

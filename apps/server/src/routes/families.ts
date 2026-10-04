@@ -27,6 +27,7 @@ import {
 } from "../http";
 import type { R2Bucket } from "../integrations/r2";
 import { requireScope } from "./care-profile";
+import { deleteFamilyArPins } from "./medicine-ar-pin";
 import { familyPdfPrefix } from "./reports";
 
 const INVITE_TTL_MS = 7 * 24 * 3_600_000;
@@ -107,9 +108,9 @@ export const familyRoutes = (storage?: R2Bucket) =>
 				),
 			} satisfies FamilyRecords);
 		})
-		// Checks access and the name before it touches storage, deletes the stored PDFs, then the
-		// records. The module checks both again. A failure after the PDFs leaves the records, so a
-		// retry finishes the job.
+		// Checks access and the name before it touches storage, deletes the stored PDFs and AR world
+		// maps, then the records. The module checks both again. A failure after the files leaves the
+		// records, so a retry finishes the job.
 		.delete("/", async (c) => {
 			const { name } = await decodeBody(c, DeleteFamily);
 			const { db, familyId } = c.var;
@@ -125,6 +126,7 @@ export const familyRoutes = (storage?: R2Bucket) =>
 			if (storage !== undefined)
 				for (const { key } of await storage.list(familyPdfPrefix(familyId)))
 					await storage.remove(key);
+			await deleteFamilyArPins(storage, familyId);
 			await callReducer(db, (connection) =>
 				connection.reducers.deleteFamily({ familyId, name }),
 			);

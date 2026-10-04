@@ -182,18 +182,25 @@ export const authenticate = (
 	};
 };
 
-/** Requires that the caller's database identity is a member of the path's `familyId`. */
-export const requireFamilyMember: MiddlewareHandler<FamilyEnv> = async (
-	c,
-	next,
-) => {
-	const raw = c.req.param("familyId") ?? "";
-	const familyId = /^(0|[1-9][0-9]{0,19})$/.test(raw) ? BigInt(raw) : undefined;
+/** The path's `familyId` as a database id (u64); anything else is `invalid_request`. */
+export const familyIdParam = (raw: string | undefined): bigint => {
+	const familyId = /^(0|[1-9][0-9]{0,19})$/.test(raw ?? "")
+		? BigInt(raw ?? "")
+		: undefined;
 	if (familyId === undefined || familyId >= 2n ** 64n)
 		throw new ApiFailure(
 			"invalid_request",
 			"The family id must be a database id",
 		);
+	return familyId;
+};
+
+/** Requires that the caller's database identity is a member of the path's `familyId`. */
+export const requireFamilyMember: MiddlewareHandler<FamilyEnv> = async (
+	c,
+	next,
+) => {
+	const familyId = familyIdParam(c.req.param("familyId"));
 	// `my_families` holds only the families the database identity belongs to.
 	const member = c.var.db.connection.db.myFamilies
 		.iter()

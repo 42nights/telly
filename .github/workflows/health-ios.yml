@@ -12,6 +12,10 @@ jobs:
   # Xcode needs macOS. The job runs only when the repository variable HEALTH_IOS_RUNNER names a
   # macOS runner (`macos-26`, or a self-hosted Mac's label); otherwise it is skipped. HEALTH_RUNNER
   # is a Linux runner, so it is not used here. This check is not part of the `required` gate.
+  # HEALTH_IOS_RUNNER is `telly-mac`: one self-hosted runner on the captain's MacBook, installed in
+  # ~/actions-runner-telly as a launchd user service. It needs Xcode 26 with the iOS platform
+  # (`xcodebuild -downloadPlatform iOS`) and CocoaPods on the runner's PATH (its .path file).
+  # Jobs wait in the queue while the laptop sleeps.
   ios:
     if: vars.HEALTH_IOS_RUNNER != ''
     runs-on: ${{ vars.HEALTH_IOS_RUNNER }}

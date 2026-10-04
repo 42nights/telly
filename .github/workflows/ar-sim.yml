@@ -1,0 +1,41 @@
+# Telly AR pin simulation (tools/ar-sim): save -> relocalize -> project over seeded, randomized trials.
+# The quick run (24 baseline trials; about 2 minutes on 4 loaded cores) fails when the
+# baseline misses the bar (pairing >= 95 percent, marker >= 90 percent, p95 <= 5 cm and <= 20 px, arrow p95 <= 15
+# degrees). Seeds are fixed, so a
+# red run is a regression, not chance. It runs on the HEALTH_RUNNER (see health.yml) like the app checks.
+name: ar-sim
+
+on:
+  pull_request:
+    paths:
+      - 'tools/ar-sim/**'
+      - '.github/workflows/ar-sim.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/ar-sim/**'
+      - '.github/workflows/ar-sim.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ar-sim-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sim:
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/ar-sim/requirements.txt
+      - run: pip install -r tools/ar-sim/requirements.txt
+      - run: python tools/ar-sim/run.py --quick --out "$RUNNER_TEMP/ar-sim"
+      - if: always()
+        run: cat "$RUNNER_TEMP/ar-sim/results.md" >> "$GITHUB_STEP_SUMMARY" || true

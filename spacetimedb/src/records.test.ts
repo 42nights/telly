@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { Identity } from "spacetimedb";
 import { at, harness, identity, mod } from "./test/harness.test";
 
 const alice = identity(1);
@@ -441,8 +442,10 @@ describe("recordMealFact", () => {
 });
 
 describe("medicine memory", () => {
+	// Alice founded family 1 and holds every scope; Bob is a member without care scopes.
 	const seen = (over: Record<string, unknown> = {}) => ({
 		familyId: 1n,
+		personId: bob,
 		container: "Aspirin",
 		place: "kitchen",
 		seenAt: at("2026-01-05T11:50:00Z"),
@@ -451,59 +454,127 @@ describe("medicine memory", () => {
 		labelRead: true,
 		...over,
 	});
-	const on = () =>
-		h.call(mod.setMedicineMemory, alice, {
+	const on = (personId = bob, places = ["kitchen"]) =>
+		h.call(mod.setMedicineMemory, personId, {
 			familyId: 1n,
+			personId,
 			enabled: true,
-			places: ["kitchen"],
+			places,
+		});
+	const carol = identity(4);
+	const caregiver = (granted: boolean) =>
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member: carol,
+			scope: "care_plan_edit",
+			granted,
 		});
 
-	test("enable, update, disable wipes memory and sightings", () => {
+	test("each member's places and sightings are their own; disabling wipes only theirs", () => {
 		expect(() => h.call(mod.rememberMedicine, bob, seen())).toThrow(
-			"medicine memory is off for this family",
+			"medicine memory is off for this member",
 		);
 		on();
+		on(alice, ["bath"]);
+		h.call(mod.rememberMedicine, bob, seen());
+		h.call(mod.rememberMedicine, alice, seen({ personId: alice }));
+		expect(h.view(mod.myMedicinePlaces, bob)).toMatchObject([
+			{ personId: bob, places: ["kitchen"], setBy: bob },
+		]);
+		expect(h.view(mod.myMedicineSightings, bob)).toMatchObject([
+			{ personId: bob, container: "Aspirin" },
+		]);
+		expect(h.view(mod.myMedicinePlaces, mallory)).toEqual([]);
+		expect(h.view(mod.myMedicineSightings, mallory)).toEqual([]);
+
 		h.call(mod.setMedicineMemory, bob, {
 			familyId: 1n,
-			enabled: true,
-			places: ["bath"],
-		});
-		expect(h.view(mod.myMedicineMemory, alice)).toMatchObject([
-			{ places: ["bath"], setBy: bob },
-		]);
-		expect(h.view(mod.myMedicineMemory, mallory)).toEqual([]);
-		h.call(mod.rememberMedicine, bob, seen());
-		h.call(mod.setMedicineMemory, alice, {
-			familyId: 1n,
+			personId: bob,
 			enabled: false,
 			places: [],
 		});
-		expect(h.rows("medicineMemory")).toEqual([]);
-		expect(h.rows("medicineSighting")).toEqual([]);
+		expect(h.rows("medicinePlaces")).toMatchObject([{ personId: alice }]);
+		expect(h.rows("medicineSighting")).toMatchObject([{ personId: alice }]);
 	});
 
-	test("setMedicineMemory rejects blank places and outsiders", () => {
+	test("a member without care scopes cannot read or change another member's", () => {
+		on(alice);
+		h.call(mod.rememberMedicine, alice, seen({ personId: alice }));
+		expect(h.view(mod.myMedicinePlaces, bob)).toEqual([]);
+		expect(h.view(mod.myMedicineSightings, bob)).toEqual([]);
+		for (const write of [
+			() =>
+				h.call(mod.setMedicineMemory, bob, {
+					familyId: 1n,
+					personId: alice,
+					enabled: false,
+					places: [],
+				}),
+			() => h.call(mod.rememberMedicine, bob, seen({ personId: alice })),
+			() => h.call(mod.markMedicineNotFound, bob, { id: 1n }),
+		])
+			expect(write).toThrow("no care access:");
+		expect(h.rows("medicineSighting")).toMatchObject([
+			{ personId: alice, notFoundAt: undefined },
+		]);
+	});
+
+	test("a caregiver manages every member's until the scope is revoked; the founder too", () => {
+		h.call(mod.addFamilyMember, alice, { familyId: 1n, member: carol });
+		caregiver(true);
+		h.call(mod.setMedicineMemory, carol, {
+			familyId: 1n,
+			personId: bob,
+			enabled: true,
+			places: ["hall"],
+		});
+		h.call(mod.rememberMedicine, carol, seen());
+		h.call(mod.markMedicineNotFound, alice, { id: 1n });
+		expect(h.view(mod.myMedicineSightings, carol)).toMatchObject([
+			{ personId: bob, savedBy: carol },
+		]);
+		expect(h.view(mod.myMedicinePlaces, alice)).toMatchObject([
+			{ personId: bob, places: ["hall"], setBy: carol },
+		]);
+		caregiver(false);
+		expect(h.view(mod.myMedicineSightings, carol)).toEqual([]);
+		expect(() => h.call(mod.rememberMedicine, carol, seen())).toThrow(
+			"no care access:",
+		);
+	});
+
+	test("outsiders and non-member people are refused", () => {
+		on();
 		expect(() =>
 			h.call(mod.setMedicineMemory, alice, {
 				familyId: 1n,
+				personId: mallory,
 				enabled: true,
-				places: ["a", " "],
+				places: [],
 			}),
-		).toThrow("place must not be empty");
+		).toThrow("not a member of this family");
 		expect(() =>
 			h.call(mod.setMedicineMemory, mallory, {
 				familyId: 1n,
+				personId: mallory,
 				enabled: false,
 				places: [],
 			}),
 		).toThrow("not a member of this family");
+		expect(() =>
+			h.call(mod.rememberMedicine, mallory, seen({ personId: mallory })),
+		).toThrow("not a member of this family");
+		expect(() => on(bob, ["a", " "])).toThrow("place must not be empty");
 	});
 
 	test("a newer sighting of the same container replaces the old; older is refused", () => {
 		on();
+		on(alice);
 		h.call(mod.rememberMedicine, bob, seen());
 		h.call(mod.rememberMedicine, bob, seen({ container: "Ibuprofen" }));
-		h.call(mod.markMedicineNotFound, alice, { id: 1n });
+		// Alice's own aspirin is a separate container.
+		h.call(mod.rememberMedicine, alice, seen({ personId: alice }));
+		h.call(mod.markMedicineNotFound, bob, { id: 1n });
 		h.call(
 			mod.rememberMedicine,
 			alice,
@@ -520,13 +591,10 @@ describe("medicine memory", () => {
 			savedBy: alice,
 			notFoundAt: undefined,
 		});
-		expect(sightings.find((s) => s.id === 2n)).toMatchObject({
-			container: "Ibuprofen",
-		});
+		expect(h.rows("medicineSighting")).toHaveLength(3);
 		expect(() => h.call(mod.rememberMedicine, bob, seen())).toThrow(
 			"a newer sighting is already stored",
 		);
-		expect(h.view(mod.myMedicineSightings, mallory)).toEqual([]);
 	});
 
 	test.each([
@@ -565,20 +633,67 @@ describe("medicine memory", () => {
 		on();
 		h.call(mod.rememberMedicine, bob, seen());
 		h.advance(30);
-		h.call(mod.markMedicineNotFound, alice, { id: 1n });
+		h.call(mod.markMedicineNotFound, bob, { id: 1n });
 		expect(h.rows("medicineSighting")[0]).toMatchObject({
 			place: "kitchen",
 			notFoundAt: at("2026-01-05T12:00:30Z"),
 		});
 		for (const [who, id] of [
-			[alice, 9n],
+			[bob, 9n],
 			[mallory, 1n],
 		] as const)
 			expect(() => h.call(mod.markMedicineNotFound, who, { id })).toThrow(
 				"not a member of this family",
 			);
-		expect(() => h.call(mod.rememberMedicine, mallory, seen())).toThrow(
-			"not a member of this family",
+	});
+
+	test("the migration gives every shared row to the wearer and keeps it", () => {
+		const op = identity(9);
+		h.call(mod.init, op, {});
+		const setAt = at("2026-01-01T08:00:00Z");
+		h.db.medicineMemory?.insert({
+			familyId: 1n,
+			places: ["kitchen", "hall"],
+			setBy: bob,
+			setAt,
+		});
+		const legacy = {
+			id: 0n,
+			familyId: 1n,
+			container: "Aspirin",
+			place: "kitchen",
+			seenAt: setAt,
+			source: "camera_check",
+			confidence: 0.9,
+			labelRead: true,
+			savedBy: bob,
+			notFoundAt: undefined,
+			personId: Identity.zero(),
+		};
+		h.db.medicineSighting?.insert(legacy);
+		expect(() => h.call(mod.migrateMedicineMembers, bob, {})).toThrow(
+			"not the delivery operator",
 		);
+
+		h.call(mod.migrateMedicineMembers, op, {});
+		const places = h.rows("medicinePlaces");
+		const sightings = h.rows("medicineSighting");
+		expect(places).toEqual([
+			{
+				id: 1n,
+				familyId: 1n,
+				personId: alice,
+				places: ["kitchen", "hall"],
+				setBy: bob,
+				setAt,
+			},
+		]);
+		expect(sightings).toEqual([{ ...legacy, id: 1n, personId: alice }]);
+		expect(h.rows("medicineMemory")).toEqual([]);
+		expect(h.view(mod.myMedicineSightings, alice)).toHaveLength(1);
+
+		h.call(mod.migrateMedicineMembers, op, {});
+		expect(h.rows("medicinePlaces")).toEqual(places);
+		expect(h.rows("medicineSighting")).toEqual(sightings);
 	});
 });
