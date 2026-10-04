@@ -2,9 +2,10 @@
 // skippable. Health data comes only from the WHOOP strap through NOOP; nothing here writes a reading.
 import type { Family } from "@health/contracts";
 import { WhoopPushToken } from "@health/contracts/families";
-import { Button } from "@health/ui/components/button";
+import { Button, buttonVariants } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { toQR } from "toqr";
 
 import { InviteLink, useInvite } from "@/components/family/invite";
 import { ENV } from "@/env";
@@ -15,7 +16,7 @@ import { FirstMedicine } from "./medicine";
 import { ShareLink } from "./share-link";
 import { useSetupStatus, WhoopStatus } from "./status";
 
-type Open = "whoop" | "medicine" | "invite";
+type Open = "whoop" | "replace-whoop" | "medicine" | "invite";
 
 function Row({
 	done,
@@ -52,6 +53,25 @@ function Row({
 			</div>
 			{children}
 		</li>
+	);
+}
+
+function QrCode({ text }: { text: string }) {
+	const bits = toQR(text);
+	const size = Math.sqrt(bits.length);
+	const path = Array.from(bits, (bit, i) =>
+		bit ? `M${i % size} ${Math.floor(i / size)}h1v1h-1z` : "",
+	).join("");
+	return (
+		<svg
+			aria-label="QR code of the link"
+			className="size-48 justify-self-center bg-white"
+			role="img"
+			shapeRendering="crispEdges"
+			viewBox={`-4 -4 ${size + 8} ${size + 8}`}
+		>
+			<path d={path} />
+		</svg>
 	);
 }
 
@@ -103,14 +123,57 @@ export function ConnectScreen({ family }: { family: Family }) {
 						</>
 					}
 					action="Connect"
-					onAction={() => void connectWhoop()}
+					onAction={() =>
+						status.records.kind === "ready" &&
+						!status.hasWhoop &&
+						whoopLink === null
+							? void connectWhoop()
+							: setOpen("replace-whoop")
+					}
 				>
+					{open === "replace-whoop" && (
+						<div className="grid gap-2">
+							<p>
+								A new link turns off the current one. The phone with the strap
+								stops sending until the new link is opened on it.
+							</p>
+							<div className="grid grid-cols-2 gap-2">
+								<Button
+									type="button"
+									className="h-11"
+									onClick={() => void connectWhoop()}
+								>
+									Make a new link
+								</Button>
+								<Button
+									type="button"
+									className="h-11"
+									onClick={() => setOpen(whoopLink === null ? null : "whoop")}
+								>
+									Cancel
+								</Button>
+							</div>
+						</div>
+					)}
 					{open === "whoop" && whoopLink !== null && (
 						<div className="grid gap-2">
 							<p>
-								Send this link to the person with the WHOOP strap. They tap it
-								on the iPhone that runs NOOP. NOOP then sends the strap's
-								readings to {family.name}. A new link stops the old one.
+								Open this link on the iPhone that runs Healer S.I., or send it
+								to the person with the WHOOP strap. Healer S.I. then sends the
+								strap's readings to {family.name}. A new link stops the old one.
+							</p>
+							<a
+								className={buttonVariants({
+									className: "win95-primary h-11 w-full",
+								})}
+								data-slot="button"
+								href={whoopLink}
+							>
+								Open in Healer S.I.
+							</a>
+							<QrCode text={whoopLink} />
+							<p className="text-center text-xs">
+								On a computer, scan this code with the iPhone camera.
 							</p>
 							<ShareLink link={whoopLink} title="Connect WHOOP to Telly" />
 						</div>

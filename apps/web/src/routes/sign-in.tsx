@@ -57,8 +57,12 @@ const landing = async (returnTo: string) => {
 		.fetchQuery(apiQuery(FamilyList, "/api/families"))
 		.catch(() => null);
 	if (families === null) return path;
+	const asked = new URL(path, location.origin);
 	if (families.families.length > 0)
-		return path.startsWith("/welcome") ? "/hud" : path;
+		return asked.pathname.startsWith("/welcome") &&
+			asked.searchParams.get("step") !== "connect"
+			? "/hud"
+			: path;
 	return path.startsWith("/join/") ? path : "/welcome";
 };
 
