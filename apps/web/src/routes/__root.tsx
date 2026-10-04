@@ -3,18 +3,22 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
+	useLocation,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { FamilyProvider } from "@/lib/family";
+import { FamilyProvider, NewFamilyBar } from "@/lib/family";
+import { requireSession } from "@/lib/session";
 
 import "../index.css";
 
 type RouterAppContext = Record<string, never>;
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
+	// No app page, nav tab, or family data shows before sign-in.
+	beforeLoad: requireSession,
 	component: RootComponent,
 	head: () => ({
 		meta: [
@@ -36,6 +40,9 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+	const signingIn = useLocation({
+		select: (location) => location.pathname === "/sign-in",
+	});
 	return (
 		<>
 			<HeadContent />
@@ -45,17 +52,24 @@ function RootComponent() {
 				disableTransitionOnChange
 				storageKey="vite-ui-theme"
 			>
-				<FamilyProvider>
-					<div className="win95-desktop grid h-svh grid-rows-[auto_auto_1fr]">
-						<header className="win95-titlebar px-2 py-1 text-[0.9375rem]">
-							Telly
-						</header>
-						<Header />
-						<div className="min-h-0 overflow-y-auto">
+				<div className="win95-desktop flex h-svh flex-col">
+					<header className="win95-titlebar px-2 py-1 text-[0.9375rem]">
+						Telly
+					</header>
+					{signingIn ? (
+						<div className="min-h-0 flex-1 overflow-y-auto">
 							<Outlet />
 						</div>
-					</div>
-				</FamilyProvider>
+					) : (
+						<FamilyProvider>
+							<Header />
+							<NewFamilyBar />
+							<div className="min-h-0 flex-1 overflow-y-auto">
+								<Outlet />
+							</div>
+						</FamilyProvider>
+					)}
+				</div>
 				<Toaster richColors />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />
