@@ -1,5 +1,7 @@
-// The family the screens show. The server returns the caller's families; the app selects one and
-// remembers it on this device. A new person gets their own family through onboarding (/welcome).
+// The family the screens show. The server returns the caller's families; the app selects one. The
+// person picked in this tab is in the address (`?person=<family id>`, kept by the root route), so
+// tabs do not change each other's person and a link opens the same person. The last pick is also
+// remembered on this device as the default. A new person gets their own family through onboarding.
 import type { Family } from "@health/contracts";
 import { FamilyList } from "@health/contracts/families";
 import { useNavigate } from "@tanstack/react-router";
@@ -56,14 +58,28 @@ type FamilyContext = {
 
 const Context = createContext<FamilyContext | null>(null);
 
-export function FamilyProvider({ children }: { children: ReactNode }) {
+/** The person picked in this tab and how to pick another. The root route keeps it in the address. */
+export type PersonPick = {
+	readonly picked: string | null;
+	readonly pick: (familyId: string) => void;
+};
+
+export function FamilyProvider({
+	children,
+	person,
+}: {
+	children: ReactNode;
+	/** Without it (tests outside a router), the pick lives in this provider only. */
+	person?: PersonPick;
+}) {
 	const [reloadAt, setReloadAt] = useState(0);
 	const read = useApi(FamilyList, "/api/families", { refreshKey: reloadAt });
 	const state: ApiState<FamilyList> =
 		read.kind === "ready" && read.at <= reloadAt ? { kind: "loading" } : read;
 	const [remembered, setRemembered] = useState<string | null>(null);
-	const [picked, setPicked] = useState<string | null>(null);
+	const [localPick, setLocalPick] = useState<string | null>(null);
 	useEffect(() => setRemembered(localStorage.getItem(KEY)), []);
+	const picked = person ? person.picked : localPick;
 	const family =
 		state.kind === "ready"
 			? chooseFamily(state.value.families, picked, remembered)
@@ -71,7 +87,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
 	const select = (familyId: string) => {
 		localStorage.setItem(KEY, familyId);
 		setRemembered(familyId);
-		setPicked(familyId);
+		(person?.pick ?? setLocalPick)(familyId);
 	};
 	const reload = () => setReloadAt(Date.now());
 	return (
