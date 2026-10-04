@@ -1,15 +1,14 @@
-import { type Report, ReportPdf, ReportPdfs } from "@health/contracts/reports";
+import {
+	type Report,
+	ReportPdf,
+	ReportPdfLink,
+	ReportPdfs,
+} from "@health/contracts/reports";
 import { Button } from "@health/ui/components/button";
 import { useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
-import {
-	type ApiFailure,
-	apiBlob,
-	apiRequest,
-	familyPath,
-	useApi,
-} from "@/lib/api";
+import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
 
 import { DataTable } from "./data-table";
 import { formatTime } from "./logic";
@@ -90,19 +89,15 @@ function PastPdfsDialog({
 	const state = useApi(ReportPdfs, familyPath(familyId, "/report-pdfs"));
 	const [failure, setFailure] = useState<ApiFailure | null>(null);
 
+	// The server checks that the PDF is the caller's, then gives a link that expires in minutes.
 	const download = async (id: string) => {
-		const file = await apiBlob(
+		const link = await apiRequest(
+			ReportPdfLink,
 			familyPath(familyId, `/report-pdfs/${encodeURIComponent(id)}`),
-			{ method: "GET" },
 		);
-		if (file.kind !== "ready") return setFailure(file);
+		if (link.kind !== "ready") return setFailure(link);
 		setFailure(null);
-		const url = URL.createObjectURL(file.value);
-		const link = document.createElement("a");
-		link.href = url;
-		link.download = `lab-report-${id.slice(0, 8)}.pdf`;
-		link.click();
-		setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		window.location.assign(link.value.url);
 	};
 
 	return (

@@ -2,8 +2,8 @@ import { AwsClient } from "aws4fetch";
 import { ApiFailure } from "../http";
 
 // Cloudflare R2 through its S3-compatible API (https://developers.cloudflare.com/r2/api/s3/api/).
-// The bucket stays private: every object is read and written by this server with an API token
-// scoped to the one bucket ("Object Read & Write"). Clients never get a bucket URL.
+// The bucket stays private: this server writes and lists with an API token scoped to the one bucket
+// ("Object Read & Write"), and a download is a short-lived presigned GET link for one object.
 
 export type R2Config = {
 	/** `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. */
@@ -21,8 +21,13 @@ export type StoredObject = {
 
 export type R2Bucket = {
 	readonly put: (key: string, body: Uint8Array, type: string) => Promise<void>;
-	/** `null` when no object has this key. */
-	readonly get: (key: string) => Promise<Response | null>;
+	readonly exists: (key: string) => Promise<boolean>;
+	/** A GET link for one object that expires after `seconds`; the browser saves it as `filename`. */
+	readonly presign: (
+		key: string,
+		filename: string,
+		seconds: number,
+	) => Promise<string>;
 	/** Every object whose key starts with `prefix`. */
 	readonly list: (prefix: string) => Promise<StoredObject[]>;
 };
@@ -66,14 +71,24 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 			await response.body?.cancel();
 			if (!response.ok) throw failed("save the PDF", response.status);
 		},
-		get: async (key) => {
-			const response = await send(url(key));
-			if (response.status === 404) {
-				await response.body?.cancel();
-				return null;
-			}
+		exists: async (key) => {
+			const response = await send(url(key), { method: "HEAD" });
+			if (response.status === 404) return false;
 			if (!response.ok) throw failed("read the PDF", response.status);
-			return response;
+			return true;
+		},
+		presign: async (key, filename, seconds) => {
+			const link = new URL(url(key));
+			link.searchParams.set("X-Amz-Expires", String(seconds));
+			link.searchParams.set(
+				"response-content-disposition",
+				`attachment; filename="${filename}"`,
+			);
+			const signed = await client.sign(link.toString(), {
+				method: "GET",
+				aws: { signQuery: true },
+			});
+			return signed.url;
 		},
 		list: async (prefix) => {
 			const objects: StoredObject[] = [];

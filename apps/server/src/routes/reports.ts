@@ -6,6 +6,7 @@ import {
 	ReportFields,
 	ReportMarker,
 	type ReportPdf,
+	type ReportPdfLink,
 	type ReportPdfs,
 	type Reports,
 } from "@health/contracts/reports";
@@ -208,16 +209,16 @@ export const reportRoutes = (storage?: R2Bucket) =>
 		.get("/report-pdfs/:pdfId", async (c) => {
 			const bucket = needStorage(storage);
 			const id = c.req.param("pdfId");
-			const stored = PDF_ID.test(id)
-				? await bucket.get(`${pdfPrefix(c)}${id}.pdf`)
-				: null;
+			const key = `${pdfPrefix(c)}${id}.pdf`;
 			// Another person's PDF, or another family's, reads exactly like a missing one.
-			if (stored === null) throw new ApiFailure("not_found", "No such PDF");
-			return new Response(stored.body, {
-				headers: {
-					"Content-Type": "application/pdf",
-					"Content-Disposition": `attachment; filename="lab-report-${id.slice(0, 8)}.pdf"`,
-					"Cache-Control": "private, no-store",
-				},
-			});
+			if (!(PDF_ID.test(id) && (await bucket.exists(key))))
+				throw new ApiFailure("not_found", "No such PDF");
+			const seconds = 300;
+			const url = await bucket.presign(
+				key,
+				`lab-report-${id.slice(0, 8)}.pdf`,
+				seconds,
+			);
+			const expiresAt = new Date(Date.now() + seconds * 1000).toISOString();
+			return c.json({ url, expiresAt } satisfies ReportPdfLink);
 		});

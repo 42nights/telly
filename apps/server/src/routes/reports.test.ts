@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	Report,
 	ReportPdf,
+	ReportPdfLink,
 	ReportPdfs,
 	Reports,
 } from "@health/contracts/reports";
@@ -167,10 +168,8 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				const objects = new Map<string, Uint8Array>();
 				const bucket: R2Bucket = {
 					put: async (key, body) => void objects.set(key, body),
-					get: async (key) => {
-						const body = objects.get(key);
-						return body === undefined ? null : new Response(body);
-					},
+					exists: async (key) => objects.has(key),
+					presign: async (key) => `https://storage.test/${key}?signed`,
 					list: async (prefix) =>
 						[...objects]
 							.filter(([key]) => key.startsWith(prefix))
@@ -203,11 +202,13 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				expect(Schema.decodeUnknownSync(ReportPdfs)(listed.json).pdfs).toEqual([
 					{ ...pdf, createdAt: expect.any(String) },
 				]);
-				const file = yield* Effect.promise(async () =>
-					ownerApp.request(`/report-pdfs/${pdf.id}`),
+				const link = yield* send(ownerApp, "GET", `/report-pdfs/${pdf.id}`);
+				const { url } = Schema.decodeUnknownSync(ReportPdfLink)(link.json);
+				const key = new URL(url).pathname.slice(1);
+				expect(key).toBe(
+					`report-pdfs/${familyId}/${owner.identity}/${pdf.id}.pdf`,
 				);
-				expect(file.headers.get("content-type")).toBe("application/pdf");
-				const text = yield* Effect.promise(() => file.text());
+				const text = new TextDecoder("latin1").decode(objects.get(key));
 				expect(text.startsWith("%PDF-1.4")).toBe(true);
 				expect(text).toContain(`(Layout version 1 - report ${report.id})`);
 
