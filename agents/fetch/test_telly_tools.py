@@ -75,6 +75,34 @@ class HandleCallTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((status, body), (200, ALERTS))
         self.assertEqual(self.calls, [("/api/families/12/tools", "Bearer worker-token", REQUEST)])
 
+    async def test_saved_things_is_forwarded_and_bad_input_or_answer_is_refused(self) -> None:
+        request = {"tool": "saved_things", "input": {"limit": 5}}
+        things = {
+            "tool": "saved_things",
+            "things": [
+                {
+                    "id": "1",
+                    "container": "B12 vitamin pills",
+                    "category": "medicine",
+                    "place": "in the cabinet above the dish rack",
+                    "seenAt": "2026-01-01T08:00:00.000Z",
+                    "notFoundAt": None,
+                }
+            ],
+        }
+        self.reply = web.json_response(things)
+        self.assertEqual(await handle_call(self.cfg, SENDER, "12", request), (200, things))
+        for bad in ({"limit": 0}, {"person": "someone else"}):
+            status, body = await handle_call(
+                self.cfg, SENDER, "12", {"tool": "saved_things", "input": bad}
+            )
+            self.assertEqual((status, body["error"]), (400, "invalid_request"))
+        self.assertEqual(len(self.calls), 1)
+        del things["things"][0]["place"]
+        self.reply = web.json_response(things)
+        status, body = await handle_call(self.cfg, SENDER, "12", request)
+        self.assertEqual((status, body["error"]), (502, "upstream_error"))
+
     async def test_family_id_is_url_encoded(self) -> None:
         cfg = Config("seed", self.cfg.server_url, "t", {SENDER: frozenset({"a/b"})}, 8001, False)
         await handle_call(cfg, SENDER, "a/b", REQUEST)

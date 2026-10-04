@@ -95,6 +95,7 @@ export const familyTools = (
 							signal,
 							delegation,
 						);
+			if (response.tool === "saved_things") return response;
 			if (response.tool === "alerts") {
 				for (const alert of response.alerts) alerts.set(alert.id, alert);
 				return response;
