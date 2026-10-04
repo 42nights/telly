@@ -129,7 +129,7 @@ describe("server boundaries", () => {
 		) => ({ metric, value, unit, time, source });
 		expect(recorded).toEqual([
 			[
-				sample("heart_rate", 61, "bpm", minute * 1000, "noop:my-whoop"),
+				sample("heart_rate", 64, "bpm", (minute + 30) * 1000, "noop:my-whoop"),
 				sample("heart_rate", 70, "bpm", (minute + 60) * 1000, "noop:my-whoop"),
 				sample("on_wrist", 0, "boolean", (minute + 5) * 1000, "noop:my-whoop"),
 				sample("resting_heart_rate", 52, "bpm", day, "noop:my-whoop-noop"),

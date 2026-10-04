@@ -4,7 +4,12 @@ import { Hono } from "hono";
 import { Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import * as http from "../http";
-import { type NoopSample, noopRoutes, recordNoopSamples } from "./noop-ingest";
+import {
+	type NoopSample,
+	noopRoutes,
+	recordNoopSamples,
+	unstoredSamples,
+} from "./noop-ingest";
 
 // recordNoopSamples reaches the database only through callReducer; run its call on the fake.
 const callReducer = spyOn(http, "callReducer").mockImplementation((db, call) =>
@@ -76,7 +81,7 @@ describe("recordNoopSamples", () => {
 		]);
 	});
 
-	test("skips a heart rate already stored in the same minute, and a repeat within the batch", async () => {
+	test("a newer heart rate in a stored minute replaces it; an older one is skipped", async () => {
 		const minute = 1_700_000_040_000; // a whole minute
 		const { db, recorded } = fakeDb([
 			stored("heart_rate", 60, minute + 5_000, 1),
@@ -85,11 +90,13 @@ describe("recordNoopSamples", () => {
 			db,
 			7n,
 		)([
-			sample("heart_rate", 99, minute + 50_000), // same minute as stored
+			sample("heart_rate", 58, minute + 2_000), // older than the stored reading: skipped
+			sample("heart_rate", 99, minute + 50_000), // newer, same minute as stored: kept
 			sample("heart_rate", 70, minute + 60_000), // next minute: new
-			sample("heart_rate", 71, minute + 61_000), // same minute as the one before
+			sample("heart_rate", 71, minute + 61_000), // newer in that minute: kept
+			sample("heart_rate", 70, minute + 60_000), // repeat of an older one: skipped
 		]);
-		expect(recorded.map((row) => row.value)).toEqual([70]);
+		expect(recorded.map((row) => row.value)).toEqual([99, 70, 71]);
 	});
 
 	test("records a daily value again only when it changed since the latest stored one", async () => {
@@ -191,7 +198,7 @@ describe("noopRoutes ingest", () => {
 				tables: {
 					hrSample: [
 						{ deviceId: "d1", ts: 120, bpm: 60 },
-						{ deviceId: "d1", ts: 150, bpm: 99 }, // same minute: dropped
+						{ deviceId: "d1", ts: 150, bpm: 99 }, // same minute, newer: replaces 60
 						{ deviceId: "d2", ts: 150, bpm: 70 }, // other device: kept
 					],
 					event: [
@@ -220,9 +227,9 @@ describe("noopRoutes ingest", () => {
 			[
 				{
 					metric: "heart_rate",
-					value: 60,
+					value: 99,
 					unit: "bpm",
-					time: 120_000,
+					time: 150_000,
 					source: "noop:d1",
 				},
 				{
@@ -279,5 +286,31 @@ describe("noopRoutes ingest", () => {
 		expect(now - lastSeen).toBeLessThan(5_000);
 		expect(routes.status(lastSeen + 10 * 60_000 - 1).status).toBe("connected");
 		expect(routes.status(lastSeen + 10 * 60_000).status).toBe("not_connected");
+	});
+});
+
+describe("unstoredSamples", () => {
+	const minute = 1_790_000_040_000;
+	const hr = (value: number, seconds: number): NoopSample => ({
+		metric: "heart_rate",
+		value,
+		unit: "bpm",
+		time: minute + seconds * 1000,
+		source: "noop:my-whoop",
+	});
+
+	test("a newer heart rate in a stored minute is stored; an older or repeated one is not", () => {
+		const stored = [hr(61, 5)];
+		expect(unstoredSamples(stored, [hr(64, 35)])).toEqual([hr(64, 35)]);
+		expect(unstoredSamples(stored, [hr(61, 5), hr(58, 2)])).toEqual([]);
+		expect(unstoredSamples([...stored, hr(64, 35)], [hr(64, 35)])).toEqual([]);
+	});
+
+	test("another metric is stored again only when its value changed", () => {
+		const strain = { ...hr(20, 0), metric: "daily_strain", unit: "%" };
+		expect(unstoredSamples([strain], [strain])).toEqual([]);
+		expect(unstoredSamples([strain], [{ ...strain, value: 21 }])).toEqual([
+			{ ...strain, value: 21 },
+		]);
 	});
 });

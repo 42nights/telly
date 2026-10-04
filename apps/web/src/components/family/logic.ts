@@ -99,9 +99,12 @@ export const newestNoopSample = (
 			null,
 		);
 
+/** "just now", "42 s ago", "3 min ago", "2 h ago", "3 days ago". */
 export const ago = (iso: string, now: number): string => {
-	const minutes = Math.round((now - Date.parse(iso)) / 60_000);
-	if (minutes < 1) return "just now";
+	const seconds = Math.round((now - Date.parse(iso)) / 1000);
+	if (seconds < 5) return "just now";
+	if (seconds < 60) return `${seconds} s ago`;
+	const minutes = Math.round(seconds / 60);
 	if (minutes < 60) return `${minutes} min ago`;
 	const hours = Math.round(minutes / 60);
 	if (hours < 48) return `${hours} h ago`;
