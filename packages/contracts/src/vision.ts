@@ -58,6 +58,18 @@ export const OBJECT_CATEGORIES = [
 export const ObjectCategory = Schema.Literals(OBJECT_CATEGORIES);
 export type ObjectCategory = typeof ObjectCategory.Type;
 
+export const LANDMARKS = [
+	"cabinet",
+	"dish rack",
+	"shelf",
+	"counter",
+	"sink",
+	"fridge",
+	"drawer",
+] as const;
+export const Landmark = Schema.Literals(LANDMARKS);
+export type Landmark = typeof Landmark.Type;
+
 /** `POST /api/families/:familyId/vision/object-detections` body. */
 export const ObjectDetectionRequest = Schema.Struct({
 	frame: VisionFrame,
@@ -66,6 +78,7 @@ export const ObjectDetectionRequest = Schema.Struct({
 		/** Base64 bytes; at most `MAX_VISION_IMAGE_BYTES` once decoded. */
 		data: Schema.String.check(Schema.isMinLength(1), Schema.isBase64()),
 	}),
+	landmarks: Schema.optionalKey(Schema.Boolean),
 });
 export type ObjectDetectionRequest = typeof ObjectDetectionRequest.Type;
 
@@ -98,6 +111,11 @@ export type ObjectDetection = typeof ObjectDetection.Type;
 export const ObjectDetections = Schema.Struct({
 	frame: VisionFrame,
 	detections: Schema.Array(ObjectDetection),
+	landmarks: Schema.optionalKey(
+		Schema.Array(
+			Schema.Struct({ kind: Landmark, box: ObjectDetection.fields.box }),
+		),
+	),
 	/** Provider model that produced the detections. */
 	model: Schema.String,
 	analyzedAt: UtcTime,

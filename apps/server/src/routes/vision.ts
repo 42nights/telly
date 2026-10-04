@@ -126,9 +126,12 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 			checkImage(request);
 
 			// The request signal interrupts the provider call when the client disconnects.
-			const result = await Effect.runPromiseExit(detect(request.image), {
-				signal: c.req.raw.signal,
-			});
+			const result = await Effect.runPromiseExit(
+				detect(request.image, request.landmarks),
+				{
+					signal: c.req.raw.signal,
+				},
+			);
 			if (Exit.isSuccess(result))
 				return c.json({
 					frame: request.frame,
@@ -143,6 +146,10 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 							box: toFramePixels(request.frame, box),
 						}),
 					),
+					landmarks: result.value.landmarks.map(({ kind, box }) => ({
+						kind,
+						box: toFramePixels(request.frame, box),
+					})),
 				} satisfies ObjectDetections);
 			// 499: the client closed the request; nobody reads this response.
 			if (Cause.hasInterruptsOnly(result.cause))

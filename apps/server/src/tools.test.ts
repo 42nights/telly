@@ -31,6 +31,22 @@ const alertRow = (id: bigint, familyId: bigint, at: string) => ({
 	raisedBy: identity("aa"),
 	createdAt: new Date(at),
 });
+const thingRow = (
+	id: bigint,
+	familyId: bigint,
+	person: string,
+	place: string,
+	at: string,
+) => ({
+	id,
+	familyId,
+	personId: identity(person),
+	container: "B12 vitamin pills",
+	category: "medicine",
+	place,
+	seenAt: new Date(at),
+	notFoundAt: undefined,
+});
 const ackRow = (id: bigint, alertId: bigint) => ({
 	id,
 	alertId,
@@ -44,6 +60,7 @@ const fakeDb = (
 		samples?: unknown[];
 		alerts?: unknown[];
 		acks?: unknown[];
+		things?: unknown[];
 	},
 	isActive = true,
 ): FamilyDb => {
@@ -59,6 +76,7 @@ const fakeDb = (
 				myAlerts: view(rows.alerts),
 				myMessages: view(),
 				myAcknowledgements: view(rows.acks),
+				myMedicineSightings: view(rows.things),
 			},
 		} as unknown as FamilyDb["connection"],
 	};
@@ -139,6 +157,44 @@ describe("runTool", () => {
 					familyId: "7",
 					member: "bb",
 					acknowledgedAt: "2026-01-03T00:00:00.000Z",
+				},
+			],
+		});
+	});
+
+	test("saved_things: only the asker's own things in the asked family, newest first", () => {
+		const db = fakeDb({
+			things: [
+				thingRow(1n, 7n, "cc", "Hall table", "2026-01-01T08:00:00Z"),
+				thingRow(
+					2n,
+					7n,
+					"cc",
+					"in the cabinet above the dish rack",
+					"2026-01-02T08:00:00Z",
+				),
+				thingRow(3n, 7n, "dd", "Bedroom", "2026-01-03T08:00:00Z"),
+				thingRow(4n, 8n, "cc", "Garage", "2026-01-04T08:00:00Z"),
+			],
+		});
+		expect(runTool(db, "7", { tool: "saved_things", input: {} })).toEqual({
+			tool: "saved_things",
+			things: [
+				{
+					id: "2",
+					container: "B12 vitamin pills",
+					category: "medicine",
+					place: "in the cabinet above the dish rack",
+					seenAt: "2026-01-02T08:00:00.000Z",
+					notFoundAt: null,
+				},
+				{
+					id: "1",
+					container: "B12 vitamin pills",
+					category: "medicine",
+					place: "Hall table",
+					seenAt: "2026-01-01T08:00:00.000Z",
+					notFoundAt: null,
 				},
 			],
 		});

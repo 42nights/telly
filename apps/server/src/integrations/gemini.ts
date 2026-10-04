@@ -1,5 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import {
+	LANDMARKS,
+	Landmark,
 	OBJECT_CATEGORIES,
 	ObjectCategory,
 	type ObjectDetectionRequest,
@@ -105,8 +107,16 @@ export type GeminiBox = {
 
 type ObjectDetector = (
 	image: ObjectDetectionRequest["image"],
+	landmarks?: boolean,
 ) => Effect.Effect<
-	{ readonly boxes: readonly GeminiBox[]; readonly model: string },
+	{
+		readonly boxes: readonly GeminiBox[];
+		readonly landmarks: readonly {
+			readonly box: GeminiBox["box"];
+			readonly kind: Landmark;
+		}[];
+		readonly model: string;
+	},
 	VisionUpstreamError
 >;
 
@@ -114,11 +124,13 @@ const Coordinate = Schema.Finite.check(
 	Schema.isBetween({ minimum: 0, maximum: 1000 }),
 );
 
+const Box2d = Schema.Tuple([Coordinate, Coordinate, Coordinate, Coordinate]);
+
 // Model output schema, sent to Gemini as JSON Schema and enforced again here.
 const Detections = Schema.Struct({
 	detections: Schema.Array(
 		Schema.Struct({
-			box_2d: Schema.Tuple([Coordinate, Coordinate, Coordinate, Coordinate]),
+			box_2d: Box2d,
 			category: ObjectCategory,
 			label: Schema.String,
 			label_readable: Schema.Boolean,
@@ -127,7 +139,16 @@ const Detections = Schema.Struct({
 			),
 		}),
 	),
+	landmarks: Schema.optionalKey(
+		Schema.Array(Schema.Struct({ box_2d: Box2d, kind: Landmark })),
+	),
 });
+
+const box2d = {
+	type: "array",
+	items: { type: "integer" },
+	description: "[ymin, xmin, ymax, xmax] normalized to 0-1000.",
+};
 
 const outputSchema = {
 	type: "object",
@@ -137,11 +158,7 @@ const outputSchema = {
 			items: {
 				type: "object",
 				properties: {
-					box_2d: {
-						type: "array",
-						items: { type: "integer" },
-						description: "[ymin, xmin, ymax, xmax] normalized to 0-1000.",
-					},
+					box_2d: box2d,
 					category: { type: "string", enum: [...OBJECT_CATEGORIES] },
 					label: {
 						type: "string",
@@ -176,6 +193,31 @@ const prompt =
 	"For medicine, set label to the medicine name printed on it only if you can read it; never guess " +
 	"a name from color, shape, or loose pills. For anything else, set label to a short everyday name " +
 	'such as "keys" or "reading glasses". Return an empty list when there is none.';
+
+const landmarkQuestion = {
+	prompt:
+		`${prompt} Separately, in landmarks, box each of these room landmarks that you can clearly ` +
+		`see: ${LANDMARKS.join(", ")}. Box each cabinet door, drawer, and shelf on its own, at most ` +
+		"12 landmarks. Return an empty landmarks list when the picture is too dark or blurry to tell.",
+	schema: {
+		...outputSchema,
+		properties: {
+			...outputSchema.properties,
+			landmarks: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						box_2d: box2d,
+						kind: { type: "string", enum: [...LANDMARKS] },
+					},
+					required: ["box_2d", "kind"],
+				},
+			},
+		},
+		required: ["detections", "landmarks"],
+	},
+};
 
 // Interactions API response: only the fields this adapter reads.
 const Interaction = Schema.Struct({
@@ -218,7 +260,7 @@ const modelJson = <A>(body: unknown, schema: Schema.Decoder<A>) =>
 /** Decodes the model's JSON. Medicine keeps only a printed name it could read; others keep a name. */
 const parseDetections = (body: unknown) =>
 	Effect.gen(function* () {
-		const { detections } = yield* modelJson(body, Detections);
+		const { detections, landmarks = [] } = yield* modelJson(body, Detections);
 		const boxes: GeminiBox[] = [];
 		for (const d of detections) {
 			const [ymin, xmin, ymax, xmax] = d.box_2d;
@@ -233,7 +275,14 @@ const parseDetections = (body: unknown) =>
 				confidence: d.confidence,
 			});
 		}
-		return boxes;
+		for (const {
+			box_2d: [ymin, xmin, ymax, xmax],
+		} of landmarks)
+			if (ymin >= ymax || xmin >= xmax) return yield* Effect.fail(invalid());
+		return {
+			boxes,
+			landmarks: landmarks.map(({ box_2d, kind }) => ({ box: box_2d, kind })),
+		};
 	});
 
 // ponytail: fixed split from one load probe on 2026-10-04 (3.8 Flash 9.5–14 s, 3.5 Flash 16.5–17.5 s
@@ -304,13 +353,13 @@ const askAboutImage = <A>(
 /** Gemini detection of personal objects in one camera frame. */
 export const createGeminiDetector =
 	(config: GeminiConfig): ObjectDetector =>
-	(image) =>
+	(image, landmarks = false) =>
 		askAboutImage(
 			config,
 			image,
-			{ prompt, schema: outputSchema },
+			landmarks ? landmarkQuestion : { prompt, schema: outputSchema },
 			parseDetections,
-		).pipe(Effect.map(({ value, model }) => ({ boxes: value, model })));
+		).pipe(Effect.map(({ value, model }) => ({ ...value, model })));
 
 const ItemAnswer = Schema.Struct({
 	item: Schema.String,

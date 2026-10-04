@@ -221,6 +221,13 @@ test.each([
 		'["input"]["limit"]',
 	],
 	[
+		"tools",
+		ToolRequest,
+		{ tool: "saved_things", input: { limit: 5 } },
+		{ tool: "saved_things", input: { limit: 0 } },
+		'["input"]["limit"]',
+	],
+	[
 		"trends",
 		TrendQuestion,
 		{ question: "Why is my HRV low?", days: 90 },
