@@ -1,5 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { MedicineDetectionRequest } from "@health/contracts/vision";
+import {
+	OBJECT_CATEGORIES,
+	ObjectCategory,
+	type ObjectDetectionRequest,
+} from "@health/contracts/vision";
 import { Data, Effect, Schema } from "effect";
 
 /** Pinned so a provider alias change cannot silently change detection behavior. */
@@ -94,12 +98,13 @@ class VisionUpstreamError extends Data.TaggedError("VisionUpstreamError")<{
 /** One box as Gemini reports it: `[ymin, xmin, ymax, xmax]` normalized to 0–1000 of the sent image. */
 export type GeminiBox = {
 	readonly box: readonly [number, number, number, number];
+	readonly category: ObjectCategory;
 	readonly label: string | null;
 	readonly confidence: number;
 };
 
-type MedicineDetector = (
-	image: MedicineDetectionRequest["image"],
+type ObjectDetector = (
+	image: ObjectDetectionRequest["image"],
 ) => Effect.Effect<
 	{ readonly boxes: readonly GeminiBox[]; readonly model: string },
 	VisionUpstreamError
@@ -114,6 +119,7 @@ const Detections = Schema.Struct({
 	detections: Schema.Array(
 		Schema.Struct({
 			box_2d: Schema.Tuple([Coordinate, Coordinate, Coordinate, Coordinate]),
+			category: ObjectCategory,
 			label: Schema.String,
 			label_readable: Schema.Boolean,
 			confidence: Schema.Finite.check(
@@ -136,18 +142,25 @@ const outputSchema = {
 						items: { type: "integer" },
 						description: "[ymin, xmin, ymax, xmax] normalized to 0-1000.",
 					},
+					category: { type: "string", enum: [...OBJECT_CATEGORIES] },
 					label: {
 						type: "string",
 						description:
-							"Medicine name printed on the container, exactly as readable; empty if unreadable.",
+							"Medicine: the name printed on it, exactly as readable, empty if unreadable. Anything else: a short everyday name, 1-4 words.",
 					},
 					label_readable: { type: "boolean" },
 					confidence: {
 						type: "number",
-						description: "0-1 confidence that this is a medicine container.",
+						description: "0-1 confidence in the category.",
 					},
 				},
-				required: ["box_2d", "label", "label_readable", "confidence"],
+				required: [
+					"box_2d",
+					"category",
+					"label",
+					"label_readable",
+					"confidence",
+				],
 			},
 		},
 	},
@@ -155,10 +168,14 @@ const outputSchema = {
 };
 
 const prompt =
-	"Find every medicine container in the image: medicine boxes, pill bottles, and blister packs. " +
+	"Find the personal objects a person might lose in the image: keys, glasses, a wallet, a phone, " +
+	"a remote, medicine (boxes, pill bottles, blister packs), a hearing aid, a bag, or another small " +
+	"belonging. Ignore people, pets, furniture, walls, and the floor. Put the main object first: the " +
+	"one the camera is pointed at, near the center and in focus. Return at most 5. " +
 	"For each, return box_2d as [ymin, xmin, ymax, xmax] normalized to 0-1000. " +
-	"Set label to the medicine name printed on it only if you can read it; never guess a name " +
-	"from color, shape, or loose pills. Return an empty list when there is none.";
+	"For medicine, set label to the medicine name printed on it only if you can read it; never guess " +
+	"a name from color, shape, or loose pills. For anything else, set label to a short everyday name " +
+	'such as "keys" or "reading glasses". Return an empty list when there is none.';
 
 // Interactions API response: only the fields this adapter reads.
 const Interaction = Schema.Struct({
@@ -180,6 +197,7 @@ const Interaction = Schema.Struct({
 
 const invalid = () => new VisionUpstreamError({ reason: "invalid_response" });
 
+/** Decodes the model's JSON. Medicine keeps only a printed name it could read; others keep a name. */
 const parseDetections = (body: unknown) =>
 	Effect.gen(function* () {
 		const interaction = yield* Schema.decodeUnknownEffect(Interaction)(
@@ -196,14 +214,17 @@ const parseDetections = (body: unknown) =>
 			Schema.fromJsonString(Detections),
 		)(text).pipe(Effect.mapError(invalid));
 		const boxes: GeminiBox[] = [];
-		for (const { box_2d, label, label_readable, confidence } of detections) {
-			const [ymin, xmin, ymax, xmax] = box_2d;
+		for (const d of detections) {
+			const [ymin, xmin, ymax, xmax] = d.box_2d;
 			if (ymin >= ymax || xmin >= xmax) return yield* Effect.fail(invalid());
-			const readable = label_readable && label.trim() !== "";
+			const label = d.label.trim();
+			const readable =
+				label !== "" && (d.category !== "medicine" || d.label_readable);
 			boxes.push({
-				box: box_2d,
-				label: readable ? label.trim() : null,
-				confidence,
+				box: d.box_2d,
+				category: d.category,
+				label: readable ? label : null,
+				confidence: d.confidence,
 			});
 		}
 		return boxes;
@@ -220,7 +241,7 @@ const primaryShare = 0.4;
  * model gets 40% of `timeout`; when it is slow or overloaded, the fallback gets the rest.
  */
 export const createGeminiDetector =
-	({ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig): MedicineDetector =>
+	({ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig): ObjectDetector =>
 	(image) =>
 		Effect.tryPromise({
 			try: (signal) =>

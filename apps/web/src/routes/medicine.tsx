@@ -1,17 +1,18 @@
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Pill } from "lucide-react";
+import { ArrowLeft, ScanSearch } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Window } from "@/components/hud/window";
-import { LastSeen, RememberPlace } from "@/components/wearer/last-seen";
-import { itemFromRequest } from "@/components/wearer/logic";
-import { MedicineAnswer } from "@/components/wearer/medicine-answer";
 import {
-	bestDetection,
-	usePictureCheck,
-} from "@/components/wearer/medicine-check";
+	RememberPlace,
+	SavedThings,
+	useArSupported,
+} from "@/components/wearer/last-seen";
+import { categoryOfRequest, itemFromRequest } from "@/components/wearer/logic";
+import { ObjectAnswer } from "@/components/wearer/medicine-answer";
+import { useArrow, usePictureCheck } from "@/components/wearer/medicine-check";
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
 import { Tip } from "@/components/win95";
 import { useFamily } from "@/lib/family";
@@ -20,19 +21,22 @@ import {
 	WhoseMedicinesPicker,
 } from "@/lib/medicine-memory";
 
+// "Find things" (#301): the camera names the main object in view, Save remembers where it is, and
+// "Where is my…?" lists the member's saved things. The path stays /medicine for old links.
 export const Route = createFileRoute("/medicine")({
 	validateSearch: (search: Record<string, unknown>): { q?: string } =>
 		typeof search.q === "string" ? { q: search.q } : {},
-	component: MedicineComponent,
+	component: FindThingsComponent,
 });
 
-function MedicineComponent() {
+function FindThingsComponent() {
 	const { q = "" } = Route.useSearch();
 	const { state: families, family } = useFamily();
 	const familyId = family?.id ?? null;
 	const camera = useCamera(true);
 	const { check, look, stop } = usePictureCheck(familyId, families);
 	const { memory, change, choose } = useChosenMedicineMemory(familyId);
+	const ar = useArSupported();
 	const video = useRef<HTMLVideoElement | null>(null);
 	const lookNow = () => void look(video.current);
 
@@ -47,27 +51,12 @@ function MedicineComponent() {
 	});
 
 	const asked = q.trim() !== "";
-	const item = itemFromRequest(q);
-	const name = (
-		<>
-			<b>{item}</b>
-			<Tip
-				text={
-					asked
-						? `From your request “${q}”.`
-						: "No request was given, so I look for any medicine container."
-				}
-			/>
-		</>
-	);
-	const best =
-		check?.result.kind === "done"
-			? bestDetection(check.result.detections)
-			: null;
+	const category = categoryOfRequest(q);
+	const { best, choice, saving } = useArrow(check, category);
 
 	return (
 		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
-			<Window icon={Pill} title="Find medicine">
+			<Window icon={ScanSearch} title="Find things">
 				<div className="grid gap-4 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
 					<div className="flex flex-wrap items-end justify-between gap-3 md:col-span-2">
 						<Link
@@ -111,35 +100,53 @@ function MedicineComponent() {
 						aria-live="polite"
 						className="grid min-w-0 content-start gap-3 text-[20px]"
 					>
-						<LastSeen
-							change={change}
-							familyId={familyId}
-							item={item}
-							memory={memory}
-						/>
-						<MedicineAnswer
+						<ObjectAnswer
 							best={best}
 							check={check}
+							choice={choice}
 							familyId={familyId}
-							item={item}
 							live={camera.state.kind === "live"}
 							look={lookNow}
-							name={name}
+							name={<AskedItem q={q} />}
 							startCamera={camera.start}
 							stop={stop}
 						/>
-						{check !== null && best !== null && (
+						{best !== null && saving && check !== null && (
 							<RememberPlace
+								ar={ar ? familyId : null}
 								best={best}
 								change={change}
 								check={check}
-								key={check.id}
+								key={`${check.id}:${choice.skipped}`}
 								memory={memory}
 							/>
 						)}
+						<SavedThings
+							ar={ar}
+							asked={category}
+							change={change}
+							familyId={familyId}
+							memory={memory}
+						/>
 					</div>
 				</div>
 			</Window>
 		</main>
+	);
+}
+
+/** The thing the request names, with where that name came from. */
+function AskedItem({ q }: { q: string }) {
+	return (
+		<>
+			<b>{itemFromRequest(q)}</b>
+			<Tip
+				text={
+					q.trim() === ""
+						? "No request was given, so I look for the main thing in view."
+						: `From your request “${q}”.`
+				}
+			/>
+		</>
 	);
 }

@@ -21,8 +21,8 @@ import {
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
 import {
-	type MedicineDetectionRequest,
-	MedicineDetections,
+	type ObjectDetectionRequest,
+	ObjectDetections,
 } from "@health/contracts/vision";
 import { GEMINI_VISION_MODEL } from "../integrations/gemini";
 import {
@@ -73,7 +73,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 	let owner: User;
 	let member: User;
 	let family: { id: string; path: string };
-	let detections: MedicineDetections;
+	let detections: ObjectDetections;
 	let instructionId: string;
 	let reminder: Reminder;
 	let acknowledged: ReminderOccurrenceDetail;
@@ -120,6 +120,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 											detections: [
 												{
 													box_2d: [100, 200, 500, 400],
+													category: "medicine",
 													label: LABEL,
 													label_readable: true,
 													confidence: 0.92,
@@ -142,16 +143,17 @@ describe.skipIf(!integration)("medication reminders", () => {
 		} as const;
 		const image = { type: "image/png", data: png.toString("base64") } as const;
 		detections = await json(
-			MedicineDetections,
-			await owner.call("POST", `${family.path}/vision/medicine-detections`, {
+			ObjectDetections,
+			await owner.call("POST", `${family.path}/vision/object-detections`, {
 				frame,
 				image,
-			} satisfies MedicineDetectionRequest),
+			} satisfies ObjectDetectionRequest),
 		);
 		expect(detections.frame).toEqual(frame);
 		expect(detections.model).toBe(GEMINI_VISION_MODEL);
 		expect(detections.detections).toEqual([
 			{
+				category: "medicine",
 				label: LABEL,
 				confidence: 0.92,
 				needsVerification: false,

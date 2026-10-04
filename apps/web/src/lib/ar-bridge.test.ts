@@ -72,32 +72,37 @@ describe("ar bridge", () => {
 		expect(await answer).toEqual({ supported: false });
 	});
 
-	test("savePin sends the pin and returns the anchor and world map", async () => {
-		const sent = fakeShell(({ requestId, containerId }) => [
-			{
-				type: "ar.pinSaved",
-				requestId,
-				containerId,
+	// A shell built before #301 reads and echoes `containerId`; a newer one uses `objectId`.
+	test.each(["containerId", "objectId"])(
+		"savePin works with a shell that reads the id as %s",
+		async (field) => {
+			const sent = fakeShell((request) => [
+				{
+					type: "ar.pinSaved",
+					requestId: request.requestId,
+					[field]: request[field],
+					anchorId: `telly-pin-${request[field]}`,
+					worldMap: "bWFw",
+					mapBytes: 3,
+				},
+			]);
+			expect(
+				await savePin({ familyId: "1", objectId: "7", label: "Lisinopril" }),
+			).toEqual({
+				kind: "saved",
 				anchorId: "telly-pin-7",
 				worldMap: "bWFw",
 				mapBytes: 3,
-			},
-		]);
-		expect(
-			await savePin({ familyId: "1", containerId: "7", label: "Lisinopril" }),
-		).toEqual({
-			kind: "saved",
-			anchorId: "telly-pin-7",
-			worldMap: "bWFw",
-			mapBytes: 3,
-		});
-		expect(sent[0]).toMatchObject({
-			type: "ar.savePin",
-			familyId: "1",
-			containerId: "7",
-			label: "Lisinopril",
-		});
-	});
+			});
+			expect(sent[0]).toMatchObject({
+				type: "ar.savePin",
+				familyId: "1",
+				objectId: "7",
+				containerId: "7",
+				label: "Lisinopril",
+			});
+		},
+	);
 
 	test("findPin returns the shell's error code", async () => {
 		fakeShell(({ requestId }) => [
@@ -110,7 +115,7 @@ describe("ar bridge", () => {
 		]);
 		expect(
 			await findPin({
-				containerId: "7",
+				objectId: "7",
 				label: "Lisinopril",
 				anchorId: "telly-pin-7",
 				worldMap: "bWFw",
@@ -124,11 +129,11 @@ describe("ar bridge", () => {
 
 	test("a reply of the wrong type for the request is a failure", async () => {
 		fakeShell(({ requestId }) => [
-			{ type: "ar.pinFound", requestId, containerId: "7" },
+			{ type: "ar.pinFound", requestId, objectId: "7" },
 		]);
 		const saved = await savePin({
 			familyId: "1",
-			containerId: "7",
+			objectId: "7",
 			label: "Lisinopril",
 		});
 		expect(saved).toMatchObject({ kind: "error", code: "failed" });

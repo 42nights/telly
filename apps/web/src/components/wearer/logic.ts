@@ -1,5 +1,6 @@
 import type { HealthSample } from "@health/contracts";
 import { urgentRequest } from "@health/contracts/ask";
+import type { ObjectCategory } from "@health/contracts/vision";
 
 /** A heart-rate reading older than this is not shown as current. */
 // ponytail: fixed 10 min window; read it from the family's alert threshold if they ever differ.
@@ -99,27 +100,60 @@ export const barPercent = (bpm: number): number =>
 		Math.max(0, ((bpm - BAR_BPM.low) / (BAR_BPM.high - BAR_BPM.low)) * 100),
 	);
 
-const MEDICINE_WORD =
-	"meds?|medicines?|medications?|pills?|tablets?|capsules?|vitamins?|prescriptions?|inhalers?";
-const MEDICINE = new RegExp(`\\b(?:${MEDICINE_WORD})\\b`, "i");
-// "my" plus up to three describing words before the medicine word: "my blood pressure pills".
-const MY_MEDICINE = new RegExp(
-	`\\bmy\\s+((?:[a-z'-]+\\s+){0,3}?(?:${MEDICINE_WORD}))\\b`,
-	"i",
-);
+// The words for each object the finder knows (#301), medicine first: "where are my keys?" opens it.
+const OBJECT_WORDS: ReadonlyArray<readonly [ObjectCategory, string]> = [
+	[
+		"medicine",
+		"meds?|medicines?|medications?|pills?|tablets?|capsules?|vitamins?|prescriptions?|inhalers?",
+	],
+	["keys", "keys?|keyring"],
+	["glasses", "glasses|spectacles|specs|sunglasses"],
+	["wallet", "wallet|purse"],
+	["phone", "phone|cellphone|mobile"],
+	["remote", "remote|remote control"],
+	["hearing aid", "hearing aids?"],
+	["bag", "bag|handbag|backpack"],
+];
+const FIND = /\b(?:where|find|lost|misplaced|seen|look(?:ing)? for)\b/i;
 
-/** True when a request asks about medicine, so it opens the medicine finder. */
-export const isMedicineRequest = (request: string): boolean =>
-	MEDICINE.test(request);
+const namedObject = (request: string) =>
+	OBJECT_WORDS.find(([, words]) =>
+		new RegExp(`\\b(?:${words})\\b`, "i").test(request),
+	);
+
+/** The object category a request names: medicine words first, then keys, glasses, and so on. */
+export const categoryOfRequest = (request: string): ObjectCategory | null =>
+	namedObject(request)?.[0] ?? null;
+
+/** What to call an object: its label when there is one, else its kind ("keys", "thing"). */
+export const objectName = (
+	category: ObjectCategory,
+	label: string | null,
+): string => label ?? (category === "other" ? "thing" : category);
+
+/**
+ * True when a request opens the finder: any medicine request, or a request to find a known object
+ * ("where are my keys?"). "Call my phone" is not a find request.
+ */
+export const isFindRequest = (request: string): boolean => {
+	const category = categoryOfRequest(request);
+	return category === "medicine" || (category !== null && FIND.test(request));
+};
 
 /**
  * The item a request names, in words to show the wearer: "Where are my meds?" → "your medicine",
- * "find my blood pressure pills" → "your blood pressure pills". Never a stored or per-item name.
+ * "find my blood pressure pills" → "your blood pressure pills", "where are my reading glasses" →
+ * "your reading glasses", no named object → "your things". Never a stored or per-item name.
  */
 export const itemFromRequest = (request: string): string => {
-	const named = MY_MEDICINE.exec(request)?.[1] ?? MEDICINE.exec(request)?.[0];
-	if (named === undefined) return "your medicine";
-	return `your ${named.toLowerCase().replace(/\bmeds?\b/, "medicine")}`;
+	const words = namedObject(request)?.[1];
+	if (words === undefined) return "your things";
+	// "my" plus up to three describing words before the object word: "my blood pressure pills".
+	const named =
+		new RegExp(`\\bmy\\s+((?:[a-z'-]+\\s+){0,3}?(?:${words}))\\b`, "i").exec(
+			request,
+		)?.[1] ?? new RegExp(`\\b(?:${words})\\b`, "i").exec(request)?.[0];
+	return `your ${named?.toLowerCase().replace(/\bmeds?\b/, "medicine")}`;
 };
 
 // "Ouch" and the like: maybe hurt, maybe not. Not urgent by itself, so it gets a check-in.

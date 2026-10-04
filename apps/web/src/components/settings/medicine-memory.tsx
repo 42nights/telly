@@ -13,7 +13,7 @@ import {
 	WhoseMedicinesPicker,
 } from "@/lib/medicine-memory";
 
-/** One member's permission to remember where their medicine was last seen, and their places. */
+/** One member's permission to remember where their things were last seen (#301), and their places. */
 export function MedicineMemorySettings() {
 	const { family } = useFamily();
 	const { memory, change, choose } = useChosenMedicineMemory(
@@ -29,7 +29,7 @@ export function MedicineMemorySettings() {
 						? "Off: no places are saved"
 						: `On · saved ${new Date(memory.value.permission.setAt).toLocaleString()}`
 			}
-			title="Settings · Medicine places"
+			title="Settings · Things and places"
 		>
 			<WhoseMedicinesPicker
 				choose={choose}
@@ -39,7 +39,7 @@ export function MedicineMemorySettings() {
 			{memory.kind === "ready" ? (
 				<MemoryForm change={change} key={memory.at} memory={memory.value} />
 			) : (
-				<ApiNotice state={memory} what="medicine places" />
+				<ApiNotice state={memory} what="things and places" />
 			)}
 		</Window>
 	);
@@ -64,7 +64,7 @@ function MemoryForm({
 		.filter(Boolean);
 	return (
 		<form
-			aria-label="Medicine places"
+			aria-label="Things and places"
 			className="grid gap-3 p-2 text-sm"
 			onSubmit={(event) => {
 				event.preventDefault();
@@ -81,12 +81,12 @@ function MemoryForm({
 					onChange={(event) => setEnabled(event.target.checked)}
 					type="checkbox"
 				/>
-				Remember where medicine was last seen
+				Remember where my things were last seen
 			</label>
 			<p>
-				After a camera check finds a medicine container, you can save the room
-				or landmark where it is. Only this member, family admins, and caregivers
-				can see it.
+				After a camera check finds keys, glasses, medicine, or another thing,
+				you can save the room or spot where it is, with a small picture. Only
+				this member, family admins, and caregivers can see it.
 			</p>
 			{enabled ? (
 				<label className="grid gap-1">
@@ -100,7 +100,8 @@ function MemoryForm({
 			) : (
 				on && (
 					<p className="font-bold">
-						Turning this off deletes every saved place of this member.
+						Turning this off deletes every saved thing, place, and AR pin of
+						this member.
 					</p>
 				)
 			)}

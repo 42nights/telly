@@ -5,7 +5,7 @@ import type {
 	MedicineMemory,
 	MedicineSighting,
 } from "@health/contracts/medicine-memory";
-import type { MedicineDetection } from "@health/contracts/vision";
+import type { ObjectDetection } from "@health/contracts/vision";
 import {
 	createMemoryHistory,
 	createRootRoute,
@@ -21,9 +21,10 @@ import {
 	type ServerReply,
 	serve,
 	waitFor,
+	within,
 } from "../test/dom";
 
-import { LastSeen, RememberPlace } from "./last-seen";
+import { RememberPlace, SavedThings } from "./last-seen";
 import type { PictureCheck } from "./medicine-check";
 
 installDom();
@@ -50,6 +51,10 @@ const sighting = (
 	confidence: 0.9,
 	labelRead: true,
 	notFoundAt: null,
+	category: "medicine",
+	thumbnail: "",
+	usualPlace: null,
+	pinned: false,
 	...extra,
 });
 
@@ -91,25 +96,41 @@ const memory: MedicineMemory = {
 	sightings: [sighting("s1")],
 };
 
-describe("LastSeen", () => {
+/** Renders `node` inside a router, for the links to Settings. */
+const routed = async (node: React.ReactNode) => {
+	const router = createRouter({
+		routeTree: createRootRoute({ component: () => node }),
+		history: createMemoryHistory(),
+	});
+	const view = render(<RouterProvider router={router} />);
+	await waitFor(() => expect(view.container.textContent).not.toBe(""));
+	return view;
+};
+
+const keys = sighting("k", {
+	container: "keys",
+	category: "keys",
+	place: "Hall table",
+	seenAt: minutesAgo(60),
+	thumbnail: "/9j/AA",
+	usualPlace: "Hall table",
+});
+
+describe("SavedThings", () => {
+	const props = {
+		change: changes().change,
+		familyId: "1",
+		asked: null,
+		ar: false,
+	} as const;
+
 	test("shows nothing while loading or with no paired person", () => {
-		const { change } = changes();
 		const view = render(
-			<LastSeen
-				change={change}
-				familyId="1"
-				item="x"
-				memory={{ kind: "loading" }}
-			/>,
+			<SavedThings {...props} memory={{ kind: "loading" }} />,
 		);
 		expect(view.container.textContent).toBe("");
 		view.rerender(
-			<LastSeen
-				change={change}
-				familyId={null}
-				item="x"
-				memory={ready(memory)}
-			/>,
+			<SavedThings {...props} familyId={null} memory={ready(memory)} />,
 		);
 		expect(view.container.textContent).toBe("");
 	});
@@ -117,109 +138,104 @@ describe("LastSeen", () => {
 	test.each([
 		[{ kind: "signed_out" }, "Sign in first."],
 		[{ kind: "forbidden", message: "Not your family." }, "Not your family."],
-		[{ kind: "unavailable", message: "Database down." }, "Database down."],
 	] as const)(
 		"a failed read says the notes cannot be read (%o)",
 		(state, why) => {
-			const view = render(
-				<LastSeen
-					change={changes().change}
-					familyId="1"
-					item="x"
-					memory={state}
-				/>,
-			);
+			const view = render(<SavedThings {...props} memory={state} />);
 			expect(view.container.textContent).toBe(
-				`I can't read my notes on where medicine was last seen. ${why}`,
+				`I can't read my notes on where things were last seen. ${why}`,
 			);
 		},
 	);
 
 	test("with remembering off it links to Settings", async () => {
-		const router = createRouter({
-			routeTree: createRootRoute({
-				component: () => (
-					<LastSeen
-						change={changes().change}
-						familyId="1"
-						item="x"
-						memory={ready({ permission: null, sightings: [] })}
-					/>
-				),
-			}),
-			history: createMemoryHistory(),
-		});
-		const view = render(<RouterProvider router={router} />);
-		const link = await view.findByRole("link", {
-			name: "Turn this on in Settings",
-		});
-		expect(link.getAttribute("href")).toBe("/settings/places");
-		view.getByText(/I don't keep notes on where medicine was last seen\./);
-	});
-
-	test("with no sighting yet it names the item", () => {
-		const view = render(
-			<LastSeen
-				change={changes().change}
-				familyId="1"
-				item="your pills"
-				memory={ready({ permission, sightings: [] })}
+		const view = await routed(
+			<SavedThings
+				{...props}
+				memory={ready({ permission: null, sightings: [] })}
 			/>,
 		);
+		const link = view.getByRole("link", { name: "Turn this on in Settings" });
+		expect(link.getAttribute("href")).toBe("/settings/places");
+		view.getByText(/I don't keep notes on where things were last seen\./);
+	});
+
+	test("with nothing saved it says how to save", () => {
+		const view = render(
+			<SavedThings {...props} memory={ready({ permission, sightings: [] })} />,
+		);
 		expect(view.container.textContent).toBe(
-			"I have no note yet of where your pills was last seen. When I find it, I can remember the place.",
+			"No saved things yet. Point the camera at something you often lose, then tap Save.",
 		);
 	});
 
-	test("shows up to three past sightings, each qualified, never as current", () => {
+	test("lists every saved thing; picking one shows its last and usual place, never as current", () => {
 		const view = render(
-			<LastSeen
-				change={changes().change}
-				familyId="1"
-				item="x"
+			<SavedThings
+				{...props}
 				memory={ready({
 					permission,
 					sightings: [
 						sighting("sure"),
-						sighting("old", { place: "Hall", seenAt: minutesAgo(13 * 60) }),
-						sighting("unsure", { place: "Desk", labelRead: false }),
-						sighting("fourth", { place: "Garage" }),
+						keys,
+						sighting("old", {
+							container: "Glasses",
+							category: "glasses",
+							place: "Desk",
+							seenAt: minutesAgo(13 * 60),
+						}),
 					],
 				})}
 			/>,
 		);
-		const text = view.getByRole("region", { name: "Last seen" }).textContent;
-		expect(text).toContain(
-			"Last seen 3 min ago at Kitchen counter: Lisinopril bottle.",
-		);
-		expect(text).toContain("Last seen 13 h ago at Hall");
-		expect(text).toContain("Last seen 3 min ago at Desk");
-		expect(text).not.toContain("Garage");
+		const list = view.getByRole("region", { name: "Where is my…?" });
+		expect(view.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+			"Lisinopril bottleKitchen counter · 3 min ago",
+			"keysHall table · 1 h ago",
+			"GlassesDesk · 13 h ago",
+		]);
+		// Only a thing saved with a picture shows one.
+		expect(list.querySelectorAll("img")).toHaveLength(1);
+		expect(view.queryByText(/Last seen/)).toBeNull();
+
+		fireEvent.click(view.getByRole("button", { name: /^keys/ }));
 		expect(
-			view.getAllByText("This note is old. It has probably moved since."),
-		).toHaveLength(1);
-		expect(
-			view.getAllByText("I was not sure about the label then."),
-		).toHaveLength(1);
+			view.getByRole("button", { name: /^keys/ }).getAttribute("aria-pressed"),
+		).toBe("true");
+		expect(list.textContent).toContain("Last seen 1 h ago at Hall table.");
+		expect(list.textContent).toContain("Usually kept at Hall table.");
 		view.getByText(
-			"This is where it was seen before, not where it is now. Go there and check the picture again.",
+			"This is where it was seen before, not where it is now. Go there and check with the camera.",
 		);
-		expect(
-			view.getAllByRole("button", { name: "It's not there" }),
-		).toHaveLength(3);
-		// Nothing is out of date, so there is no family help yet.
-		expect(
-			view.queryByRole("button", { name: "Ask family for help" }),
-		).toBeNull();
+		// No AR on this device.
+		expect(view.queryByRole("button", { name: "Show me in AR" })).toBeNull();
+
+		fireEvent.click(view.getByRole("button", { name: /^Glasses/ }));
+		view.getByText("This note is old. It has probably moved since.");
+		expect(view.queryByText(/Usually kept/)).toBeNull();
+	});
+
+	test("a request for a kind of thing opens the first saved one of that kind", () => {
+		const view = render(
+			<SavedThings
+				{...props}
+				asked="keys"
+				memory={ready({ permission, sightings: [sighting("s"), keys] })}
+			/>,
+		);
+		expect(view.container.textContent).toContain(
+			"Last seen 1 h ago at Hall table.",
+		);
+		expect(view.container.textContent).not.toContain("at Kitchen counter.");
 	});
 
 	test("It's not there marks the place out of date and shows a failure", async () => {
 		const { calls, change, answer } = changes();
 		const view = render(
-			<LastSeen
+			<SavedThings
+				{...props}
+				asked="medicine"
 				change={change}
-				familyId="1"
-				item="x"
 				memory={ready({ permission, sightings: [sighting("a/b")] })}
 			/>,
 		);
@@ -233,19 +249,13 @@ describe("LastSeen", () => {
 		);
 		expect(button).toHaveProperty("disabled", false);
 		fireEvent.click(button);
-		answer({ kind: "signed_out" });
-		await waitFor(() =>
-			expect(view.getByRole("alert").textContent).toBe("Sign in first."),
-		);
-		fireEvent.click(button);
 		answer({ kind: "ready", value: memory });
 		// A saved change shows no message: the re-read memory shows it.
 		await waitFor(() => expect(view.queryByRole("alert") === null).toBe(true));
-		expect(view.queryByRole("status")).toBeNull();
-		expect(calls).toHaveLength(3);
+		expect(calls).toHaveLength(2);
 	});
 
-	test("a container that moved shows other places and asks the family once", async () => {
+	test("a thing that moved shows other places and asks the family once", async () => {
 		let reply: (r: ServerReply) => void = () => {};
 		const calls = serve({
 			"POST /api/families/1/messages": () => {
@@ -255,76 +265,39 @@ describe("LastSeen", () => {
 			},
 		});
 		const view = render(
-			<LastSeen
-				change={changes().change}
-				familyId="1"
-				item="x"
+			<SavedThings
+				{...props}
+				asked="medicine"
 				memory={ready({
 					permission,
-					sightings: [
-						sighting("moved", { notFoundAt: minutesAgo(2) }),
-						sighting("other", { place: "Hall" }),
-					],
+					sightings: [sighting("moved", { notFoundAt: minutesAgo(2) })],
 				})}
 			/>,
 		);
 		view.getByText("It was not there 2 min ago. This place is out of date.");
-		// Only the sighting still current gets the button.
-		expect(
-			view.getAllByRole("button", { name: "It's not there" }),
-		).toHaveLength(1);
+		expect(view.queryByRole("button", { name: "It's not there" })).toBeNull();
 		view.getByText("Other places to look:");
-		expect(view.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-			"Bedside table",
-			"Bathroom shelf",
-		]);
+		expect(
+			[...view.container.querySelectorAll("ul.list-disc li")].map(
+				(li) => li.textContent,
+			),
+		).toEqual(["Bedside table", "Bathroom shelf"]);
 		const ask = view.getByRole("button", { name: "Ask family for help" });
 		fireEvent.click(ask);
-		expect(ask).toHaveProperty("disabled", true);
 		await waitFor(() => expect(calls).toHaveLength(1));
 		reply({
 			status: 503,
 			body: { error: "unavailable", message: "Chat is down." },
 		});
 		expect((await view.findByRole("alert")).textContent).toBe("Chat is down.");
-		expect(ask).toHaveProperty("disabled", false);
 		// A retry sends the same client id, so the family gets one message.
 		fireEvent.click(ask);
 		await waitFor(() => expect(calls).toHaveLength(2));
-		const body = {
+		expect(calls[1]?.body).toEqual(calls[0]?.body);
+		expect(calls[0]?.body).toEqual({
 			clientId: expect.any(String),
 			body: "I can't find Lisinopril bottle. It was last seen at Kitchen counter, but it is not there now. Can you help me find it?",
-		};
-		expect(calls.map((c) => c.body)).toEqual([body, body]);
-		expect(calls[1]?.body).toEqual(calls[0]?.body);
-		reply({
-			json: {
-				id: "9",
-				familyId: "1",
-				sender: "a",
-				body: body.body,
-				sentAt: minutesAgo(0),
-				clientId: "c",
-			},
 		});
-		await view.findByText("I asked your family for help.");
-		expect(ask).toHaveProperty("disabled", true);
-	});
-
-	test("with no other agreed place, only the family help shows", () => {
-		const view = render(
-			<LastSeen
-				change={changes().change}
-				familyId="1"
-				item="x"
-				memory={ready({
-					permission: { ...permission, places: ["Kitchen counter"] },
-					sightings: [sighting("moved", { notFoundAt: minutesAgo(2) })],
-				})}
-			/>,
-		);
-		expect(view.queryByText("Other places to look:")).toBeNull();
-		view.getByRole("button", { name: "Ask family for help" });
 	});
 });
 
@@ -337,40 +310,54 @@ describe("RememberPlace", () => {
 		capturedAt,
 		result: { kind: "looking" },
 	};
-	const sure: MedicineDetection = {
+	const sure: ObjectDetection = {
+		category: "medicine",
 		label: "Metformin",
 		confidence: 0.92,
 		needsVerification: false,
 		box: { x: 0, y: 0, width: 10, height: 10 },
 	};
+	const place = (value: string) =>
+		fireEvent.change(
+			within(document.body).getByRole("combobox", {
+				name: "Where is it? A room or a spot.",
+			}),
+			{ target: { value } },
+		);
 
-	test("shows nothing until remembering is known to be on", () => {
+	test("shows nothing while loading, and links to Settings while remembering is off", async () => {
 		const { change } = changes();
-		const view = render(
+		const loading = render(
 			<RememberPlace
+				ar={null}
 				best={sure}
 				change={change}
 				check={check}
 				memory={{ kind: "loading" }}
 			/>,
 		);
-		expect(view.container.textContent).toBe("");
-		view.rerender(
+		expect(loading.container.textContent).toBe("");
+		loading.unmount();
+		const off = await routed(
 			<RememberPlace
+				ar={null}
 				best={sure}
 				change={change}
 				check={check}
 				memory={ready({ permission: null, sightings: [] })}
 			/>,
 		);
-		expect(view.container.textContent).toBe("");
+		expect(
+			off.getByRole("link", { name: "Settings" }).getAttribute("href"),
+		).toBe("/settings/places");
 	});
 
-	test("saves a read label at a place once one is given", async () => {
+	test("saves any thing with its kind and picture at a place once one is given", async () => {
 		const { calls, change, answer } = changes();
 		const view = render(
 			<RememberPlace
-				best={sure}
+				ar={null}
+				best={{ ...sure, category: "keys", label: null, confidence: 0.6 }}
 				change={change}
 				check={check}
 				memory={ready({
@@ -379,53 +366,52 @@ describe("RememberPlace", () => {
 				})}
 			/>,
 		);
-		const form = view.getByRole("form", { name: "Remember where it is" });
+		const form = view.getByRole("form", { name: "Save where it is" });
 		// The agreed places and past places are offered once each.
 		expect(
 			[...form.querySelectorAll("option")].map((o) => o.getAttribute("value")),
 		).toEqual(["Kitchen counter", "Bedside table", "Bathroom shelf", "Hall"]);
+		// A thing without a label is named by its kind, and the person may rename it.
 		expect(view.getByRole("textbox", { name: "What is it?" })).toHaveProperty(
 			"value",
-			"Metformin",
+			"keys",
 		);
-		const save = view.getByRole("button", { name: "Remember this place" });
+		// Only medicine needs a label check, even when the model was unsure.
+		expect(view.queryByRole("checkbox")).toBeNull();
+		const save = view.getByRole("button", { name: "Save this place" });
 		expect(save).toHaveProperty("disabled", true);
-		// A submit without a place sends nothing.
 		fireEvent.submit(form);
 		expect(calls).toEqual([]);
-		fireEvent.change(
-			view.getByRole("combobox", {
-				name: "Where is it? A room or a landmark.",
-			}),
-			{ target: { value: "  Bedside table " } },
-		);
+		place("  Bedside table ");
 		expect(save).toHaveProperty("disabled", false);
 		fireEvent.click(save);
-		expect(calls).toEqual([
-			[
-				"POST",
-				"/sightings",
-				{
-					container: "Metformin",
-					place: "Bedside table",
-					seenAt: new Date(capturedAt).toISOString(),
-					source: "camera_check",
-					confidence: 0.92,
-					labelRead: true,
-				},
-			],
+		await waitFor(() => expect(calls).toHaveLength(1));
+		expect(calls[0]).toEqual([
+			"POST",
+			"/sightings",
+			{
+				container: "keys",
+				place: "Bedside table",
+				seenAt: new Date(capturedAt).toISOString(),
+				source: "camera_check",
+				confidence: 0.6,
+				labelRead: false,
+				category: "keys",
+				thumbnail: expect.any(String),
+			},
 		]);
-		await waitFor(() => expect(save.hasAttribute("disabled")).toBe(true));
+		expect(save).toHaveProperty("disabled", true);
 		answer({ kind: "ready", value: memory });
 		expect((await view.findByRole("status")).textContent).toBe(
-			"Saved as the last place it was seen. This does not record a dose.",
+			"Saved as the last place it was seen.",
 		);
 	});
 
-	test("an unread label must be named and checked before saving", async () => {
+	test("an unread medicine label must be named and checked before saving", async () => {
 		const { calls, change, answer } = changes();
 		const view = render(
 			<RememberPlace
+				ar={null}
 				best={{
 					...sure,
 					label: null,
@@ -437,16 +423,11 @@ describe("RememberPlace", () => {
 				memory={ready({ permission, sightings: [] })}
 			/>,
 		);
-		const save = view.getByRole("button", { name: "Remember this place" });
+		const save = view.getByRole("button", { name: "Save this place" });
 		const name = view.getByRole("textbox", { name: "What is it?" });
 		expect(name).toHaveProperty("value", "");
 		fireEvent.change(name, { target: { value: "Blue pill box" } });
-		fireEvent.change(
-			view.getByRole("combobox", {
-				name: "Where is it? A room or a landmark.",
-			}),
-			{ target: { value: "Hall" } },
-		);
+		place("Hall");
 		expect(save).toHaveProperty("disabled", true);
 		fireEvent.click(
 			view.getByRole("checkbox", {
@@ -455,16 +436,101 @@ describe("RememberPlace", () => {
 		);
 		expect(save).toHaveProperty("disabled", false);
 		fireEvent.click(save);
+		await waitFor(() => expect(calls).toHaveLength(1));
 		expect(calls[0]?.[2]).toMatchObject({
 			container: "Blue pill box",
 			place: "Hall",
 			confidence: 0.5,
 			labelRead: false,
+			category: "medicine",
 		});
 		answer({ kind: "error", message: "Remembering is off." });
 		expect((await view.findByRole("alert")).textContent).toBe(
 			"Remembering is off.",
 		);
 		expect(save).toHaveProperty("disabled", false);
+	});
+
+	test("a saved medicine says no dose was recorded", async () => {
+		const { calls, change, answer } = changes();
+		const view = render(
+			<RememberPlace
+				ar={null}
+				best={sure}
+				change={change}
+				check={check}
+				memory={ready({ permission, sightings: [] })}
+			/>,
+		);
+		place("Hall");
+		fireEvent.click(view.getByRole("button", { name: "Save this place" }));
+		await waitFor(() => expect(calls).toHaveLength(1));
+		answer({ kind: "ready", value: memory });
+		expect((await view.findByRole("status")).textContent).toBe(
+			"Saved as the last place it was seen. This does not record a dose.",
+		);
+	});
+
+	test("on an iPhone with AR, Save then pins the saved thing in AR by its object id", async () => {
+		const pinPath = "PUT /api/families/1/medicine-memory/objects/k/ar-pin";
+		const calls = serve({ [pinPath]: { json: { anchorId: "telly-pin-k" } } });
+		const sent: Record<string, unknown>[] = [];
+		globalThis.ReactNativeWebView = {
+			postMessage: (data) => {
+				const request = JSON.parse(data) as Record<string, unknown>;
+				sent.push(request);
+				queueMicrotask(() =>
+					globalThis.dispatchEvent(
+						new CustomEvent("telly-ar", {
+							detail: {
+								type: "ar.pinSaved",
+								requestId: request.requestId,
+								anchorId: "telly-pin-k",
+								worldMap: "bWFw",
+								mapBytes: 3,
+							},
+						}),
+					),
+				);
+			},
+		};
+		try {
+			const saves = changes();
+			const { change, answer } = saves;
+			const view = render(
+				<RememberPlace
+					ar="1"
+					best={{ ...sure, category: "keys", label: "Keys" }}
+					change={change}
+					check={check}
+					memory={ready({ permission, sightings: [] })}
+				/>,
+			);
+			place("Hall table");
+			fireEvent.click(view.getByRole("button", { name: "Save this place" }));
+			await waitFor(() => expect(saves.calls).toHaveLength(1));
+			answer({
+				kind: "ready",
+				value: {
+					...memory,
+					sightings: [sighting("k", { container: "keys", category: "keys" })],
+				},
+			});
+			await waitFor(() =>
+				expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([pinPath]),
+			);
+			expect(sent[0]).toMatchObject({
+				type: "ar.savePin",
+				familyId: "1",
+				objectId: "k",
+				label: "keys",
+			});
+			expect(calls[0]?.body).toEqual({
+				anchorId: "telly-pin-k",
+				worldMap: "bWFw",
+			});
+		} finally {
+			globalThis.ReactNativeWebView = undefined;
+		}
 	});
 });

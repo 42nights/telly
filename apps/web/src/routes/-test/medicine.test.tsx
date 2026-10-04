@@ -9,7 +9,7 @@ const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
 
-const DETECT = "POST /api/families/fam-1/vision/medicine-detections";
+const DETECT = "POST /api/families/fam-1/vision/object-detections";
 
 // A fake camera: one stream, frames painted at once, and a canvas that encodes a tiny JPEG.
 // The motion sampler asks for a readable context; none is given, so markers clear only by age.
@@ -56,54 +56,110 @@ const detections =
 		analyzedAt: "2026-10-01T12:00:00.000Z",
 	});
 
-const ASPIRIN = {
+const PILLS = {
+	category: "medicine",
 	label: "Aspirin",
 	confidence: 0.9,
 	needsVerification: false,
 	box: { x: 100, y: 100, width: 80, height: 120 },
 };
+const KEYS = { ...PILLS, category: "keys", label: "keys", confidence: 0.8 };
+
+const MEMORY = "/api/families/fam-1/medicine-memory";
+const memory = (sightings: object[]) => ({
+	personId: "a".repeat(64),
+	people: ["a".repeat(64)],
+	permission: {
+		places: ["Kitchen"],
+		setBy: "user-1",
+		setAt: "2026-10-01T00:00:00.000Z",
+	},
+	sightings,
+});
 
 async function showVideo() {
 	fireEvent.loadedData(await screen.findByLabelText("Live camera preview"));
 }
 
-test("looks for the asked medicine once the video shows, marks it, and looks again on request", async () => {
+test("names the asked thing first, Not this moves on, and Save keeps it at the named place", async () => {
 	installCamera();
 	signIn();
+	const saved = {
+		id: "7",
+		familyId: "fam-1",
+		personId: "a".repeat(64),
+		savedBy: "a".repeat(64),
+		container: "Aspirin",
+		place: "Hall",
+		seenAt: new Date().toISOString(),
+		source: "camera_check",
+		confidence: 0.9,
+		labelRead: true,
+		category: "medicine",
+		thumbnail: "",
+		notFoundAt: null,
+		usualPlace: null,
+		pinned: false,
+	};
+	let stored: object[] = [];
 	const calls = serve({
 		"GET /api/families": { families: [FAMILY] },
-		"GET /api/families/fam-1/medicine-memory": {
-			personId: "a".repeat(64),
-			people: ["a".repeat(64)],
-			permission: {
-				places: ["Kitchen"],
-				setBy: "user-1",
-				setAt: "2026-10-01T00:00:00.000Z",
-			},
-			sightings: [],
+		[`GET ${MEMORY}`]: () => memory(stored),
+		[`POST ${MEMORY}/sightings`]: () => {
+			stored = [saved];
+			return memory(stored);
 		},
-		[DETECT]: detections([
-			{ ...ASPIRIN, label: "Vitamin D", confidence: 0.6 },
-			ASPIRIN,
-		]),
+		[DETECT]: detections([PILLS, KEYS]),
 	});
-	renderRoute("/medicine?q=aspirin");
+	renderRoute("/medicine?q=where%20are%20my%20keys");
 
-	expect(await screen.findByText("“aspirin”")).toBeTruthy();
-	expect(screen.getByText("You asked")).toBeTruthy();
+	expect(await screen.findByText("“where are my keys”")).toBeTruthy();
+	expect(screen.getByRole("heading", { name: "Find things" })).toBeTruthy();
 	await showVideo();
 
-	expect(await screen.findByText("I found it")).toBeTruthy();
+	// The asked kind leads, although the model put the pills first.
+	expect((await screen.findByText(/Looks like:/)).textContent).toBe(
+		"Looks like: your keys",
+	);
 	expect(screen.getByAltText("Camera frame that was checked")).toBeTruthy();
-	expect(
-		await screen.findByRole("form", { name: "Remember where it is" }),
-	).toBeTruthy();
 	const sent = calls.filter((c) => `${c.method} ${c.path}` === DETECT);
 	expect(sent).toHaveLength(1);
 	expect(sent[0]?.body).toMatchObject({
 		frame: { width: 640, height: 480, rotation: 0 },
 		image: { type: "image/jpeg", data: "AAAA" },
 	});
+
+	fireEvent.click(screen.getByRole("button", { name: "Not this" }));
+	expect(screen.getByText(/Looks like:/).textContent).toBe(
+		"Looks like: medicine. The label looks like “Aspirin”",
+	);
+	expect(screen.queryByRole("form", { name: "Save where it is" })).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "Save" }));
+	fireEvent.change(
+		screen.getByRole("combobox", { name: "Where is it? A room or a spot." }),
+		{ target: { value: "Hall" } },
+	);
+	fireEvent.click(screen.getByRole("button", { name: "Save this place" }));
+	await waitFor(() =>
+		expect(
+			calls.find((c) => `${c.method} ${c.path}` === `POST ${MEMORY}/sightings`)
+				?.body,
+		).toMatchObject({
+			container: "Aspirin",
+			place: "Hall",
+			category: "medicine",
+			labelRead: true,
+		}),
+	);
+	expect(
+		await screen.findByText(
+			"Saved as the last place it was seen. This does not record a dose.",
+		),
+	).toBeTruthy();
+	// The saved thing is listed under "Where is my…?".
+	expect(
+		(await screen.findByRole("region", { name: "Where is my…?" })).textContent,
+	).toContain("Aspirin");
 
 	fireEvent.click(screen.getByRole("button", { name: "Look again" }));
 	await waitFor(() =>
@@ -113,7 +169,7 @@ test("looks for the asked medicine once the video shows, marks it, and looks aga
 	);
 });
 
-test("says nothing was found when the picture has no medicine container", async () => {
+test("says nothing was found when the picture has no thing in it", async () => {
 	installCamera();
 	signIn();
 	serve({
@@ -123,15 +179,11 @@ test("says nothing was found when the picture has no medicine container", async 
 	renderRoute("/medicine");
 
 	await showVideo();
-	expect(
-		await screen.findByText(
-			"None found in this picture. Point the phone at the counter or shelf and try again.",
-		),
-	).toBeTruthy();
+	expect((await screen.findByText(/^I can't see/)).textContent).toBe(
+		"I can't see your things in this picture.",
+	);
 	expect(screen.queryByText("You asked")).toBeNull();
-	expect(
-		screen.queryByRole("form", { name: "Remember where it is" }),
-	).toBeNull();
+	expect(screen.queryByRole("form", { name: "Save where it is" })).toBeNull();
 });
 
 test("explains that a caller who is not a member cannot check pictures", async () => {

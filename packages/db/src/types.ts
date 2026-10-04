@@ -472,6 +472,9 @@ export const MedicineSighting = __t.object("MedicineSighting", {
   savedBy: __t.identity(),
   notFoundAt: __t.option(__t.timestamp()),
   personId: __t.identity(),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()),
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
 

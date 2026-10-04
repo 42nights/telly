@@ -65,6 +65,8 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 							familyId: BigInt(familyId),
 							personId: Identity.fromString(db.identity),
 							...sighting("Kitchen", ""),
+							category: "medicine",
+							thumbnail: "",
 							seenAt: Timestamp.now(),
 						})
 						.then(String, String),
@@ -123,8 +125,47 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 				const memory = decode(moved.json);
 				expect(memory.permission?.places).toEqual(places);
 				expect(
-					memory.sightings.map((s) => [s.id, s.place, s.notFoundAt]),
-				).toEqual([[stored.id, "Bedside table", null]]);
+					memory.sightings.map((s) => [
+						s.id,
+						s.place,
+						s.notFoundAt,
+						s.category,
+						s.usualPlace,
+					]),
+				).toEqual([[stored.id, "Bedside table", null, "medicine", null]]);
+
+				// Any object, not only medicine: its category and picture are kept, and a place it was
+				// seen at twice becomes where it is usually kept.
+				const keys = {
+					...sighting("Hall table", minutesAgo(4)),
+					container: "Synthetic keys",
+					category: "keys",
+					thumbnail: "/9j/AAAA",
+				};
+				yield* send(app, "POST", path, keys);
+				yield* send(app, "POST", path, {
+					...keys,
+					place: "Sofa",
+					seenAt: minutesAgo(3),
+				});
+				const back = decode(
+					(yield* send(app, "POST", path, {
+						...keys,
+						place: "hall table",
+						seenAt: minutesAgo(2),
+					})).json,
+				).sightings.find((s) => s.container === "Synthetic keys");
+				expect(back).toMatchObject({
+					category: "keys",
+					thumbnail: "/9j/AAAA",
+					place: "hall table",
+					usualPlace: "hall table",
+				});
+				const unknown = yield* send(app, "POST", path, {
+					...keys,
+					category: "sofa",
+				});
+				expect(failure(unknown)).toEqual([400, "invalid_request"]);
 
 				// Another container is its own sighting; the most recently seen lists first.
 				const second = yield* send(app, "POST", path, {
@@ -136,6 +177,7 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 				).toEqual([
 					[expect.stringMatching(/lisinopril/i), "Bedside table"],
 					["Synthetic Metformin box", "Kitchen counter"],
+					["Synthetic keys", "hall table"],
 				]);
 
 				// Turning the permission off deletes what was remembered.
@@ -204,18 +246,20 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 						familyId: BigInt(familyId),
 						personId: Identity.fromString(owner.identity),
 						...sighting("Garage", ""),
+						category: "keys",
+						thumbnail: "",
 						seenAt: Timestamp.now(),
 					}),
 					theirs.markMedicineNotFound({ id: BigInt(stored?.id ?? "0") }),
 					theirs.saveMedicineArPin({
 						familyId: BigInt(familyId),
-						containerId: BigInt(stored?.id ?? "0"),
+						objectId: BigInt(stored?.id ?? "0"),
 						anchorId: "outsider-anchor",
 						mapBytes: 1,
 					}),
 					theirs.deleteMedicineArPin({
 						familyId: BigInt(familyId),
-						containerId: BigInt(stored?.id ?? "0"),
+						objectId: BigInt(stored?.id ?? "0"),
 					}),
 				];
 				const results = yield* Effect.promise(() => Promise.allSettled(writes));

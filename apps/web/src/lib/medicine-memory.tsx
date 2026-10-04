@@ -76,7 +76,7 @@ export function useChosenMedicineMemory(familyId: string | null) {
 	return { ...read, choose };
 }
 
-/** Win95 combo box for whose medicines and places the screen shows, as the Person picker. */
+/** Win95 combo box for whose things and places the screen shows, as the Person picker. */
 export function WhoseMedicinesPicker({
 	memory,
 	choose,
@@ -99,7 +99,7 @@ export function WhoseMedicinesPicker({
 	return (
 		<span className={`flex items-center gap-1.5 ${className ?? ""}`}>
 			<label htmlFor="whose-medicines" className="text-sm">
-				Whose medicines?
+				Whose things?
 			</label>
 			<select
 				id="whose-medicines"
@@ -114,7 +114,7 @@ export function WhoseMedicinesPicker({
 					</option>
 				))}
 			</select>
-			<Tip text="Each family member has their own medicines and places. Family admins and caregivers can open every member's; everyone else sees only their own." />
+			<Tip text="Each family member has their own things, medicines, and places. Family admins and caregivers can open every member's; everyone else sees only their own." />
 		</span>
 	);
 }

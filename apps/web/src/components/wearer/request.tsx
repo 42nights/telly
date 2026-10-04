@@ -9,11 +9,7 @@ import { signInConfig } from "@/lib/sign-in";
 
 import { AnswerFailed, AnswerPanel, type Reply, xl } from "./answer";
 import { HelpPanel, SupportActions } from "./help";
-import {
-	type EmergencyIntent,
-	emergencyIntent,
-	isMedicineRequest,
-} from "./logic";
+import { type EmergencyIntent, emergencyIntent, isFindRequest } from "./logic";
 
 // ponytail: fixed cap keeps a forgotten recording under the 10 MiB upload limit.
 const MAX_RECORDING_MS = 60_000;
@@ -197,9 +193,9 @@ function AskForm({
 /**
  * The wearer's request: Talk or a typed question. An urgent request opens the help panel first,
  * before any model, and starts the simulated emergency dispatch; an "ouch" starts the emergency
- * check-in. A medicine request opens the medicine finder; any other question goes to Gemini with
- * the calm-support rules (`POST /ask`, or `POST /ask/voice` for Talk). A failure shows as a
- * failure, never as an answer, and keeps the request for Try again.
+ * check-in. A medicine request, or one to find a known object, opens the finder; any other
+ * question goes to Gemini with the calm-support rules (`POST /ask`, or `POST /ask/voice` for
+ * Talk). A failure shows as a failure, never as an answer, and keeps the request for Try again.
  */
 export function Request({
 	familyId,
@@ -220,7 +216,7 @@ export function Request({
 	const support = (
 		<SupportActions onHelp={() => setStep({ kind: "help", asked: null })} />
 	);
-	const openMedicine = (q: string) =>
+	const openFinder = (q: string) =>
 		void navigate({ to: "/medicine", search: { q } });
 
 	/** Shows "Thinking…" with Cancel; returns the signal for the request. */
@@ -247,7 +243,7 @@ export function Request({
 			if (urgent === "help") return setStep({ kind: "help", asked: question });
 			return;
 		}
-		if (isMedicineRequest(question)) return openMedicine(question);
+		if (isFindRequest(question)) return openFinder(question);
 		const request = { kind: "text", text: question } as const;
 		if (familyId === null)
 			return setStep({
@@ -321,7 +317,7 @@ export function Request({
 				urgent === "help" ? { kind: "help", asked: said } : { kind: "ready" },
 			);
 		}
-		if (isMedicineRequest(said)) return openMedicine(said);
+		if (isFindRequest(said)) return openFinder(said);
 		setStep({
 			kind: "answer",
 			reply: {

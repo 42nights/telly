@@ -97,6 +97,10 @@ const sighting: MedicineSighting = {
 	labelRead: true,
 	savedBy: me,
 	notFoundAt: null,
+	category: "medicine",
+	thumbnail: "",
+	usualPlace: null,
+	pinned: false,
 };
 const need = (attempts: CareNeed["attempts"]): CareNeed => ({
 	id: "4",

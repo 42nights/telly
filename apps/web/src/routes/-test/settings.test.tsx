@@ -19,7 +19,7 @@ test("shows the phone, speaker, medicine place, report email, device, and delete
 	expect(tabs.map((t) => [t.textContent, t.getAttribute("href")])).toEqual([
 		["Phone numbers", "/settings"],
 		["Home speaker", "/settings/speaker"],
-		["Medicine places", "/settings/places"],
+		["Things and places", "/settings/places"],
 		["Report email", "/settings/reports"],
 		["This device", "/settings/device"],
 		["Delete family", "/settings/family"],
@@ -27,7 +27,7 @@ test("shows the phone, speaker, medicine place, report email, device, and delete
 
 	for (const [tab, heading] of [
 		["Home speaker", "Settings · Home speaker (simulated)"],
-		["Medicine places", "Settings · Medicine places"],
+		["Things and places", "Settings · Things and places"],
 		["Report email", "Settings · Report email"],
 		["This device", "Settings · This device"],
 		["Delete family", "Settings · Delete family"],

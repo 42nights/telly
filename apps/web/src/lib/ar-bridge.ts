@@ -1,4 +1,4 @@
-// The AR medicine pin bridge to the iOS shell (contract: telly-ar-pin). A request goes out through
+// The AR object pin bridge to the iOS shell (contract: telly-ar-pin). A request goes out through
 // `ReactNativeWebView.postMessage`; the shell answers with a "telly-ar" CustomEvent that echoes the
 // request's `requestId`. Outside the shell (web, Android) there is no bridge, so AR is unsupported.
 import { Schema } from "effect";
@@ -11,10 +11,11 @@ const Capabilities = Schema.Struct({
 		Schema.Literals(["no-arkit", "no-camera-permission", "not-ios"]),
 	),
 });
+// The replies also echo the object id: `objectId` from shells built since #301, `containerId` from
+// older ones. The `requestId` already matches a reply to its request, so neither is read.
 const PinSaved = Schema.Struct({
 	type: Schema.Literal("ar.pinSaved"),
 	requestId: Schema.String,
-	containerId: Schema.String,
 	anchorId: Schema.String,
 	worldMap: Schema.String,
 	mapBytes: Schema.Number,
@@ -22,7 +23,6 @@ const PinSaved = Schema.Struct({
 const PinFound = Schema.Struct({
 	type: Schema.Literal("ar.pinFound"),
 	requestId: Schema.String,
-	containerId: Schema.String,
 });
 const ArErrorCode = Schema.Literals([
 	"cancelled",
@@ -62,12 +62,12 @@ type Request =
 	| {
 			readonly type: "ar.savePin";
 			readonly familyId: string;
-			readonly containerId: string;
+			readonly objectId: string;
 			readonly label: string;
 	  }
 	| {
 			readonly type: "ar.findPin";
-			readonly containerId: string;
+			readonly objectId: string;
 			readonly label: string;
 			readonly anchorId: string;
 			readonly worldMap: string;
@@ -91,7 +91,9 @@ const send = (request: Request, timeoutMs: number) =>
 		};
 		const timer = setTimeout(() => finish(null), timeoutMs);
 		globalThis.addEventListener("telly-ar", onReply);
-		bridge.postMessage(JSON.stringify({ ...request, requestId }));
+		// Shells built before #301 read the object id as `containerId`.
+		const old = "objectId" in request ? { containerId: request.objectId } : {};
+		bridge.postMessage(JSON.stringify({ ...request, ...old, requestId }));
 	});
 
 const timedOut: ArFailure = {
@@ -126,10 +128,10 @@ export const arCapabilities = async (): Promise<ArCapabilities> => {
 		: { supported: reply.supported, reason: reply.reason };
 };
 
-/** Opens the AR screen to pin `containerId`; resolves with the anchor and the room's world map. */
+/** Opens the AR screen to pin `objectId`; resolves with the anchor and the room's world map. */
 export const savePin = async (pin: {
 	readonly familyId: string;
-	readonly containerId: string;
+	readonly objectId: string;
 	readonly label: string;
 }): Promise<
 	| {
@@ -152,7 +154,7 @@ export const savePin = async (pin: {
 
 /** Opens the AR screen with a saved world map; resolves once the marker shows at the anchor. */
 export const findPin = async (pin: {
-	readonly containerId: string;
+	readonly objectId: string;
 	readonly label: string;
 	readonly anchorId: string;
 	readonly worldMap: string;

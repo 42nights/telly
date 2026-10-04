@@ -384,14 +384,15 @@ const medicinePlaces = table(
 	},
 );
 
-// Where one member's medicine container was last seen: one row per member and container
-// description. Only a newer camera observation that the person confirmed changes it; `notFoundAt`
-// marks it outdated.
+// Where one member's object was last seen: one row per member and object label (#29, #301). An
+// object is medicine or any personal thing: keys, glasses, a wallet. Only a newer camera
+// observation that the person confirmed changes it; `notFoundAt` marks it outdated.
 const medicineSighting = table(
 	{ name: "medicine_sighting" },
 	{
 		id: t.u64().primaryKey().autoInc(),
 		familyId: t.u64().index("btree"),
+		// The object's label, such as "Lisinopril bottle" or "keys".
 		container: t.string(),
 		place: t.string(),
 		// When the camera captured the frame the container was found in.
@@ -404,16 +405,24 @@ const medicineSighting = table(
 		// The member whose medicine this is (#291). Rows from before #291 hold the zero identity until
 		// `migrateMedicineMembers` gives them to the family's wearer.
 		personId: t.identity().default(Identity.zero()),
+		// What kind of object it is (#301): "keys", "glasses", "medicine", ... Older rows are medicine.
+		category: t.string().default("medicine"),
+		// Base64 JPEG of the object from the confirming picture; empty for rows from before #301.
+		thumbnail: t.string().default(""),
+		// The places it was seen before `place`, oldest first, at most `MAX_PAST_PLACES` (#301).
+		pastPlaces: t.array(t.string()).default([]),
 	},
 );
 
-// Where a remembered container sits in the room, pinned with ARKit on the person's iPhone (contract
-// telly-ar-pin). The world map itself is in R2 at `ar-pins/<familyId>/<containerId>.worldmap`; this
-// row only says that it exists. One pin per sighting; turning medicine memory off deletes them.
+// Where a remembered object sits in the room, pinned with ARKit on the person's iPhone (contract
+// telly-ar-pin, generalized in #301). The world map itself is in R2 at
+// `ar-pins/<familyId>/<objectId>.worldmap`; this row only says that it exists. One pin per object;
+// turning the member's memory off deletes them.
 const medicineArPin = table(
 	{ name: "medicine_ar_pin" },
 	{
-		// The `medicine_sighting` id of the pinned container.
+		// The `medicine_sighting` id of the pinned object. The column keeps its first name, so the
+		// pins saved before #301 stay valid.
 		containerId: t.u64().primaryKey(),
 		familyId: t.u64().index("btree"),
 		anchorId: t.string(),
@@ -2107,6 +2116,9 @@ export const migrateMedicineMembers = spacetimedb.reducer((ctx) => {
 
 // A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
 const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+const MAX_PAST_PLACES = 19;
+// A 160 px JPEG is about 10 KB of base64; this leaves room and still keeps the rows small.
+const MAX_THUMBNAIL_CHARS = 64 * 1024;
 
 export const rememberMedicine = spacetimedb.reducer(
 	{
@@ -2118,12 +2130,17 @@ export const rememberMedicine = spacetimedb.reducer(
 		source: t.string(),
 		confidence: t.f64(),
 		labelRead: t.bool(),
+		category: t.string(),
+		thumbnail: t.string(),
 	},
 	(ctx, seen) => {
 		requireMedicineOf(ctx, seen.familyId, seen.personId);
 		if (placesOf(ctx, seen.familyId, seen.personId) === undefined)
 			throw new SenderError("medicine memory is off for this member");
 		requireText("container", seen.container);
+		requireText("category", seen.category);
+		if (seen.thumbnail.length > MAX_THUMBNAIL_CHARS)
+			throw new SenderError("the thumbnail is too large");
 		requireText("place", seen.place);
 		requireText("source", seen.source);
 		if (!(seen.confidence >= 0 && seen.confidence <= 1))
@@ -2133,13 +2150,19 @@ export const rememberMedicine = spacetimedb.reducer(
 		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
 			throw new SenderError("seenAt must be a current observation");
 		const key = seen.container.trim().toLowerCase();
-		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+		const row = {
+			...seen,
+			savedBy: ctx.sender,
+			notFoundAt: undefined,
+			pastPlaces: [] as string[],
+		};
 		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
 			if (!old.personId.isEqual(seen.personId)) continue;
 			if (old.container.trim().toLowerCase() !== key) continue;
 			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
 				throw new SenderError("a newer sighting is already stored");
-			ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+			const pastPlaces = [...old.pastPlaces, old.place].slice(-MAX_PAST_PLACES);
+			ctx.db.medicineSighting.id.update({ ...row, id: old.id, pastPlaces });
 			return;
 		}
 		ctx.db.medicineSighting.insert({ ...row, id: 0n });
@@ -2161,17 +2184,17 @@ export const markMedicineNotFound = spacetimedb.reducer(
 // The largest world map a pin keeps; the server refuses a larger one before it stores anything.
 const MAX_WORLD_MAP_BYTES = 16 * 1024 * 1024;
 
-// Stores or replaces the AR pin of a remembered container. The server has already stored the world
-// map in R2; the row records its anchor and size. The same member rule as the sighting (#291).
+// Stores or replaces the AR pin of a remembered object. The server has already stored the world map
+// in R2; the row records its anchor and size. The same member rule as the object's sighting.
 export const saveMedicineArPin = spacetimedb.reducer(
 	{
 		familyId: t.u64(),
-		containerId: t.u64(),
+		objectId: t.u64(),
 		anchorId: t.string(),
 		mapBytes: t.u32(),
 	},
-	(ctx, pin) => {
-		const sighting = ctx.db.medicineSighting.id.find(pin.containerId);
+	(ctx, { objectId, ...pin }) => {
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
 		if (sighting?.familyId !== pin.familyId)
 			throw new SenderError("no such sighting in this family");
 		requireMedicineOf(ctx, pin.familyId, sighting.personId);
@@ -2180,9 +2203,10 @@ export const saveMedicineArPin = spacetimedb.reducer(
 		requireText("anchorId", pin.anchorId);
 		if (pin.mapBytes === 0 || pin.mapBytes > MAX_WORLD_MAP_BYTES)
 			throw new SenderError("the world map must be 1 byte to 16 MB");
-		const old = ctx.db.medicineArPin.containerId.find(pin.containerId);
+		const old = ctx.db.medicineArPin.containerId.find(objectId);
 		const row = {
 			...pin,
+			containerId: objectId,
 			savedBy: ctx.sender,
 			createdAt: old?.createdAt ?? ctx.timestamp,
 			updatedAt: ctx.timestamp,
@@ -2192,16 +2216,16 @@ export const saveMedicineArPin = spacetimedb.reducer(
 	},
 );
 
-// Deletes one container's AR pin; a missing pin is already deleted. The server deletes the map.
+// Deletes one object's AR pin; a missing pin is already deleted. The server deletes the map.
 export const deleteMedicineArPin = spacetimedb.reducer(
-	{ familyId: t.u64(), containerId: t.u64() },
-	(ctx, { familyId, containerId }) => {
+	{ familyId: t.u64(), objectId: t.u64() },
+	(ctx, { familyId, objectId }) => {
 		requireMember(ctx, familyId);
-		const pin = ctx.db.medicineArPin.containerId.find(containerId);
+		const pin = ctx.db.medicineArPin.containerId.find(objectId);
 		if (pin?.familyId !== familyId) return;
-		const sighting = ctx.db.medicineSighting.id.find(containerId);
+		const sighting = ctx.db.medicineSighting.id.find(objectId);
 		if (sighting !== null) requireMedicineOf(ctx, familyId, sighting.personId);
-		ctx.db.medicineArPin.containerId.delete(containerId);
+		ctx.db.medicineArPin.containerId.delete(objectId);
 	},
 );
 
@@ -3595,7 +3619,7 @@ export const myFamilyMembers = spacetimedb.view(
 		]),
 );
 
-// The pins of the sightings the caller may read (`medicineReader`, #291): a pin follows its sighting.
+// The pins of the objects the caller may read (`medicineReader`): a pin follows its sighting.
 export const myMedicineArPins = spacetimedb.view(
 	{ name: "my_medicine_ar_pins", public: true },
 	t.array(medicineArPin.rowType),

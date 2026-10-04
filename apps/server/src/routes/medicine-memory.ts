@@ -1,15 +1,16 @@
-// Medicine last-seen memory (issue #29; docs/board.html#hud-marker), relative to
+// Medicine and object last-seen memory (issues #29, #301; docs/board.html#hud-marker), relative to
 // `/api/families/:familyId`. Each member has their own (#291): `?person=<identity>` names the member,
 // and the caller is the default. The module's reducers check membership, the member rule, the
 // permission, and sighting freshness again; the member check here only turns an empty view into an
-// honest `403`. Nothing here records or changes a dose. Turning the memory off also deletes AR pins
-// (`./medicine-ar-pin`) and their maps.
+// honest `403`. Nothing here records or changes a dose. Turning the memory off also deletes the
+// member's AR pins (`./medicine-ar-pin`) and their maps.
 import { IdentityHex } from "@health/contracts/families";
 import {
 	type MedicineMemory,
 	RememberMedicine,
 	SetMedicineMemory,
 } from "@health/contracts/medicine-memory";
+import { ObjectCategory } from "@health/contracts/vision";
 import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -24,7 +25,7 @@ import {
 } from "../http";
 import type { R2Bucket } from "../integrations/r2";
 import { readAccess } from "./care-profile";
-import { deleteFamilyArPins, medicineArPinRoutes } from "./medicine-ar-pin";
+import { deleteArPins, medicineArPinRoutes } from "./medicine-ar-pin";
 
 type Ctx = Context<FamilyEnv>;
 
@@ -55,6 +56,22 @@ const readPerson = (c: Ctx) => {
 	return { person, people };
 };
 
+/**
+ * The place seen most often among `places` (oldest first), ignoring case, in its newest spelling;
+ * a tie goes to the newer place. `null` until one place was seen at least twice.
+ */
+const usualPlace = (places: readonly string[]): string | null => {
+	const seen = new Map<string, { count: number; name: string }>();
+	let best: { count: number; name: string } | null = null;
+	for (const name of places) {
+		const key = name.trim().toLowerCase();
+		const entry = { count: (seen.get(key)?.count ?? 0) + 1, name };
+		seen.set(key, entry);
+		if (best === null || entry.count >= best.count) best = entry;
+	}
+	return best !== null && best.count >= 2 ? best.name : null;
+};
+
 const readMemory = (c: Ctx): MedicineMemory => {
 	const { connection } = c.var.db;
 	if (!connection.isActive)
@@ -66,6 +83,9 @@ const readMemory = (c: Ctx): MedicineMemory => {
 	const mine = (row: { familyId: bigint; personId: Identity }) =>
 		row.familyId === familyId && row.personId.toHexString() === person;
 	const permission = [...connection.db.myMedicinePlaces.iter()].find(mine);
+	const pinned = new Set(
+		[...connection.db.myMedicineArPins.iter()].map((pin) => pin.containerId),
+	);
 	return {
 		personId: person,
 		people,
@@ -89,8 +109,14 @@ const readMemory = (c: Ctx): MedicineMemory => {
 				source: "camera_check" as const,
 				confidence: row.confidence,
 				labelRead: row.labelRead,
+				category: Schema.is(ObjectCategory)(row.category)
+					? row.category
+					: "other",
+				thumbnail: row.thumbnail,
 				savedBy: row.savedBy.toHexString(),
 				notFoundAt: row.notFoundAt?.toISOString() ?? null,
+				usualPlace: usualPlace([...row.pastPlaces, row.place]),
+				pinned: pinned.has(row.id),
 			}))
 			.sort((a, b) => b.seenAt.localeCompare(a.seenAt)),
 	};
@@ -102,6 +128,8 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 		.get("/medicine-memory", (c) => c.json(readMemory(c)))
 		.put("/medicine-memory", async (c) => {
 			const { enabled, places } = await decodeBody(c, SetMedicineMemory);
+			// The member's objects, read before the module deletes them, name their world maps.
+			const { sightings } = readMemory(c);
 			const { person } = readPerson(c);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
@@ -112,8 +140,13 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 					places: places.map((place) => place.trim()),
 				}),
 			);
-			// After the module's membership check; the module has deleted the pin rows.
-			if (!enabled) await deleteFamilyArPins(storage, familyId);
+			// After the module's member check; the module has deleted the pin rows.
+			if (!enabled)
+				await deleteArPins(
+					storage,
+					familyId,
+					sightings.map((s) => BigInt(s.id)),
+				);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {
@@ -122,7 +155,7 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 			if (memory.permission === null)
 				throw new ApiFailure(
 					"conflict",
-					"Remembering where medicine was seen is off for this person",
+					"Remembering where things were seen is off for this person",
 				);
 			const { db, familyId } = c.var;
 			await callReducer(db, (connection) =>
@@ -133,6 +166,8 @@ export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 					container: seen.container.trim(),
 					place: seen.place.trim(),
 					seenAt: Timestamp.fromDate(new Date(seen.seenAt)),
+					category: seen.category ?? "medicine",
+					thumbnail: seen.thumbnail ?? "",
 				}),
 			);
 			return c.json(readMemory(c), 201);

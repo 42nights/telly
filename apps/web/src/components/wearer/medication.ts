@@ -78,9 +78,10 @@ const STATE_TEXT: Record<ReminderState, string> = {
 
 /**
  * The answer when the wearer cannot remember whether they took a dose: every recorded step for
- * this dose time and every container sighting (#29) since it, oldest first, then an offer of human
- * help. A sighting is "container found" only, never a dose. It never advises another dose or a
- * skipped one. `who` names an event's actor; `time` formats an instant.
+ * this dose time and every medicine container sighting (#29) since it, oldest first, then an offer
+ * of human help. Sightings of other things (#301) are left out. A sighting is "container found"
+ * only, never a dose. It never advises another dose or a skipped one. `who` names an event's
+ * actor; `time` formats an instant.
  */
 export const uncertaintyAnswer = (
 	occurrence: ReminderOccurrence,
@@ -96,7 +97,9 @@ export const uncertaintyAnswer = (
 			text: `${time(e.at)}, ${who(e.actor)}: ${STATE_TEXT[e.state]}${e.wording === null ? "" : `, in the words “${e.wording}”`}.`,
 		})),
 		...sightings
-			.filter((s) => s.seenAt >= occurrence.scheduledFor)
+			.filter(
+				(s) => s.category === "medicine" && s.seenAt >= occurrence.scheduledFor,
+			)
 			.map((s) => ({
 				at: s.seenAt,
 				text: `${time(s.seenAt)}, ${who(s.savedBy)}: container found, “${s.container}” at ${s.place}; this does not say the dose was taken.`,

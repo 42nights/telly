@@ -53,7 +53,7 @@ const show = (routes: Routes) => {
 		</FamilyProvider>,
 	);
 	const frame = view.getByRole("region", {
-		name: "Settings · Medicine places",
+		name: "Settings · Things and places",
 	});
 	return { calls, view, frame };
 };
@@ -70,11 +70,11 @@ describe("MedicineMemorySettings", () => {
 			},
 		});
 		expect(view.getByRole("status").textContent).toContain(
-			"Loading medicine places…",
+			"Loading things and places…",
 		);
 		await waitFor(() =>
 			expect(view.getByRole("alert").textContent).toContain(
-				"Medicine places unavailableDatabase not configured",
+				"Things and places unavailableDatabase not configured",
 			),
 		);
 	});
@@ -88,7 +88,7 @@ describe("MedicineMemorySettings", () => {
 				return { json: memory };
 			},
 		});
-		const form = await view.findByRole("form", { name: "Medicine places" });
+		const form = await view.findByRole("form", { name: "Things and places" });
 		expect(frame.textContent).toContain("Off: no places are saved");
 		expect(within(form).queryByRole("textbox") === null).toBe(true);
 		expect(form.textContent).not.toContain("deletes every saved place");
@@ -112,10 +112,10 @@ describe("MedicineMemorySettings", () => {
 			[`GET ${PATH}`]: { json: ON },
 			[`PUT ${PATH}`]: { json: OFF },
 		});
-		const form = await view.findByRole("form", { name: "Medicine places" });
+		const form = await view.findByRole("form", { name: "Things and places" });
 		fireEvent.click(within(form).getByRole("checkbox"));
 		expect(form.textContent).toContain(
-			"Turning this off deletes every saved place of this member.",
+			"Turning this off deletes every saved thing, place, and AR pin of this member.",
 		);
 		fireEvent.submit(form);
 		await waitFor(() =>
@@ -148,7 +148,7 @@ describe("MedicineMemorySettings", () => {
 			[`GET ${PATH}`]: { json: ON },
 			[`PUT ${PATH}`]: () => reply,
 		});
-		const form = await view.findByRole("form", { name: "Medicine places" });
+		const form = await view.findByRole("form", { name: "Things and places" });
 		fireEvent.submit(form);
 		await waitFor(() =>
 			expect(view.getByRole("alert").textContent).toBe("Not saved: Disk full"),
@@ -161,7 +161,7 @@ describe("MedicineMemorySettings", () => {
 			expect(within(frame).queryByRole("form") === null).toBe(true),
 		);
 		expect(within(frame).getByRole("status").textContent).toContain(
-			"Loading medicine places…",
+			"Loading things and places…",
 		);
 		expect(puts(calls)).toHaveLength(2);
 	});
@@ -183,7 +183,7 @@ describe("MedicineMemorySettings", () => {
 			[`GET ${PATH}?person=${MOM}`]: { json: hers },
 			[`PUT ${PATH}?person=${MOM}`]: { json: hers },
 		});
-		const picker = await view.findByLabelText("Whose medicines?");
+		const picker = await view.findByLabelText("Whose things?");
 		expect(picker).toHaveProperty("value", ME);
 		expect(
 			within(picker)
@@ -222,7 +222,7 @@ describe("MedicineMemorySettings", () => {
 				body: { error: "forbidden", message: "Only your own" },
 			},
 		});
-		const picker = await view.findByLabelText("Whose medicines?");
+		const picker = await view.findByLabelText("Whose things?");
 		await waitFor(() => expect(picker).toHaveProperty("value", ME));
 		expect(localStorage.getItem("telly.medicine-person.7")).toBeNull();
 	});
@@ -233,8 +233,8 @@ describe("MedicineMemorySettings", () => {
 		const { view, calls } = show({
 			[`GET ${PATH}`]: { json: { ...ON, people: [ME, MOM] } },
 		});
-		await view.findByRole("form", { name: "Medicine places" });
-		expect(view.queryByLabelText("Whose medicines?")).toBeNull();
+		await view.findByRole("form", { name: "Things and places" });
+		expect(view.queryByLabelText("Whose things?")).toBeNull();
 		expect(
 			calls.filter((c) => c.path.startsWith(PATH)).map((c) => c.path),
 		).toEqual([PATH]);
