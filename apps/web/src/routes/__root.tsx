@@ -3,7 +3,7 @@ import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
-	useLocation,
+	useMatch,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
@@ -40,9 +40,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-	const signingIn = useLocation({
-		select: (location) => location.pathname === "/sign-in",
-	});
+	// The rendered match, not the location: the location changes before the next page loads, and
+	// switching layout early would remount sign-in in the old match.
+	const signingIn =
+		useMatch({ from: "/sign-in", shouldThrow: false }) !== undefined;
 	return (
 		<>
 			<HeadContent />
