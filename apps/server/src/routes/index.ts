@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ServerConfig } from "../config";
 import type { FamilyEnv, FamilyRoutes } from "../http";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
+import { r2Bucket } from "../integrations/r2";
 import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
 import { chatRoutes } from "./chat";
@@ -32,7 +33,10 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			}),
 		)
 		.route("/vision", visionRoutes(config.gemini))
-		.route("/", reportRoutes())
+		.route(
+			"/",
+			reportRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+		)
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())

@@ -85,6 +85,23 @@ export type Report = typeof Report.Type;
 export const Reports = Schema.Struct({ reports: Schema.Array(Report) });
 export type Reports = typeof Reports.Type;
 
+/**
+ * `POST /api/families/:familyId/reports/:reportId/pdfs`: a PDF the caller made of one report, kept
+ * in private storage. Only the person who made it can list or download it, and only while they
+ * are a member of the report's family. Download: `GET …/report-pdfs/:id`.
+ */
+export const ReportPdf = Schema.Struct({
+	id: Schema.String,
+	reportId: Schema.String,
+	createdAt: Schema.String,
+	bytes: Schema.Number,
+});
+export type ReportPdf = typeof ReportPdf.Type;
+
+/** `GET /api/families/:familyId/report-pdfs`: the caller's PDFs in this family, newest first. */
+export const ReportPdfs = Schema.Struct({ pdfs: Schema.Array(ReportPdf) });
+export type ReportPdfs = typeof ReportPdfs.Type;
+
 // FinchNode (https://finchnode.com/docs): read-only, patient-authorized health records. A patient
 // connects a health system and approves sharing in FinchNode Connect; FinchNode checks that consent
 // on every read. Values, units, ranges, and interpretations are the source's, unchanged.

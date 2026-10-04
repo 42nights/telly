@@ -1,11 +1,17 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`). All records
 // are synthetic. Each connection is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
-import { Report, Reports } from "@health/contracts/reports";
+import {
+	Report,
+	ReportPdf,
+	ReportPdfs,
+	Reports,
+} from "@health/contracts/reports";
 import { Effect, Schema } from "effect";
-import { Timestamp } from "spacetimedb";
+import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import { openFamilyDb } from "../db";
+import type { R2Bucket } from "../integrations/r2";
 import { reportRoutes } from "./reports";
 import {
 	dbConfig,
@@ -151,6 +157,72 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 
 				const after = yield* send(ownerApp, "GET", `/reports/${id}`);
 				expect(after.json).toEqual(created.json);
+			}),
+		));
+
+	test("a saved PDF belongs to the member who made it", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				// The storage stand-in keeps objects by key; the routes alone decide the keys.
+				const objects = new Map<string, Uint8Array>();
+				const bucket: R2Bucket = {
+					put: async (key, body) => void objects.set(key, body),
+					get: async (key) => {
+						const body = objects.get(key);
+						return body === undefined ? null : new Response(body);
+					},
+					list: async (prefix) =>
+						[...objects]
+							.filter(([key]) => key.startsWith(prefix))
+							.map(([key, body]) => ({
+								key,
+								size: body.length,
+								lastModified: new Date().toISOString(),
+							})),
+				};
+				const { db: owner, familyId } = yield* openFamily(config, "Pdf");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				const ownerApp = familyApp(owner, familyId, reportRoutes(bucket));
+				const created = yield* send(ownerApp, "POST", "/reports");
+				const report = Schema.decodeUnknownSync(Report)(created.json);
+
+				const made = yield* send(
+					ownerApp,
+					"POST",
+					`/reports/${report.id}/pdfs`,
+				);
+				expect(made.status).toBe(201);
+				const pdf = Schema.decodeUnknownSync(ReportPdf)(made.json);
+				const listed = yield* send(ownerApp, "GET", "/report-pdfs");
+				expect(Schema.decodeUnknownSync(ReportPdfs)(listed.json).pdfs).toEqual([
+					{ ...pdf, createdAt: expect.any(String) },
+				]);
+				const file = yield* Effect.promise(async () =>
+					ownerApp.request(`/report-pdfs/${pdf.id}`),
+				);
+				expect(file.headers.get("content-type")).toBe("application/pdf");
+				const text = yield* Effect.promise(() => file.text());
+				expect(text.startsWith("%PDF-1.4")).toBe(true);
+				expect(text).toContain(`(Layout version 1 - report ${report.id})`);
+
+				// Another member of the same family sees none of it, even with the exact id.
+				const relativeApp = familyApp(relative, familyId, reportRoutes(bucket));
+				const theirs = yield* send(relativeApp, "GET", "/report-pdfs");
+				expect(theirs.json).toEqual({ pdfs: [] });
+				const taken = yield* send(relativeApp, "GET", `/report-pdfs/${pdf.id}`);
+				expect(failure(taken)).toEqual([404, "not_found"]);
+				const climb = yield* send(relativeApp, "GET", "/report-pdfs/..%2F..");
+				expect(failure(climb)).toEqual([404, "not_found"]);
+
+				const unset = familyApp(owner, familyId, reportRoutes());
+				const none = yield* send(unset, "GET", "/report-pdfs");
+				expect(failure(none)).toEqual([503, "unavailable"]);
 			}),
 		));
 });

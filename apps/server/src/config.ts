@@ -4,6 +4,7 @@ import type { FetchAgentConfig } from "./integrations/fetch";
 import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
+import type { R2Config } from "./integrations/r2";
 
 export type ServerConfig = {
 	readonly corsOrigin: string;
@@ -19,6 +20,8 @@ export type ServerConfig = {
 	readonly fetchAgent?: FetchAgentConfig | undefined;
 	/** Undefined when no Gemma deployment is configured: the cue route then answers `unavailable`. */
 	readonly gemma?: GemmaConfig | undefined;
+	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
+	readonly r2?: R2Config | undefined;
 };
 
 type Env = {
@@ -36,6 +39,10 @@ type Env = {
 	readonly FINCHNODE_API_KEY?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_URL?: string | undefined;
 	readonly TELLY_FETCH_BRIDGE_TOKEN?: string | undefined;
+	readonly R2_ENDPOINT?: string | undefined;
+	readonly R2_BUCKET?: string | undefined;
+	readonly R2_ACCESS_KEY_ID?: string | undefined;
+	readonly R2_SECRET_ACCESS_KEY?: string | undefined;
 } & Parameters<typeof gemmaConfigFrom>[0];
 
 /** The bridge needs both values; one alone is a deployment mistake, so startup fails. */
@@ -48,6 +55,24 @@ const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
 	if (bridgeUrl || bridgeToken)
 		throw new Error(
 			"Set both TELLY_FETCH_BRIDGE_URL and TELLY_FETCH_BRIDGE_TOKEN, or neither",
+		);
+	return undefined;
+};
+
+/** R2 needs all four values; a partial set is a deployment mistake, so startup fails. */
+const r2Config = (env: Env): R2Config | undefined => {
+	const values = [
+		env.R2_ENDPOINT,
+		env.R2_BUCKET,
+		env.R2_ACCESS_KEY_ID,
+		env.R2_SECRET_ACCESS_KEY,
+	] as const;
+	const [endpoint, bucket, accessKeyId, secretAccessKey] = values;
+	if (endpoint && bucket && accessKeyId && secretAccessKey)
+		return { endpoint, bucket, accessKeyId, secretAccessKey };
+	if (values.some(Boolean))
+		throw new Error(
+			"Set all of R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY, or none",
 		);
 	return undefined;
 };
@@ -73,6 +98,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		},
 		...(finchnode === undefined ? {} : { finchnode }),
 		fetchAgent: fetchAgentConfig(env),
+		r2: r2Config(env),
 	};
 	const gemini = env.GEMINI_API_KEY
 		? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }

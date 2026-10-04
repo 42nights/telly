@@ -243,6 +243,8 @@ function ReportSheet({
 						<SendTab
 							sheet={sheet}
 							report={report}
+							reports={reports}
+							familyId={familyId}
 							onAsk={() => setAsking(true)}
 						/>
 					)}

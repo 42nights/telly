@@ -13,6 +13,7 @@ import {
 	markerValue,
 	metricLabel,
 } from "./logic";
+import { PdfActions } from "./pdfs";
 import { failureText, type ReportSheetState } from "./use-report-sheet";
 
 const PATIENT_FIELDS = [
@@ -293,10 +294,14 @@ function ReviewGroup({
 export function SendTab({
 	sheet,
 	report,
+	reports,
+	familyId,
 	onAsk,
 }: {
 	sheet: ReportSheetState;
 	report: Report;
+	reports: readonly Report[];
+	familyId: string;
 	onAsk: () => void;
 }) {
 	const { reviewed, sendFailure } = sheet;
@@ -304,7 +309,7 @@ export function SendTab({
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
 			<fieldset className="grid gap-2 border border-border p-2">
-				<legend className="px-1">Send to hospital</legend>
+				<legend className="px-1">Send and PDF</legend>
 				{sendFailure === null ? (
 					<p>
 						Not sent.
@@ -317,18 +322,25 @@ export function SendTab({
 							: `Not sent: ${failureText(sendFailure)}`}
 					</p>
 				)}
-				<Button
-					type="button"
-					className={`h-11 justify-self-start px-4 text-sm ${reviewed && sendFailure === null ? "win95-primary" : ""}`}
-					disabled={!reviewed || sheet.busy !== null}
-					onClick={onAsk}
-				>
-					Send to hospital…
-				</Button>
 				<p>
 					A family review is not a clinician review. Sending a report does not
 					mean that a clinician has read it.
 				</p>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						type="button"
+						className={`h-11 px-4 text-sm ${reviewed && sendFailure === null ? "win95-primary" : ""}`}
+						disabled={!reviewed || sheet.busy !== null}
+						onClick={onAsk}
+					>
+						Send to hospital…
+					</Button>
+					<PdfActions
+						familyId={familyId}
+						reportId={report.id}
+						reports={reports}
+					/>
+				</div>
 			</fieldset>
 		</>
 	);
