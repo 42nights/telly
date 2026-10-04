@@ -157,6 +157,18 @@ export const apiBlob = async (
 };
 
 /**
+ * How long a starting API gets before its failure shows: a cold container start takes about 35 s,
+ * and the Worker gives up after 60 s. Screen tests that check failure notices set it to 0.
+ */
+export const apiStart = { windowMs: 60_000 };
+
+/** A failure that means the API may still be starting, not that it refused or broke. */
+const coldStart = (failure: ApiFailure) =>
+	(failure.kind === "error" && failure.unreachable === true) ||
+	(failure.kind === "unavailable" &&
+		failure.message === "The API did not start");
+
+/**
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
  * its failure visible: the last good value is not shown as current. A new `path` (such as another
@@ -166,27 +178,51 @@ export const apiBlob = async (
  * still on it. So a lost network shows a failure at once, a polled read that takes longer than
  * `pollMs` fails, and a return to the screen or to the network reads again. A value older than two
  * polls is not shown while that read runs.
+ *
+ * The API container starts in about 35 s after a deploy or an idle period (the Worker waits up to
+ * 60 s, then answers 503 "The API did not start"). So a read that times out, cannot reach the
+ * server, or gets that 503 is retried with backoff and shows loading ("Waiting for the server") for
+ * up to `connectMs` from the first such failure; only then does the failure show.
  */
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
 	path: string | null,
-	options: { readonly pollMs?: number; readonly refreshKey?: unknown } = {},
+	options: {
+		readonly pollMs?: number;
+		readonly refreshKey?: unknown;
+		/** How long a server that is starting gets before its failure shows. Tests shorten it. */
+		readonly connectMs?: number;
+	} = {},
 ): ApiState<T> {
 	const [read, setRead] = useState<{
 		readonly path: string;
 		readonly state: ApiState<T>;
 	} | null>(null);
-	const { pollMs, refreshKey } = options;
+	const { pollMs, refreshKey, connectMs = apiStart.windowMs } = options;
 	useEffect(() => {
 		void refreshKey;
 		if (path === null) return;
 		let controller = new AbortController();
 		// A poll waits for the read in flight, so a slow read can finish and a hung one can time out.
 		let pending = false;
+		// While the server may be starting: when the first failure came, and the next retry.
+		let failingSince: number | undefined;
+		let retries = 0;
+		let retry: number | undefined;
 		// Both local failures (no network, no answer in time) mean the server was not reached.
 		const fail = (message: string) =>
 			setRead({ path, state: { kind: "error", message, unreachable: true } });
+		// True when the failure is retried: the server may still be starting.
+		const starting = () => {
+			failingSince ??= Date.now();
+			if (Date.now() - failingSince >= connectMs) return false;
+			setRead({ path, state: { kind: "loading" } });
+			clearTimeout(retry);
+			retry = window.setTimeout(load, Math.min(1000 * 2 ** retries++, 8000));
+			return true;
+		};
 		const load = () => {
+			clearTimeout(retry);
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
@@ -199,6 +235,10 @@ export function useApi<T>(
 			})
 				.then((result) => {
 					if (signal.aborted) return;
+					if (result.kind === "ready") {
+						failingSince = undefined;
+						retries = 0;
+					} else if (coldStart(result) && starting()) return;
 					setRead({
 						path,
 						state:
@@ -207,7 +247,7 @@ export function useApi<T>(
 				})
 				.catch(() => {
 					// Only the timeout gets here without this read being replaced or unmounted.
-					if (signal.aborted) return;
+					if (signal.aborted || starting()) return;
 					fail("The server did not answer in time.");
 				})
 				.finally(() => {
@@ -250,13 +290,14 @@ export function useApi<T>(
 		document.addEventListener("visibilitychange", resume);
 		return () => {
 			stop();
+			clearTimeout(retry);
 			clearInterval(timer);
 			window.removeEventListener("offline", offline);
 			window.removeEventListener("online", load);
 			document.removeEventListener("visibilitychange", resume);
 			controller.abort();
 		};
-	}, [schema, path, pollMs, refreshKey]);
+	}, [schema, path, pollMs, refreshKey, connectMs]);
 	return read !== null && read.path === path ? read.state : { kind: "loading" };
 }
 
