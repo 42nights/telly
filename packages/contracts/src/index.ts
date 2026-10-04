@@ -23,6 +23,49 @@ export const Sources = Schema.Struct({
 });
 export type Sources = typeof Sources.Type;
 
+const NoopReading = Schema.optional(Schema.NullOr(Schema.Finite));
+
+export const NoopBatch = Schema.Struct({
+	tables: Schema.Struct({
+		hrSample: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					ts: Schema.Int,
+					bpm: Schema.Finite,
+				}),
+			),
+		),
+		event: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					ts: Schema.Int,
+					kind: Schema.String,
+				}),
+			),
+		),
+		dailyMetric: Schema.optional(
+			Schema.Array(
+				Schema.Struct({
+					deviceId: Schema.NonEmptyString,
+					day: Schema.String,
+					restingHr: NoopReading,
+					avgHrv: NoopReading,
+					respRateBpm: NoopReading,
+					totalSleepMin: NoopReading,
+					efficiency: NoopReading,
+					steps: NoopReading,
+					strain: NoopReading,
+					skinTempC: NoopReading,
+					recovery: NoopReading,
+				}),
+			),
+		),
+	}),
+});
+export type NoopBatch = typeof NoopBatch.Type;
+
 /**
  * Every non-2xx JSON response from the server. `unauthorized` (401): no valid sign-in.
  * `forbidden` (403): signed in, but not a member of the family. `invalid_request` (400): the body or

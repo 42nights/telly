@@ -12,9 +12,10 @@ import {
 	type FamilyRoutes,
 } from "./http";
 import { noopConnection } from "./integrations/noop";
+import { type NoopIngest, noopIngestRoute } from "./integrations/noop-ingest";
 import { accountRoutes, familyRoutes } from "./routes/families";
 
-export const createApp = (config: ServerConfig) => {
+export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
@@ -39,6 +40,7 @@ export const createApp = (config: ServerConfig) => {
 			});
 			return c.json({ sources: [noop] } satisfies Sources);
 		})
+		.post("/api/noop/ingest", noopIngestRoute(ingest))
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())
