@@ -136,6 +136,11 @@ export const apiBlob = async (
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
  * its failure visible: the last good value is not shown as current.
+ *
+ * On a phone the screen can come back from the background, or lose its network, with an old value
+ * still on it. So a lost network shows a failure at once, a polled read that takes longer than
+ * `pollMs` fails, and a return to the screen or to the network reads again. A value older than two
+ * polls is not shown while that read runs.
  */
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
@@ -151,25 +156,75 @@ export function useApi<T>(
 			return;
 		}
 		let controller = new AbortController();
+		// A poll waits for the read in flight, so a slow read can finish and a hung one can time out.
+		let pending = false;
 		const read = () => {
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
-			apiRequest(schema, path, { signal })
+			pending = true;
+			apiRequest(schema, path, {
+				signal:
+					pollMs === undefined
+						? signal
+						: AbortSignal.any([signal, AbortSignal.timeout(pollMs)]),
+			})
 				.then((result) => {
 					if (signal.aborted) return;
 					setState(
 						result.kind === "ready" ? { ...result, at: Date.now() } : result,
 					);
 				})
-				.catch(() => {});
+				.catch(() => {
+					// Only the timeout gets here without this read being replaced or unmounted.
+					if (signal.aborted) return;
+					setState({
+						kind: "error",
+						message: "The server did not answer in time.",
+					});
+				})
+				.finally(() => {
+					if (!signal.aborted) pending = false;
+				});
+		};
+		const offline = () =>
+			setState({
+				kind: "error",
+				message:
+					"This phone has no network connection, so the last values may not be current.",
+			});
+		const resume = () => {
+			if (document.visibilityState !== "visible") return;
+			setState((current) =>
+				current.kind === "ready" &&
+				pollMs !== undefined &&
+				Date.now() - current.at > 2 * pollMs
+					? {
+							kind: "error",
+							message:
+								"The app was in the background. Checking for current values.",
+						}
+					: current,
+			);
+			read();
 		};
 		read();
 		const stop = onSessionChange(read);
-		const timer = pollMs === undefined ? undefined : setInterval(read, pollMs);
+		const timer =
+			pollMs === undefined
+				? undefined
+				: setInterval(() => {
+						if (!pending) read();
+					}, pollMs);
+		window.addEventListener("offline", offline);
+		window.addEventListener("online", read);
+		document.addEventListener("visibilitychange", resume);
 		return () => {
 			stop();
 			clearInterval(timer);
+			window.removeEventListener("offline", offline);
+			window.removeEventListener("online", read);
+			document.removeEventListener("visibilitychange", resume);
 			controller.abort();
 		};
 	}, [schema, path, pollMs, refreshKey]);
