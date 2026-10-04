@@ -11,7 +11,7 @@ root=$(git rev-parse --show-toplevel)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cd "$root"
-git ls-files -co --exclude-standard -- . ':!noop' ':!packages/db/src/types/reducers.ts' |
+git ls-files -co --exclude-standard -- . ':!noop' ':!packages/db/src/types/reducers.ts' ':!deploy/cloudflare/landing' |
 	tar -cf - -T - | tar -xf - -C "$tmp"
 cd "$tmp"
 # Sentrux reads the file list from git; without a repository it walks the tree differently.
