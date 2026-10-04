@@ -156,3 +156,41 @@ export const marker = (
 		head: `${cx},${endY} ${cx - gap},${endY + head} ${cx + gap},${endY + head}`,
 	};
 };
+
+/** A sighting older than this is shown as old. */
+// ponytail: fixed 12 h; make it a family setting if containers move on another rhythm.
+export const SIGHTING_OLD_MS = 12 * 3600_000;
+/** Same limit as the vision route: below it, a detection asks the person to check the label. */
+const SURE_CONFIDENCE = 0.7;
+
+/**
+ * How to qualify a remembered sighting. It is only ever "last seen", never a current place: it is
+ * `outdated` once the person did not find it there, `old` after `SIGHTING_OLD_MS`, and `unsure`
+ * when the label was not read or the detection had low confidence.
+ */
+export const sightingState = (
+	sighting: {
+		readonly seenAt: string;
+		readonly notFoundAt: string | null;
+		readonly confidence: number;
+		readonly labelRead: boolean;
+	},
+	now: number,
+) => ({
+	outdated: sighting.notFoundAt !== null,
+	old: now - Date.parse(sighting.seenAt) > SIGHTING_OLD_MS,
+	unsure: !sighting.labelRead || sighting.confidence < SURE_CONFIDENCE,
+});
+
+/** A short direction to a box in the picture: "Look to the left, low down." */
+export const direction = (
+	box: Box,
+	frame: { readonly width: number; readonly height: number },
+): string => {
+	const x = (box.x + box.width / 2) / frame.width;
+	const y = (box.y + box.height / 2) / frame.height;
+	const side =
+		x < 1 / 3 ? "to the left" : x > 2 / 3 ? "to the right" : "straight ahead";
+	const height = y < 1 / 3 ? ", high up" : y > 2 / 3 ? ", low down" : "";
+	return `Look ${side}${height}.`;
+};

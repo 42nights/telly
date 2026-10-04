@@ -20,6 +20,7 @@ import { finchnodeRoutes } from "./finchnode";
 import { healthKitRoutes } from "./healthkit";
 import { locationRoutes } from "./location";
 import { mealRoutes } from "./meal-facts";
+import { medicineMemoryRoutes } from "./medicine-memory";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import { speakerRoutes } from "./speaker";
@@ -48,6 +49,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			}),
 		)
 		.route("/vision", visionRoutes(config.gemini))
+		.route("/", medicineMemoryRoutes())
 		.route("/", mealRoutes(config.gemini))
 		.route(
 			"/",

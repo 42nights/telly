@@ -52,6 +52,7 @@ import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
+import MarkMedicineNotFoundReducer from "./mark_medicine_not_found_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
@@ -61,6 +62,7 @@ import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RecordTripEventReducer from "./record_trip_event_reducer";
+import RememberMedicineReducer from "./remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import ReportLocationReducer from "./report_location_reducer";
 import RequestAppointmentReducer from "./request_appointment_reducer";
@@ -75,6 +77,7 @@ import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
+import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
 import ShareLocationReducer from "./share_location_reducer";
@@ -109,6 +112,8 @@ import MyHealthSamplesRow from "./my_health_samples_table";
 import MyLocationSharesRow from "./my_location_shares_table";
 import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
+import MyMedicineMemoryRow from "./my_medicine_memory_table";
+import MyMedicineSightingsRow from "./my_medicine_sightings_table";
 import MyMessagesRow from "./my_messages_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
 import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
@@ -277,6 +282,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMealFactsRow),
+  myMedicineMemory: __table({
+    name: 'my_medicine_memory',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMedicineMemoryRow),
+  myMedicineSightings: __table({
+    name: 'my_medicine_sightings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMedicineSightingsRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -362,6 +381,7 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
+  __reducerSchema("mark_medicine_not_found", MarkMedicineNotFoundReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
@@ -371,6 +391,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("record_trip_event", RecordTripEventReducer),
+  __reducerSchema("remember_medicine", RememberMedicineReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("report_location", ReportLocationReducer),
   __reducerSchema("request_appointment", RequestAppointmentReducer),
@@ -385,6 +406,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
+  __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
   __reducerSchema("share_location", ShareLocationReducer),

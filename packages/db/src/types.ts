@@ -403,6 +403,28 @@ export const MealFact = __t.object("MealFact", {
 });
 export type MealFact = __Infer<typeof MealFact>;
 
+export const MedicineMemory = __t.object("MedicineMemory", {
+  familyId: __t.u64(),
+  places: __t.array(__t.string()),
+  setBy: __t.identity(),
+  setAt: __t.timestamp(),
+});
+export type MedicineMemory = __Infer<typeof MedicineMemory>;
+
+export const MedicineSighting = __t.object("MedicineSighting", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  container: __t.string(),
+  place: __t.string(),
+  seenAt: __t.timestamp(),
+  source: __t.string(),
+  confidence: __t.f64(),
+  labelRead: __t.bool(),
+  savedBy: __t.identity(),
+  notFoundAt: __t.option(__t.timestamp()),
+});
+export type MedicineSighting = __Infer<typeof MedicineSighting>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -478,6 +500,12 @@ export type MyLocations = __Infer<typeof MyLocations>;
 
 export const MyMealFacts = __t.object("MyMealFacts", {});
 export type MyMealFacts = __Infer<typeof MyMealFacts>;
+
+export const MyMedicineMemory = __t.object("MyMedicineMemory", {});
+export type MyMedicineMemory = __Infer<typeof MyMedicineMemory>;
+
+export const MyMedicineSightings = __t.object("MyMedicineSightings", {});
+export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;

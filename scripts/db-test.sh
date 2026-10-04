@@ -40,6 +40,7 @@ SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIM
 	apps/server/src/routes/tools.test.ts apps/server/src/routes/healthkit.test.ts \
 	apps/server/src/routes/trends.test.ts \
 	apps/server/src/routes/appointments.test.ts \
+	apps/server/src/routes/medicine-memory.test.ts \
 	apps/server/src/routes/chat.test.ts apps/server/src/routes/care.test.ts \
 	apps/server/src/routes/meal-facts.test.ts apps/server/src/routes/care-profile.test.ts \
 	apps/server/src/routes/exercise.test.ts apps/server/src/routes/reminders.test.ts \
