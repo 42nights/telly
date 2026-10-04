@@ -38,7 +38,7 @@ enum NoopLocalAccessMain {
         } catch let error as LocalAccessError {
             let message: String
             if case .databaseUnavailable = error {
-                message = "NOOP database is unavailable"
+                message = "Healer S.I. database is unavailable"
             } else {
                 message = error.description
             }
@@ -117,13 +117,13 @@ enum NoopLocalAccessMain {
       workout_summary [--days N]
 
     Query options:
-      --db-path PATH    Explicit NOOP SQLite path. Otherwise NOOP_DB_PATH or the official app container is used.
+      --db-path PATH    Explicit Healer S.I. SQLite path. Otherwise NOOP_DB_PATH or the official app container is used.
 
     Environment:
-      NOOP_DB_PATH    Explicit NOOP SQLite path. Optional; otherwise the official macOS app container is used.
+      NOOP_DB_PATH    Explicit Healer S.I. SQLite path. Optional; otherwise the official macOS app container is used.
       NOOP_BUNDLE_ID  Optional non-default bundle id. Not needed for the official app.
       NOOP_DEVICE_ID  Optional source id. Defaults to my-whoop.
 
-    The MCP server is read-only, stdio-based, and exposes bounded local NOOP data tools.
+    The MCP server is read-only, stdio-based, and exposes bounded local Healer S.I. data tools.
     """
 }

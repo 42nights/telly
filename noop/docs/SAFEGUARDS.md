@@ -1,8 +1,8 @@
 # Platform safeguards — staying within GitHub's Acceptable Use Policy
 
-NOOP's account was once auto-suspended by GitHub (later **reinstated on appeal** — the review found no violation). The most likely trigger was **automated pattern-matching**, not anything we actually did wrong: an anonymous account that, in a short window, cut a rapid burst of releases *and* posted many comments repeating the same donation address. To a spam filter that looks bot-like, even though it was one developer shipping fast and answering everyone.
+Healer S.I.'s account was once auto-suspended by GitHub (later **reinstated on appeal** — the review found no violation). The most likely trigger was **automated pattern-matching**, not anything we actually did wrong: an anonymous account that, in a short window, cut a rapid burst of releases *and* posted many comments repeating the same donation address. To a spam filter that looks bot-like, even though it was one developer shipping fast and answering everyone.
 
-NOOP's purpose is legitimate — it reads a device **you own** over Bluetooth, fully offline, with no account, no cloud, and no proprietary code. None of that breaks GitHub's terms or any law. These safeguards exist so our **behaviour never again *looks* like abuse** to an automated filter. They're grounded in [GitHub's Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies) and [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
+Healer S.I.'s purpose is legitimate — it reads a device **you own** over Bluetooth, fully offline, with no account, no cloud, and no proprietary code. None of that breaks GitHub's terms or any law. These safeguards exist so our **behaviour never again *looks* like abuse** to an automated filter. They're grounded in [GitHub's Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies) and [Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
 
 ## The relevant policy lines
 
@@ -30,4 +30,4 @@ Batch API operations; don't burst-create commits, issues, or comments. Stats bad
 We build and verify **centrally/locally**, so we don't need CI runners. Actions is disabled on the repo (`gh api -X PUT repos/ryanbr/noop/actions/permissions -F enabled=false`). This removes the "unusual Actions volume" flag vector and the supply-chain exposure of third-party actions. Re-enable only deliberately, and SHA-pin every `uses:` if you do.
 
 ## If it happens again
-Don't evade or create replacement accounts (that makes a suspension permanent and violates the rules). Appeal at support.github.com with the facts: NOOP reads a device the user owns, offline, no account/cloud/credentials, no proprietary code — there is nothing to violate. The appeal worked once; the facts haven't changed.
+Don't evade or create replacement accounts (that makes a suspension permanent and violates the rules). Appeal at support.github.com with the facts: Healer S.I. reads a device the user owns, offline, no account/cloud/credentials, no proprietary code — there is nothing to violate. The appeal worked once; the facts haven't changed.

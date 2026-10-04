@@ -31,7 +31,7 @@ The writes use the authenticated WHOOP command characteristic and require a conn
 An accepted command is not evidence that samples arrived, so the collector reports connection state,
 request state, packet/byte counts, the last packet time, and history-sync progress separately.
 
-The earlier NOOP decoder accepts 100 signed 16-bit samples for each of
+The earlier Healer S.I. decoder accepts 100 signed 16-bit samples for each of
 `ax, ay, az, gx, gy, gz`, keyed by a strap Unix timestamp, and applies
 `1/4096 g/LSB` and `0.06104 deg/s/LSB` as its historical scaling convention.
 The [WHOOP 5/MG R21 layout](PROTOCOL_SENSORS.md#r21-six-axis-imu) also permits
@@ -106,7 +106,7 @@ signals, raw sensor CSV, and `imu/*.imus`. Apple exports equivalent session meta
   the conservative coverage result; Apple carries the same facts in `imu-coverage.json`;
 
 Exports stay local until the user invokes the operating system's share sheet. Raw captures are not
-part of routine cloud sync or telemetry, consistent with NOOP's offline-first privacy model. The
+part of routine cloud sync or telemetry, consistent with Healer S.I.'s offline-first privacy model. The
 suggested archive name is `noop-5mg-raw-<session-id>.zip`.
 
 ## Scope and operational limits

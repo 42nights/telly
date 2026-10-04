@@ -110,6 +110,6 @@ installation procedure must transfer or that a modified container will boot.
 
 ### Certificate command boundaries
 
-Commands 155 through 159 cover certificate transfer and device authorization. They gate an authorization state that requires a validly signed, identity-matching certificate; NOOP implements no update, authorization or unlock path, and the signing key and detailed validation rules are outside this reference.
+Commands 155 through 159 cover certificate transfer and device authorization. They gate an authorization state that requires a validly signed, identity-matching certificate; Healer S.I. implements no update, authorization or unlock path, and the signing key and detailed validation rules are outside this reference.
 
 For sensor production, live/save policy, typed configuration and flag behavior use [configuration](PROTOCOL_CONFIGURATION.md); for ECG wrist/start/stop and independent raw/filtered routing use [ECG](PROTOCOL_ECG.md). Those pages separate requested state from applied state and packet delivery. Exact timing, energy cost, all reset paths and all hardware variants remain open unless a specific contract says otherwise.

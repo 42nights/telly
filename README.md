@@ -1,11 +1,11 @@
-# telly
+# Healer S.I.
 
-telly is an application for a person with memory loss and their family. Alzheimer's care is the first focus. The product name is not decided yet.
+Healer S.I. is an application for a person with memory loss and their family. Alzheimer's care is the first focus. The repository is named `telly`.
 
 The repository has two separate projects:
 
 - The **health application** at the repository root: a web HUD and family dashboard, an Expo phone app, and a Node server (Hono for HTTP, Effect 4 for service logic).
-- **NOOP**, an existing WHOOP companion app, in [`noop/`](noop). Read [`noop/README.md`](noop/README.md) for NOOP itself. The health application does not use NOOP source code.
+- The **Healer S.I. WHOOP app**, an on-device WHOOP companion based on [NOOP](https://github.com/ryanbr/noop), in [`noop/`](noop). Read [`noop/README.md`](noop/README.md) for the WHOOP app itself. The health application does not use its source code.
 
 This software is not a medical device. It makes no medical safety claims.
 
@@ -18,7 +18,7 @@ Done:
 - A Bun workspace with a web app, a phone app, a server, and shared packages.
 - Shared Effect Schema API contracts in `@health/contracts`.
 - The server answers `GET /health` and `GET /api/sources`.
-- A stub for the NOOP-to-server connection. `GET /api/sources` reports NOOP as `not_connected`, and the clients show "NOOP not connected". The stub has no transport, ingestion, or database write. It returns no readings and no WHOOP-based nudges.
+- A stub for the Healer S.I.-to-server connection. `GET /api/sources` reports Healer S.I. as `not_connected`, and the clients show "Healer S.I. not connected". The stub has no transport, ingestion, or database write. It returns no readings and no WHOOP-based nudges.
 - CI checks: lint, types, tests, Fallow, Sentrux, and a build and runtime smoke test of the server.
 
 Not done (each item has a GitHub issue):
@@ -91,13 +91,13 @@ To return to GitHub-hosted runners, delete the variable: `gh variable delete HEA
 apps/
   web/          Web HUD and family dashboard (React, Vite, TanStack Router)
   native/       Phone app (Expo, React Native)
-  server/       Server (Node, Hono, Effect); src/integrations/noop.ts is the NOOP stub
+  server/       Server (Node, Hono, Effect); src/integrations/noop.ts is the Healer S.I. stub
 packages/
   contracts/    Shared Effect Schema API contracts
   config/       Shared strict TypeScript configuration
   ui/           shadcn/ui components for the web app
 docs/           Plan and planning board
-noop/           NOOP, a separate project (see noop/README.md)
+noop/           Healer S.I., a separate project (see noop/README.md)
 ```
 
 Clients import only `@health/contracts`, and the web app also imports `@health/ui`. Only the server can import database code. Fallow and Sentrux enforce these rules in CI.
@@ -106,4 +106,4 @@ Clients import only `@health/contracts`, and the web app also imports `@health/u
 
 Work is issue-first. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the claim, progress, and handoff rules.
 
-NOOP keeps its own license and contributor rules. See [`noop/README.md`](noop/README.md).
+Healer S.I. keeps its own license and contributor rules. See [`noop/README.md`](noop/README.md).

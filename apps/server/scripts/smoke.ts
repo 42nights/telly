@@ -32,7 +32,7 @@ try {
 		},
 	);
 	if (sources.find((s) => s.source === "noop")?.status !== "not_connected") {
-		throw new Error("NOOP must be reported as not_connected");
+		throw new Error("Healer S.I. must be reported as not_connected");
 	}
 } finally {
 	server.kill("SIGTERM");

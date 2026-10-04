@@ -57,7 +57,7 @@ selectors throughout the reference. Unknown means unresolved, not unsupported.
 | Schedule or stop an alarm | [Alarms](PROTOCOL_ALARMS.md) |
 | Understand image transfer and authorization | [Updates and authorization](PROTOCOL_UPDATES.md) |
 | Know the hardware behind a contract | Hardware overview on the [WHOOP 4](PROTOCOL_WHOOP4.md#hardware-overview) and [WHOOP 5/MG](PROTOCOL_WHOOP5.md#hardware-overview) profile pages |
-| Work on the NOOP integration | [Contract-to-implementation map](PROTOCOL_IMPLEMENTATION.md#protocol-contract-to-implementation-map) |
+| Work on the Healer S.I. integration | [Contract-to-implementation map](PROTOCOL_IMPLEMENTATION.md#protocol-contract-to-implementation-map) |
 | Reproduce selected parsing rules | [Constructed examples](protocol-examples/validate_examples.py) |
 
 Each contract has one authoritative topic. Historical experiments and
@@ -73,7 +73,7 @@ examples check selected arithmetic and state rules; they are not device tests.
 
 ## Project and credits
 
-NOOP is an independent, offline companion and is not affiliated with WHOOP or a
+Healer S.I. is an independent, offline companion and is not affiliated with WHOOP or a
 medical device. See [disclaimer](../DISCLAIMER.md) and [attribution](../ATTRIBUTION.md).
 The existing work builds on `johnmiddleton12/my-whoop` (WHOOP 4) and
 `b-nnett/goose` (WHOOP 5); further credits remain with the historical observations.

@@ -1,6 +1,6 @@
 # Contributing to the health app
 
-These rules apply to the health app at the repository root and to the health issues. NOOP is a
+These rules apply to the health app at the repository root and to the health issues. Healer S.I. is a
 separate project in `noop/`; its own rules are in `noop/AGENTS.md` and `noop/docs/CONTRIBUTING.md`.
 The plan is [`docs/plan.md`](docs/plan.md).
 
@@ -65,7 +65,7 @@ CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single requ
 
 - Every feature works on the phone and the web without glasses. Glasses (Meta DAT) are an optional
   adapter and never gate startup or a feature.
-- The NOOP-to-server connection stays a stub (`apps/server/src/integrations/noop.ts`) until the
-  friend who owns NOOP hands it off. Never return readings, zeros, or WHOOP-based nudges from it.
+- The Healer S.I.-to-server connection stays a stub (`apps/server/src/integrations/noop.ts`) until the
+  friend who owns Healer S.I. hands it off. Never return readings, zeros, or WHOOP-based nudges from it.
 - Show missing data as unavailable, never as "all clear".
 - Provider keys stay on the server. `VITE_*` and `EXPO_PUBLIC_*` values are public.

@@ -17,11 +17,11 @@ public enum LocalAccessError: Error, CustomStringConvertible, Equatable {
         case .methodNotFound(let method):
             return "Unsupported MCP method: \(method)"
         case .toolNotFound(let tool):
-            return "Unknown NOOP tool: \(tool)"
+            return "Unknown Healer S.I. tool: \(tool)"
         case .resourceNotFound(let uri):
-            return "Unknown NOOP resource: \(uri)"
+            return "Unknown Healer S.I. resource: \(uri)"
         case .promptNotFound(let name):
-            return "Unknown NOOP prompt: \(name)"
+            return "Unknown Healer S.I. prompt: \(name)"
         }
     }
 
@@ -70,7 +70,7 @@ public enum DatabasePathResolver {
         if let explicit = configuration.databasePath {
             let expanded = expandHome(explicit)
             guard fm.fileExists(atPath: expanded) else {
-                throw LocalAccessError.databaseUnavailable("NOOP database not found at NOOP_DB_PATH.")
+                throw LocalAccessError.databaseUnavailable("Healer S.I. database not found at NOOP_DB_PATH.")
             }
             return expanded
         }
@@ -80,7 +80,7 @@ public enum DatabasePathResolver {
         }
 
         throw LocalAccessError.databaseUnavailable(
-            "No official NOOP database was found. Start NOOP once, or set NOOP_DB_PATH explicitly."
+            "No official Healer S.I. database was found. Start Healer S.I. once, or set NOOP_DB_PATH explicitly."
         )
     }
 
@@ -375,7 +375,7 @@ public final class ReadonlyNoopStore {
         if !tableNames.contains("grdb_migrations"),
            tableNames.contains("device") || tableNames.contains("hrSample") {
             throw LocalAccessError.databaseUnavailable(
-                "This looks like a NOOP-like SQLite file without GRDB migration metadata. Open NOOP to repair it before using local access."
+                "This looks like a Healer S.I.-like SQLite file without GRDB migration metadata. Open Healer S.I. to repair it before using local access."
             )
         }
     }

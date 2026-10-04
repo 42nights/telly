@@ -1,7 +1,7 @@
-# NOOP v5 — "Rhythm" experimental irregular-rhythm screening — design
+# Healer S.I. v5 — "Rhythm" experimental irregular-rhythm screening — design
 
 **Pillar:** Rhythm screening (FRONTIER — ships clearly-EXPERIMENTAL + opt-in, or is held; see §11).
-**Status:** Design only. NOT approved. NOT built. Highest-liability feature NOOP has ever scoped.
+**Status:** Design only. NOT approved. NOT built. Highest-liability feature Healer S.I. has ever scoped.
 **Date:** 2026-06-19.
 **Engine:** new `RhythmScreener` in `Packages/StrandAnalytics` + Kotlin twin `RhythmScreener.kt`.
 **Reuses:** `HRVAnalyzer` (ectopic rejection), the R-R stream (`RRInterval`), raw PPG (`SpO2Sample` red/IR),
@@ -14,7 +14,7 @@ accelerometer (`GravitySample`), `PpgHr` autocorrelation, `ScoreConfidence` patt
 
 ---
 
-## 1. Goal & differentiation (why only NOOP)
+## 1. Goal & differentiation (why only Healer S.I.)
 
 WHOOP gates its on-demand **ECG / "Irregular Heart Rhythm Notifications" (IHRN)** to the **MG**
 hardware on the top **$359/yr** membership tier. Apple/Samsung gate AFib features to specific watches
@@ -22,16 +22,16 @@ behind FDA/CE clearance. Oura's "Symptom Radar" is illness-trend, not rhythm. So
 **WHOOP 4.0** — the most common strap in the wild — has **no path at all** to even a rough heads-up
 that their pulse looked irregular last night.
 
-NOOP already has, on **every** strap (4.0 and 5.0/MG), the one signal these features are ultimately
+Healer S.I. already has, on **every** strap (4.0 and 5.0/MG), the one signal these features are ultimately
 built on top of: **beat-to-beat timing.** From the strap's own R-R intervals (and, on 5.0 stretches
-that only stream optical PPG, from the raw red/IR waveform NOOP already decodes), NOOP can compute the
+that only stream optical PPG, from the raw red/IR waveform Healer S.I. already decodes), Healer S.I. can compute the
 **irregularity statistics** that an irregular-rhythm screen is made of — entirely **on-device, offline,
 free, no subscription.**
 
 The differentiation is structural, not marketing:
 
 - **Reasons from raw beat timing**, not a cloud-scored summary. Competitors that *could* do this choose
-  not to, or paywall it; NOOP already holds the R-R stream and the PPG waveform locally.
+  not to, or paywall it; Healer S.I. already holds the R-R stream and the PPG waveform locally.
 - **Works on a 4.0**, where every cleared/branded feature refuses to.
 - **On-device + offline.** No sample of your heartbeat ever leaves the device. (This is also the
   *responsible* posture for a high-sensitivity signal.)
@@ -66,7 +66,7 @@ care, and structurally prone to false positives (motion, ectopy, a wandering opt
   is computed or stored until the user opts in and passes the consent gate (§9).**
 - One settings flag (`noopRhythmScreening`, default **OFF**), gated behind a one-time consent screen.
 
-No firmware writes, no new BLE commands, no cloud. Everything rides signals NOOP already decodes.
+No firmware writes, no new BLE commands, no cloud. Everything rides signals Healer S.I. already decodes.
 
 ---
 
@@ -208,7 +208,7 @@ estimator. Same constants, same `RhythmState`/`RhythmConfidence` enums, same res
 
 ## 5. Cross-platform plan
 
-Follows the established NOOP parity discipline (shared Swift package auto-covers mac+iOS; Android always
+Follows the established Healer S.I. parity discipline (shared Swift package auto-covers mac+iOS; Android always
 needs a hand-port; verify iOS centrally):
 
 1. **Swift engine + tests land first**, green on macOS via the `StrandAnalytics` package test target
@@ -232,7 +232,7 @@ default. Tapping it opens the **consent gate** (§9) *before* anything computes.
 > **Heads-up: your rhythm looked irregular last night**
 > During a few quiet periods, your beat-to-beat timing looked more irregular than usual. This is
 > **not a diagnosis** and is **often nothing** — but if you see this often, or feel unwell, it's worth
-> mentioning to a clinician. *NOOP is a wellness app, not a medical device, and cannot detect any heart
+> mentioning to a clinician. *Healer S.I. is a wellness app, not a medical device, and cannot detect any heart
 > condition.* [What this means] [Dismiss]
 
 **Detail screen.**
@@ -260,8 +260,8 @@ qualified or cleared to make).
 
 ## 7. Non-clinical / legal framing (the load-bearing section)
 
-This is the **highest-liability feature in NOOP** and the framing is not decoration — it is the feature's
-license to exist as a wellness app. NOOP already states in `DISCLAIMER.md §5` that all outputs are
+This is the **highest-liability feature in Healer S.I.** and the framing is not decoration — it is the feature's
+license to exist as a wellness app. Healer S.I. already states in `DISCLAIMER.md §5` that all outputs are
 "approximations … not clinically validated … not a medical device … not medical advice. Do not use them
 to diagnose…". Rhythm screening needs its **own dedicated sub-section** in that same register.
 
@@ -279,7 +279,7 @@ to diagnose…". Rhythm screening needs its **own dedicated sub-section** in tha
 > **not** evidence that anything is wrong. **Never** start, stop, or change any treatment based on it.
 > **If you feel faint, have chest pain, shortness of breath, palpitations that worry you, or any
 > symptom that concerns you — contact a qualified professional or your local emergency service straight
-> away; do not rely on NOOP.** All processing happens on your own device; no heartbeat data is sent
+> away; do not rely on Healer S.I.** All processing happens on your own device; no heartbeat data is sent
 > anywhere.
 
 ### 7.2 Copy rules enforced everywhere (lint-able)
@@ -290,7 +290,7 @@ to diagnose…". Rhythm screening needs its **own dedicated sub-section** in tha
   mentioning to a clinician," and the emergency-services line.
 - Allowed: descriptive *"your rhythm looked irregular"* / *"occasional extra or skipped beats"* with the
   benign-causes caveat attached.
-- Mirror the §5.1 Mind-feature pattern (NOOP already ships a non-clinical mental-health sub-section with
+- Mirror the §5.1 Mind-feature pattern (Healer S.I. already ships a non-clinical mental-health sub-section with
   a crisis line — proven house style for exactly this).
 
 ### 7.3 Other obligations
@@ -419,7 +419,7 @@ screening verdict behind an explicit the maintainer go/no-go and the full consen
    trustworthy inter-beat intervals (peak picking) from the 24 Hz buffer is non-trivial and may not be
    reliable enough for §3.4 — does the fusion path survive contact?
 5. **Jurisdictional reach of "consider seeing a clinician."** Even disclaimed, does that phrasing risk
-   being read as a medical-device function in any market NOOP is distributed in? Worth a conservative
+   being read as a medical-device function in any market Healer S.I. is distributed in? Worth a conservative
    legal sanity check before the verdict (not the visualization) ships.
 6. **Naming.** "Rhythm" vs "Beat regularity" vs "Pulse steadiness" — pick a name that reads clearly
    *wellness/experimental* and avoids implying a cardiac diagnostic.

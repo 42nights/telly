@@ -75,7 +75,7 @@ class HrBroadcasterEncodeTest {
             val parsed = StandardHeartRate.parse(encoded)
             assertNotNull("encoded $bpm must re-parse", parsed)
             assertEquals("encode→parse round trip must preserve $bpm", bpm, parsed!!.hr)
-            assertEquals("NOOP broadcasts a plain HR with no R-R", 0, parsed.rr.size)
+            assertEquals("Healer S.I. broadcasts a plain HR with no R-R", 0, parsed.rr.size)
         }
     }
 }

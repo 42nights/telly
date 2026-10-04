@@ -1,6 +1,6 @@
 # Device support — roadmap & protocol notes
 
-NOOP's north star is **WHOOP**, fully supported. Everything else is an opportunistic, easy-first
+Healer S.I.'s north star is **WHOOP**, fully supported. Everything else is an opportunistic, easy-first
 expansion that must never regress the WHOOP experience. This file records where each additional
 source stands and the protocol facts we've verified, so the next build can pick up cleanly.
 
@@ -13,7 +13,7 @@ source stands and the protocol facts we've verified, so the next build can pick 
 | **Xiaomi Smart Band — live BLE sync** | 🔬 Protocol researched, decoder not built | Mi protobuf-v2 over BLE GATT + `encryptKey` handshake (below) — hardware-gated |
 | **Polar deep streams** (ECG / PPG / ACC / PPI) | 🔬 Pure PPI decoder built (`Packages/PolarProtocol` + `com.noop.polar`, tests green both platforms); live `PolarPMDSource` + ECG/PPG decode still to build | PMD service (below) — alpha, hardware-gated |
 | **Garmin** (sleep / HRV / Body Battery / SpO₂ / FIT) | 📋 Researched, not built | Local BLE re-derive (Gadgetbridge-informed, **never** GPLv3 copy) |
-| **Amazfit / Zepp** (incl. Helio deep) | 📋 Researched, not built | Encrypted Huami BLE — needs a one-time **user-pasted** vendor key (NOOP never logs into the vendor cloud) |
+| **Amazfit / Zepp** (incl. Helio deep) | 📋 Researched, not built | Encrypted Huami BLE — needs a one-time **user-pasted** vendor key (Healer S.I. never logs into the vendor cloud) |
 | **Oura** (Gen 3/4/5) | 🔬 Cloud import shipped; local BLE ring **experimental** | Cloud API v2 (off-by-default OAuth backfill) **+** clean-room BLE ring — auth, live HR/IBI, history drain, sleep hypnogram, activity/HR research (below) |
 | **Fitbit / Google** | 📋 Researched, not built | Build against **Google Health** API (Fitbit Web API sunsets Sept 2026) — off-by-default import |
 
@@ -50,7 +50,7 @@ Polar H10 / Verity Sense / OH1 the user owns, account-free, on top of the standa
 
 **Decoder status.** Built and tested on both platforms (`Packages/PolarProtocol` / `com.noop.polar`):
 - `PmdDecoder` — frame header (type `& 0x3F`, ns timestamp, frame-type/compressed bit) + PPI samples (HR +
-  peak-to-peak interval + error estimate + flags). PPI is the one NOOP needs — HR + inter-beat interval for
+  peak-to-peak interval + error estimate + flags). PPI is the one Healer S.I. needs — HR + inter-beat interval for
   HRV, no ECG peak detection.
 - `PmdControl` — the control-point command builder (GET_SETTINGS / REQUEST_START / STOP, u16-LE setting
   blocks, the `(recording<<7)|type` start byte) + `0xF0` response parse. Pure byte work, no BLE.
@@ -69,16 +69,16 @@ the radio while the strap is active. Needs the reporter's detail + an H10 in han
 
 ## Xiaomi Smart Band (Mi Band) — shipped import lane
 
-NOOP imports a Mi Band's full history **without Bluetooth, a Xiaomi account, or any
+Healer S.I. imports a Mi Band's full history **without Bluetooth, a Xiaomi account, or any
 cloud** by reading the data the **Mi Fitness iOS app already stored on the phone**. This
 is the same "import data you already own" model as the WHOOP-CSV and Apple-Health lanes,
 and it's fully offline.
 
 - **What the user does:** on the iPhone, *Files → On My iPhone → Mi Fitness*, long-press
-  the folder → *Compress*, then bring that `.zip` to NOOP (*Data Sources → Xiaomi Smart
+  the folder → *Compress*, then bring that `.zip` to Healer S.I. (*Data Sources → Xiaomi Smart
   Band*). The bare `<user_id>.db` or an unzipped folder (macOS) also work.
 - **Where the data is:** `DataBase/<user_id>/de/<user_id>.db` — one SQLite row per sample
-  with a JSON `value` column. NOOP opens it **read-only** (GRDB) and never writes to it.
+  with a JSON `value` column. Healer S.I. opens it **read-only** (GRDB) and never writes to it.
 - **Tables read** (`deleted = 0` only):
   - Day rollups → `dailyMetric` + `metricSeries`: `steps_day` (steps, distance),
     `calories_day` (active kcal), `heart_rate_day` (`avg_rhr` resting, avg/min/max + HR
@@ -86,11 +86,11 @@ and it's fully offline.
     (`avg_stress`, 0–100), `spo2_day` (`avg_spo2`), `intensity_day`, `valid_stand_day`,
     `vitality` (`latest_accumulated_vitality`).
   - `sleep` (interval) → `sleepSession`: each row's `items[]` is the **real per-epoch
-    hypnogram** (`{start_time, end_time, state}`), giving NOOP a native
+    hypnogram** (`{start_time, end_time, state}`), giving Healer S.I. a native
     `[{start,end,stage}]` timeline rather than just stage totals.
 - **Sleep-stage codes** (verified against a real Mi Band 10 export):
-  `1 = awake, 2 = light, 3 = deep, 4 = REM, 5 = awake-in-bed` → NOOP `wake/light/deep/rem`.
-- **Not present in the export** (left `nil`, NOOP derives what it can): HRV, recovery,
+  `1 = awake, 2 = light, 3 = deep, 4 = REM, 5 = awake-in-bed` → Healer S.I. `wake/light/deep/rem`.
+- **Not present in the export** (left `nil`, Healer S.I. derives what it can): HRV, recovery,
   respiration rate, skin temperature.
 - **Partition:** all rows land under `deviceId = "xiaomi-band"`, so it appears as its own
   Data Source for the per-source pages and cross-source consensus/compare views.
@@ -115,7 +115,7 @@ band in an iterative BLE test loop. Verified facts to pick up from:
 - **Auth:** the per-device **`encryptKey`** (32 hex chars) the vendor app holds — the user
   already extracts it as `auth.key` via the same Mi Fitness export. Pairing is a
   nonce-exchange handshake (send phone nonce → receive watch nonce → derive session keys),
-  after which traffic is **AES-CCM** encrypted with **HMAC** integrity. NOOP would take the
+  after which traffic is **AES-CCM** encrypted with **HMAC** integrity. Healer S.I. would take the
   key as a one-time **user-pasted value** (same stance as the Amazfit/Zepp lane) and never
   log into the Xiaomi cloud.
 - **Data fetch:** once authenticated, request **activity sync** — the watch streams the same
@@ -131,7 +131,7 @@ will not ship blind.
 ## Oura Ring — BLE (experimental)
 
 A clean-room BLE lane for a ring the user owns, alongside the shipped cloud import. **Experimental**
-(`ExperimentalBrand`-gated, not a shipped supported strap). NOOP computes its **own** Charge/Rest from the
+(`ExperimentalBrand`-gated, not a shipped supported strap). Healer S.I. computes its **own** Charge/Rest from the
 ring's raw signals and **never** reads Oura's encrypted readiness/sleep scores. Full byte-level spec:
 [`OURA_PROTOCOL.md`](OURA_PROTOCOL.md); this is the where-we-stand summary.
 
@@ -142,7 +142,7 @@ cursor advance + quiet window → converges to `bytes_left 0`, no re-serve loop)
 (`0x5D` + reconstructed), skin temp (`0x46`), SpO₂, battery. Own central/GATT — never the WHOOP path.
 
 **Sleep — hypnogram persist (DRAFT PR #446).** The ring writes the whole night's SleepNet phase codes in one
-burst after wake; NOOP reconstructs the time axis (30 s/code, end anchored by the `0x49` sleep-summary) and
+burst after wake; Healer S.I. reconstructs the time axis (30 s/code, end anchored by the `0x49` sleep-summary) and
 banks it as a `CachedSleepSession` with a `[{start,end,stage}]` timeline under the ring's own deviceId, so
 `SleepMerge`'s imported-over-computed rule surfaces Oura's staging (reusing the #988/HC stage-timeline path).
 Cross-checks: **light** matches WHOOP/the Oura app well (±2–3 min); **deep/REM undercounted, awake over** vs
@@ -156,11 +156,11 @@ a day (same class as the import-side fix **#375**); on-device multi-night valida
 never a durable/scoring row. **Validated:** MET tracks land-activity intensity — three walks read mean ≈ 4 MET
 vs a ≈ 0.9 sleep floor, and per-minute MET vs a Suunto `.fit` speed profile correlates **r = 0.89**. It
 underreads water, and the stream is sparse with **ring-side** cadence gaps (~86 % coverage) so daily totals
-undercount. **NOOP has no MET field** in its HR/strain model, so `0x50` stays research only — the ring's path
-into NOOP activity is HR, never MET, and it is never a step count.
+undercount. **Healer S.I. has no MET field** in its HR/strain model, so `0x50` stays research only — the ring's path
+into Healer S.I. activity is HR, never MET, and it is never a step count.
 
 **Banked IBI → HR — `0x80` (research instrumentation).** open_oura derives per-minute HR (`hr_bpm = 60000/ibi`)
-from the `0x80` green-IBI record, not from `0x50`. NOOP already decodes those IBIs for HRV; a tagged JSONL
+from the `0x80` green-IBI record, not from `0x50`. Healer S.I. already decodes those IBIs for HRV; a tagged JSONL
 sidecar (`oura-ibihr-<id>.jsonl`) also reconstructs an HR history from the banked stream for offline study.
 **First daytime sample was sparse + noisy** (~7 usable beats/min, ~15 % impossible-HR artifacts) — looks like a
 quality-sampled subset, not a full beat record. **Decisive test pending:** overnight density (ring still →

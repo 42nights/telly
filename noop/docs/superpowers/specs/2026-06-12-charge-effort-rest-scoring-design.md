@@ -1,6 +1,6 @@
-# NOOP scoring — "Charge / Effort / Rest" design
+# Healer S.I. scoring — "Charge / Effort / Rest" design
 
-**Goal:** Give NOOP its own first-class daily scores — **Charge** (recovery), **Effort** (strain),
+**Goal:** Give Healer S.I. its own first-class daily scores — **Charge** (recovery), **Effort** (strain),
 **Rest** (sleep) — all out of 100, computed across WHOOP 4.0 and 5.0/MG, competitive with WHOOP's
 Recovery/Strain/Sleep while staying transparent and honest.
 
@@ -84,12 +84,12 @@ metric series, so everything stored under `strain` is 0–100. (Documented in th
   `WhoopExportImporter` strain rescale.
 - **Kotlin:** mirror all of the above (`RecoveryScorer.kt`/`AnalyticsEngine.kt`/`MetricCatalog.kt`/
   `TodayScreen.kt`/importer).
-- **Docs/wiki:** Features, How-NOOP-Works, FAQ, the Science page, disclaimers — rename + explain the
+- **Docs/wiki:** Features, How-Healer S.I.-Works, FAQ, the Science page, disclaimers — rename + explain the
   energy-economy framing; keep the "approximations, not WHOOP's scores" disclaimer.
 
 ## Out of scope (v1)
 
-- No 4th blended "NOOP Score".
+- No 4th blended "Healer S.I. Score".
 - No change to the sleep-staging algorithm itself (Rest consumes existing stages).
 - Internal metric keys unchanged.
 

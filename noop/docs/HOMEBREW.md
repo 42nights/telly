@@ -4,10 +4,10 @@
 > `noopapp/noop` tap referenced by older releases is gone — the upstream `noopapp` GitHub org (and its
 > `homebrew-noop` repo) no longer exists (#1069), so `brew tap noopapp/noop` fails outright.
 >
-> **Install NOOP on macOS by downloading `NOOP.app` directly from
+> **Install Healer S.I. on macOS by downloading `NOOP.app` directly from
 > [Releases](https://github.com/ryanbr/noop/releases)** — Apple Silicon + Intel, drag to Applications.
 > See **First launch on macOS** in the [README](../README.md#download) for the one-time Gatekeeper step
-> (NOOP ships anonymously and isn't notarized, so macOS blocks it on first open until you clear the
+> (Healer S.I. ships anonymously and isn't notarized, so macOS blocks it on first open until you clear the
 > download quarantine flag).
 
 The rest of this doc is a maintainer reference for **re-publishing** a tap under this fork, should that
@@ -46,11 +46,11 @@ rides along with them.
 > you're vouching for code you can read — the cask is one short file in the public tap, and the app's
 > full source is in this repo.
 
-> **Unsigned-app note.** NOOP ships anonymously with no Apple Developer ID, so it isn't notarized.
+> **Unsigned-app note.** Healer S.I. ships anonymously with no Apple Developer ID, so it isn't notarized.
 > Homebrew can't strip the quarantine flag for an un-notarized app, so on **first launch** Gatekeeper
-> blocks it. On **macOS 15 Sequoia and later**: try to open NOOP once, then **System Settings →
-> Privacy & Security**, scroll down, and click **"Open Anyway"** next to NOOP. (On macOS 14 and
-> earlier you can right-click NOOP in `/Applications` → **Open** → **Open**.) Updates after that are
+> blocks it. On **macOS 15 Sequoia and later**: try to open Healer S.I. once, then **System Settings →
+> Privacy & Security**, scroll down, and click **"Open Anyway"** next to Healer S.I. (On macOS 14 and
+> earlier you can right-click Healer S.I. in `/Applications` → **Open** → **Open**.) Updates after that are
 > just `brew upgrade`.
 
 ## Requirements (for a republished tap)

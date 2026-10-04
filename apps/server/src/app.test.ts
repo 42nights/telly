@@ -9,7 +9,7 @@ const app = createApp("http://localhost:3001");
 const strict = { onExcessProperty: "error" } as const;
 
 describe("server boundaries", () => {
-	test("NOOP is reported unavailable, with no readings or nudges", async () => {
+	test("Healer S.I. is reported unavailable, with no readings or nudges", async () => {
 		const response = await app.request("/api/sources");
 		expect(response.status).toBe(200);
 		const { sources } = Schema.decodeUnknownSync(Sources)(
@@ -21,7 +21,7 @@ describe("server boundaries", () => {
 		);
 	});
 
-	test("clients reject a fabricated NOOP reading", () => {
+	test("clients reject a fabricated Healer S.I. reading", () => {
 		const fabricated = {
 			sources: [{ source: "noop", status: "connected", heartRate: 62 }],
 		};

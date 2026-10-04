@@ -1,8 +1,8 @@
 
 
-# NOOP Local Oura BLE Source — Architecture + Ordered Implementation Plan
+# Healer S.I. Local Oura BLE Source — Architecture + Ordered Implementation Plan
 
-Replaces the current "honest dead-end" `OuraProbeSource` (Strand/BLE/OuraProbeSource.swift + android `OuraProbeSource.kt`) with a real, WHOOP-isolated, clean-room **live Oura BLE source** that decodes the ring's own raw signals and HRV/sleep tags, runs **NOOP's own scoring**, and produces a NOOP Charge/Rest for an Oura day exactly like a WHOOP day. All protocol byte-facts are cited from the RE resources; no RE source is copied — we write our own framing/auth/decoders from the documented facts only.
+Replaces the current "honest dead-end" `OuraProbeSource` (Strand/BLE/OuraProbeSource.swift + android `OuraProbeSource.kt`) with a real, WHOOP-isolated, clean-room **live Oura BLE source** that decodes the ring's own raw signals and HRV/sleep tags, runs **Healer S.I.'s own scoring**, and produces a Healer S.I. Charge/Rest for an Oura day exactly like a WHOOP day. All protocol byte-facts are cited from the RE resources; no RE source is copied — we write our own framing/auth/decoders from the documented facts only.
 
 ## 0. Existing-code contracts the plan binds to (verified by reading the repo)
 
@@ -14,7 +14,7 @@ Replaces the current "honest dead-end" `OuraProbeSource` (Strand/BLE/OuraProbeSo
 - **Wizard:** `Strand/Screens/AddDeviceWizard.swift` (+ `android/.../ui/AddDeviceWizard.kt`). `DeviceType.oura` already exists, wired to the `OuraProbeSource` dead-end via `OuraPickList`; `finishAdd(makeActive:)` builds the `PairedDevice` per path.
 - **Scoring is stream-driven, per-device:** `Packages/StrandAnalytics` `RecoveryScorer.recovery(hrv:..., sleepPerf:...)`, `restingHR(_ hr:[HRSample]...)`, `DayOwnerResolver`, `AnalyticsEngine`, `SleepStager`. Recovery needs HRV (RMSSD ms) + sleeping resting-HR + a sleep/rest composite; strain needs the HR stream — all off the per-device `Streams` + sleep sessions. So **if the live source lands real hr/rr + HRV + sleep-phase data under its deviceId, the existing engine scores the Oura day with zero scorer changes.**
 
-**Honest-data invariant (hard):** Oura's own encrypted readiness/sleep scores are never read or surfaced. We decode only raw PPG/IBI/accel + the ring's open event tags (HR 0x55, IBI 0x44/0x60, RMSSD 0x5d, SpO2 0x6F/0x70/0x77, temp 0x46/0x75, sleep-phase 0x49/0x4B/0x4C/0x4E/0x4F/0x58) and compute NOOP's Charge/Rest ourselves. When a signal can't be read, the source stays at "—" (Huami precedent).
+**Honest-data invariant (hard):** Oura's own encrypted readiness/sleep scores are never read or surfaced. We decode only raw PPG/IBI/accel + the ring's open event tags (HR 0x55, IBI 0x44/0x60, RMSSD 0x5d, SpO2 0x6F/0x70/0x77, temp 0x46/0x75, sleep-phase 0x49/0x4B/0x4C/0x4E/0x4F/0x58) and compute Healer S.I.'s Charge/Rest ourselves. When a signal can't be read, the source stays at "—" (Huami precedent).
 
 ## 1. Clean-room protocol PACKAGE — `Packages/OuraProtocol/` (+ Kotlin `com.noop.oura.*`)
 
@@ -54,19 +54,19 @@ Kotlin twin `android/.../oura/{OuraGatt,Framing,Auth,Commands,EventTags,Decoders
 - **3c Wizard:** Swift swap `@StateObject ouraScanner` from OuraProbeSource→OuraLiveSource (discovery-only, deviceId "scan-preview", no-op persist); real `prepInstructions(.oura)`; replace `OuraPickList` dead-end with a normal `DiscoveredRow` pick list (like HuamiPickList) feeding `@State pickedOura` + detected `ringGen`; `finishAdd` adds an `else if let pickedOura` block → `PairedDevice(id:"oura-<uuid>", brand:"Oura", model:ringGen.displayName, peripheralId:uuid, sourceKind:.oura, capabilities: gen-filtered set, status:.paired)`. Keep under Experimental heading with "Use file import" fallback when `needsPairing` is set. Kotlin: same edits in ui/AddDeviceWizard.kt.
 - **3d DevicesView:** Swift `DevicesView.swift` + Kotlin `ui/DevicesScreen.kt`/`DataSourcesScreen.kt` — extend the generic capability/battery rendering keyed off brand=="Oura"/sourceKind==.oura with per-gen capability copy + a `needsPairing` honest-state row. No bespoke card type.
 
-## 4. SCORING / STREAM contract — Oura day → NOOP Charge/Rest
+## 4. SCORING / STREAM contract — Oura day → Healer S.I. Charge/Rest
 
 Decoded events map onto the EXISTING `Streams` and persist under the ring's deviceId; existing analytics score the day unchanged. Glue lives in a pure testable `OuraStreamMapping` (WhoopStore, beside StandardHRMapping):
 
 - HR 0x55 → `hr:[HRSample]` → RecoveryScorer.restingHR + strain HR stream.
 - IBI 0x44/0x60 → `rr:[RRInterval]` → HRV/R-R analytics.
-- HRV 0x5d → `events:[WhoopEvent(kind:"OURA_HRV", payload:["time_ms":…,"b1":…,"b2":…])]` raw units-neutral fields only (the b1/b2 byte to ms scale is not Tier-A, so no fabricated `rmssd_ms`); NOOP's scoring RMSSD comes from the `rr` IBI stream, never Oura's readiness.
+- HRV 0x5d → `events:[WhoopEvent(kind:"OURA_HRV", payload:["time_ms":…,"b1":…,"b2":…])]` raw units-neutral fields only (the b1/b2 byte to ms scale is not Tier-A, so no fabricated `rmssd_ms`); Healer S.I.'s scoring RMSSD comes from the `rr` IBI stream, never Oura's readiness.
 - SpO2 0x6F/0x70/0x77 → `spo2:[SpO2Sample(raw_adc)]`.
 - Temp 0x46/0x75 → `skinTemp:[SkinTempSample(raw_adc)]`.
 - Sleep-phase tags → `events:[WhoopEvent(kind:"OURA_SLEEP_PHASE", payload:["phase":…])]` folded into a `sleepSession` for that deviceId → SleepStager/SleepStageTotals → the `sleepPerf` composite fed to recovery.
 - Battery → `battery:[BatterySample]` + live onBattery.
 
-`recovery(hrv: ourRMSSD, sleepPerf: ourSleepComposite, hrvBaseline:…)` = NOOP Charge; strain from the HR stream = NOOP Rest/strain — identical to a WHOOP day because DayOwnerResolver/AnalyticsEngine key off (deviceId, streams, sleepSession). Missing inputs leave sub-scores nil (honest), never faked. Android twin extends protocol/Streams.kt/StreamBatch with spo2/skinTemp/events (DAO inserts already exist) + a Kotlin OuraStreamMapping; sleep-phase events fold into the existing sleepSession Room table.
+`recovery(hrv: ourRMSSD, sleepPerf: ourSleepComposite, hrvBaseline:…)` = Healer S.I. Charge; strain from the HR stream = Healer S.I. Rest/strain — identical to a WHOOP day because DayOwnerResolver/AnalyticsEngine key off (deviceId, streams, sleepSession). Missing inputs leave sub-scores nil (honest), never faked. Android twin extends protocol/Streams.kt/StreamBatch with spo2/skinTemp/events (DAO inserts already exist) + a Kotlin OuraStreamMapping; sleep-phase events fold into the existing sleepSession Room table.
 
 ## 5. Ring-gen (3/4/5) identity + per-gen capability
 

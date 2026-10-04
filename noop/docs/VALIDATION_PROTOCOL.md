@@ -1,6 +1,6 @@
 # Validation protocol
 
-How NOOP is allowed to claim that a scoring change is an improvement.
+How Healer S.I. is allowed to claim that a scoring change is an improvement.
 
 This document is prescriptive. It exists because the project has repeatedly published accuracy
 numbers that did not survive a second measurement. In one review, six separate findings reversed
@@ -44,7 +44,7 @@ after the pooled result disappoints. If a stratum matters, name it before you lo
 
 ### R2 — Never score against a reference the scorer produced
 
-NOOP pre-populates a hypnogram with machine stages and the wearer edits it. A lightly-edited night
+Healer S.I. pre-populates a hypnogram with machine stages and the wearer edits it. A lightly-edited night
 is therefore mostly scorer output. Scoring the scorer against it is self-comparison, and it inflates
 agreement toward 1.0.
 

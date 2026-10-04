@@ -1,12 +1,12 @@
-# NOOP — System Architecture
+# Healer S.I. — System Architecture
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It talks
+Healer S.I. is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It talks
 directly to the strap over Bluetooth Low Energy, stores everything on-device in SQLite (GRDB on Mac/iOS, Room on Android), and computes
 recovery, strain, HRV, and sleep locally. There is no WHOOP cloud, no account —
 the app interoperates with **your own device and your own data**. It can also import data you already
 own: WHOOP CSV exports and Apple Health exports.
 
-> **Not affiliated with WHOOP.** NOOP is an independent, interoperability project built on
+> **Not affiliated with WHOOP.** Healer S.I. is an independent, interoperability project built on
 > community reverse-engineering of the strap's Bluetooth protocol. It is **not a medical device**
 > and produces **approximate** physiological estimates that must not be used for diagnosis or
 > treatment. See [`DISCLAIMER.md`](../DISCLAIMER.md) and [`ATTRIBUTION.md`](../ATTRIBUTION.md).
@@ -22,7 +22,7 @@ off-device.
 
 ```
                           ┌─────────────────────────────────────────────────────────┐
-   WHOOP strap (4.0/5.0)  │                     NOOP (on-device)                     │
+   WHOOP strap (4.0/5.0)  │                     Healer S.I. (on-device)                     │
    ────────────────────   │                                                          │
         BLE GATT           │   CoreBluetooth          WhoopProtocol (pure decode)    │
    ┌──────────────┐  notify│  ┌────────────┐  bytes  ┌──────────────────────────┐    │
@@ -211,7 +211,7 @@ them to wall time with the linear `(device, wall)` offset captured at connect by
 
 ### Historical path (offload / backfill)
 
-The strap holds a ~14-day on-device biometric store. NOOP re-offloads it the way the official client
+The strap holds a ~14-day on-device biometric store. Healer S.I. re-offloads it the way the official client
 syncs — once per connect and then every `backfillIntervalSeconds` (900s) while connected+bonded — so
 the periodic **type-47 historical offload is the primary metric source**, not the live stream.
 
@@ -274,7 +274,7 @@ Supporting machinery, all on the main run loop:
   notification has arrived for >120s** — bounces the link; the auto-rescan on disconnect re-bonds and
   resumes streaming.
 - **Stuck-strap watchdog:** after each offload, `StuckStrapDetector` compares the strap's newest
-  record (`GET_DATA_RANGE`) against NOOP's data frontier (`latestHRSampleTs`). Strap-ahead **and**
+  record (`GET_DATA_RANGE`) against Healer S.I.'s data frontier (`latestHRSampleTs`). Strap-ahead **and**
   frontier-frozen ⇒ a reboot hint banner; off-wrist / caught-up is *not* flagged.
 - **Auto-reconnect:** an unintentional disconnect flushes the `Collector` and rescans after 3s.
 
@@ -378,19 +378,19 @@ computed locally.
    SQLite file, and the UI are the whole system.
 2. **Decoded-first durability.** Metrics are committed before raw is queued; the raw outbox is a
    prunable convenience, never the source of truth.
-3. **Resumable safe-trim.** The strap forgets historical data only after NOOP has it durably and has
+3. **Resumable safe-trim.** The strap forgets historical data only after Healer S.I. has it durably and has
    confirmed the ack; a durable cursor makes every offload resumable.
 4. **Pure cores, thin shell.** `WhoopProtocol`, `WhoopStore`, `StrandAnalytics`, and `StrandImport`
    are platform-pure and testable in isolation; the app target is the only CoreBluetooth/SwiftUI
    surface.
-5. **Interoperability, not impersonation.** NOOP reads your strap and your exports for your own use.
+5. **Interoperability, not impersonation.** Healer S.I. reads your strap and your exports for your own use.
    It is independent of WHOOP and is not a medical device.
 
 ---
 
 ## Attribution
 
-NOOP's BLE protocol work builds on community reverse-engineering of the WHOOP straps:
+Healer S.I.'s BLE protocol work builds on community reverse-engineering of the WHOOP straps:
 
 - **johnmiddleton12/my-whoop** — WHOOP 4.0 protocol.
 - **b-nnett/goose** — WHOOP 5.0 protocol.

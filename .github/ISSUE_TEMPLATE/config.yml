@@ -1,6 +1,6 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 💬 NOOP Discord — questions, setup help & chat
+  - name: 💬 Healer S.I. Discord — questions, setup help & chat
     url: https://discord.com/invite/wKgyqVdjrP
     about: "Got a question, stuck on setup, or not sure something's a bug? Discord is the fastest place for a quick answer. (Confirmed bugs still go to a GitHub issue, with a strap log.)"
   - name: ❓ FAQ — start here (most questions are answered)

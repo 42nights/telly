@@ -10,7 +10,7 @@ Fitness Age is below your real age, your estimated fitness is better than averag
 if it's above, it's worse. That's the whole claim — it is **not** a measure of how old your body, cells,
 or organs are, and it carries no medical meaning.
 
-It is computed **on-device**, weekly, from data NOOP already has. Nothing is sent anywhere.
+It is computed **on-device**, weekly, from data Healer S.I. already has. Nothing is sent anywhere.
 
 ## Where the number comes from
 
@@ -36,7 +36,7 @@ corroborated by the **CERG/NTNU** group that authored the original work.
 
 The Nes model takes a **physical-activity index** that, in HUNT, came from the **HUNT1 PA-Q**
 questionnaire (Kurtze 2008) — a short self-report of weekly exercise frequency, duration and intensity
-mapped onto a 0–7.5 scale. NOOP doesn't ask the user to fill that in. Instead it **reconstructs the
+mapped onto a 0–7.5 scale. Healer S.I. doesn't ask the user to fill that in. Instead it **reconstructs the
 PA-index on-device** from the measured training signal it already records (workout frequency, duration
 and strain/intensity over the rolling window), mapping it onto the same scale the questionnaire produced.
 This keeps the input honest — it's derived from what you actually did, not what you'd claim on a survey.

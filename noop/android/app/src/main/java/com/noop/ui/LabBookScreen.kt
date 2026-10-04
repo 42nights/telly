@@ -495,7 +495,7 @@ private fun CorrelationResult(
                     "(and keep wearing your strap)."
             } else {
                 "$n reading${if (n == 1) "" else "s"} line up so far, not enough to read a trend yet " +
-                    "(NOOP waits for $LAB_FLOOR)."
+                    "(Healer S.I. waits for $LAB_FLOOR)."
             },
             style = NoopType.subhead,
             color = Palette.textTertiary,
@@ -595,10 +595,10 @@ private fun LabBookDisclaimerSheet(onDismiss: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(uiString(R.string.l10n_lab_book_screen_about_lab_book_37bf2691), style = NoopType.title2, color = Palette.textPrimary)
             Text(uiString(R.string.l10n_lab_book_screen_a_private_notebook_not_a_medical_f63242cb), style = NoopType.subhead, color = Palette.textSecondary)
-            DisclaimerBullet("NOOP stores and lines up the numbers you enter yourself. It does not test you, read your results, give medical advice, or diagnose anything.")
+            DisclaimerBullet("Healer S.I. stores and lines up the numbers you enter yourself. It does not test you, read your results, give medical advice, or diagnose anything.")
             DisclaimerBullet("Anything you see here (including any side-by-side trend) is your own information shown back to you. It's an association, never a cause, and never a medical finding.")
-            DisclaimerBullet("NOOP never decides whether a value is \"normal,\" \"high,\" or \"low.\" Any reference range shown is exactly what you typed from your own report.")
-            DisclaimerBullet("Your records never leave this phone. There's no account, no cloud, no NOOP server. Because NOOP is an independent app you run yourself (not a healthcare provider), it isn't \"HIPAA-covered,\" and that protection doesn't apply here; the safety comes from the data being local-only and yours.")
+            DisclaimerBullet("Healer S.I. never decides whether a value is \"normal,\" \"high,\" or \"low.\" Any reference range shown is exactly what you typed from your own report.")
+            DisclaimerBullet("Your records never leave this phone. There's no account, no cloud, no Healer S.I. server. Because Healer S.I. is an independent app you run yourself (not a healthcare provider), it isn't \"HIPAA-covered,\" and that protection doesn't apply here; the safety comes from the data being local-only and yours.")
             DisclaimerBullet("Always rely on your doctor, pharmacist, or a qualified professional to interpret results and make decisions. If a number worries you, talk to them, not to an app.")
             PrimaryActionButton("Got it", Icons.Filled.Check, onClick = onDismiss)
         }

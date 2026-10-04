@@ -18,7 +18,7 @@ final class MetricKitLineTests: XCTestCase {
         day.exits = [.init(reason: "normal", count: 4), .init(reason: "CPU limit", count: 1),
                      .init(reason: "crash", count: 0)]
         XCTAssertEqual(MetricKitLine.day(day, timeZone: utc),
-                       "MetricKit day 2026-09-22 00:00 → 2026-09-23 00:00 (NOOP 11.8.0): foreground 1h 12m, "
+                       "MetricKit day 2026-09-22 00:00 → 2026-09-23 00:00 (Healer S.I. 11.8.0): foreground 1h 12m, "
                        + "background 9h 40m, CPU 6m 12s, peak memory 180 MB, disk writes 1.5 GB, hangs 3, "
                        + "exits: normal 4, CPU limit 1")
     }
@@ -27,13 +27,13 @@ final class MetricKitLineTests: XCTestCase {
     func testWhatIOSDidNotReportIsNotPrinted() {
         let day = MetricKitLine.Day(begin: begin, end: begin.addingTimeInterval(86_400), appVersion: "11.8.0")
         XCTAssertEqual(MetricKitLine.day(day, timeZone: utc),
-                       "MetricKit day 2026-09-22 00:00 → 2026-09-23 00:00 (NOOP 11.8.0): exits: none")
+                       "MetricKit day 2026-09-22 00:00 → 2026-09-23 00:00 (Healer S.I. 11.8.0): exits: none")
     }
 
     func testADiagnosticNamesItsKind() {
         XCTAssertEqual(MetricKitLine.diagnostic("CPU exception", appVersion: "11.8.0", at: begin,
                                                 detail: "48s of CPU in 1m 0s", timeZone: utc),
-                       "MetricKit CPU exception (NOOP 11.8.0, reported 2026-09-22 00:00): 48s of CPU in 1m 0s")
+                       "MetricKit CPU exception (Healer S.I. 11.8.0, reported 2026-09-22 00:00): 48s of CPU in 1m 0s")
     }
 
     func testDurationsAndSizes() {

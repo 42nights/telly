@@ -33,7 +33,7 @@ function HomeComponent() {
 				{state?.kind === "ready" &&
 					state.value.sources.map((source) => (
 						<div key={source.source}>
-							<p className="font-medium">NOOP not connected</p>
+							<p className="font-medium">Healer S.I. not connected</p>
 							<p className="text-muted-foreground text-sm">
 								WHOOP readings and WHOOP-based nudges are unavailable.
 							</p>

@@ -1,14 +1,14 @@
 # Live Sessions — Design Spec
 
 **Status:** design locked 2026-07-04 (full autonomy granted). Next: implementation plan.
-**Goal:** During a workout, NOOP holds you inside a recovery-gated heart-rate band and coaches you with WHOOP strap haptics, silence-first, fully on-device.
+**Goal:** During a workout, Healer S.I. holds you inside a recovery-gated heart-rate band and coaches you with WHOOP strap haptics, silence-first, fully on-device.
 **Platforms:** macOS + iOS (shared Swift) and Android (Kotlin hand-port). Coaching logic lives in a shared, pure, unit-tested engine; only BLE + haptic transport differs per platform.
 
 ---
 
 ## 1. The USP, honestly
 
-NOOP does **not** win on the raw concept. WHOOP's own Strain Coach already gates a target on Recovery and buzzes the strap. The daylight nobody else holds at once:
+Healer S.I. does **not** win on the raw concept. WHOOP's own Strain Coach already gates a target on Recovery and buzzes the strap. The daylight nobody else holds at once:
 
 - **A continuous live band held the whole session** (WHOOP buzzes once, at a cumulative-strain milestone; we hold a band the entire time).
 - **Fully local, no account, no subscription** (every audio-based live coach dies in a gym; every "daily readiness" system hands you a *fixed* zone and stops).
@@ -22,7 +22,7 @@ Ownable phrase: **recovery-gated + continuous live band + on-strap haptic + full
 
 1. **Silence-first, but silence must be legible.** In-band = no buzz, ever. But a correctly-silent guardian looks identical to a dead app, so the ring *breathes* with each live HR sample and a "time held in band" fill grows all session. A glance proves it's working.
 2. **Recovery-honest, and visibly so.** Show the recovery claim once at start ("today's ceiling is lower, Charge is 41%") and again on the summary, so it can never be mistaken for a fixed-zone alarm.
-3. **Never fabricate a number.** Coach on a smoothed trend; reject impossible samples; on a real stream dropout the ring greys and coaching **stops**. This is the NOOP identity.
+3. **Never fabricate a number.** Coach on a smoothed trend; reject impossible samples; on a real stream dropout the ring greys and coaching **stops**. This is the Healer S.I. identity.
 4. **Works with just a WHOOP, honest that it's the hard case.** Wrist optical is weakest on fast intensity changes; defended by grace windows, trend smoothing, shape-aware triggers. A chest strap / power meter sharpens the guardian, never changes the model or adds UI.
 5. **One wrong buzz is unforgivable; a missed buzz is fine.** Trust is asymmetric. Bias hard toward not buzzing when unsure. Hysteresis, sustained dwell, cool-downs are core, not polish.
 6. **A buzz vocabulary learnable in one session.** Exactly two signals, unmistakable by feel, no screen needed to decode them.
@@ -52,7 +52,7 @@ Chosen over a richer "Guided Session" and an "Ambient always-on" variant (judged
 
 ## 4. Recovery → target logic
 
-- **Zone model: %HRR (Karvonen).** `targetHR = restingHR + fraction × (HRmax − restingHR)`. %HRR ≈ %VO2reserve (ACSM 1998), truer than %HRmax across fitness levels. NOOP already derives resting HR; HRmax comes from strap-derived data if available, else an age estimate **clearly flagged** on the summary (never implying precision we don't have).
+- **Zone model: %HRR (Karvonen).** `targetHR = restingHR + fraction × (HRmax − restingHR)`. %HRR ≈ %VO2reserve (ACSM 1998), truer than %HRmax across fitness levels. Healer S.I. already derives resting HR; HRmax comes from strap-derived data if available, else an age estimate **clearly flagged** on the summary (never implying precision we don't have).
 - **Band, not a line:** `[floor, ceiling]` in %HRR. Two-sided vocabulary needs two edges.
 - **Charge scales ceiling + width:** low Charge → lower ceiling, narrower band ("today can't pay for hard"); high Charge → higher ceiling, wider band ("room to send it"). Ship a deliberately **conservative** curve v1 and widen with data, never the reverse. Exact anchors tuned during the spike session, not invented here.
 - **Over-reach trigger (ease-off)** fires only when all hold: smoothed (10–15 s trailing median) HR above ceiling by a real margin; breach came from a fast step-change (not slow drift); HR sustainedly elevated (~20–30 s dwell) past grace.
@@ -98,7 +98,7 @@ The original framing overstated this. Two facts shrink it:
 
 1. **Engineer the drop-tolerance in.** Silence-first already makes a *dropped* buzz harmless (a *wrong* buzz is the only unforgivable failure, and that's an accuracy concern, handled in §4). The transport queues one pending cue, drops stale cues rather than backing up, and if the strap NAKs/throttles a buzz it is simply skipped, never retried into a burst.
 2. **Optional sedentary self-check (nice-to-have, not a gate).** The buzz-while-streaming loop can be exercised fully at rest, strap on a wrist at a desk, no exercise needed, if we ever want bench numbers. Not required to ship.
-3. **Prove it in the wild via a BETA flag.** Ship the live-coaching path clearly labelled **beta / experimental** (NOOP's established pattern for safe-but-unproven-in-the-field features: band sleep-state, Oura, WHOOP 5/MG capture). Real users on real bikes/runs exercise the sustained loop on both strap generations; the feature degrades gracefully if the transport ever misbehaves, and we harden from real reports. No telemetry (offline-first); we rely on opt-in bug reports / Test Centre exports.
+3. **Prove it in the wild via a BETA flag.** Ship the live-coaching path clearly labelled **beta / experimental** (Healer S.I.'s established pattern for safe-but-unproven-in-the-field features: band sleep-state, Oura, WHOOP 5/MG capture). Real users on real bikes/runs exercise the sustained loop on both strap generations; the feature degrades gracefully if the transport ever misbehaves, and we harden from real reports. No telemetry (offline-first); we rely on opt-in bug reports / Test Centre exports.
 
 ---
 

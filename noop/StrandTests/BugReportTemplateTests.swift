@@ -48,7 +48,7 @@ final class BugReportTemplateTests: XCTestCase {
 
     func testAttachZipCheckboxPresent() {
         let t = templateText()
-        XCTAssertTrue(t.contains("I attached my exported NOOP"))
+        XCTAssertTrue(t.contains("I attached my exported Healer S.I."))
         XCTAssertTrue(t.contains("not a screenshot of the Live screen"))
     }
 }

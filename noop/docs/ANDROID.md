@@ -1,6 +1,6 @@
-# NOOP — Android Port Guide
+# Healer S.I. — Android Port Guide
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It pairs
+Healer S.I. is a standalone, fully **offline** companion app for WHOOP straps (4.0 and 5.0). It pairs
 directly with the strap over Bluetooth Low Energy, stores everything on-device in SQLite, imports
 WHOOP CSV exports and Apple Health exports, and computes recovery / strain / HRV / sleep locally.
 There is no cloud, no account — the app talks only to **your own device** and
@@ -13,7 +13,7 @@ into the main project as a **build-from-source-only** client — see the macOS/i
 the same analytics so results match macOS.)
 
 > **Not affiliated with WHOOP, and not a medical device.** "WHOOP" is used nominatively only to
-> identify the hardware this software interoperates with. NOOP contains no WHOOP code, firmware, or
+> identify the hardware this software interoperates with. Healer S.I. contains no WHOOP code, firmware, or
 > assets, and performs no DRM circumvention — it talks only to the user's own device and the data it
 > has already recorded. All outputs (HR, HRV, recovery, strain, sleep, SpO₂, temperature) are
 > approximations and are **not** clinically validated. See [`../DISCLAIMER.md`](../DISCLAIMER.md)
@@ -21,7 +21,7 @@ the same analytics so results match macOS.)
 
 > ### Status: shipping platform — builds, releases, and validated on WHOOP 4.0
 >
-> The Android client is a **fully shipping** part of NOOP. It builds and releases as two APK
+> The Android client is a **fully shipping** part of Healer S.I. It builds and releases as two APK
 > flavours — **full** (`./gradlew assembleFullRelease`) and **demo** (`./gradlew
 > assembleDemoRelease`) — and is sideloaded by users (with features such as a **Sync-now** button).
 > The BLE pipeline, Compose UI, Room database, and importers are all present and working. It is
@@ -81,7 +81,7 @@ memory.
 
 ```
 android/
-├── settings.gradle.kts          # rootProject.name = "NOOP"; include(":app")
+├── settings.gradle.kts          # rootProject.name = "Healer S.I."; include(":app")
 ├── build.gradle.kts             # root: declares AGP / Kotlin / KSP plugin versions (apply false)
 ├── gradle.properties            # JVM args, AndroidX on, R8 full mode, parallel/caching
 ├── gradlew / gradlew.bat        # committed wrapper scripts
@@ -223,7 +223,7 @@ the `app` configuration on a physical device.
 
 The released `NOOP-full.apk` is an **unsigned, source-available APK** — there
 is no Play Store listing, because the project is anonymous and has no paid Play identity to publish
-or sign under. That's deliberate, but it means Android treats NOOP as an "unknown app" and **Google
+or sign under. That's deliberate, but it means Android treats Healer S.I. as an "unknown app" and **Google
 Play Protect** may warn or block on install — most stubbornly on stock Pixel / recent Android.
 Nothing is wrong with the file; it's just missing a Play signature. To get it on:
 
@@ -232,7 +232,7 @@ Nothing is wrong with the file; it's just missing a Play signature. To get it on
    directly: **Settings → Apps → Special app access → Install unknown apps → [the browser or file
    manager you're installing from] → Allow from this source**, then reopen the APK.
 3. **If Play Protect still refuses**, it's your call for an unsigned app you trust: **Play Store →
-   profile icon → Play Protect → ⚙ Settings → "Scan apps with Play Protect" off**, install NOOP,
+   profile icon → Play Protect → ⚙ Settings → "Scan apps with Play Protect" off**, install Healer S.I.,
    then switch it **back on**.
 4. **Reinstalling is safe.** The app sets `android:allowBackup="false"` and keeps everything in
    private on-device storage, so uninstalling and reinstalling simply starts fresh — there's no cloud
@@ -303,10 +303,10 @@ total = declaredLength + 8
 | `WHOOP5` | `WHOOP5_MINIMUM_FRAME_BYTES` = **13** | `declaredLength + 8` |
 
 The minima have different evidence. Eleven bytes is structural for WHOOP 4.0 and deliberately admits
-real metadata records with no data after `type/seq/cmd`. Thirteen bytes is NOOP's empirical 5.0/MG
+real metadata records with no data after `type/seq/cmd`. Thirteen bytes is Healer S.I.'s empirical 5.0/MG
 policy: Goose's `v5Payload` accepts a self-consistent 12-byte empty-payload envelope, while the real
 fixtures in this tree include 20-byte command responses and 24-/32-byte frames but no 12-byte case.
-Those captures show valid traffic above the floor; they do not prove the boundary, so NOOP's extra
+Those captures show valid traffic above the floor; they do not prove the boundary, so Healer S.I.'s extra
 inner-type-byte requirement remains an explicit assumption. The exact size is compared for
 **equality**, rejecting truncation and trailing bytes even when the payload CRC32 over the declared
 range checks out. Keep both constants in step with Swift; changing 13 requires new protocol evidence.
@@ -548,7 +548,7 @@ storage; nothing is uploaded.
 **Settings → Data Sources → "Raw capture (.json)"** imports a strap offload that was captured on
 *another* device — most usefully the Linux `Tools/linux-capture/whoop_sync.py` tool, whose `export`
 subcommand writes exactly this format. It lets you pull a strap's history on a laptop (no phone, no
-WHOOP app) and then fold it into NOOP on the phone. Fully offline; nothing leaves the device.
+WHOOP app) and then fold it into Healer S.I. on the phone. Fully offline; nothing leaves the device.
 
 **File format.** A JSON array of frame objects, one per stored BLE notify frame:
 
@@ -628,7 +628,7 @@ there's no hard 5.0/MG gate — but because 5.0/MG HR is currently sparse, those
 ## Compose UI
 
 The UI is Jetpack Compose (Material 3). The theme resources (`res/values/colors.xml`, `themes.xml`
-with `Theme.NOOP`, `strings.xml` with `app_name = "NOOP"`), `MainActivity`, and the screens are all
+with `Theme.NOOP`, `strings.xml` with `app_name = "Healer S.I."`), `MainActivity`, and the screens are all
 in place. The dependency set in `app/build.gradle.kts` is wired for Compose (BOM `2024.06.00`,
 Material 3, Material icons extended, `activity-compose`, `navigation-compose`,
 `lifecycle-viewmodel-compose`) and Coroutines.
@@ -741,6 +741,6 @@ reverse-engineering and interoperability work:
 - **`b-nnett/goose`** — WHOOP 5.0 / MG BLE protocol (service family `fd4b0001-…`, CRC16-Modbus
   header, CLIENT_HELLO, "puffin" packet types) that the WHOOP-5 path is ported from.
 
-See [`../ATTRIBUTION.md`](../ATTRIBUTION.md) for full detail. NOOP contains no WHOOP proprietary
+See [`../ATTRIBUTION.md`](../ATTRIBUTION.md) for full detail. Healer S.I. contains no WHOOP proprietary
 code, firmware, logos, or assets, operates only with the user's own device and data, and is **not a
 medical device**.

@@ -1,6 +1,6 @@
-# NOOP — Cross-Platform Swift Library Reference
+# Healer S.I. — Cross-Platform Swift Library Reference
 
-NOOP is a standalone, fully **offline** companion app for WHOOP straps (4.0 and
+Healer S.I. is a standalone, fully **offline** companion app for WHOOP straps (4.0 and
 5.0). It pairs directly with the user's own strap over Bluetooth — **no WHOOP
 cloud or account** — stores everything on-device in SQLite, can
 import WHOOP CSV and Apple Health exports, and computes recovery, strain, HRV,
@@ -11,9 +11,9 @@ packages** that make that possible. They are designed to be vendored and reused
 independently of the reference macOS app.
 
 > **Not affiliated with WHOOP.** "WHOOP" is used nominatively only to identify
-> the hardware these packages interoperate with. NOOP contains no WHOOP
+> the hardware these packages interoperate with. Healer S.I. contains no WHOOP
 > proprietary code, firmware, or assets and works only with the user's own
-> device and data. **NOOP is not a medical device.** Every derived metric (HR,
+> device and data. **Healer S.I. is not a medical device.** Every derived metric (HR,
 > HRV, recovery, strain, sleep, SpO₂, temperature) is an approximation and is
 > not clinically validated.
 
@@ -274,7 +274,7 @@ busy timeout so two handles to the same file don't deadlock.
 | `sleepSession`, `dailyMetric` | cached derived metrics | `(deviceId, startTs)` / `(deviceId, day)` |
 | `journal`, `workout`, `appleDaily` | journal + workouts + Apple-Health daily | various |
 | `metricSeries` | generic long-format (EAV) metric store | `(deviceId, day, key)` |
-| `scoreInputProvenance` | input provider for a NOOP-computed score | `(deviceId, day, key)` |
+| `scoreInputProvenance` | input provider for a Healer S.I.-computed score | `(deviceId, day, key)` |
 
 ### Key public API
 
@@ -519,7 +519,7 @@ component views `RecoveryRing.swift`, `StrainGauge.swift`, `Hypnogram.swift`,
 ### Depend on it
 
 ```swift
-// Package.swift  (no internal NOOP deps — standalone)
+// Package.swift  (no internal Healer S.I. deps — standalone)
 dependencies: [
     .package(path: "../StrandDesign"),
 ],

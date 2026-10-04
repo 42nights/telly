@@ -1,9 +1,9 @@
-# NOOP — Android
+# Healer S.I. — Android
 
-An **offline WHOOP companion** for Android. NOOP connects directly to a WHOOP 4.0
+An **offline WHOOP companion** for Android. Healer S.I. connects directly to a WHOOP 4.0
 (and WHOOP 5.0) strap over Bluetooth Low Energy, reads heart rate, R-R intervals,
 battery, and sensor data, and stores everything **locally** on the device. There is
-no NOOP account, hosted server, or telemetry. Network access exists only for explicit,
+no Healer S.I. account, hosted server, or telemetry. Network access exists only for explicit,
 default-off features such as the AI Coach and Experimental one-way push to an endpoint
 the user owns.
 
@@ -16,7 +16,7 @@ byte-for-byte parity with it (see the repo root [`AGENTS.md`](../AGENTS.md)).
 
 ## Status
 
-NOOP for Android is a **shipped app**, not a draft. It builds in CI (dependency-locked +
+Healer S.I. for Android is a **shipped app**, not a draft. It builds in CI (dependency-locked +
 SHA-256-verified + Room KSP-validated), ships versioned releases, and runs on real devices
 with real users against real **WHOOP 4.0 and 5.0/MG** straps.
 
@@ -162,7 +162,7 @@ flavors — `full` = the real app, `demo` = preloaded synthetic data; substitute
 
 ```
 android/
-├── settings.gradle.kts          # rootProject "NOOP", includes :app
+├── settings.gradle.kts          # rootProject "Healer S.I.", includes :app
 ├── build.gradle.kts             # root — plugin versions (apply false)
 ├── gradle.properties            # AndroidX on, JVM args
 ├── gradlew / gradlew.bat        # checked-in wrapper launchers
@@ -195,7 +195,7 @@ install side-by-side.
 
 ## Permissions & why
 
-NOOP requests the platform permissions its local features need. `INTERNET` supports only
+Healer S.I. requests the platform permissions its local features need. `INTERNET` supports only
 explicit, default-off network features (the AI Coach and Experimental self-hosted push):
 
 - **`INTERNET`** — lets those opt-in clients reach the endpoint the user selected. It is an
@@ -249,7 +249,7 @@ phone **and** a WHOOP strap.
 
 - [ ] `./gradlew assembleFullDebug` compiles with no errors.
 - [ ] App installs and launches to the main screen without crashing.
-- [ ] Dark NOOP theme renders (surfaceBase `#060A08`, accent `#18C98B`); no white flash on launch.
+- [ ] Dark Healer S.I. theme renders (surfaceBase `#060A08`, accent `#18C98B`); no white flash on launch.
 - [ ] Navigation between the main tabs works (Today / Sleep / Trends / Coach / Settings, etc.).
 - [ ] Runtime BLE permission prompt appears on first launch (Android 12+) and is handled.
 

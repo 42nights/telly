@@ -145,7 +145,7 @@ class BondRefusalGiveUpTest {
         val g = BondRefusalGiveUp.stalePairingGuide()
         assertTrue(g, g.contains("Open Settings → Bluetooth, find your WHOOP, and Forget / Unpair it."))
         assertTrue(g, g.contains("Tap the band repeatedly until its LEDs flash blue (pairing mode)."))
-        assertTrue(g, g.startsWith("Your strap connects but never finishes pairing with NOOP"))
+        assertTrue(g, g.startsWith("Your strap connects but never finishes pairing with Healer S.I."))
     }
 
     /**

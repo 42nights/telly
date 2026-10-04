@@ -1,10 +1,10 @@
-# NOOP for Windows — Design & Implementation Plan
+# Healer S.I. for Windows — Design & Implementation Plan
 
-**Status:** Design (2026-06-12). NOOP for Windows is **not built**. This is the blueprint, grounded in
+**Status:** Design (2026-06-12). Healer S.I. for Windows is **not built**. This is the blueprint, grounded in
 a 4-track architecture study. It cannot be built or BLE-tested from a macOS machine — see "Build &
 test reality."
 
-**Goal:** A Windows desktop NOOP with the same functionality and the same design language as the macOS
+**Goal:** A Windows desktop Healer S.I. with the same functionality and the same design language as the macOS
 app: pair a WHOOP strap over Bluetooth, store everything on-device, compute recovery/strain/HRV/sleep
 locally, import WHOOP CSV + Apple Health, the AI Coach — all offline, no account, no cloud.
 
@@ -19,7 +19,7 @@ mandatory** (GATT central: scan, connect, **bond**, subscribe notifications, wri
 > **Primary path: Compose Multiplatform Desktop (Kotlin) — gated on a Bluetooth spike.**
 > **Fallback if the BLE spike fails: .NET 8 + Avalonia with native WinRT Bluetooth.**
 
-Why, in one paragraph: the **Android app is already a Kotlin/Compose twin** of NOOP — the protocol
+Why, in one paragraph: the **Android app is already a Kotlin/Compose twin** of Healer S.I. — the protocol
 decoder (incl. the v25 work), the recovery/strain/HRV/sleep analytics, the data layer, and the *screens
 themselves* are Compose. Compose Multiplatform Desktop runs that same Kotlin/Compose code on the JVM on
 Windows, and **the entire app — UI, analytics, data — builds and iterates from the Mac** (`./gradlew
@@ -116,7 +116,7 @@ ongoing cost, and it's unavoidable for *any* Windows port that does Bluetooth.
 ## Anonymity & distribution (clears cleanly — same model as macOS/Android)
 
 - Ship an **unsigned, portable** Windows artifact (a `.zip` of a self-contained build, or an unsigned
-  installer) from **GitHub Releases** — exactly the no-store, no-cert, no-identity model NOOP already uses.
+  installer) from **GitHub Releases** — exactly the no-store, no-cert, no-identity model Healer S.I. already uses.
   **No Microsoft Store account, no paid Authenticode cert** — both would attach a real identity.
 - **Anonymize the binary** with a Windows twin of `anonymize-macos-app.sh` / `anonymize-ios-app.sh`: scrub
   the builder's home path out of every binary in the bundle before zipping (JVM apps embed fewer such

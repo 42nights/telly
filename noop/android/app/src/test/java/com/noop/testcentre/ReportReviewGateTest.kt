@@ -12,7 +12,7 @@ import org.junit.Test
 class ReportReviewGateTest {
 
     private fun sampleEntries(): List<Pair<String, ByteArray>> =
-        listOf("report.txt" to "NOOP strap log\nline 1\nline 2".toByteArray())
+        listOf("report.txt" to "Healer S.I. strap log\nline 1\nline 2".toByteArray())
 
     @Test
     fun freshGateIsNotCleared() {

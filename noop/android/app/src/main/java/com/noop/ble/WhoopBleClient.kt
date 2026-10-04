@@ -1639,7 +1639,7 @@ class WhoopBleClient(
                 if (!isWhoop5 && pay.size >= 9) {
                     val mv = (pay[7].toInt() and 0xFF) or ((pay[8].toInt() and 0xFF) shl 8)
                     sb.append("\nVoltage: ").append("%.2f V".format(java.util.Locale.US, mv / 1000.0))
-                        .append("  (mV=").append(mv).append(" @07) — the field NOOP already reads\n")
+                        .append("  (mV=").append(mv).append(" @07) — the field Healer S.I. already reads\n")
                 }
                 // Per-byte diff vs the previous capture — the field-mapping signal.
                 sb.append('\n')
@@ -2004,7 +2004,7 @@ class WhoopBleClient(
         fun futureDatedStrapBanner(strapNewestTs: Long?, wallNowUnix: Long): String? =
             if (!isFutureDatedNewest(strapNewestTs, wallNowUnix)) null
             else "Synced, but your strap's clock is set in the future - its banked history is dated ahead of " +
-                "today, so NOOP can't trust those timestamps and didn't import them (importing them would " +
+                "today, so Healer S.I. can't trust those timestamps and didn't import them (importing them would " +
                 "misfile your data days or years ahead). Fully charge the strap to 100% and power-cycle it so " +
                 "its clock re-syncs, then reconnect."
 
@@ -3797,7 +3797,7 @@ class WhoopBleClient(
             log("No Bluetooth LE on this device")
             _state.update { it.copy(
                 scanning = false,
-                statusNote = "This device has no Bluetooth LE. NOOP has to run on a real phone with " +
+                statusNote = "This device has no Bluetooth LE. Healer S.I. has to run on a real phone with " +
                     "Bluetooth, near your strap. It can't connect from an emulator or virtual device.") }
             return
         }
@@ -3932,8 +3932,8 @@ class WhoopBleClient(
             log("Scan blocked (permission): ${se.message}")
             _state.update { it.copy(
                 scanning = false,
-                statusNote = "NOOP needs the Nearby devices / Bluetooth permission. Allow it in " +
-                    "Settings → Apps → NOOP → Permissions, then tap Connect.") }
+                statusNote = "Healer S.I. needs the Nearby devices / Bluetooth permission. Allow it in " +
+                    "Settings → Apps → Healer S.I. → Permissions, then tap Connect.") }
             return
         } catch (t: Throwable) {
             scanning = false
@@ -6491,7 +6491,7 @@ class WhoopBleClient(
             if (_state.value.reconnectGuide == null) {
                 _state.update { it.copy(
                     reconnectGuide = """
-                    Your strap connects but never finishes pairing with NOOP. This is almost always a stale Bluetooth pairing, usually after a WHOOP firmware update, or the official WHOOP app holding the strap. NOOP works fine once it's re-paired:
+                    Your strap connects but never finishes pairing with Healer S.I. This is almost always a stale Bluetooth pairing, usually after a WHOOP firmware update, or the official WHOOP app holding the strap. Healer S.I. works fine once it's re-paired:
 
                     1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
                     2. Open Settings → Bluetooth, find your WHOOP, and Forget / Unpair it.
@@ -6515,7 +6515,7 @@ class WhoopBleClient(
             ) {
                 log("WHOOP 5/MG: CLIENT_HELLO never acknowledged across ${bondWatchdogBackoff.consecutiveBounces} silent bounces — surfacing the re-pair guide early (#1095)")
                 _state.update { it.copy(reconnectGuide = """
-                    Your WHOOP 5.0/MG connects and reads battery, but never finishes pairing with NOOP, so no health data comes through. This is almost always the official WHOOP app still holding the strap (a 5.0 pairs with one phone at a time), or a stale Bluetooth pairing:
+                    Your WHOOP 5.0/MG connects and reads battery, but never finishes pairing with Healer S.I., so no health data comes through. This is almost always the official WHOOP app still holding the strap (a 5.0 pairs with one phone at a time), or a stale Bluetooth pairing:
 
                     1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
                     2. Open Settings → Bluetooth, find your WHOOP, and Forget / Unpair it.
@@ -7155,7 +7155,7 @@ class WhoopBleClient(
                 log("WHOOP 5/MG detected — will send CLIENT_HELLO after subscribing (experimental).")
                 _state.update { it.copy(
                     whoop5Detected = true,
-                    statusNote = "WHOOP 5/MG connected - experimental. After bonding, NOOP brings up live " +
+                    statusNote = "WHOOP 5/MG connected - experimental. After bonding, Healer S.I. brings up live " +
                         "heart rate from the strap's realtime stream. Deeper metrics (recovery, strain, " +
                         "sleep) for 5/MG are still being figured out. WHOOP 4.0 is fully supported today.",
                 ) }
@@ -9426,7 +9426,7 @@ class WhoopBleClient(
             // The R22 SET_CONFIG writes go over the encrypted command channel, so the live-HR-only
             // shortcut (bonded true, encryptedBond false on a 5/MG still owned by the official app,
             // #69/#266) can't carry them. Require the genuine bond, or the writes silently fail (#269).
-            log("Deep-data: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to NOOP first — ignored."); return
+            log("Deep-data: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to Healer S.I. first — ignored."); return
         }
         if (!s.worn) {
             log("Deep-data: the R22 stream is on-wrist only — put the strap ON, then try again."); return
@@ -9482,7 +9482,7 @@ class WhoopBleClient(
         // r22DisableRun != null instead, which is the state that is actually about this operation. (#174)
         val s = _state.value
         if (!s.connected || !s.encryptedBond) {
-            log("Deep-data disable: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to NOOP first — ignored."); return
+            log("Deep-data disable: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to Healer S.I. first — ignored."); return
         }
         if (r22DisableRun != null) {
             log("Deep-data disable: a disable run is already walking its plan — ignored."); return
@@ -11405,7 +11405,7 @@ class WhoopBleClient(
             if (_state.value.reconnectGuide == null) {
                 _state.update { it.copy(
                     reconnectGuide = """
-                    Your strap keeps connecting and then dropping a second later. This is almost always a stale Bluetooth pairing - usually after a WHOOP firmware update, or the official WHOOP app holding the strap. NOOP works fine once it's re-paired:
+                    Your strap keeps connecting and then dropping a second later. This is almost always a stale Bluetooth pairing - usually after a WHOOP firmware update, or the official WHOOP app holding the strap. Healer S.I. works fine once it's re-paired:
 
                     1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
                     2. Open Settings → Bluetooth, find your WHOOP, and Forget / Unpair it.
@@ -11639,7 +11639,7 @@ class WhoopBleClient(
                 if (staleDirectFailures >= 2) {
                     _state.update { it.copy(
                         reconnectGuide = """
-                        Your strap's Bluetooth pairing was reset - usually by a WHOOP firmware update, or the official WHOOP app reconnecting. NOOP works fine on the new firmware; you just need to re-pair:
+                        Your strap's Bluetooth pairing was reset - usually by a WHOOP firmware update, or the official WHOOP app reconnecting. Healer S.I. works fine on the new firmware; you just need to re-pair:
 
                         1. Quit the official WHOOP app (or turn off Bluetooth on that phone).
                         2. Open Settings → Bluetooth, find your WHOOP, and Forget / Unpair it.

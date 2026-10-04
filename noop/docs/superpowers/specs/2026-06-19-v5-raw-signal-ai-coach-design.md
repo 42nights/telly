@@ -1,15 +1,15 @@
-# NOOP v5 — Raw-Signal AI Coach (design spec)
+# Healer S.I. v5 — Raw-Signal AI Coach (design spec)
 
 Date: 2026-06-19
 Status: Draft for review (design only, no code)
-Codename: Strand · Pillar of NOOP v5
+Codename: Strand · Pillar of Healer S.I. v5
 Author surface: anonymous independent project
 
 ---
 
-## Goal & differentiation (why only NOOP)
+## Goal & differentiation (why only Healer S.I.)
 
-Today NOOP's Coach is a **summary-fed chatbot**: `AICoachEngine.buildContext()`
+Today Healer S.I.'s Coach is a **summary-fed chatbot**: `AICoachEngine.buildContext()`
 flattens the last 14 days of *already-computed* daily scores (charge / effort /
 rest / HRV / RHR) into ~1,500 tokens of plain text, prepends it to the first user
 turn, and ships it under the user's own key. It is good, private, and honest — but
@@ -25,21 +25,21 @@ being handed a pre-baked answer, the model is given a **tool/function layer** an
 **generates its own analysis over the user's raw on-device timeseries and stats**.
 It plans ("to answer 'why low recovery' I need: that night's HRV samples, skin-temp
 deviation, the recovery driver breakdown, and any logged behaviours"), calls the
-tools, reads the numbers NOOP already computes, and synthesises a grounded answer.
+tools, reads the numbers Healer S.I. already computes, and synthesises a grounded answer.
 
-Why this is structurally **only-NOOP**:
+Why this is structurally **only-Healer S.I.**:
 
 - **WHOOP / Oura / Ultrahuman** assistants run in *their* cloud over *their* derived
   scores. They never expose your raw R-R / red-IR PPG / accelerometer to a model
   *you* control, and you cannot point them at a local model or your own key.
 - **Apple / Garmin** have no conversational coach over raw signals at all.
-- NOOP already owns the raw streams (`StreamStore`, `MetricSeriesStore`), the
+- Healer S.I. already owns the raw streams (`StreamStore`, `MetricSeriesStore`), the
   on-device analytics (`HRVAnalyzer`, `RecoveryScorer` driver breakdown,
   `CorrelationEngine`, `BehaviorInsights`, `WeeklyDigestEngine`), AND the
   privacy posture (BYO-key, on-device-orchestrated, summary-only egress).
   The raw-signal coach is the surface that *fuses all of that* into one answer.
 
-The differentiator in one line: **NOOP is the only health app whose coach reasons
+The differentiator in one line: **Healer S.I. is the only health app whose coach reasons
 from your raw biosignals and your own discovered correlations, orchestrated entirely
 on your device, under a key you control — and can run fully offline against a local
 model.**
@@ -100,7 +100,7 @@ user question
   → COACH (LLM under user's key)
       ↳ plans: which on-device facts does this need?
       ↳ emits tool calls (name + args)        ──►  CoachToolKit (on-device, deterministic)
-      ↳ reads tool results (compact text)     ◄──  numbers NOOP already computed
+      ↳ reads tool results (compact text)     ◄──  numbers Healer S.I. already computed
       ↳ (optionally calls more tools)
       ↳ synthesises grounded answer + provenance
 ```
@@ -133,7 +133,7 @@ Every clause is anchored to a deterministic, on-device number.
 ### Local-model degradation
 
 A small local model (Gemma-class) often won't reliably emit structured tool calls.
-The loop degrades gracefully: if the provider/model isn't tool-capable, NOOP runs a
+The loop degrades gracefully: if the provider/model isn't tool-capable, Healer S.I. runs a
 **single deterministic "evidence pack"** — it pre-runs the most relevant tools for
 the question class (recovery/sleep/strain/general, picked by keyword match) and
 prepends their results as today's context does. So even a dumb local model gets
@@ -231,7 +231,7 @@ android/app/src/main/java/com/noop/ai/
   `tools` + `tool_use`/`tool_result`; Gemini `functionDeclarations`/`functionCall`).
 - **Tool-capability matrix** is data, not code: a per-(provider, model) flag. Unknown
   models default to **no tools → one-shot fallback**, so nothing breaks.
-- Parity rule (per workspace memory): a NOOP change must reach all three clients.
+- Parity rule (per workspace memory): a Healer S.I. change must reach all three clients.
   MVP ships the **fallback evidence pack on all three** first (no provider tool-calling
   needed), then layers the tool loop. That keeps Android from lagging behind a
   Swift-only feature.
@@ -305,7 +305,7 @@ framing must be tighter, not looser.
 - **Honest about limits.** PPG-derived HRV/HR, motion-derived sleep staging, and
   skin-temp *deviation* (not absolute core temp) are estimates from a consumer strap;
   the provenance footer and copy say "estimated from your strap", consistent with the
-  rest of NOOP (e.g. the SpO₂ walk-back, skin-temp-as-deviation).
+  rest of Healer S.I. (e.g. the SpO₂ walk-back, skin-temp-as-deviation).
 - **Privacy copy unchanged and reinforced.** Same `aiCoachPrivacyNote`: nothing leaves
   until a key is set, consent is on, and a question is asked; only a **compact text
   summary** of computed values goes to the provider the user chose — *never raw R-R /

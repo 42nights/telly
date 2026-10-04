@@ -150,7 +150,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/CoupledScreen.kt",
-      "A classic one-glance read of NOOP's own scores. Same data, different lens."
+      "A classic one-glance read of Healer S.I.'s own scores. Same data, different lens."
     ],
     [
       "android/app/src/main/java/com/noop/ui/CoupledScreen.kt",
@@ -510,6 +510,10 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/SettingsScreen.kt",
+      "Healer S.I."
+    ],
+    [
+      "android/app/src/main/java/com/noop/ui/SettingsScreen.kt",
       "Let the background show through every card. Tune how much just below."
     ],
     [
@@ -518,7 +522,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/SettingsScreen.kt",
-      "Needs the full encrypted bond: close the official WHOOP app and pair the strap to NOOP first (a live-HR-only link can't carry the unlock)."
+      "Needs the full encrypted bond: close the official WHOOP app and pair the strap to Healer S.I. first (a live-HR-only link can't carry the unlock)."
     ],
     [
       "android/app/src/main/java/com/noop/ui/SettingsScreen.kt",
@@ -610,7 +614,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/SleepScreen.kt",
-      "Sleep deleted. NOOP won't detect sleep between $startText and $endText again."
+      "Sleep deleted. Healer S.I. won't detect sleep between $startText and $endText again."
     ],
     [
       "android/app/src/main/java/com/noop/ui/SleepScreen.kt",
@@ -618,7 +622,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/SmartAlarmScreen.kt",
-      "Armed on the strap itself, so it can buzz at your wake time even if your phone is asleep or NOOP is closed. Sends the exact alarm command the official app sends, confirmed buzzing on a real WHOOP 4.0 (community wire capture + on-device test, #535). Keep a backup alarm for anything you truly can't miss."
+      "Armed on the strap itself, so it can buzz at your wake time even if your phone is asleep or Healer S.I. is closed. Sends the exact alarm command the official app sends, confirmed buzzing on a real WHOOP 4.0 (community wire capture + on-device test, #535). Keep a backup alarm for anything you truly can't miss."
     ],
     [
       "android/app/src/main/java/com/noop/ui/SmartAlarmScreen.kt",
@@ -674,7 +678,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/ui/UpdateStore.kt",
-      "What's new in NOOP $version"
+      "What's new in Healer S.I. $version"
     ],
     [
       "android/app/src/main/java/com/noop/ui/UpdatesInboxScreen.kt",
@@ -826,7 +830,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/widget/NoopCompactGlanceWidget.kt",
-      "Open NOOP to connect"
+      "Open Healer S.I. to connect"
     ],
     [
       "android/app/src/main/java/com/noop/widget/NoopCompactGlanceWidget.kt",
@@ -842,7 +846,7 @@
     ],
     [
       "android/app/src/main/java/com/noop/widget/NoopGlanceWidget.kt",
-      "Open NOOP to connect"
+      "Open Healer S.I. to connect"
     ],
     [
       "android/app/src/main/java/com/noop/widget/NoopGlanceWidget.kt",
@@ -883,6 +887,10 @@
       "\\(title) · guided"
     ],
     [
+      "NOOPWatchComplications/NOOPWatchComplication.swift",
+      "Healer S.I."
+    ],
+    [
       "Packages/StrandDesign/Sources/StrandDesign/Appearance.swift",
       "Custom"
     ],
@@ -919,8 +927,16 @@
       "WHOOP Blue"
     ],
     [
+      "Packages/StrandDesign/Sources/StrandDesign/BrandMark.swift",
+      "Healer S.I."
+    ],
+    [
       "Packages/StrandDesign/Sources/StrandDesign/ChartHover.swift",
       "\\(value), \\(label!)"
+    ],
+    [
+      "Packages/StrandDesign/Sources/StrandDesign/RecoveryRing.swift",
+      "Healer S.I."
     ],
     [
       "Packages/StrandDesign/Sources/StrandDesign/YearHeatStrip.swift",
@@ -972,7 +988,7 @@
     ],
     [
       "Strand/Data/DataBackup.swift",
-      "the NOOP database failed its integrity check (SQLite reports: \\(DatabaseIntegrity.readableComplaint(complaint))). A backup of it would not restore. Export the WHOOP-format CSV (Settings → Export data) to save what's still readable."
+      "the Healer S.I. database failed its integrity check (SQLite reports: \\(DatabaseIntegrity.readableComplaint(complaint))). A backup of it would not restore. Export the WHOOP-format CSV (Settings → Export data) to save what's still readable."
     ],
     [
       "Strand/Data/MetricCatalog.swift",
@@ -1016,7 +1032,7 @@
     ],
     [
       "Strand/Screens/AddDeviceWizard.swift",
-      "The most common cause is the ring was not fully reset in the Oura app, or the Oura app is still running. Reset the ring again, force-quit Oura, then try once more. If it keeps failing, your ring may be a generation NOOP cannot adopt yet. The ring is not bricked: re-pair it in the Oura app to recover it. You can still use file import."
+      "The most common cause is the ring was not fully reset in the Oura app, or the Oura app is still running. Reset the ring again, force-quit Oura, then try once more. If it keeps failing, your ring may be a generation Healer S.I. cannot adopt yet. The ring is not bricked: re-pair it in the Oura app to recover it. You can still use file import."
     ],
     [
       "Strand/Screens/AutomationsView.swift",
@@ -1072,11 +1088,11 @@
     ],
     [
       "Strand/Screens/BackupSyncView.swift",
-      "Backups will be saved inside NOOP. Open the Files app → On My iPhone → NOOP → Backups to see them, or drag that folder into iCloud Drive to read it on your Mac. To use a different folder later, tap Change folder."
+      "Backups will be saved inside Healer S.I. Open the Files app → On My iPhone → Healer S.I. → Backups to see them, or drag that folder into iCloud Drive to read it on your Mac. To use a different folder later, tap Change folder."
     ],
     [
       "Strand/Screens/BackupSyncView.swift",
-      "NOOP didn't get a folder back from the picker. If the Open button won't do anything, tap \\\"Use NOOP's own folder\\\" below to back up inside NOOP instead — you can read those backups from the Files app."
+      "Healer S.I. didn't get a folder back from the picker. If the Open button won't do anything, tap \\\"Use Healer S.I.'s own folder\\\" below to back up inside Healer S.I. instead — you can read those backups from the Files app."
     ],
     [
       "Strand/Screens/BackupSyncView.swift",
@@ -1084,11 +1100,11 @@
     ],
     [
       "Strand/Screens/BackupSyncView.swift",
-      "Using NOOP's folder"
+      "Using Healer S.I.'s folder"
     ],
     [
       "Strand/Screens/BackupSyncView.swift",
-      "\\(name) is larger than the \\(cap) NOOP restores without asking. You can still restore it from Settings → Backup & restore → Import, which will ask you to confirm."
+      "\\(name) is larger than the \\(cap) Healer S.I. restores without asking. You can still restore it from Settings → Backup & restore → Import, which will ask you to confirm."
     ],
     [
       "Strand/Screens/BreathingView.swift",
@@ -1392,7 +1408,7 @@
     ],
     [
       "Strand/Screens/ScoringGuideView.swift",
-      "Your cardiovascular load. NOOP turns every second of heart rate into a training-impulse using heart-rate-reserve zones (Karvonen), weights time in harder zones more heavily (Edwards / Banister), and places it on a logarithmic 0-100 scale, so easy days sit low and an all-out day approaches 100, which stays genuinely rare. A long walk with little cardio still counts, through a steps / active-energy floor."
+      "Your cardiovascular load. Healer S.I. turns every second of heart rate into a training-impulse using heart-rate-reserve zones (Karvonen), weights time in harder zones more heavily (Edwards / Banister), and places it on a logarithmic 0-100 scale, so easy days sit low and an all-out day approaches 100, which stays genuinely rare. A long walk with little cardio still counts, through a steps / active-energy floor."
     ],
     [
       "Strand/Screens/SettingsView.swift",
@@ -1408,7 +1424,7 @@
     ],
     [
       "Strand/Screens/SettingsView.swift",
-      "Deep data is on — open NOOP near your strap and let it sync its motion history (a full first-run sync can take a while). Once a day or two of motion lands, your step estimate and the calibration below fill in."
+      "Deep data is on — open Healer S.I. near your strap and let it sync its motion history (a full first-run sync can take a while). Once a day or two of motion lands, your step estimate and the calibration below fill in."
     ],
     [
       "Strand/Screens/SettingsView.swift",
@@ -1420,11 +1436,11 @@
     ],
     [
       "Strand/Screens/SettingsView.swift",
-      "Open NOOP near the strap and let WHOOP 5/MG history finish syncing. The step estimate and calibration fill in once enough stored motion has arrived; the legacy R22 experiment is not required."
+      "Open Healer S.I. near the strap and let WHOOP 5/MG history finish syncing. The step estimate and calibration fill in once enough stored motion has arrived; the legacy R22 experiment is not required."
     ],
     [
       "Strand/Screens/SettingsView.swift",
-      "Saved to \\(url.lastPathComponent). Your database is \\(size), over the \\(cap) NOOP restores without asking — the backup is complete and valid, and restoring it will ask you to confirm once."
+      "Saved to \\(url.lastPathComponent). Your database is \\(size), over the \\(cap) Healer S.I. restores without asking — the backup is complete and valid, and restoring it will ask you to confirm once."
     ],
     [
       "Strand/Screens/SettingsView.swift",
@@ -1436,7 +1452,7 @@
     ],
     [
       "Strand/Screens/SettingsView.swift",
-      "We're not seeing motion from your WHOOP 5.0 / MG yet. Keep NOOP connected and let strap history finish syncing; the experimental R22 flags are not required. Account or Apple Health imports do not contain the raw strap motion this estimate needs."
+      "We're not seeing motion from your WHOOP 5.0 / MG yet. Keep Healer S.I. connected and let strap history finish syncing; the experimental R22 flags are not required. Account or Apple Health imports do not contain the raw strap motion this estimate needs."
     ],
     [
       "Strand/Screens/SettingsView.swift",
@@ -1444,7 +1460,7 @@
     ],
     [
       "Strand/Screens/SettingsView.swift",
-      "\\(name) is larger than the \\(cap) NOOP restores without asking. That limit guards against a malicious archive expanding to fill this \\(Platform.deviceNoun) — a backup you exported yourself is not that. Restoring it needs the space the database will take. You'll be asked to choose the file again."
+      "\\(name) is larger than the \\(cap) Healer S.I. restores without asking. That limit guards against a malicious archive expanding to fill this \\(Platform.deviceNoun) — a backup you exported yourself is not that. Restoring it needs the space the database will take. You'll be asked to choose the file again."
     ],
     [
       "Strand/Screens/SleepDebtLedgerCard.swift",
@@ -1460,7 +1476,7 @@
     ],
     [
       "Strand/Screens/SleepView.swift",
-      "Removes this recorded sleep and recomputes the day without it. NOOP won't re-detect sleep in this window. You can undo for a few seconds after."
+      "Removes this recorded sleep and recomputes the day without it. Healer S.I. won't re-detect sleep in this window. You can undo for a few seconds after."
     ],
     [
       "Strand/Screens/SleepView.swift",
@@ -1472,7 +1488,7 @@
     ],
     [
       "Strand/Screens/SleepView.swift",
-      "Sleep deleted. NOOP won't detect sleep between \\(clockTime(banner.displayStart)) and \\(clockTime(banner.windowEnd)) again."
+      "Sleep deleted. Healer S.I. won't detect sleep between \\(clockTime(banner.displayStart)) and \\(clockTime(banner.windowEnd)) again."
     ],
     [
       "Strand/Screens/SleepView.swift",
@@ -1604,7 +1620,7 @@
     ],
     [
       "Strand/Screens/TestCentreView.swift",
-      "\\(identity). Logs this to the strap log on each connect, so a Polar bug report shows the model NOOP resolved your strap to."
+      "\\(identity). Logs this to the strap log on each connect, so a Polar bug report shows the model Healer S.I. resolved your strap to."
     ],
     [
       "Strand/Screens/TestCentreView.swift",

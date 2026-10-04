@@ -30,7 +30,7 @@ final class DatabasePathResolverTests: XCTestCase {
         let config = LocalAccessConfiguration(databasePath: "/definitely/not/noop/whoop.sqlite")
 
         XCTAssertThrowsError(try DatabasePathResolver.resolve(configuration: config)) { error in
-            XCTAssertEqual(error as? LocalAccessError, .databaseUnavailable("NOOP database not found at NOOP_DB_PATH."))
+            XCTAssertEqual(error as? LocalAccessError, .databaseUnavailable("Healer S.I. database not found at NOOP_DB_PATH."))
         }
     }
 }

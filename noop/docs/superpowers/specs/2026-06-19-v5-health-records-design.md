@@ -1,11 +1,11 @@
-# NOOP v5 — Health Records ("Lab Book") Design Spec
+# Healer S.I. v5 — Health Records ("Lab Book") Design Spec
 
-**Pillar:** Health Records (labs-equivalent) — NOOP's privacy-first answer to WHOOP "Advanced Labs."
+**Pillar:** Health Records (labs-equivalent) — Healer S.I.'s privacy-first answer to WHOOP "Advanced Labs."
 **Status:** Design only. No code in this document.
 **Date:** 2026-06-19
 **Platforms:** macOS + iOS (shared Swift engine) and Android (Kotlin twin). UI per platform.
 
-> **One-line thesis:** You already get bloods, blood pressure, scans and body measurements from your own doctor or pharmacy. NOOP gives you a private place to *keep* those numbers and *see them next to your wearable signals* — entirely on your device. We never test you, never read a result for you, and never tell you what it means medically.
+> **One-line thesis:** You already get bloods, blood pressure, scans and body measurements from your own doctor or pharmacy. Healer S.I. gives you a private place to *keep* those numbers and *see them next to your wearable signals* — entirely on your device. We never test you, never read a result for you, and never tell you what it means medically.
 
 ---
 
@@ -17,24 +17,24 @@ Justification, having weighed the candidates:
 
 | Candidate | Verdict |
 |---|---|
-| "Advanced Labs" | **Rejected.** It is WHOOP's product name. Reusing it invites a trademark conflict and, worse, implies NOOP *performs* lab testing (it does not — that would be a clinical/diagnostic claim). |
+| "Advanced Labs" | **Rejected.** It is WHOOP's product name. Reusing it invites a trademark conflict and, worse, implies Healer S.I. *performs* lab testing (it does not — that would be a clinical/diagnostic claim). |
 | "Markers" / "My Markers" | Good ("marker" is the honest noun for a stored value), but as a *screen title* it's abstract and cold. Kept as the **data-type noun** instead. |
 | "Records & Results" | Accurate but long; "Results" leans diagnostic. |
 | "Health Records" | Clear, but collides with Apple's own "Health Records" (their FHIR clinical-records feature) — confusing when we *import from* exactly that. |
-| **"Lab Book"** | **Chosen.** Evokes a personal logbook you keep yourself — a *notebook*, not a laboratory. It frames NOOP as the place you *write down and look back at* your own numbers, which is exactly the legal posture: a user-owned ledger, not a testing service or interpreter. Pairs naturally with the existing "journal" idiom already in the app. |
+| **"Lab Book"** | **Chosen.** Evokes a personal logbook you keep yourself — a *notebook*, not a laboratory. It frames Healer S.I. as the place you *write down and look back at* your own numbers, which is exactly the legal posture: a user-owned ledger, not a testing service or interpreter. Pairs naturally with the existing "journal" idiom already in the app. |
 
 Copy rule everywhere: **"Lab Book"** for the place, **"marker"** for one stored value (e.g. "Add a marker", "12 markers tracked"), **"reading"** for one dated entry of a marker. Never "test", "result analysis", "panel interpretation", or "diagnosis" in shipped copy.
 
 ---
 
-## Goal & differentiation (why only NOOP)
+## Goal & differentiation (why only Healer S.I.)
 
-**Goal.** Let a user keep their *own existing* health numbers — blood-pressure readings, blood-panel values (cholesterol, glucose/HbA1c, ferritin, vitamin D, …), body measurements, scan/imaging *values*, and free-text appointment notes — in a typed, local store, and **correlate** them against the wearable biometrics NOOP already computes (resting HR, HRV, sleep, Charge, Effort, skin-temp deviation, steps, weight). Records also enrich the opt-in BYO-key AI Coach and a new **Health → Lab Book** surface.
+**Goal.** Let a user keep their *own existing* health numbers — blood-pressure readings, blood-panel values (cholesterol, glucose/HbA1c, ferritin, vitamin D, …), body measurements, scan/imaging *values*, and free-text appointment notes — in a typed, local store, and **correlate** them against the wearable biometrics Healer S.I. already computes (resting HR, HRV, sleep, Charge, Effort, skin-temp deviation, steps, weight). Records also enrich the opt-in BYO-key AI Coach and a new **Health → Lab Book** surface.
 
-**Why only NOOP can offer this honestly:**
+**Why only Healer S.I. can offer this honestly:**
 
-1. **It's the inverse of "Advanced Labs."** WHOOP/Function/Superpower *sell you blood tests* and store the results *in their cloud*, behind a subscription, where the company reads them. NOOP's pitch is the opposite and is structurally impossible for them to copy without dismantling their model: **you bring numbers you already own, and they never leave the device.** There is no test to buy, no lab partner, no server.
-2. **Local correlation against raw-signal-derived metrics.** NOOP already turns raw PPG/R-R/accelerometer/skin-temp into daily series (`metricSeries`) and already runs an on-device Pearson + lagged correlation engine (`CorrelationEngine`, surfaced in `CompareView`/`InsightsScreen`). A marker is just another `(day, value)` series — so the moment a user logs three cholesterol readings, NOOP can line them up against the *same window* of resting HR, HRV or sleep with **zero new math** and **zero network**. Oura/Apple/Garmin can show you imported lab values but do not fuse them with their own wearable signal on-device in a correlation surface; the cloud-labs players can't, because the wearable side isn't theirs.
+1. **It's the inverse of "Advanced Labs."** WHOOP/Function/Superpower *sell you blood tests* and store the results *in their cloud*, behind a subscription, where the company reads them. Healer S.I.'s pitch is the opposite and is structurally impossible for them to copy without dismantling their model: **you bring numbers you already own, and they never leave the device.** There is no test to buy, no lab partner, no server.
+2. **Local correlation against raw-signal-derived metrics.** Healer S.I. already turns raw PPG/R-R/accelerometer/skin-temp into daily series (`metricSeries`) and already runs an on-device Pearson + lagged correlation engine (`CorrelationEngine`, surfaced in `CompareView`/`InsightsScreen`). A marker is just another `(day, value)` series — so the moment a user logs three cholesterol readings, Healer S.I. can line them up against the *same window* of resting HR, HRV or sleep with **zero new math** and **zero network**. Oura/Apple/Garmin can show you imported lab values but do not fuse them with their own wearable signal on-device in a correlation surface; the cloud-labs players can't, because the wearable side isn't theirs.
 3. **Privacy is the product, not a setting.** "Your bloods never touch a server" is a claim only a local-first app can make truthfully. This is the headline.
 
 **What it is NOT (load-bearing):** not a test, not a diagnosis, not medical advice, not a clinician-reviewed record, not HIPAA-covered. See **Non-clinical / legal framing**.
@@ -70,13 +70,13 @@ There is **no new statistics** — and that is deliberate. The pillar's correctn
    - For each marker reading on day *D*, pair it not with the wearable value *on D alone* but with the **mean of the wearable series over a configurable window around D** (default: the **14 days up to and including D** — "what your body was doing in the fortnight before the draw"). This is a deliberate, disclosed modelling choice, not a hidden one.
    - Window width is shown in the UI and adjustable (7 / 14 / 30 days).
    - This mirrors the established epidemiological practice of relating a point-in-time lab value to a *trailing exposure window* of a continuously-measured covariate; it is the same idea as a moving-average feature, kept fully deterministic and on-device.
-   - The result is reported with **brutal honesty about n**: NOOP shows the *exact* number of marker readings used and never renders a correlation conclusion sentence below a floor (default **n ≥ 4 readings**; below that it shows the points but says "not enough readings to read a trend yet").
+   - The result is reported with **brutal honesty about n**: Healer S.I. shows the *exact* number of marker readings used and never renders a correlation conclusion sentence below a floor (default **n ≥ 4 readings**; below that it shows the points but says "not enough readings to read a trend yet").
 
 3. **No causal language, ever.** The output copy is the same restrained idiom already shipped in `CompareView.insightSentence`: "when X is higher, Y *tends to* be …", strength words (negligible/weak/moderate/strong), and an explicit "this shows association, not cause" line. We add one mandatory clause for markers: *"This is your own data sitting side by side — it is not a medical finding."*
 
-4. **Trend (single marker, no wearable).** Even with one marker and no pairing, NOOP shows the reading-over-time sparkline + a plain slope ("your last 3 LDL readings: 3.4 → 3.1 → 2.9 mmol/L, trending down"). This is descriptive arithmetic on the user's own entries, not interpretation.
+4. **Trend (single marker, no wearable).** Even with one marker and no pairing, Healer S.I. shows the reading-over-time sparkline + a plain slope ("your last 3 LDL readings: 3.4 → 3.1 → 2.9 mmol/L, trending down"). This is descriptive arithmetic on the user's own entries, not interpretation.
 
-**Explicitly out of scope of the algorithm:** reference-range *judgement* ("high"/"low"/"abnormal"), risk scores, any threshold NOOP itself defines. If a report's own range is captured as text, we may show it *verbatim as the user entered it* with a "from your report" label — NOOP never computes or asserts normality.
+**Explicitly out of scope of the algorithm:** reference-range *judgement* ("high"/"low"/"abnormal"), risk scores, any threshold Healer S.I. itself defines. If a report's own range is captured as text, we may show it *verbatim as the user entered it* with a "from your report" label — Healer S.I. never computes or asserts normality.
 
 ---
 
@@ -148,11 +148,11 @@ Pure, DB-free, deterministic logic goes in `StrandAnalytics`; persistence in `Wh
 
 ### Import flows
 - **CSV** (phase 2): same card idiom as nutrition — choose file, tolerant parse, summary line ("Imported 18 readings across 6 markers · 2024-01 – 2026-05 · 2 rows skipped").
-- **Apple Health clinical records** (phase 3, iOS): a permission card explaining NOOP will read the clinical records *Apple already holds on the device* (no network), then a one-tap pull. Honest copy: "Only records your providers sent to Apple Health appear here; not every clinic participates."
+- **Apple Health clinical records** (phase 3, iOS): a permission card explaining Healer S.I. will read the clinical records *Apple already holds on the device* (no network), then a one-tap pull. Honest copy: "Only records your providers sent to Apple Health appear here; not every clinic participates."
 
 ### Empty states (honest)
 - No markers: "Keep your own numbers here — type in a blood-pressure reading or a cholesterol value from your last appointment. It stays on this \(device), and over time you'll see how it lines up with your sleep, heart rate and recovery."
-- No wearable overlap yet: "Log a few more readings (and keep wearing your strap) and NOOP can line this marker up against your signals."
+- No wearable overlap yet: "Log a few more readings (and keep wearing your strap) and Healer S.I. can line this marker up against your signals."
 
 ---
 
@@ -163,14 +163,14 @@ This pillar carries the **highest legal sensitivity** in the app because it touc
 **The exact in-product disclaimer (shown on first use of Lab Book, and linked from the screen header):**
 
 > **Lab Book is a private notebook, not a medical service.**
-> - NOOP **stores and lines up the numbers you enter yourself**. It does **not** test you, **read** your results, give medical advice, or **diagnose** anything.
+> - Healer S.I. **stores and lines up the numbers you enter yourself**. It does **not** test you, **read** your results, give medical advice, or **diagnose** anything.
 > - Anything you see here — including any side-by-side trend — is **your own information shown back to you**. It is an **association**, never a cause, and never a medical finding.
 > - We never decide whether a value is "normal," "high," or "low." Any reference range shown is **exactly what you typed from your own report**.
-> - Your records **never leave this \(device)**. There is no account, no cloud, no NOOP server. Because NOOP is an independent app you run yourself — **not a healthcare provider** — it is **not "HIPAA-covered"**, and that protection does not apply here; the safety comes from the data being **local-only and yours**.
+> - Your records **never leave this \(device)**. There is no account, no cloud, no Healer S.I. server. Because Healer S.I. is an independent app you run yourself — **not a healthcare provider** — it is **not "HIPAA-covered"**, and that protection does not apply here; the safety comes from the data being **local-only and yours**.
 > - **Always rely on your doctor, pharmacist, or a qualified professional** to interpret results and make decisions. If a number worries you, talk to them — not to an app.
 
 **Hard rules for implementers (mirrors existing memory/UI rules):**
-1. No word in shipped copy that asserts a clinical judgement: never "abnormal", "diagnose", "you have", "risk of", "deficiency", "out of range" *as NOOP's own statement*.
+1. No word in shipped copy that asserts a clinical judgement: never "abnormal", "diagnose", "you have", "risk of", "deficiency", "out of range" *as Healer S.I.'s own statement*.
 2. Correlation copy uses the shipped restrained idiom (*tends to*, association-not-cause) + the mandatory markers clause.
 3. The AI Coach markers block is **opt-in twice**: the existing global "let the coach use my data" consent **and** a separate "include my Lab Book" toggle (bloods are more sensitive than a recovery score). When included, the system prompt instruction is extended with: *"These are user-entered health numbers. You may describe trends in plain language and suggest questions to ask their doctor. Do NOT diagnose, name conditions, state whether a value is normal/abnormal, or give medical advice. Always defer to a qualified professional."*
 4. Anonymity rule unchanged: no AI/LLM is mentioned anywhere except the BYO-key Coach. The Coach already provides its own key; nothing here changes that.

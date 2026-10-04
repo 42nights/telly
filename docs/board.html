@@ -222,13 +222,13 @@
       <text class="s" x="400" y="224">Web: same cloud services</text>
       <text class="s" x="400" y="248">DAT: optional adapter</text>
     </g>
-    <g id="sys-healthkit"><title>Preserve the existing NOOP application; stub only its connection to the new server</title>
+    <g id="sys-healthkit"><title>Preserve the existing Healer S.I. application; stub only its connection to the new server</title>
       <rect class="n" x="380" y="330" width="220" height="80" rx="16"/>
-      <text class="t" x="400" y="358">NOOP · friend-owned</text>
+      <text class="t" x="400" y="358">Healer S.I. · friend-owned</text>
       <text class="s" x="400" y="380">Existing source preserved</text>
       <text class="s" x="400" y="398">Server connection stubbed</text>
     </g>
-    <g id="sys-noop-stub"><title>Server-side NOOP connection adapter only: not connected, no transport, no ingestion; the rest of the server remains real</title>
+    <g id="sys-noop-stub"><title>Server-side Healer S.I. connection adapter only: not connected, no transport, no ingestion; the rest of the server remains real</title>
       <rect class="n" x="380" y="440" width="220" height="78" rx="16"/>
       <text class="t" x="400" y="470">Server link stub</text>
       <text class="s" x="400" y="494">Not connected · no I/O</text>
@@ -293,7 +293,7 @@
     <g id="edge-glasses-phone"><title>Optional DAT path; disconnecting glasses must not interrupt the phone or cloud</title>
       <path class="e" d="M332 125 H378" stroke-dasharray="5 5" marker-start="url(#ah)" marker-end="url(#ah)"/></g>
     <path id="edge-whoop-hk" class="e" d="M332 370 H378" stroke-dasharray="5 5" marker-end="url(#ah)"><title>External WHOOP connection handled by the friend, not this implementation</title></path>
-    <path id="edge-noop-stub" class="e" d="M490 412 V438" stroke-dasharray="4 4" marker-end="url(#ah)"><title>Stub boundary only; no live NOOP-to-server transport</title></path>
+    <path id="edge-noop-stub" class="e" d="M490 412 V438" stroke-dasharray="4 4" marker-end="url(#ah)"><title>Stub boundary only; no live Healer S.I.-to-server transport</title></path>
     <text class="s" x="510" y="430">stub only</text>
     <path id="edge-phone-models" class="e" d="M600 145 H608 V520 H650" marker-start="url(#ah)" marker-end="url(#ah)"><title>Phone sends inputs to cloud inference and receives results</title></path>
     <path id="edge-phone-store" class="e" d="M602 100 H650" marker-start="url(#ah)" marker-end="url(#ah)"><title>Sync vitals up, nudges down</title></path>
@@ -320,7 +320,7 @@
     <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Grokbot calls these tools for family questions.</p></div>
     <div class="integration"><strong>Gemini vision</strong><p>Locate the medicine box in the current frame. Draw its marker without a 3D map.</p></div>
     <div class="integration"><strong>ElevenLabs · required</strong><p>Speak reminders and agent replies in the user's language.</p></div>
-    <div class="integration"><strong>NOOP → server · stub only</strong><p>Preserve NOOP itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
+    <div class="integration"><strong>Healer S.I. → server · stub only</strong><p>Preserve Healer S.I. itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
     <div class="integration"><strong>HealthKit · conditional bridge</strong><p>Aggregate other phone health sources. Do not force WHOOP through this bridge.</p></div>
     <div class="integration"><strong>Tiger Data · not selected</strong><p>Alternative for historical health analytics. No second store in the selected demo.</p></div>
     <div class="integration"><strong>SpacetimeDB · selected</strong><p>Store health samples and sync alerts, messages, and acknowledgements.</p></div>
@@ -573,7 +573,7 @@
       <text class="s" x="500" y="159" text-anchor="middle">Shared contracts: health samples · alerts · messages · reports</text>
     </svg>
   </div>
-  <div class="sh" style="margin-top:24px"><h3>Build in telly</h3><p>Approved plan. GitHub issues track implementation.</p></div>
+  <div class="sh" style="margin-top:24px"><h3>Build in Healer S.I.</h3><p>Approved plan. GitHub issues track implementation.</p></div>
   <div class="integrations" id="repo-delivery">
     <div class="integration"><strong>Application setup</strong><p>Use the stack below in <a href="https://github.com/ayaangazali/telly">ayaangazali/telly</a>. Preserve one repository and shared contracts.</p></div>
     <div class="integration"><strong>Fast CI/CD</strong><p>Parallel checks, cached installs, and cancelled superseded PR runs. Build once; deploy that exact revision after merge.</p></div>
@@ -695,8 +695,8 @@
     <p><b>Display:</b> Meta Ray-Ban Display only; 600 × 600 pixels. The phone owns state. One display per user-started session; send complete views only after the display starts.</p>
     <p><b>Lifecycle:</b> handle starting, started, stopping, stopped, interruption, sleep, and denied capabilities. Release camera and display resources on exit.</p>
     <p><b>AR:</b> the reviewed guides do not establish a world-anchor or camera-to-eye projection API. Prove calibration and frame freshness before claiming aligned markers.</p>
-    <p><b>NOOP scope:</b> preserve the existing NOOP application. Stub only its connection to the new server, not NOOP itself or the rest of the server.</p>
-    <p><b>Earlier research:</b> NOOP uses PolyForm Noncommercial. Do not delete, overwrite, or integrate the existing code during app setup.</p>
+    <p><b>Healer S.I. scope:</b> preserve the existing Healer S.I. application. Stub only its connection to the new server, not Healer S.I. itself or the rest of the server.</p>
+    <p><b>Earlier research:</b> Healer S.I. uses PolyForm Noncommercial. Do not delete, overwrite, or integrate the existing code during app setup.</p>
     <p><b>Unavailable data:</b> show the missing source. Do not return sample readings, infer health status, or generate a WHOOP nudge from the stub.</p>
     <p><b>Without glasses:</b> use phone camera frames, microphone input, screen markers, and speaker output. Keep session state independent of DAT.</p>
     <p><b>Web:</b> provide camera or image input, voice or text requests, HUD, chat, alerts, and reports through the same API.</p>
@@ -708,8 +708,8 @@
       <a href="https://wearables.developer.meta.com/docs/develop/dat/version-dependencies/">Version matrix</a>
       <a href="https://wearables.developer.meta.com/docs/develop/dat/display-simulation">Display testing</a>
       <a href="https://wearables.developer.meta.com/docs/develop/webapps/build/">Web limits</a>
-      <a href="https://github.com/ryanbr/noop/blob/main/docs/PUSH_PROTOCOL.md">NOOP push contract</a>
-      <a href="https://github.com/ryanbr/noop/blob/main/LICENSE">NOOP license</a>
+      <a href="https://github.com/ryanbr/noop/blob/main/docs/PUSH_PROTOCOL.md">Healer S.I. push contract</a>
+      <a href="https://github.com/ryanbr/noop/blob/main/LICENSE">Healer S.I. license</a>
     </div>
   </details>
   <div class="panel" style="margin-top:18px" id="reliability-flow">
@@ -746,7 +746,7 @@
 
 <!-- 07 FILE STRUCTURE -->
 <section id="files">
-  <div class="sh"><span class="no">07</span><h2>One repo. Clear boundaries.</h2><p>New app layout for private telly, at the repository root. NOOP stays a separate project in noop/.</p></div>
+  <div class="sh"><span class="no">07</span><h2>One repo. Clear boundaries.</h2><p>New app layout for Healer S.I. (private repository <code>telly</code>), at the repository root. Healer S.I. stays a separate project in noop/.</p></div>
   <div class="panel" id="repo-tree">
     <pre style="font-size:15px;line-height:1.7">telly/            New app · Bun workspace root
 ├── apps/
@@ -760,9 +760,9 @@
 ├── agents/fetch/     Python Agentverse worker
 ├── training/gemma/   Python River training
 ├── scripts/          One end-to-end smoke
-├── noop/             Existing NOOP source · separate, not connected
+├── noop/             Existing Healer S.I. source · separate, not connected
 └── .github/          CI/CD + task templates</pre>
-    <p class="tag" style="font-size:13px">noop/ keeps NOOP's source and documentation apart from the new app. The app does not import or build it.</p>
+    <p class="tag" style="font-size:13px">noop/ keeps Healer S.I.'s source and documentation apart from the new app. The app does not import or build it.</p>
   </div>
   <div class="integrations" id="repo-boundaries">
     <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
@@ -801,9 +801,9 @@ apps/server/
     integrations/   noop.ts (connection stub) · gemini.ts · elevenlabs.ts
                     grokbot.ts · finchnode.ts
                     fetch.ts · gemma.ts</pre>
-    <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
-    <p>Keep HUD and reports under web routes. Keep the existing NOOP source in noop/; add the new app without connecting it.</p>
-    <p>The NOOP connection stub returns { status: "not_connected", source: "noop" }. It performs no transport or ingestion and supplies no readings.</p>
+    <p>These are planned paths. Implement the server and providers normally; only the Healer S.I.-to-server connection adapter is stubbed.</p>
+    <p>Keep HUD and reports under web routes. Keep the existing Healer S.I. source in noop/; add the new app without connecting it.</p>
+    <p>The Healer S.I. connection stub returns { status: "not_connected", source: "noop" }. It performs no transport or ingestion and supplies no readings.</p>
     <p>Phone capture and wearable capture feed the same feature contracts. Keep optional DAT lifecycle outside core session and cloud state.</p>
   </details>
   <details class="stack-notes" id="repo-shared-files">
@@ -1037,11 +1037,11 @@ export const GeminiKey = Config.schema(
 
 <!-- 09 DECIDE -->
 <section id="decide">
-  <div class="sh"><span class="no">09</span><h2>Confirmed direction</h2><p>Everything must work without glasses. NOOP stays with the friend. The name stays deferred.</p></div>
+  <div class="sh"><span class="no">09</span><h2>Confirmed direction</h2><p>Everything must work without glasses. Healer S.I. stays with the friend. The name stays deferred.</p></div>
   <div class="settled" aria-label="Confirmed direction">
     <span class="chip acc">River AI training</span><span class="chip acc">Grokbot agents</span>
     <span class="chip acc">No 3D map dependency</span><span class="chip acc">Glasses optional</span>
-    <span class="chip acc">NOOP server link stubbed</span><span class="chip acc">One repository</span><span class="chip acc">Stability first</span>
+    <span class="chip acc">Healer S.I. server link stubbed</span><span class="chip acc">One repository</span><span class="chip acc">Stability first</span>
     <span class="chip acc">Fetch.ai Agentverse required</span><span class="chip acc">ElevenLabs required</span>
     <span class="chip acc">Phone + web first</span><span class="chip acc">SpacetimeDB selected</span>
     <span class="chip acc">Alzheimer's first</span><span class="chip acc">Grokbot family chat</span>
@@ -1103,7 +1103,7 @@ const team = document.getElementById("team-svg");
 const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows", "camera + validated data"], ["3 · Family loop", "durable alert + ask"], ["4 · Recovery", "report + failure checks"]];
 const lanes = [
   ["M", "Mahesh", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
-  ["A", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
+  ["A", "Ayaan", [["Healer S.I. server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
   ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot family chat"], ["Dashboard + recovery"]]],
 ];
 const CX = 110, CW = 222, LY = 74, LH = 84;

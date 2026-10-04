@@ -23,7 +23,7 @@ This spec was written against v7.2.3; work now targets upstream **v8.5.2** (`rya
 
 ## 1. Summary
 
-NOOP already imports a user's own Oura data from the **account export file** (a single JSON), parsed by
+Healer S.I. already imports a user's own Oura data from the **account export file** (a single JSON), parsed by
 [`OuraExportParser`](../../../Packages/StrandImport/Sources/StrandImport/OuraExportParser.swift) into the
 normalized `WearableDailyRow` / `WearableSleepSession` models. That lane is lossy by necessity: the file
 export carries stage **durations** but no hypnogram, no heart-rate/HRV time series, and only a handful of
@@ -35,7 +35,7 @@ network, under the user's own OAuth grant — capturing the rich data the file e
 resilience, cardiovascular age, VO2 max, workouts, sessions, tags, and ring metadata, across ~18 endpoints.
 
 It is a **one-time, pull-everything** operation (the user's stated use case), behind an off-by-default
-opt-in — NOOP's **second** network exception after the AI Coach. Storage is **lossless**: every raw Oura
+opt-in — Healer S.I.'s **second** network exception after the AI Coach. Storage is **lossless**: every raw Oura
 payload is archived verbatim, and a curated subset is normalized into the existing on-device tables so the
 dashboard, Sleep tab, and Metric Explorer light up immediately. A future "Sync again" re-pull is a button,
 not new architecture.
@@ -52,7 +52,7 @@ not new architecture.
 - **G3 — Fit, don't duplicate.** Reuse `OuraExportParser`'s field mapping and the existing `WhoopStore`
   write path (`dailyMetric`, `sleepSession`, `metricSeries`, `hrSample`, `workout`) and the device registry.
 - **G4 — Honest data.** Oura's own scores (readiness, sleep, activity, resilience) are stored **reference-only**
-  and never become NOOP's Charge/Effort/Rest, exactly as the file lane already does.
+  and never become Healer S.I.'s Charge/Effort/Rest, exactly as the file lane already does.
 - **G5 — Preserve invariants.** Every Swift package stays network-free; `StrandImport` stays offline-pure;
   untrusted JSON is treated as hostile; the WHOOP experience never regresses.
 - **G6 — Re-pull seam.** Tokens (incl. refresh) persist so a later re-pull needs no re-auth; auth sits
@@ -63,7 +63,7 @@ not new architecture.
   Oura webhook subscriptions (those need a public callback URL / backend).
 - **NG2 — No backend.** No server component. The OAuth `client_secret` is the user's own (BYO app).
 - **NG3 — No macOS / Android.** iOS Swift app only.
-- **NG4 — No new scoring.** NOOP's recovery/strain/sleep math is unchanged; this only feeds it inputs.
+- **NG4 — No new scoring.** Healer S.I.'s recovery/strain/sleep math is unchanged; this only feeds it inputs.
 
 ---
 
@@ -86,16 +86,16 @@ not new architecture.
 - **Sandbox:** every collection endpoint has a twin at `/v2/sandbox/usercollection/...` returning static demo
   data with identical schemas — used for development and as a live smoke test without a real account.
 
-### 3.2 NOOP invariants this feature must not break
+### 3.2 Healer S.I. invariants this feature must not break
 - **Offline-by-default privacy posture** ([`docs/PRIVACY_SECURITY.md`](../../PRIVACY_SECURITY.md) §1).
   The five Swift packages are network-free; the AI Coach (in the **app target**) is the single opt-in network
   exception. → The Oura networking lives in the **app target**, and is documented as the **second** opt-in
   exception. The data flow is **inbound** (Oura → device, the user's own data, under the user's own grant);
-  nothing of the user's existing NOOP data leaves the device except the OAuth handshake with Oura.
+  nothing of the user's existing Healer S.I. data leaves the device except the OAuth handshake with Oura.
 - **`StrandImport` is offline-pure** — its banner reads "STAY OFFLINE: nothing here touches the network."
   → Only **pure** (no-network) Oura-API response parsers are added to `StrandImport`; the fetch happens in the
   app target. This mirrors the existing split: `StrandImport` parses, `Strand/Data/WearableImporter.swift` writes.
-- **Honest data** — a brand's own scores are reference-only; NOOP recomputes downstream.
+- **Honest data** — a brand's own scores are reference-only; Healer S.I. recomputes downstream.
 - **Untrusted input is hostile** ([`docs/PRIVACY_SECURITY.md`](../../PRIVACY_SECURITY.md) §3) — byte caps,
   finite/range-checked numerics, bounded collection counts (reuse `WearableJSON` coercion helpers).
 - **Supply chain** — dependencies are pinned `exact:` and must match across `Packages/*/Package.swift` and
@@ -147,12 +147,12 @@ not new architecture.
 
 ### 5.1 Flow
 1. The user registers a **free OAuth application** on Oura's developer portal once (redirect URI =
-   NOOP's custom scheme, e.g. `noop://oura/callback`), then provides its `client_id` + `client_secret`.
+   Healer S.I.'s custom scheme, e.g. `noop://oura/callback`), then provides its `client_id` + `client_secret`.
    For the personal/one-time case these go into an **untracked xcconfig** (no in-app credential screen to
    build); see §5.3. (A paste-credentials screen is a noted alternative — §12 Q2.)
 2. Tapping **Connect** runs `ASWebAuthenticationSession` against
    `https://cloud.ouraring.com/oauth/authorize?response_type=code&client_id=…&redirect_uri=…&scope=<all 8>&state=<nonce>`.
-3. On redirect, NOOP validates `state`, extracts `code`, and POSTs to
+3. On redirect, Healer S.I. validates `state`, extracts `code`, and POSTs to
    `https://api.ouraring.com/oauth/token` with `grant_type=authorization_code`, the code, redirect, and
    `client_id`/`client_secret` → `{access_token, refresh_token, expires_in}`.
 4. Tokens + expiry are stored in Keychain (`OuraTokenStore`, `kSecAttrAccessibleAfterFirstUnlock`, mirroring
@@ -229,7 +229,7 @@ window + refreshed token. Idempotent because every store upsert is keyed by natu
 ### 8.1 Endpoint → storage mapping
 
 All endpoints are archived verbatim to `ouraRaw`. The normalized columns below are the curated projection that
-drives existing UI. "ref-only" = reference `metricSeries` key, never a NOOP score (G4).
+drives existing UI. "ref-only" = reference `metricSeries` key, never a Healer S.I. score (G4).
 
 | Oura endpoint | Raw | Normalized target | Notes |
 |---|---|---|---|
@@ -260,7 +260,7 @@ Reused write APIs (all already exist): `upsertDailyMetrics`, `upsertSleepSession
 ### 8.2 Sleep hypnogram (the headline win)
 - `OuraHypnogram.decode(_:)` turns `sleep_phase_5_min` (or the finer `sleep_phase_30_sec` when present) into
   `[{start,end,stage}]` segments, epoch-aligned from `bedtime_start`. Legend (verbatim): `1=deep, 2=light,
-  3=REM, 4=awake` → NOOP stage strings `"deep"/"light"/"rem"/"wake"` (matching `WearableSleepStageInterval`).
+  3=REM, 4=awake` → Healer S.I. stage strings `"deep"/"light"/"rem"/"wake"` (matching `WearableSleepStageInterval`).
   This populates `sleepSession.stagesJSON`, which the Oura **file** lane always left empty.
 - `movement_30_sec` (legend `1=no motion … 4=active` — a **different** decoder) → `sleepSession.motionJSON`
   (the v18 per-epoch motion column).
@@ -322,7 +322,7 @@ v18 — this is **v19**. The doc's schema table will be updated to reflect v10�
 
 - **Second opt-in network lane.** Update [`docs/PRIVACY_SECURITY.md`](../../PRIVACY_SECURITY.md) §1/§4/§5 to
   document the Oura lane honestly: off-by-default, user-initiated, **inbound** (the user's own Oura data → device
-  under the user's own OAuth app), tokens in Keychain, no NOOP server, raw data never exfiltrated. §4's "No
+  under the user's own OAuth app), tokens in Keychain, no Healer S.I. server, raw data never exfiltrated. §4's "No
   WHOOP account or API credentials" stays true (this is Oura, the user's own grant) but the blanket "offline by
   default / one exception" framing is amended to "two opt-in exceptions: AI Coach and Oura import."
 - **Token storage:** Keychain only, `kSecAttrAccessibleAfterFirstUnlock`, service `com.noop.oura`. Never logged
@@ -368,7 +368,7 @@ v18 — this is **v19**. The doc's schema table will be updated to reflect v10�
 ## 13. Out of scope
 
 Background sync, webhooks, incremental "changed-since" diffing, a backend/token-proxy, OAuth-for-all-users
-(BYO-app only for now), macOS, Android, and any change to NOOP's scoring math. All are reachable later behind
+(BYO-app only for now), macOS, Android, and any change to Healer S.I.'s scoring math. All are reachable later behind
 the `AuthProvider` seam and the idempotent store upserts without reworking this lane.
 
 ---

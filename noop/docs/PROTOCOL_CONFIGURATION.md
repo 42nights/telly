@@ -65,7 +65,7 @@ Confirmation of an earlier state does not establish later states.
 
 | Area | Operation | WHOOP 4 status | Known boundary |
 |---|---|---|---|
-| Live HR | command 3, request form `01`/`00` observed in use | **Implemented outside the documented 41.17.6.0 command set** | NOOP sends the proprietary command, but no type-40 transition has been observed for this version; standard HRS remains separate |
+| Live HR | command 3, request form `01`/`00` observed in use | **Implemented outside the documented 41.17.6.0 command set** | Healer S.I. sends the proprietary command, but no type-40 transition has been observed for this version; standard HRS remains separate |
 | R10/R11 realtime | command 63, body `01`/`00` | **Device capture + supported behavior** | controls observed type-43 output; command 82 did not stop that output |
 | Raw collection | commands 81/82, body `01` | **Older request convention** | collection intent is distinct from live transport; persistence and exact storage effect unresolved |
 | IMU modes | commands 105–107 | **105 outside the documented set; 106/107 supported SET/GET operations on 41.17.6.0** | 106 uses `[01, state]`; 107 uses `[01]` and returns stored state; the WHOOP 5/MG identifier `ENABLE_OPTICAL_DATA` does not describe this WHOOP 4 operation |

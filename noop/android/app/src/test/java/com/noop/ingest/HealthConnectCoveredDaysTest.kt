@@ -91,7 +91,7 @@ class HealthConnectCoveredDaysTest {
         // Any other on-device computed source counts as strap coverage.
         assertTrue(HealthConnectImporter.isStrapNativeSourceId("xiaomi-band-noop"))
         // Case-insensitive (ids are stored lowercase, but never rely on it).
-        assertTrue(HealthConnectImporter.isStrapNativeSourceId("WHOOP-AA:BB-NOOP"))
+        assertTrue(HealthConnectImporter.isStrapNativeSourceId("WHOOP-AA:BB-Healer S.I."))
     }
 
     @Test

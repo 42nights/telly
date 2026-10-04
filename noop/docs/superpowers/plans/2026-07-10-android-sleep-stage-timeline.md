@@ -877,7 +877,7 @@ In `SleepScreen.kt`, inside `Hero` (line ~772), find the block starting at
                 trailing = durationText(s.asleep),
                 tint = Palette.restColor,
                 footer = {
-                    // WHOOP-style stage rows in the NOOP pip language: swatch + UPPERCASE stage +
+                    // WHOOP-style stage rows in the Healer S.I. pip language: swatch + UPPERCASE stage +
                     // coloured % + a segmented PipBar of the share-of-night + right-aligned duration.
                     // Same minutes/percentages the old "label · value" footer carried — no new numbers.
                     // Mirrors the macOS SleepView.stageBreakdownRows. (PipBar)

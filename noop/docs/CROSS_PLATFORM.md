@@ -1,6 +1,6 @@
 # Cross-platform architecture — macOS, iOS & Android
 
-NOOP ships three clients. They look different and are written in two languages, but they implement the
+Healer S.I. ships three clients. They look different and are written in two languages, but they implement the
 **same on-device pipeline**: read a WHOOP strap over BLE → decode the protocol → persist locally →
 score recovery/strain/sleep → render. This doc is the map of **what's shared, what's mirrored, and how
 to add a feature that should land on more than one of them** — so a new capability is built once
@@ -101,4 +101,4 @@ shared model + per-client edit UI. Each is "one idea, ported deliberately."
 ---
 
 *Everything stays on the device on every client. The platforms differ at the edges — the front door and
-the OS integrations — but the strap protocol, the math, and your data are the same NOOP underneath.*
+the OS integrations — but the strap protocol, the math, and your data are the same Healer S.I. underneath.*

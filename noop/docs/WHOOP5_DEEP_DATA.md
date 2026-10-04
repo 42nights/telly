@@ -28,7 +28,7 @@ Use the [WHOOP 5 connection profile](PROTOCOL_WHOOP5.md) and
 
 Use the complete [named configuration body](PROTOCOL_CONFIGURATION.md#named-configuration-interface)
 and [feature inventory](PROTOCOL_CONFIGURATION.md#feature-flag-inventory).
-The older NOOP encoder uses a 40-byte key/value block after its revision byte;
+The older Healer S.I. encoder uses a 40-byte key/value block after its revision byte;
 that client implementation is not the current 65-byte semantic request contract.
 Acceptance of truncated bodies remains unresolved. This page supplies no bulk
 “unlock” recipe.
@@ -66,7 +66,7 @@ These sources contributed earlier protocol observations and client work:
 
 ## High-rate IMU capture is a separate switch
 
-NOOP’s raw IMU workflow uses command 81 followed by command 106 with `[1,1]`;
+Healer S.I.’s raw IMU workflow uses command 81 followed by command 106 with `[1,1]`;
 stop uses command 82 followed by command 106 with `[1,0]`. Requests, effective
 collection state and packet delivery are separate; see the
 [collection controls](PROTOCOL_CONFIGURATION.md#collection-and-live-stream-coordination)
@@ -74,7 +74,7 @@ and [R21 layout](PROTOCOL_SENSORS.md#r21-six-axis-imu).
 
 ## Honest limits
 
-- **Measurements are not product scores.** NOOP computes its own metrics from
+- **Measurements are not product scores.** Healer S.I. computes its own metrics from
   the available records; decoded measurements do not reproduce WHOOP recovery,
   strain or sleep scores by themselves.
 - **The large records are no longer an undifferentiated type-`0x2F` blob.** Layout v21 (1,244 bytes)
@@ -87,7 +87,7 @@ and [R21 layout](PROTOCOL_SENSORS.md#r21-six-axis-imu).
 
 The documented WHOOP 5 optical layouts do not establish calibrated SpO₂ or a raw
 respiration waveform. Keep R18 byte 82 uninterpreted; see the
-[sensor reference](PROTOCOL_SENSORS.md#r18-biometric-summary). NOOP’s candidate
+[sensor reference](PROTOCOL_SENSORS.md#r18-biometric-summary). Healer S.I.’s candidate
 validation tools are research instrumentation, not a source of validated health metrics.
 
 ### Comparison tool

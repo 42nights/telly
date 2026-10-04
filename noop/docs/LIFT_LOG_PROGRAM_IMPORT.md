@@ -20,7 +20,7 @@ has to reject, and the max RPE column only accepts a number from 1 to 10. A seco
 |---|---|---|
 | `Program` | no | The session name — "Upper A". Every row with the same name becomes one program, so several programs can live in one file. Defaults to "Imported program". |
 | `Program note` | no | Taken from whichever row of that program carries it. |
-| `Exercise` | **yes** | Whatever you call the movement. NOOP ships no exercise catalogue — your name is the name. |
+| `Exercise` | **yes** | Whatever you call the movement. Healer S.I. ships no exercise catalogue — your name is the name. |
 | `Primary muscle` | no | Dropdown. |
 | `Secondary muscles` | no | Dropdown, and several can be typed separated by commas: `Front delts, Triceps`. |
 | `Sets` | no | Working sets. |

@@ -1,4 +1,4 @@
-# NOOP v5 "Strand" — Umbrella Design Spec (IA · Design Language · Positioning)
+# Healer S.I. v5 "Strand" — Umbrella Design Spec (IA · Design Language · Positioning)
 
 **Date:** 2026-06-19 · **Status:** Proposed — integration glue for the v5 pillar set
 **Scope:** This is the **umbrella** spec. It does *not* design a feature. It designs (1) the information
@@ -36,20 +36,20 @@ this doc only decides **where each lives** and **how they share chrome**.
 
 ---
 
-## 1. Goal & differentiation (why only NOOP)
+## 1. Goal & differentiation (why only Healer S.I.)
 
-**Goal.** Make NOOP feel like *one product with five places to go*, not twenty-three features in a list.
+**Goal.** Make Healer S.I. feel like *one product with five places to go*, not twenty-three features in a list.
 A new user should be able to name where everything is after thirty seconds. A returning power user should
 reach any feature in ≤ 2 taps.
 
-**Why only NOOP can frame it this way.** Every competitor's IA is organised around *scores their cloud
-computed and shipped you*. NOOP's IA can be organised around the **signal chain it owns end to end**:
+**Why only Healer S.I. can frame it this way.** Every competitor's IA is organised around *scores their cloud
+computed and shipped you*. Healer S.I.'s IA can be organised around the **signal chain it owns end to end**:
 raw signals → on-device computation → an action it can take on your body (the haptic motor) → fusion of
 multiple devices, all offline. That is a structural story no cloud-scored app can tell, and the navigation
 should *read* that story: **Today** (what's true now) · **Insights** (what your own numbers mean,
 including the coach and the breathe-outcomes) · **Health** (your body's longer arc) · **Devices &
 Sources** (where signals come from + what you imported) · **Settings**. Five destinations. The "only one
-that can breathe you back down" pillar (HRV haptic biofeedback) is the literal proof that NOOP *acts*,
+that can breathe you back down" pillar (HRV haptic biofeedback) is the literal proof that Healer S.I. *acts*,
 not just *reports* — it earns a permanent quick-action, not a buried screen.
 
 ---
@@ -182,7 +182,7 @@ do **not** invent a card:
   design-discipline rule.)
 - **Copy is plain and honest.** USD never GBP. Never claim to *diagnose/treat/screen*. Never name any AI/LLM
   anywhere in shipped copy **except** the opt-in bring-your-own-key Coach (and there, only "bring your own
-  key", never the model). NOOP is the WHOOP *companion* — never implies affiliation.
+  key", never the model). Healer S.I. is the WHOOP *companion* — never implies affiliation.
 
 ### 3.4 The fully-resolved example screen — **Insights hub (iPhone)**
 
@@ -191,7 +191,7 @@ most pillars), so resolving it proves the IA holds.
 
 ```
 ┌─────────────────────────────────────────────┐
-│  ◉ NOOP   Insights                       ⚙︎  │  ← top bar: BrandMark + StrandFont.title2,
+│  ◉ Healer S.I.   Insights                       ⚙︎  │  ← top bar: BrandMark + StrandFont.title2,
 │                                              │     trailing gear → Settings (no More tab)
 ├─────────────────────────────────────────────┤
 │  TODAY'S SYNTHESIS                  · Solid  │  ← SectionHeader overline + ScoreStatePill
@@ -243,7 +243,7 @@ pane, the Android twin the same five as Compose `NoopCard`s.
 
 ### 4.1 The cross-cutting posture (applies to every pillar)
 
-NOOP is a **wellness and self-tracking tool, not a medical device**. This is already the law of the repo
+Healer S.I. is a **wellness and self-tracking tool, not a medical device**. This is already the law of the repo
 (`DISCLAIMER.md §5`). v5 makes it a **design rule** every pillar inherits:
 
 1. **No diagnostic verbs, anywhere.** Never *diagnose / treat / screen / detect a condition*. Skin-temp
@@ -256,8 +256,8 @@ NOOP is a **wellness and self-tracking tool, not a medical device**. This is alr
    both the honesty differentiator and the legal cover.
 3. **Crisis carve-out for Mind.** Anything mood/mental-health-adjacent carries the standing line *"If you
    are struggling or in crisis, contact a qualified professional or your local emergency service — do not
-   rely on NOOP."* (DISCLAIMER §5.1, verbatim.)
-4. **Your data, your device, your choice.** Imports/exports/Apple-Health surfaces restate that NOOP only
+   rely on Healer S.I."* (DISCLAIMER §5.1, verbatim.)
+4. **Your data, your device, your choice.** Imports/exports/Apple-Health surfaces restate that Healer S.I. only
    moves data the user explicitly chooses, on-device, and can't see it afterward (DISCLAIMER §5.3).
 
 ### 4.2 One consolidated disclaimer surface (new in v5)
@@ -287,9 +287,9 @@ gives them a single home and a reusable surface so seven pillars can't drift.
 
 ### 5.1 Positioning
 
-**The category is "cloud-scored wearable apps." NOOP is the local-first, signal-first alternative.**
+**The category is "cloud-scored wearable apps." Healer S.I. is the local-first, signal-first alternative.**
 Every competitor (WHOOP, Oura, Garmin, Apple, Ultrahuman) ships you a number their server computed, behind
-a subscription, and can't act on your body. NOOP's five-hub IA *is* the pitch:
+a subscription, and can't act on your body. Healer S.I.'s five-hub IA *is* the pitch:
 
 - **Reasons from raw signals** (red/IR PPG, beat-to-beat R-R, 3-axis accel, skin temp) — not a cloud verdict.
 - **Computes on-device** — no account, no cloud, no subscription, fully offline.
@@ -301,12 +301,12 @@ a subscription, and can't act on your body. NOOP's five-hub IA *is* the pitch:
 
 ### 5.2 The one-liner (and supporting copy)
 
-> **Everyone else shows you a score their cloud computed. NOOP computes from your raw signals, on your
+> **Everyone else shows you a score their cloud computed. Healer S.I. computes from your raw signals, on your
 > device, for free — and it's the only one that can breathe you back down.**
 
 Tighter variants for different surfaces (all USD, no AI named, non-clinical):
 
-- **App Store / Reddit subhead:** *"Your strap, your data, your device. NOOP reads the raw signals and does
+- **App Store / Reddit subhead:** *"Your strap, your data, your device. Healer S.I. reads the raw signals and does
   the math locally — recovery, strain, sleep, fitness age — no account, no cloud, no subscription."*
 - **Six-word badge:** *"Raw signals in. On-device. Offline."*
 - **The act-on-body hook (Breathe):** *"It doesn't just measure your nervous system — it can nudge it,

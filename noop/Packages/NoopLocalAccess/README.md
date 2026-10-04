@@ -1,6 +1,6 @@
 # NoopLocalAccess
 
-`noop-local-access` exposes bounded, read-only NOOP health data locally. It has no network or
+`noop-local-access` exposes bounded, read-only Healer S.I. health data locally. It has no network or
 write/control path.
 
 Use MCP over stdio with `noop-local-access mcp`, or query one tool directly as JSON:

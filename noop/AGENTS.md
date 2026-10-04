@@ -1,21 +1,26 @@
-# AGENTS.md — working on NOOP
+# AGENTS.md — working on Healer S.I.
 
-> **telly:** this repo is telly, a fork of [NOOP](https://github.com/ryanbr/noop) (PolyForm
-> Noncommercial). [`whoop/health-fields.html`](whoop/health-fields.html) lists every WHOOP 5.0 / MG data field
-> NOOP collects, how fast each one arrives (real time, events, every-15-min sync, hourly, daily), its SQLite table and column, type and unit, plus fall-detection and vibration-motor notes. Start there when building a feature
+> **Name:** the product is **Healer S.I.** Write "Healer S.I." in every user-facing string, doc, README,
+> PR, issue and commit subject. Never add "NOOP" to visible text. NOOP stays only where something matches it
+> exactly: code identifiers, the `noop` source id and `noop/` path, package and bundle IDs, Android resource
+> names, file formats and export names, headers, env vars, URLs, and the license notices crediting NOOP.
+>
+> **telly:** this repo is telly. Its WHOOP app, Healer S.I., is based on [NOOP](https://github.com/ryanbr/noop)
+> (PolyForm Noncommercial, Copyright 2026 NoopApp). [`whoop/health-fields.html`](whoop/health-fields.html) lists every WHOOP 5.0 / MG data field
+> Healer S.I. collects, how fast each one arrives (real time, events, every-15-min sync, hourly, daily), its SQLite table and column, type and unit, plus fall-detection and vibration-motor notes. Start there when building a feature
 > on strap data. [`whoop/data/`](whoop/data) holds real sample rows as one JSON array per table: summary tables
 > in full, and one hour (30 min either side of sleep onset, 2026-09-29) of every per-second stream.
 > Blobs are hex strings. `whoop/data/export.sh [noop.sqlite] [from_ts] [to_ts]` regenerates them.
 >
 > When publishing or hosting anything from this repo, publish only `whoop/health-fields.html`, `whoop/data/`,
 > and the built health application.
-> Never publish the rest of the repo or anyone's live NOOP database.
+> Never publish the rest of the repo or anyone's live Healer S.I. database.
 >
-> NOOP lives in `noop/`. The health application (web, phone app, and server) is the repository root
+> Healer S.I. lives in `noop/`. The health application (web, phone app, and server) is the repository root
 > and follows [`../CONTRIBUTING.md`](../CONTRIBUTING.md); its plan is [`../docs/plan.md`](../docs/plan.md). The
-> scope limits below apply to NOOP's source, not to the health application.
+> scope limits below apply to Healer S.I.'s source, not to the health application.
 >
-> The rest of this file is NOOP's own contributor guide.
+> The rest of this file is Healer S.I.'s own contributor guide.
 
 Guidance for anyone (human or AI agent) submitting a pull request. This is the high-signal map;
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) is the full guide (BLE safety contract, design-system
@@ -24,12 +29,12 @@ rules, add-a-metric/screen/command recipes), [`docs/BUILD.md`](docs/BUILD.md) co
 specific WHOOP-app features that stay out of scope (and their local equivalents). Read this first;
 follow the links for depth.
 
-## What NOOP is (and the hard scope limits)
+## What Healer S.I. is (and the hard scope limits)
 
-NOOP is an **offline-by-default, on-device** companion app for WHOOP 4.0 and 5.0/MG straps (with
+Healer S.I. is an **offline-by-default, on-device** companion app for WHOOP 4.0 and 5.0/MG straps (with
 **experimental** Oura support in the tree — gated behind `ExperimentalBrand`, not a shipped supported
 strap). It pairs over Bluetooth, stores everything in on-device SQLite, and computes recovery / strain
-/ HRV / sleep locally. There is **no NOOP-operated server, no account, no cloud dependency, no
+/ HRV / sleep locally. There is **no Healer S.I.-operated server, no account, no cloud dependency, no
 telemetry**, and the project stays **anonymous** (iOS/Android ship build-from-source / sideload, not
 via the App Store). Issue #1314 permits one narrow exception: a default-off Experimental client may
 export data one way to an HTTP(S) endpoint the user owns and configures. It must remain outside strap
@@ -39,7 +44,7 @@ These are hard constraints, not preferences. A PR is out of scope if it:
 - adds a server, account, cloud dependency, or sends data off-device without the explicit user export
   boundary in [`docs/SCOPE.md`](docs/SCOPE.md) (including #1314's one-way self-hosted push);
 - adds analytics/telemetry/crash-reporting that phones home;
-- adds WHOOP firmware, decompiled app code, logos/assets, or any DRM circumvention. NOOP is
+- adds WHOOP firmware, decompiled app code, logos/assets, or any DRM circumvention. Healer S.I. is
   **clean-room interoperability** with hardware the user owns — keep it that way. (That bars
   *implementations* and literals, not every fact learned from one: a protocol offset may be
   re-derived with attribution as an unvalidated candidate — see the "facts vs code" bullet in
@@ -61,7 +66,7 @@ build-from-source target** folded into the same repo.
 | Analytics (pure) | `Packages/StrandAnalytics` | HRV / recovery / strain / sleep / correlation math. Database-free. |
 | Import | `Packages/StrandImport` | WHOOP CSV + Apple Health importers. |
 | Design system | `Packages/StrandDesign` | SwiftUI palette / components / charts. |
-| macOS + shared app | `Strand/` (scheme **Strand**, product `NOOP`, macOS 13+) | `BLE/` (CoreBluetooth), `Collect/`, `Data/` (Repository), `Screens/`, `App/` (`RootView`/`ContentView` = sidebar shell). Shared with iOS where a file isn't macOS-only. |
+| macOS + shared app | `Strand/` (scheme **Strand**, product `Healer S.I.`, macOS 13+) | `BLE/` (CoreBluetooth), `Collect/`, `Data/` (Repository), `Screens/`, `App/` (`RootView`/`ContentView` = sidebar shell). Shared with iOS where a file isn't macOS-only. |
 | iOS-only app | `StrandiOS/` (scheme **NOOPiOS**, iOS 17+), `StrandiOSShared/`, `StrandiOSWidgets/`, `NOOPWatch*` | `StrandiOSApp` (@main), `RootTabView` (the iOS tab shell — no macOS analogue), iOS widgets, watch app. |
 | Android app | `android/` (Kotlin, Compose, Room; flavors `Full`/`Demo`) | `com.noop.{ble,collect,data,ingest,analytics,protocol,ui,widget,…}` — mirrors the Swift layering with its own reimplementations. |
 

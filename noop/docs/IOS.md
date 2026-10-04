@@ -3,7 +3,7 @@
 > **iOS is now a direct download (v1.96).** Grab **`NOOP-v<version>-ios.ipa`** from the
 > [Releases](https://github.com/ryanbr/noop/releases) page and install it with **AltStore** or **SideStore** — see
 > **[Install (sideload)](#install-sideload)** below. No Mac, no Xcode, no App Store, and no Apple
-> Developer account needed — **and NOOP stays anonymous**, because the `.ipa` has no Apple developer
+> Developer account needed — **and Healer S.I. stays anonymous**, because the `.ipa` has no Apple developer
 > signature and **you** sign it on your own iPhone with your own free Apple ID. It carries only a
 > replaceable ad-hoc capability template so the sideloader can provision HealthKit and the App Group
 > shared with the widget. The app target (`NOOPiOS` +
@@ -16,7 +16,7 @@
 The `.ipa` is **not signed by an Apple developer identity** — that's what keeps the project
 anonymous. Its replaceable ad-hoc signature only describes the capabilities AltStore/SideStore must
 provision; iOS won't run it until the sideloader signs it **on your device, with your own free Apple
-ID**. Nothing about this touches NOOP's identity or Apple's servers on our side.
+ID**. Nothing about this touches Healer S.I.'s identity or Apple's servers on our side.
 
 1. **Install a sideloader on your computer** — [AltStore](https://altstore.io) or
    [SideStore](https://sidestore.io) (both free). Follow their one-time setup (it installs a helper +
@@ -24,24 +24,24 @@ ID**. Nothing about this touches NOOP's identity or Apple's servers on our side.
 2. **Download `NOOP-v<version>-ios.ipa`** from [Releases](https://github.com/ryanbr/noop/releases) to your iPhone (or your
    computer, then AirDrop/transfer it).
 3. **Open the `.ipa` with AltStore/SideStore** (Share → AltStore, or the app's "+" button). It signs
-   and installs NOOP. First launch may need **Settings → General → VPN & Device Management → trust
+   and installs Healer S.I. First launch may need **Settings → General → VPN & Device Management → trust
    your Apple ID**.
 
-### If AltStore's Error Log says "Install NOOP Failed"
+### If AltStore's Error Log says "Install Healer S.I. Failed"
 
-The same failure also shows up **on the phone**, in AltStore's own Error Log, where it names NOOP and so
-looks like NOOP's fault:
+The same failure also shows up **on the phone**, in AltStore's own Error Log, where it names Healer S.I. and so
+looks like Healer S.I.'s fault:
 
-> **Install NOOP Failed** — `NSCocoaErrorDomain 3840`
+> **Install Healer S.I. Failed** — `NSCocoaErrorDomain 3840`
 > *The data couldn't be read because it isn't in the correct format.*
 
 **Read the whole log before concluding anything.** If it also contains:
 
 > **Refresh AltStore Failed** — `NSCocoaErrorDomain 3840`
 
-then AltStore could not refresh **its own app**, which nothing about NOOP's `.ipa` or NOOP's source can
+then AltStore could not refresh **its own app**, which nothing about Healer S.I.'s `.ipa` or Healer S.I.'s source can
 cause. Every "… Failed" line is the same decode failure hitting whatever AltStore happened to be doing at
-that minute — installing NOOP, refreshing NOOP, refreshing itself. The NOOP-named lines are the symptom,
+that minute — installing Healer S.I., refreshing Healer S.I., refreshing itself. The Healer S.I.-named lines are the symptom,
 not the cause.
 
 `NSCocoaErrorDomain 3840` is a parse error: AltStore expected structured data and got something else back
@@ -50,7 +50,7 @@ failure, just reported from the phone instead of AltServer.
 
 ### If AltServer can't sign in with your Apple ID
 
-A failure at **step 1** — before NOOP is involved at all — looks like this:
+A failure at **step 1** — before Healer S.I. is involved at all — looks like this:
 
 > **AltServer could not sign in with your Apple ID. The data is not in the correct format.**
 >
@@ -69,7 +69,7 @@ hex" line beneath it is the same failure reported by the older-style parser, not
 **What actually works today:**
 
 - **Use [SideStore](https://sidestore.io) instead.** It is a separate implementation that does not go
-  through AltServer's Apple ID sign-in, and NOOP's source works there identically — the same URL, the same
+  through AltServer's Apple ID sign-in, and Healer S.I.'s source works there identically — the same URL, the same
   auto-updates. This is the practical answer while the upstream bug is open.
 - **Install the `.ipa` directly** with any sideloader that signs on-device, if you prefer not to add a
   source at all.
@@ -79,12 +79,12 @@ Local network filtering — a DNS blocker, a VPN, a captive portal — can produ
 by returning a block page, so it is worth ruling out if you have any. But it is **not** the usual cause,
 and the two reports that prompted this note were both the upstream bug.
 
-This is AltStore's own setup rather than anything NOOP controls, but it is the first step of the install,
+This is AltStore's own setup rather than anything Healer S.I. controls, but it is the first step of the install,
 so it is written down here rather than left as a dead end.
 
-### Add NOOP as a source (recommended — auto-updates)
+### Add Healer S.I. as a source (recommended — auto-updates)
 
-So you never have to manually re-download, add NOOP's **source** to AltStore/SideStore once — new
+So you never have to manually re-download, add Healer S.I.'s **source** to AltStore/SideStore once — new
 releases then show up (and re-sign) automatically:
 
 **Source URL:** `https://raw.githubusercontent.com/ryanbr/noop/main/altstore-source.json`
@@ -94,7 +94,7 @@ releases then show up (and re-sign) automatically:
 > the raw file — use the `raw.githubusercontent.com` URL above.
 
 - **AltStore:** open AltStore → **Browse** tab → tap **＋** (top-left) → paste the URL → **Add Source**.
-  NOOP appears under the source; tap **Free** / **Get** to install. From then on it updates itself on
+  Healer S.I. appears under the source; tap **Free** / **Get** to install. From then on it updates itself on
   AltStore's background refresh (you can also pull-to-refresh **My Apps**).
 - **SideStore:** open SideStore → **Browse** / **Sources** → **＋ Add Source** → paste the same URL → add.
 
@@ -104,7 +104,7 @@ hunting for the `.ipa` each time.
 > ### Two honest limitations of free-Apple-ID sideloading
 > - **7-day expiry.** Apps signed with a *free* Apple ID stop launching after 7 days and need
 >   re-signing. **AltStore/SideStore refresh this automatically** in the background — keep the
->   sideloader installed and NOOP keeps working.
+>   sideloader installed and Healer S.I. keeps working.
 > - **Apple-only features require their extensions and capabilities.** Keep the
 >   `NOOPWidgets.appex` extension enabled when AltStore/SideStore asks: it renders the Home/Lock-Screen
 >   widgets and Live Activities and shares data through the provisioned App Group. Removing app
@@ -126,7 +126,7 @@ below.
 
 > 🛠️ **Signing it under your own Apple ID** (thanks @gingerbeardman for the original recipe). Apple
 > requires a bundle id and app group unique to *your* developer account — otherwise the build collides
-> with any other NOOP install already on your device (an AltStore/SideStore sideload, or someone
+> with any other Healer S.I. install already on your device (an AltStore/SideStore sideload, or someone
 > else's build). Two steps:
 > 1. `cp Config/BundleIdSecrets.example.xcconfig Config/BundleIdSecrets.xcconfig` and set
 >    `BUNDLE_ID_PREFIX` to your own reverse-domain prefix (e.g. `com.yourdomain`), then re-run
@@ -137,22 +137,22 @@ below.
 >    targets — the one step Apple still requires you to do by hand.
 >
 > Skip step 1 and the build still works under the default `com.noopapp` identifiers — fine if this is
-> the only NOOP install on your device.
+> the only Healer S.I. install on your device.
 
 > ℹ️ **Cross-platform engineering lives in [`CROSS_PLATFORM.md`](CROSS_PLATFORM.md)** — the shared-code
 > boundary across the macOS / iOS / Android clients, the `Platform.swift` shim convention, the
 > Swift↔Kotlin parity discipline, and the playbook for adding a feature across all three. Read that
 > first if you're building something that should land on more than one client.
 
-This document describes how NOOP — a standalone, fully offline companion app for
+This document describes how Healer S.I. — a standalone, fully offline companion app for
 WHOOP straps — is positioned for iOS, what already works, and the concrete plan
 for a native iOS app target.
 
-> **Not affiliated with WHOOP.** NOOP is an independent, unofficial project. It is
+> **Not affiliated with WHOOP.** Healer S.I. is an independent, unofficial project. It is
 > not affiliated with, endorsed by, or connected to WHOOP, Inc. "WHOOP" is used
 > nominatively only to identify the hardware the app interoperates with — your own
-> device and your own data. NOOP performs no DRM circumvention and ships no WHOOP
-> proprietary code, firmware, or assets. **NOOP is not a medical device;** all
+> device and your own data. Healer S.I. performs no DRM circumvention and ships no WHOOP
+> proprietary code, firmware, or assets. **Healer S.I. is not a medical device;** all
 > metrics (HR, HRV, recovery, strain, sleep, SpO₂, temperature) are approximations
 > and not clinically validated.
 
@@ -174,7 +174,7 @@ the WHOOP 5.0 / MG protocol from **`b-nnett/goose`**. See [`../ATTRIBUTION.md`](
 - **CoreBluetooth is fully available on iOS** and the BLE engine is already written
   with iOS background collection in mind (state restoration hooks exist).
 - **HealthKit is available on iOS** (it is not on macOS), so iOS can do *two-way*
-  Apple Health: read live, and write NOOP-computed metrics back. On macOS, Apple
+  Apple Health: read live, and write Healer S.I.-computed metrics back. On macOS, Apple
   Health is import-only via the static `export.xml` / `export.zip` file.
 
 ---
@@ -419,16 +419,16 @@ static func runShortcut(_ name: String) {
   "double-tap runs an arbitrary Shortcut while my phone is in my pocket" pattern
   unreliable on iOS.
 - The robust iOS approach is to **publish App Intents** (the App Intents framework)
-  from NOOP — e.g. "Mark a moment", "Start live HR", "Buzz strap", "Log recovery". The
-  user then builds Shortcuts/Automations that call *NOOP's* intents, and NOOP also
+  from Healer S.I. — e.g. "Mark a moment", "Start live HR", "Buzz strap", "Log recovery". The
+  user then builds Shortcuts/Automations that call *Healer S.I.'s* intents, and Healer S.I. also
   appears in Spotlight, Siri, and the Shortcuts gallery.
-- For invoking *other* apps from NOOP, support **x-callback-url** style deep links
+- For invoking *other* apps from Healer S.I., support **x-callback-url** style deep links
   (`x-callback-url` is the de-facto inter-app callback convention) and the standard
   `shortcuts://x-callback-url/run-shortcut?name=…&x-success=…` form so control can
-  return to NOOP after the external shortcut completes.
+  return to Healer S.I. after the external shortcut completes.
 
 > Net: replace the macOS `runShortcut(_:)` plumbing with (a) **App Intents exposed by
-> NOOP** for inbound automation and (b) **x-callback-url / `shortcuts://` deep links**
+> Healer S.I.** for inbound automation and (b) **x-callback-url / `shortcuts://` deep links**
 > for outbound calls, and remove `lockScreen` from the iOS action set.
 
 ### 4. Pasteboard
@@ -469,7 +469,7 @@ This is the biggest *additive* opportunity on iOS.
 | Direction | iOS capability |
 |---|---|
 | **Read** | Query HealthKit live (`HKHealthStore`, `HKSampleQuery`, anchored/observer queries) for HR, RHR, HRV SDNN, SpO₂, wrist/body temperature, respiratory rate, sleep stages, workouts, body composition — the same types `relevantTypes` already enumerates in `AppleHealthImporter`. No manual export needed. |
-| **Write** | Write NOOP-computed values back into Apple Health: HR / HRV / SpO₂ / temperature samples decoded from the strap, sleep analysis from `StrandAnalytics.SleepStager`, and workouts from `WorkoutDetector` — so NOOP data shows up across the user's Health ecosystem. |
+| **Write** | Write Healer S.I.-computed values back into Apple Health: HR / HRV / SpO₂ / temperature samples decoded from the strap, sleep analysis from `StrandAnalytics.SleepStager`, and workouts from `WorkoutDetector` — so Healer S.I. data shows up across the user's Health ecosystem. |
 | **Background delivery** | `HKObserverQuery` + `enableBackgroundDelivery` keep the on-device store current, while a best-effort `BGAppRefreshTaskRequest` periodically writes already-banked strap data back to Health. Fresh WHOOP offloads write immediately from their completion hook. iOS chooses the actual refresh time. |
 
 Because `AppleHealthImporter` already defines the canonical type set, units, and
@@ -479,7 +479,7 @@ the static-export importer and the live HealthKit importer converge on one schem
 
 > **Entitlement/Info.plist on iOS:** add the **HealthKit** capability and supply
 > `NSHealthShareUsageDescription` (read) and `NSHealthUpdateUsageDescription` (write).
-> Keep both directions strictly opt-in and on-device — consistent with NOOP's
+> Keep both directions strictly opt-in and on-device — consistent with Healer S.I.'s
 > offline, no-cloud stance.
 
 ---
@@ -568,20 +568,20 @@ targets:
     info:
       path: StrandiOS/Resources/Info.plist
       properties:
-        CFBundleName: NOOP
-        CFBundleDisplayName: NOOP
+        CFBundleName: Healer S.I.
+        CFBundleDisplayName: Healer S.I.
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         UIBackgroundModes:
           - bluetooth-central
         NSBluetoothAlwaysUsageDescription: >-
-          NOOP connects directly to your WHOOP strap over Bluetooth to read heart rate,
+          Healer S.I. connects directly to your WHOOP strap over Bluetooth to read heart rate,
           R-R intervals, battery, and sensor data locally on your iPhone. Nothing leaves
           your device.
         NSHealthShareUsageDescription: >-
-          NOOP reads your own Apple Health data on-device to compute recovery, strain,
+          Healer S.I. reads your own Apple Health data on-device to compute recovery, strain,
           and sleep. Nothing leaves your device.
         NSHealthUpdateUsageDescription: >-
-          NOOP writes the metrics it computes from your strap back into Apple Health,
+          Healer S.I. writes the metrics it computes from your strap back into Apple Health,
           on-device and only when you allow it.
     entitlements:
       path: StrandiOS/Resources/NOOP.entitlements
@@ -591,7 +591,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.noopapp.noop
-        PRODUCT_NAME: NOOP
+        PRODUCT_NAME: Healer S.I.
     dependencies:
       - package: WhoopProtocol
       - package: WhoopStore
@@ -617,7 +617,7 @@ targets:
 - [x] `MenuBarExtra` replaced by a WidgetKit widget + Live Activity (`StrandiOSWidgets`), reusing `StrandDesign`.
 - [x] iOS action layer: `lockScreen` returns false on iOS, `buzzBack`/`markMoment` portable, **App Intents** exposed (`StrandiOS/System/NOOPAppIntents.swift`).
 - [x] Clipboard + URL-open routed through `Platform.swift` (`PlatformPasteboard`/`PlatformOpen`).
-- [x] `HealthKitBridge` two-way Apple Health (read live + immediate post-offload and periodic background write-back of NOOP metrics).
+- [x] `HealthKitBridge` two-way Apple Health (read live + immediate post-offload and periodic background write-back of Healer S.I. metrics).
 - [ ] **Still TODO (needs hardware):** verify BLE on a **physical iPhone** with a real strap — CoreBluetooth has no Simulator. This is the one thing CI/compile can't cover.
 
 ---
@@ -634,6 +634,6 @@ How PR #42's port was brought onto current `main` — useful the next time a scr
 
 ---
 
-*NOOP keeps everything on-device. The iOS plan changes the front door (menu bar →
+*Healer S.I. keeps everything on-device. The iOS plan changes the front door (menu bar →
 widgets, AppKit → UIKit, file import → HealthKit) but not the principle: your strap,
 your data, no cloud.*

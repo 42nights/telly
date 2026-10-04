@@ -128,7 +128,7 @@ The ordered command sequence that follows is:
 
 **Observed in device captures:** re-running this sequence in the middle of an
 offload stopped type-47 streaming. Run it once per connection. Scheduling around
-the sequence is application policy, not required protocol timing; the NOOP policy
+the sequence is application policy, not required protocol timing; the Healer S.I. policy
 is recorded on the [implementation page](PROTOCOL_IMPLEMENTATION.md#noop-connection-policy).
 
 > WHOOP 5/MG instead writes the fixed `CLIENT_HELLO` [frame](PROTOCOL_WHOOP5.md#connection-and-frame-format) to its `…0002` command

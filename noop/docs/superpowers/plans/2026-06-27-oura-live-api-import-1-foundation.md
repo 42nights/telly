@@ -19,7 +19,7 @@
 
 Every task implicitly includes these (verbatim from the spec):
 - **Packages stay network-free.** No `URLSession`/`URLRequest`/`NWConnection` in `StrandImport` or `WhoopStore`. (`StrandImport` banner: "STAY OFFLINE: nothing here touches the network.")
-- **Honest data.** Oura's own scores (readiness/sleep/activity/resilience) are written ONLY under reference keys (`ref_*`) or namespaced (`oura_*`) — never as a NOOP score column (`recovery`/`strain`). NOOP recomputes downstream.
+- **Honest data.** Oura's own scores (readiness/sleep/activity/resilience) are written ONLY under reference keys (`ref_*`) or namespaced (`oura_*`) — never as a Healer S.I. score column (`recovery`/`strain`). Healer S.I. recomputes downstream.
 - **Untrusted input is hostile.** Parse via the existing `WearableJSON` finite/range-checked coercion (`dbl`/`int`/`posInt`/`posDbl`/`str`); never trap on attacker NaN/inf/huge values.
 - **Additive migrations only.** New tables/indexes; never alter or drop existing rows. The live migrator is at **v23** (`Packages/WhoopStore/Sources/WhoopStore/Database.swift`); this adds **v24** (`v19`–`v23` already exist).
 - **Pinned deps.** Add no new dependency. Versions across `Packages/*/Package.swift` must stay identical (`GRDB.swift exact 6.29.3`, `ZIPFoundation exact 0.9.20`).
@@ -259,7 +259,7 @@ Create `Packages/StrandImport/Sources/StrandImport/OuraHypnogram.swift`:
 ```swift
 import Foundation
 
-// MARK: - Oura compact per-epoch sleep strings (DOCUMENTED Oura API v2 encodings; NOOP's own decoder)
+// MARK: - Oura compact per-epoch sleep strings (DOCUMENTED Oura API v2 encodings; Healer S.I.'s own decoder)
 //
 // The Oura `sleep` object carries two compact strings. Their digit legends are DIFFERENT — never share a
 // decoder between them:
@@ -268,7 +268,7 @@ import Foundation
 
 public enum OuraHypnogram {
 
-    /// `sleep_phase_*` digit → NOOP stage string ("deep"/"light"/"rem"/"wake", matching
+    /// `sleep_phase_*` digit → Healer S.I. stage string ("deep"/"light"/"rem"/"wake", matching
     /// `WearableSleepStageInterval`). Unknown digits → nil (skipped, the epoch clock still advances).
     public static func stageName(_ ch: Character) -> String? {
         switch ch {
@@ -428,7 +428,7 @@ import Foundation
 // MARK: - Oura API v2 document parser (PURE / network-free)
 //
 // Takes already-fetched JSON `data[]` arrays (the OuraAPIClient does the I/O in the app target) and maps
-// them to NOOP's normalized models. Reuses the SAME field semantics as OuraExportParser — the account export
+// them to Healer S.I.'s normalized models. Reuses the SAME field semantics as OuraExportParser — the account export
 // and the API share field names (bedtime_start, total_sleep_duration, …) — and adds the hypnogram +
 // time-series the file export never carried. Crafted-input safe via WearableJSON.
 
@@ -603,7 +603,7 @@ Append to `Packages/StrandImport/Sources/StrandImport/OuraApiModels.swift`:
 ```swift
 /// One extra daily scalar Oura returns that the wide `dailyMetric` columns don't hold (→ metricSeries on
 /// write). `key` is the metricSeries key; the brand's OWN scores use a `ref_` prefix and its contributor
-/// breakdowns an `oura_` prefix, so they are browseable but never mistaken for a NOOP score.
+/// breakdowns an `oura_` prefix, so they are browseable but never mistaken for a Healer S.I. score.
 public struct OuraDailyExtra: Sendable, Equatable {
     public let day: String
     public let key: String
@@ -694,7 +694,7 @@ public extension OuraApiParser {
         return (Array(byDay.values), extras)
     }
 
-    /// Oura resilience level → an ordered reference number (1…5). Reference-only — never a NOOP score.
+    /// Oura resilience level → an ordered reference number (1…5). Reference-only — never a Healer S.I. score.
     static func resilienceLevel(_ s: String?) -> Double? {
         switch s {
         case "limited":     return 1

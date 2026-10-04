@@ -1,12 +1,12 @@
 # BLE Reverse Engineering
 
-How NOOP talks to a WHOOP strap directly over Bluetooth Low Energy — no WHOOP cloud and no account.
+How Healer S.I. talks to a WHOOP strap directly over Bluetooth Low Energy — no WHOOP cloud and no account.
 This document explains how the strap's private GATT protocol was understood, how the
 frame format and checksums work, how WHOOP 4.0 ("Harvard") and WHOOP 5.0 ("puffin") differ, capture observations, and how to extend the decoder for new packet types or sensors.
 For current wire contracts, start with the [protocol reference](PROTOCOL.md); this page
 retains implementation history and measured observations rather than a second schema.
 
-> **Interoperability, not impersonation.** NOOP is a companion app for a strap *you own*. It reads the
+> **Interoperability, not impersonation.** Healer S.I. is a companion app for a strap *you own*. It reads the
 > data *your* device already records and stores it locally on *your* machine. Nothing here replicates,
 > circumvents, or interoperates with WHOOP's servers.
 >
@@ -79,7 +79,7 @@ Standard Battery     180F / 2A19   → battery percent
 
 The two standard services (`180D` heart rate, `180F` battery) are a useful sanity check: the standard
 `2A37` Heart Rate Measurement characteristic streams HR and R-R intervals at ~1 Hz **without bonding**,
-which made it the reliable baseline while the custom channels were being mapped. NOOP still treats
+which made it the reliable baseline while the custom channels were being mapped. Healer S.I. still treats
 `2A37` as the *reliable* HR/R-R source and lets the custom streams supply everything else (see
 `parseStandardHR` in `BLEManager.swift`).
 
@@ -170,7 +170,7 @@ The inner record (`[type][seq][cmd][data…]`) starts at **offset 8** instead of
 payload CRC32 is unchanged from 4.0. The header-check choice is selected through `DeviceFamily.headerCRCKind`; command
 bodies and record layouts have further generation-specific differences.
 
-NOOP accepts a 5.0/MG frame only at **13 bytes or more** (8 header bytes including the CRC16, at
+Healer S.I. accepts a 5.0/MG frame only at **13 bytes or more** (8 header bytes including the CRC16, at
 least the inner type byte, and the 4-byte CRC32 trailer) and exactly `declaredLength + 8` bytes, so
 truncation and trailing bytes are rejected. The 13-byte floor is empirical rather than structural:
 Goose's `v5Payload` accepts the self-consistent 12-byte, zero-payload envelope. The committed real
@@ -239,7 +239,7 @@ choices, not evidence that every alias has an equivalent producer on the strap:
 |---|---|---|
 
 
-### Why NOOP disables it on connect
+### Why Healer S.I. disables it on connect
 
 In the earlier WHOOP 4 sessions described here, the ~2 × 1.9 KB/s stream
 consumed substantial BLE airtime during historical offload. Live delivery alone
@@ -257,7 +257,7 @@ send(.sendR10R11Realtime, payload: [0x00])   // stop the type-43 realtime flood 
 
 Because the flood can resume, the backfill idle-watchdog deliberately ignores type-43/40 frames and
 only re-arms on genuine offload frames (`BLEManager.isOffloadFrame` → types 47/48/49/50). With the raw
-stream off, NOOP's primary metric source becomes the **historical offload** (next section).
+stream off, Healer S.I.'s primary metric source becomes the **historical offload** (next section).
 
 ### On-demand raw capture
 
@@ -322,13 +322,13 @@ decoded in v1.95 — see "The WHOOP 4.0 type-47 record (version 25)" below).
 `extractHistoricalStreams` (`HistoricalStreams.swift`) turns these into the typed rows
 (`HRSample`, `SpO2Sample`, `SkinTempSample`, `RespSample`, `GravitySample`, …). The raw ADCs are kept
 as-is (`unit: "raw_adc"`). These names do not independently establish physical
-calibration. Current NOOP keeps SpO₂ import-only and treats respiration estimation
+calibration. Current Healer S.I. keeps SpO₂ import-only and treats respiration estimation
 and temperature processing separately; see [current data boundaries](WHOOP5_DEEP_DATA.md#spo₂-and-respiration-interpretation-limits).
 
 ### Safe offload + trim
 
 The strap streams `HISTORY_START → type-47 records → METADATA (HISTORY_END) → … → HISTORY_COMPLETE`.
-Each `METADATA` chunk carries a **`trim_cursor`** (u32 at frame offset 17). NOOP persists the decoded +
+Each `METADATA` chunk carries a **`trim_cursor`** (u32 at frame offset 17). Healer S.I. persists the decoded +
 raw rows first, then sends `HISTORICAL_DATA_RESULT` (23) as a confirmed write echoing the chunk's
 `end_data`. The local `strap_trim` cursor records committed client progress. It does not guarantee
 that the strap resumes at exactly that position: unacknowledged records can repeat, and preparation

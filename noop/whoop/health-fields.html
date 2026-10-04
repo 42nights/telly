@@ -28,16 +28,16 @@
 <body>
 <main>
 <h1>WHOOP capabilities</h1>
-<p class="lede">Every field NOOP collects from a WHOOP 5.0 / MG strap, where it lives in NOOP's on-device SQLite database, and what kind of value it holds. Values are placeholders: <code>{int}</code> and <code>{float}</code> give the type, followed by the unit. Rows marked "not populated" exist in the schema but had no data on our strap. Real sample rows for every table are in <code>data/&lt;table&gt;.json</code>.</p>
+<p class="lede">Every field Healer S.I. collects from a WHOOP 5.0 / MG strap, where it lives in Healer S.I.'s on-device SQLite database, and what kind of value it holds. Values are placeholders: <code>{int}</code> and <code>{float}</code> give the type, followed by the unit. Rows marked "not populated" exist in the schema but had no data on our strap. Real sample rows for every table are in <code>data/&lt;table&gt;.json</code>.</p>
 
 <h2>Real time (about 1–2 s while connected)</h2>
 <p class="note">Streamed live over Bluetooth while a phone or computer is connected to the strap.</p>
 <div class="wrap"><table>
-<tr><th>Signal</th><th>Rate</th><th>How to get it</th><th>NOOP stores</th><th>Status</th></tr>
+<tr><th>Signal</th><th>Rate</th><th>How to get it</th><th>Healer S.I. stores</th><th>Status</th></tr>
 <tr><td>Heart rate (bpm)</td><td class="v">~1 Hz</td><td>Subscribe to the standard heart-rate characteristic <code>0x2A37</code>, no pairing needed</td><td><code>hrSample.bpm</code></td><td>Confirmed</td></tr>
 <tr><td>R-R intervals (ms)</td><td class="v">every beat</td><td>Same <code>0x2A37</code> subscription; 5.0 / MG sends milliseconds</td><td><code>rrInterval.rrMs</code></td><td>Confirmed</td></tr>
 <tr><td>Skin contact flag</td><td class="v">per update</td><td><code>0x2A37</code> flags</td><td><code>event</code>, on change</td><td>Meaning not validated on 5.0 / MG</td></tr>
-<tr><td>Motion: accelerometer (g) + gyroscope (°/s)</td><td class="v">100 Hz, sent in 1 s buffers</td><td>Command 81 <code>[01]</code>, then 106 <code>[01 01]</code>. Stop: 82 <code>[01]</code>, then 106 <code>[01 00]</code></td><td><code>.imus</code> capture files, not SQLite</td><td>Confirmed; NOOP only allows it during a Raw Data Collector session</td></tr>
+<tr><td>Motion: accelerometer (g) + gyroscope (°/s)</td><td class="v">100 Hz, sent in 1 s buffers</td><td>Command 81 <code>[01]</code>, then 106 <code>[01 01]</code>. Stop: 82 <code>[01]</code>, then 106 <code>[01 00]</code></td><td><code>.imus</code> capture files, not SQLite</td><td>Confirmed; Healer S.I. only allows it during a Raw Data Collector session</td></tr>
 <tr><td>ECG waveform (MG only)</td><td class="v">~100 Hz, unresolved</td><td>Commands 139 → 125 → 124</td><td>Not stored</td><td>Experimental, seen on one device</td></tr>
 <tr><td>Battery (%)</td><td class="v">every 60 s, 30 s when charging</td><td>Poll the standard battery characteristic <code>0x2A19</code></td><td>In memory only</td><td>Confirmed</td></tr>
 <tr><td>Heart rate in Bluetooth advertising</td><td class="v">—</td><td>"Broadcast HR" setting (command 119), readable by bike computers</td><td>—</td><td>Confirmed with a Garmin</td></tr>
@@ -47,19 +47,19 @@
 <p class="note">Sent the moment something happens. Each event also starts a history sync, at most once every 90 s.</p>
 <div class="wrap"><table>
 <tr><th>Event</th><th>Code</th><th>Use</th></tr>
-<tr><td>Double tap</td><td><code>14</code></td><td>Input gesture; NOOP uses it for Automations</td></tr>
+<tr><td>Double tap</td><td><code>14</code></td><td>Input gesture; Healer S.I. uses it for Automations</td></tr>
 <tr><td>Wrist on / off</td><td><code>9</code> / <code>10</code></td><td>Arrives about 2 s after the strap comes off</td></tr>
 <tr><td>Battery level: %, mV, charging</td><td><code>3</code></td><td>About every 8 min</td></tr>
 <tr><td>Charging on / off, battery pack on / off, pack info</td><td><code>7</code>/<code>8</code>, <code>21</code>/<code>22</code>, <code>109</code></td><td></td></tr>
 <tr><td>Alarm and haptics fired / finished</td><td><code>56</code>–<code>60</code>, <code>100</code></td><td>Confirms a buzz was attempted, not that the motor moved</td></tr>
-<tr><td>Accelerometer saturated</td><td><code>42</code></td><td>Might fire on a hard impact. Untested on 5.0 / MG; NOOP ignores it</td></tr>
+<tr><td>Accelerometer saturated</td><td><code>42</code></td><td>Might fire on a hard impact. Untested on 5.0 / MG; Healer S.I. ignores it</td></tr>
 <tr><td>Clock lost, boot, clock set</td><td><code>13</code>, <code>15</code>, <code>16</code></td><td></td></tr>
 </table></div>
 
 <h2>Every second, delivered on sync (every ~15 min)</h2>
-<p class="note">The strap records these once per second and stores them. NOOP pulls them every 15 min while connected, or as soon as 90 s after an event. On low battery or "Low refresh" it slows to every 45–60 min. None of these can be streamed live. Faster options: "Sync now" skips the limits. The strap's own high-frequency sync mode asks for a sync every 61 s or more for up to 8 hours, but NOOP deliberately stopped using it. Back-to-back syncs from a custom app might get the delay down to seconds, but that's untested. The strap stores history in 4 KB flash pages, so the newest seconds may not be readable until a page is written.</p>
+<p class="note">The strap records these once per second and stores them. Healer S.I. pulls them every 15 min while connected, or as soon as 90 s after an event. On low battery or "Low refresh" it slows to every 45–60 min. None of these can be streamed live. Faster options: "Sync now" skips the limits. The strap's own high-frequency sync mode asks for a sync every 61 s or more for up to 8 hours, but Healer S.I. deliberately stopped using it. Back-to-back syncs from a custom app might get the delay down to seconds, but that's untested. The strap stores history in 4 KB flash pages, so the newest seconds may not be readable until a page is written.</p>
 <div class="wrap"><table>
-<tr><th>Signal</th><th>Unit</th><th>NOOP stores</th><th>Status</th></tr>
+<tr><th>Signal</th><th>Unit</th><th>Healer S.I. stores</th><th>Status</th></tr>
 <tr><td>Heart rate; up to 4 R-R intervals per second</td><td>bpm, ms</td><td><code>hrSample</code>, <code>rrInterval</code></td><td>Confirmed</td></tr>
 <tr><td>Gravity / wrist orientation x, y, z</td><td>g</td><td><code>gravitySample.x/y/z</code></td><td>Confirmed. Smallest step 0.0000024 g (about 0.0001°). In our data, the second-to-second change while asleep was 0.04° typically and 0.6° at the 99th percentile, so anything over about half a degree is real movement. Smoothed and only once per second, so it misses fast impacts</td></tr>
 <tr><td>Movement (acceleration minus gravity)</td><td>g, 0–8</td><td><code>gravitySample.dynAccel</code></td><td>Captured, meaning not pinned</td></tr>
@@ -78,7 +78,7 @@
 
 <h2>Hourly (computed)</h2>
 <div class="wrap"><table>
-<tr><th>Metric</th><th>From</th><th>NOOP stores</th></tr>
+<tr><th>Metric</th><th>From</th><th>Healer S.I. stores</th></tr>
 <tr><td>Hourly stress, 0–3</td><td>Hourly mean HR + RMSSD</td><td>Computed on read, not stored</td></tr>
 <tr><td>Hourly steps</td><td>iPhone via Apple Health, not the strap</td><td><code>appleStepHour</code></td></tr>
 <tr><td>Anything else per hour</td><td>Any of the per-second streams above can be bucketed by hour</td><td>Not built yet</td></tr>
@@ -86,7 +86,7 @@
 
 <h2>Daily or per sleep (computed)</h2>
 <div class="wrap"><table>
-<tr><th>Metric</th><th>From</th><th>NOOP stores</th></tr>
+<tr><th>Metric</th><th>From</th><th>Healer S.I. stores</th></tr>
 <tr><td>Steps, active calories</td><td>Step counter + activity class</td><td><code>dailyMetric.steps/activeKcalEst</code></td></tr>
 <tr><td>Resting HR, HRV (RMSSD, SDNN), recovery, strain</td><td>HR + R-R</td><td><code>dailyMetric</code></td></tr>
 <tr><td>Sleep start/end, stages, efficiency, disturbances, sleep performance</td><td>Gravity + HR</td><td><code>sleepSession</code>, <code>dailyMetric</code>, <code>metricSeries</code></td></tr>
@@ -103,7 +103,7 @@
 <tr><td>Range</td><td>Accelerometer 1/4096 g per count, about ±8 g (worked out from the scale, not stated). Gyroscope ±2000 °/s.</td></tr>
 <tr><td>Can the 1 Hz gravity data work?</td><td>No. It only arrives on sync, 90 s to 15 min late.</td></tr>
 <tr><td>Built-in fall detection on the strap?</td><td>Not that anyone has found. The accelerometer-saturated event (42) might fire on a hard impact, but it's untested on 5.0 / MG.</td></tr>
-<tr><td>Catches</td><td>The phone must stay connected. NOOP only turns the stream on during a user-started capture session. The battery cost of streaming continuously is unknown.</td></tr>
+<tr><td>Catches</td><td>The phone must stay connected. Healer S.I. only turns the stream on during a user-started capture session. The battery cost of streaming continuously is unknown.</td></tr>
 <tr><td>Typical recipe to tune</td><td>Free fall (total acceleration below ~0.3 g for ~0.3 s), then impact (above ~2.5–3 g), then stillness for ~10 s. Confirm with live heart rate, then buzz and alert. Thresholds are common starting points and need tuning on real data.</td></tr>
 </table></div>
 
@@ -111,12 +111,12 @@
 <div class="wrap"><table>
 <tr><th>Question</th><th>Answer</th></tr>
 <tr><td>Chip</td><td>Texas Instruments DRV2625 haptic driver</td></tr>
-<tr><td>How to buzz</td><td>Command 19 (<code>0x13</code>) with a 12-byte body: <code>[01] [8 effect bytes] [loop control, 2 bytes] [repeat]</code>. NOOP sends <code>[01, 47, 152, 0, 0, 0, 0, 0, 0, 00 00, N−1]</code> for N pulses.</td></tr>
-<tr><td>Beat patterns</td><td>Yes. Up to 8 effects per command and a repeat of 0–7, so 1–8 pulses. Longer rhythms come from timed separate commands; NOOP's time-telling buzz does this (long = 2 pulses, short = 1).</td></tr>
-<tr><td>Strength</td><td>No confirmed control. Only effect IDs 47 and 152 have been tried; each effect byte can be up to 251. Unverified guess from the DRV2625 layout: each effect ID is a different stored waveform, so other IDs may feel stronger or softer, and bytes of 128 and up may be pauses of (value − 128) × 10 ms, which would make 152 a 240 ms gap. That needs testing on the strap. Alarms have a staged "crescendo" ramp flag that NOOP doesn't use.</td></tr>
+<tr><td>How to buzz</td><td>Command 19 (<code>0x13</code>) with a 12-byte body: <code>[01] [8 effect bytes] [loop control, 2 bytes] [repeat]</code>. Healer S.I. sends <code>[01, 47, 152, 0, 0, 0, 0, 0, 0, 00 00, N−1]</code> for N pulses.</td></tr>
+<tr><td>Beat patterns</td><td>Yes. Up to 8 effects per command and a repeat of 0–7, so 1–8 pulses. Longer rhythms come from timed separate commands; Healer S.I.'s time-telling buzz does this (long = 2 pulses, short = 1).</td></tr>
+<tr><td>Strength</td><td>No confirmed control. Only effect IDs 47 and 152 have been tried; each effect byte can be up to 251. Unverified guess from the DRV2625 layout: each effect ID is a different stored waveform, so other IDs may feel stronger or softer, and bytes of 128 and up may be pauses of (value − 128) × 10 ms, which would make 152 a 240 ms gap. That needs testing on the strap. Alarms have a staged "crescendo" ramp flag that Healer S.I. doesn't use.</td></tr>
 <tr><td>Delay</td><td>Double tap to buzz usually takes under 1 s, or 1–2.8 s when a history sync is already running.</td></tr>
-<tr><td>Stop</td><td>Command 122 <code>[01]</code> on 5.0 / MG. NOOP sends <code>[00]</code>, which does nothing on this strap.</td></tr>
-<tr><td>Known bug</td><td>NOOP's "Buzz strap" button also sends RUN_ALARM, which clears stored alarm slot 1, so it can delete a scheduled wake alarm.</td></tr>
+<tr><td>Stop</td><td>Command 122 <code>[01]</code> on 5.0 / MG. Healer S.I. sends <code>[00]</code>, which does nothing on this strap.</td></tr>
+<tr><td>Known bug</td><td>Healer S.I.'s "Buzz strap" button also sends RUN_ALARM, which clears stored alarm slot 1, so it can delete a scheduled wake alarm.</td></tr>
 </table></div>
 
 <h2>Device</h2>
@@ -143,7 +143,7 @@
 <tr><td>HRV (SDNN)</td><td><code>avgSdnn</code></td><td class="v">{float} ms</td><td></td></tr>
 <tr><td>Respiratory rate</td><td><code>respRateBpm</code></td><td class="v">{float} /min</td><td></td></tr>
 <tr><td>Skin temperature</td><td><code>skinTempC</code></td><td class="v">{float} °C</td><td></td></tr>
-<tr><td>Strain</td><td><code>strain</code></td><td class="v">{float}</td><td>NOOP's scale is 0–21, but we've seen values above 21, so check how it's calculated before using it</td></tr>
+<tr><td>Strain</td><td><code>strain</code></td><td class="v">{float}</td><td>Healer S.I.'s scale is 0–21, but we've seen values above 21, so check how it's calculated before using it</td></tr>
 <tr><td>Steps</td><td><code>steps</code></td><td class="v">{int}</td><td></td></tr>
 <tr><td>Active calories</td><td><code>activeKcalEst</code></td><td class="v">{float} kcal</td><td>Estimate</td></tr>
 <tr><td>Workouts</td><td><code>exerciseCount</code></td><td class="v">{int}</td><td></td></tr>

@@ -1,6 +1,6 @@
-# NOOP v5 — Haptic Biofeedback ("the strap that breathes you down")
+# Healer S.I. v5 — Haptic Biofeedback ("the strap that breathes you down")
 
-**Pillar:** Closed-loop haptic biofeedback. NOOP both *measures* the autonomic response (live
+**Pillar:** Closed-loop haptic biofeedback. Healer S.I. both *measures* the autonomic response (live
 beat-to-beat R-R → RMSSD / HF-RSA) and *acts on the body* through the strap's haptic motor — so it can
 pace, entrain, and nudge the nervous system, then show the user a **measured** outcome. No competitor
 ships this loop: their straps/rings either don't buzz, don't expose raw R-R locally, or don't compute
@@ -19,21 +19,21 @@ medical, diagnostic, or a treatment. See *Non-clinical / legal framing*.
 
 ---
 
-## Goal & differentiation (why only NOOP)
+## Goal & differentiation (why only Healer S.I.)
 
 WHOOP, Oura, Garmin, Apple Watch and Ultrahuman can *show* you HRV and *tell* you to breathe. None of
 them can do all four of the things this pillar needs at once:
 
-1. **Read raw beat-to-beat R-R locally, live.** NOOP already ingests R-R off the standard HR profile
+1. **Read raw beat-to-beat R-R locally, live.** Healer S.I. already ingests R-R off the standard HR profile
    (`0x2A37`) and the custom stream, and computes RMSSD on-device (`HRVAnalyzer`, `BreathingView`).
-2. **Drive the strap haptic motor.** NOOP has a hardware-confirmed buzz path
+2. **Drive the strap haptic motor.** Healer S.I. has a hardware-confirmed buzz path
    (`MaverickHaptics.notificationBuzz` → `send(.runHapticsPattern)` on Apple, `WhoopBleClient.buzz` on
    Android) and a proven *scheduled* multi-pulse engine (`HapticClock` / `buzzTimeNow`).
 3. **Close the loop on-device.** Measure → act → re-measure, all local, no cloud, no subscription.
 4. **Run screen-off, hands-free.** The cue is *felt* on the wrist, so the user can close their eyes /
    pocket the phone. The Mac/iOS keep-awake hook already exists (`ScreenIdle.keepAwake`).
 
-This pillar turns NOOP's existing **Breathe** screen (a fixed-pace HRV trainer with a post-session
+This pillar turns Healer S.I.'s existing **Breathe** screen (a fixed-pace HRV trainer with a post-session
 outcome) into a **closed-loop biofeedback instrument** in three layers:
 
 - **L1 — Personalised resonance breathing.** Find *this user's* resonance pace by sweeping 4.5–7 br/min

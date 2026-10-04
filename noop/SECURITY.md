@@ -2,7 +2,7 @@
 
 ## Scope
 
-NOOP is an offline-by-default, on-device app. It operates no servers, accounts,
+Healer S.I. is an offline-by-default, on-device app. It operates no servers, accounts,
 cloud sync, or telemetry, so the usual hosted-service attack surface does not apply.
 What remains is local or explicitly user-configured:
 
@@ -24,7 +24,7 @@ otherwise breaks the offline-by-default or one-way-export guarantees the app mak
 
 ## Reporting a vulnerability
 
-NOOP is maintained anonymously and has no security contact email. **Report
+Healer S.I. is maintained anonymously and has no security contact email. **Report
 security issues through GitHub's Private Vulnerability Reporting** — Security →
 Report a vulnerability. That keeps proof-of-concept details out of public view
 until a fix ships, and needs no email address on either side.
@@ -50,7 +50,7 @@ the next release.
 
 ## Supported versions
 
-Only the latest release receives fixes. NOOP ships from source; if you build your
+Only the latest release receives fixes. Healer S.I. ships from source; if you build your
 own copy, rebuild from the latest tag to pick up security fixes.
 
 ## Out of scope
@@ -58,6 +58,6 @@ own copy, rebuild from the latest tag to pick up security fixes.
 - Vulnerabilities that require physical access to an already-unlocked device
 - Issues in third-party dependencies — please report those upstream (see
   [`NOTICE`](NOTICE) for the bundled libraries and their licences)
-- The WHOOP strap firmware itself, which NOOP does not ship or modify
+- The WHOOP strap firmware itself, which Healer S.I. does not ship or modify
 - The user's own API key being misused after they have entered it (the key is
   stored in the platform keystore; protecting the device account is the user's job)

@@ -60,7 +60,7 @@ private val CAPABILITIES: List<CapabilityRow> = listOf(
     CapabilityRow(
         "Live heart rate",
         Support.YES, Support.YES,
-        "Both stream live HR to NOOP over Bluetooth.",
+        "Both stream live HR to Healer S.I. over Bluetooth.",
     ),
     CapabilityRow(
         "Sleep, recovery & strain history",
@@ -69,10 +69,10 @@ private val CAPABILITIES: List<CapabilityRow> = listOf(
             "deeper history is still being mapped.",
     ),
     CapabilityRow(
-        "NOOP re-broadcasts your HR (gym / Zwift / Garmin)",
+        "Healer S.I. re-broadcasts your HR (gym / Zwift / Garmin)",
         Support.YES, Support.YES,
         "Data Sources → \"Broadcast heart rate\" turns your PHONE into a standard BLE HR sensor using " +
-            "whatever HR NOOP is reading, so this works on a 4.0 too. It's local Bluetooth; nothing leaves " +
+            "whatever HR Healer S.I. is reading, so this works on a 4.0 too. It's local Bluetooth; nothing leaves " +
             "your phone.",
     ),
     CapabilityRow(
@@ -86,13 +86,13 @@ private val CAPABILITIES: List<CapabilityRow> = listOf(
         // device-config write is read back on opcode 121.
         "A 4.0 is asked over its own broadcast command and answers, but nothing can read back whether " +
             "it really advertises, and it has been confirmed on one strap on one firmware. A 5/MG uses " +
-            "the whoop_live_hr_in_adv_ind_pkt firmware setting, which NOOP reads back.",
+            "the whoop_live_hr_in_adv_ind_pkt firmware setting, which Healer S.I. reads back.",
     ),
     CapabilityRow(
         "Steps",
         Support.PARTIAL, Support.YES,
-        "A 4.0 sends no step count, so NOOP ESTIMATES steps from motion, calibrated to your phone " +
-            "(Settings → Profile → Steps estimate). A 5/MG reports a motion counter NOOP reads directly.",
+        "A 4.0 sends no step count, so Healer S.I. ESTIMATES steps from motion, calibrated to your phone " +
+            "(Settings → Profile → Steps estimate). A 5/MG reports a motion counter Healer S.I. reads directly.",
     ),
     CapabilityRow(
         "Rename the strap's Bluetooth name",

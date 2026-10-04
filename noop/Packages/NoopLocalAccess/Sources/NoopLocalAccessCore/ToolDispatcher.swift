@@ -68,7 +68,7 @@ public final class NoopToolDispatcher {
         } catch let error as LocalAccessError {
             throw error
         } catch {
-            throw LocalAccessError.databaseUnavailable("NOOP database is not available: \(error)")
+            throw LocalAccessError.databaseUnavailable("Healer S.I. database is not available: \(error)")
         }
     }
 }

@@ -1,4 +1,4 @@
-# NOOP v5 — Insights & Correlation Engine design
+# Healer S.I. v5 — Insights & Correlation Engine design
 
 **Pillar:** A personal **n-of-1 correlation / effect engine** — "what actually moves *your* recovery" —
 plus the headline sub-feature: a personalised **alcohol / caffeine dose-response** model and an evening
@@ -7,7 +7,7 @@ plus the headline sub-feature: a personalised **alcohol / caffeine dose-response
 **Status:** Design only. Not approved. 2026-06-19.
 
 **One-line framing:** Competitors (WHOOP Journal / Behaviors, Oura Tags) show **population** averages —
-"alcohol typically lowers recovery." NOOP computes the effect **on your own data, on-device**, ranks the
+"alcohol typically lowers recovery." Healer S.I. computes the effect **on your own data, on-device**, ranks the
 behaviours *you* log by their real lag-aware effect on next-day Charge / HRV / Rest, gives each one an
 effect size + confidence + lead/lag, fits a personal dose curve that shrinks toward a population prior
 until you have enough days, and — at night, when it can still change the outcome — tells you what *one
@@ -16,9 +16,9 @@ or a causal/diagnostic claim.
 
 ---
 
-## Goal & differentiation (why only NOOP)
+## Goal & differentiation (why only Healer S.I.)
 
-| Capability | WHOOP | Oura | Garmin / Apple | **NOOP v5** |
+| Capability | WHOOP | Oura | Garmin / Apple | **Healer S.I. v5** |
 |---|---|---|---|---|
 | Behaviour → recovery effect | Population averages ("Behaviors") | Population tag insights | None / generic | **Per-user effect size, ranked, on-device** |
 | Lead/lag awareness (today's drink → *tomorrow's* recovery) | Implicit, fixed | No | No | **Explicit D+1/D+2 lag search per behaviour** |
@@ -27,17 +27,17 @@ or a causal/diagnostic claim.
 | Honest subjective-vs-biometric disconnect | No | "readiness" only | No | **Flags when your mood/readiness diverges from your body** |
 | Runs with no account / no cloud / no subscription | No | No | No | **Yes — fully local** |
 
-The differentiation is **not** a new statistic. It is that NOOP already *owns the raw daily series on-device*
+The differentiation is **not** a new statistic. It is that Healer S.I. already *owns the raw daily series on-device*
 (Charge / HRV / Rest / RHR from `IntelligenceEngine`, the journal yes/no tags, the mood check-ins, the
 workout tags) and already ships a tested correlation/effect substrate (`BehaviorInsights`,
 `ActivityCostEngine`, `CorrelationEngine`, `ComparisonEngine`). v5's job is to **unify those into one
 ranked "what moves you" engine**, add the **lag search** and the **dose-response curve + evening forecast**,
 and present it honestly. No competitor can match the evening forecast without (a) on-device per-user data
-and (b) an on-device recovery model — NOOP has both.
+and (b) an on-device recovery model — Healer S.I. has both.
 
 **Honesty is the product.** Where the population says "drinking is bad" but *your* eight logged drink-nights
-show no Charge dip, NOOP says so ("we can't see an effect in your data yet"). Where your subjective readiness
-or mood says "great" but HRV/RHR say otherwise, NOOP surfaces the **disconnect** rather than picking a side.
+show no Charge dip, Healer S.I. says so ("we can't see an effect in your data yet"). Where your subjective readiness
+or mood says "great" but HRV/RHR say otherwise, Healer S.I. surfaces the **disconnect** rather than picking a side.
 
 ---
 
@@ -74,7 +74,7 @@ or mood says "great" but HRV/RHR say otherwise, NOOP surfaces the **disconnect**
 5. **A subjective-vs-objective disconnect read** (`DisconnectDetector`) — when the user's mood/readiness
    percentile diverges from their HRV/RHR percentile beyond a threshold over a window, flag it honestly.
 
-No new raw sensor work — this pillar is pure derived analytics over series NOOP already computes.
+No new raw sensor work — this pillar is pure derived analytics over series Healer S.I. already computes.
 
 ---
 
@@ -135,14 +135,14 @@ For a dosed behaviour (alcohol drinks; caffeine = a "late-caffeine intensity" pr
 - Below the gate (`n_user < minDoseDays`, ≈ 5) the card says **"based mostly on typical patterns, not yet
   yours"** and shows the prior explicitly.
 - When the **personal** slope contradicts the prior with enough data (e.g. your drink-nights show *no* dip),
-  NOOP says **"in your data so far, this doesn't move your Charge"** — population is not allowed to override
+  Healer S.I. says **"in your data so far, this doesn't move your Charge"** — population is not allowed to override
   the person once the person has spoken.
 - Caffeine "dose" is a **timing** proxy (later = stronger), not mg; copy is explicit about that.
 
 ### 3. Evening Damage Forecast (`DamageForecast`)
 
 **Approach:** compose the existing `RecoveryForecaster` (tonight's Charge point + band from baseline mean/SD
-/ slope + strain debt + planned sleep) with the dose-response Δs. This is a *what-if on a number NOOP already
+/ slope + strain debt + planned sleep) with the dose-response Δs. This is a *what-if on a number Healer S.I. already
 forecasts*, not a new model.
 
 `forecast(base: RecoveryForecast, pending: [(behaviour, fromDose, toDose)]) -> DamageForecast`:

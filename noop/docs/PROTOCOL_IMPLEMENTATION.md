@@ -1,4 +1,4 @@
-# NOOP implementation and historical observations
+# Healer S.I. implementation and historical observations
 
 This page records client behavior and earlier observations; it does not override the topic references. Read the [scope and compatibility](PROTOCOL.md#scope-and-compatibility) before applying this page.
 
@@ -17,7 +17,7 @@ must not override it.
 
 ## Protocol contract to implementation map
 
-The protocol pages define the wire contracts; the tables below show where NOOP
+The protocol pages define the wire contracts; the tables below show where Healer S.I.
 implements each one. Every code reference names both a file and a symbol, and CI
 checks that both continue to exist.
 
@@ -80,7 +80,7 @@ checks that both continue to exist.
 | [R18](PROTOCOL_SENSORS.md#r18-biometric-summary) | [decodeWhoop5Historical(_:fb:payloadEnd:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift) | [decodeWhoop5Historical](../android/app/src/main/java/com/noop/protocol/HistoricalStreams.kt) | Biometric summary uses the versioned record decoder |
 | [R20](PROTOCOL_SENSORS.md#r20-optical-blocks) | [decodeWhoop5Historical(_:fb:payloadEnd:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift) | [decodeWhoop5Historical](../android/app/src/main/java/com/noop/protocol/HistoricalStreams.kt) | Optical blocks are decoded by record version |
 | [R21](PROTOCOL_SENSORS.md#r21-six-axis-imu) | [decodeWhoop5HistoricalV2021(_:fb:version:payloadEnd:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift) | [decodeWhoop5HistoricalV2021](../android/app/src/main/java/com/noop/protocol/HistoricalStreams.kt) | Six inertial channels use explicit offsets |
-| [R22 versions](PROTOCOL_SENSORS.md#r22-inner-version) | — | — | No NOOP R22 record decoder is implemented |
+| [R22 versions](PROTOCOL_SENSORS.md#r22-inner-version) | — | — | No Healer S.I. R22 record decoder is implemented |
 | [R26](PROTOCOL_SENSORS.md#r26-compact-optical-window) | [decodeWhoop5HistoricalV26(_:fb:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift) | [decodeWhoop5HistoricalV26](../android/app/src/main/java/com/noop/protocol/HistoricalStreams.kt) | Compact optical window has a dedicated layout |
 | [ECG R16/R17](PROTOCOL_ECG.md#routing-and-shared-header) | [Whoop5Ecg](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift) | [Whoop5Ecg](../android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt) | Raw and filtered routes share the status header |
 | [IMU streams 51/52](PROTOCOL_SENSORS.md#dedicated-imu-stream-types-51-and-52) | [Whoop5RawImu.decode(_:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawImu.swift) | [Whoop5RawImu.decode](../android/app/src/main/java/com/noop/protocol/Whoop5RawImu.kt) | Dedicated buffers decode to six-axis samples |
@@ -96,7 +96,7 @@ checks that both continue to exist.
 | [Feature-flag enumeration 117/118](PROTOCOL_CONFIGURATION.md#feature-flag-inventory) | [FeatureFlagProbe.parseStart(frame:family:namespace:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift), [FeatureFlagProbe.parseNext(frame:family:namespace:)](../Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift) | [FeatureFlagProbe.parseStart](../android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt), [FeatureFlagProbe.parseNext](../android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt) | Cursor walk is bounded |
 | [R22 disable sequence](PROTOCOL_CONFIGURATION.md#r22-version-preferences) | [R22DisableReport](../Packages/WhoopProtocol/Sources/WhoopProtocol/R22Disable.swift), [FeatureFlagWriteGate](../Packages/WhoopProtocol/Sources/WhoopProtocol/R22Disable.swift) | [R22DisableReport](../android/app/src/main/java/com/noop/protocol/R22Disable.kt), [FeatureFlagWriteGate](../android/app/src/main/java/com/noop/protocol/R22Disable.kt) | Clear writes are followed by per-key verification |
 | [AFE 61/62](PROTOCOL_CONFIGURATION.md#afe-parameters-6162) | [CommandNumber](../Packages/WhoopProtocol/Sources/WhoopProtocol/Resources/whoop_protocol.json) | [CommandNames](../android/app/src/main/java/com/noop/protocol/Enums.kt) | Decode catalogue only; no sender builder |
-| [Gyro 150/152](PROTOCOL_CONFIGURATION.md#gyro-mode-150152) | — | — | No NOOP sender or decoder is implemented |
+| [Gyro 150/152](PROTOCOL_CONFIGURATION.md#gyro-mode-150152) | — | — | No Healer S.I. sender or decoder is implemented |
 | [Collection policies 153/154](PROTOCOL_CONFIGURATION.md#collection-settings-and-overlapping-controls) | [CommandNumber](../Packages/WhoopProtocol/Sources/WhoopProtocol/Resources/whoop_protocol.json) | [CommandNames](../android/app/src/main/java/com/noop/protocol/Enums.kt) | Named in the decode catalogue; no sender builder |
 
 ### Alarms and haptics
@@ -111,7 +111,7 @@ checks that both continue to exist.
 
 | Contract | Swift | Android | Note |
 |---|---|---|---|
-| [Update and authorization boundaries](PROTOCOL_UPDATES.md) | — | — | NOOP has no installation path on either platform |
+| [Update and authorization boundaries](PROTOCOL_UPDATES.md) | — | — | Healer S.I. has no installation path on either platform |
 
 ### Diagnostic probes
 
@@ -127,7 +127,7 @@ checks that both continue to exist.
 
 ## WHOOP 4
 
-WHOOP 4 behavior is version-scoped. NOOP implementation, observed wire bytes,
+WHOOP 4 behavior is version-scoped. Healer S.I. implementation, observed wire bytes,
 command acknowledgement, persisted state and physical device effects are separate
 facts. For example, the seven-byte semantic alarm body is implemented with two
 additional unevaluated zero bytes observed in working requests, while acknowledgement
@@ -145,8 +145,8 @@ alone still does not prove a scheduled physical buzz.
 | History | Commit rows, rejected layouts and cursor before acknowledging the exact eight-byte END block |
 | Battery | Prefer proprietary command/event observations over the standard Battery Service stub |
 | Configuration | Keep request acceptance, readback, producer activity and persistence as separate facts |
-| Alarms | Use the seven-byte revision-1 SET body; NOOP appends the two unevaluated zero bytes observed in working requests. Readback is diagnostic and recurrence remains application-owned |
-| Updates | NOOP has no documented or authorized installation/flash path |
+| Alarms | Use the seven-byte revision-1 SET body; Healer S.I. appends the two unevaluated zero bytes observed in working requests. Readback is diagnostic and recurrence remains application-owned |
+| Updates | Healer S.I. has no documented or authorized installation/flash path |
 
 ### Fail-closed and preserve-raw behavior
 
@@ -167,15 +167,15 @@ not relabelled as a proven version map.
 
 Incomplete areas include request/response bodies for many supported commands,
 record layouts for several revisions, the complete Nordic BLE/SPI contract,
-configuration storage, alarm lifecycle and update authorization/recovery. NOOP
+configuration storage, alarm lifecycle and update authorization/recovery. Healer S.I.
 does not provide or authorize firmware installation.
 
-### NOOP connection policy
+### Healer S.I. connection policy
 
-These are NOOP client choices around the [WHOOP 4 connect sequence](PROTOCOL_WHOOP4.md#bond-handshake--connect-lifecycle-whoop-40),
+These are Healer S.I. client choices around the [WHOOP 4 connect sequence](PROTOCOL_WHOOP4.md#bond-handshake--connect-lifecycle-whoop-40),
 not protocol requirements.
 
-- NOOP marks the connection bonded once the confirmed `GET_BATTERY_LEVEL` write is
+- Healer S.I. marks the connection bonded once the confirmed `GET_BATTERY_LEVEL` write is
   acknowledged, then runs the connect handshake.
 - The handshake runs exactly once per connection. Its one-shot guard
   (`connectHandshakeDone`) is load-bearing: the write-acknowledgement callback that
@@ -199,11 +199,11 @@ not protocol requirements.
 ## Diagnostic-only WHOOP service families
 
 Additional WHOOP service families use the same `0001` service plus
-`0002`/`0003`/`0004`/`0005`/`0007` characteristic pattern. NOOP lists these as protocol metadata and
+`0002`/`0003`/`0004`/`0005`/`0007` characteristic pattern. Healer S.I. lists these as protocol metadata and
 logs them when advertised, but does not connect, discover characteristics, or send commands for them
 until the correct framing is mapped and hardware-tested.
 
-| Family label in NOOP | Service UUID | Current status |
+| Family label in Healer S.I. | Service UUID | Current status |
 |----------------------|--------------|----------------|
 | `puffin1150` | `11500001-6215-11ee-8c99-0242ac120002` | detected but unsupported |
 | `monument` | `8a580001-2fe8-4796-9267-b87a2b0c8234` | detected but unsupported; likely Castle/Rev2 framing |
@@ -292,7 +292,7 @@ a placeholder header makes every rebuilt frame fail, so the rebuild now round-tr
 
 ## PacketType (offset `[4]`, or `[8]` on WHOOP 5/MG)
 
-This is NOOP’s schema vocabulary, not a guarantee that every named packet is produced by either generation. Current WHOOP 5/MG layouts are in [sensor records](PROTOCOL_SENSORS.md).
+This is Healer S.I.’s schema vocabulary, not a guarantee that every named packet is produced by either generation. Current WHOOP 5/MG layouts are in [sensor records](PROTOCOL_SENSORS.md).
 
 Source: `enums.PacketType` in `whoop_protocol.json`; resolved by `Schema.typeName(_:)`.
 
@@ -337,7 +337,7 @@ identify every live sensor or ECG packet. See [sensor records](PROTOCOL_SENSORS.
 WHOOP 4 `EVENT` frames carry an `EventNumber` at `[6]` and a `u32` `event_timestamp` at `[8]`.
 For WHOOP 5/MG format 1 the corresponding offsets are `[10]` and `[12]`; other event
 types need their own layouts. See [sensor/event records](PROTOCOL_SENSORS.md). A
-strap-pushed event is WHOOP's "strap-as-clock" signal: NOOP treats any event as "I may have new
+strap-pushed event is WHOOP's "strap-as-clock" signal: Healer S.I. treats any event as "I may have new
 data" and kicks a rate-limited sync (`FrameRouter.onSyncTrigger` → `requestSync(.strap)`).
 Selected, frequently-used values (full table in `whoop_protocol.json`):
 
@@ -369,13 +369,13 @@ The legacy WHOOP 4 `BATTERY_LEVEL` event decoder uses this layout (see the `even
 
 ## CommandNumber (sending) — client subset
 
-**Non-exhaustive historical NOOP sender selection.** The table below records client
+**Non-exhaustive historical Healer S.I. sender selection.** The table below records client
 payload conventions, primarily WHOOP 4. It is not a complete inventory, the WHOOP
 5/MG command contract or a recommendation to send every listed operation. Use the
 [command reference](PROTOCOL_COMMANDS.md) for current meanings and the [alarm reference](PROTOCOL_ALARMS.md)
 for revisioned alarms.
 
-NOOP exposes a curated, **safe** command set in `WhoopCommand` (`../Strand/BLE/Commands.swift`).
+Healer S.I. exposes a curated, **safe** command set in `WhoopCommand` (`../Strand/BLE/Commands.swift`).
 The raw value is the on-wire command byte at `[6]` (inside a type-35 `COMMAND` frame). Commands
 are built by `WhoopCommand.frame(seq:payload:)` and written to `…0002`.
 
@@ -390,7 +390,7 @@ public func frame(seq: UInt8, payload: [UInt8] = [0x00]) -> [UInt8] {
 
 | Code | Command | Typical payload | Purpose |
 |-----:|---------|-----------------|---------|
-| 3 | `TOGGLE_REALTIME_HR` | `[0x01]`/`[0x00]` | sent by NOOP outside the documented 41.17.6.0 command set; standard BLE HR remains separate |
+| 3 | `TOGGLE_REALTIME_HR` | `[0x01]`/`[0x00]` | sent by Healer S.I. outside the documented 41.17.6.0 command set; standard BLE HR remains separate |
 | 7 | `REPORT_VERSION_INFO` | `[0x00]` | firmware versions (decoded by `command_response` hook) |
 | 10 | `SET_CLOCK` | `[secs u32 LE][subsecs u32 LE]` | request form observed in use outside the documented 41.17.6.0 command set; one of two forms can latch on some devices |
 | 11 | `GET_CLOCK` | *empty* or `[0x00]` | request forms observed in use outside the documented 41.17.6.0 command set; readback selects the effective form |
@@ -400,18 +400,18 @@ public func frame(seq: UInt8, payload: [UInt8] = [0x00]) -> [UInt8] {
 | 34 | `GET_DATA_RANGE` | `[0x00]` | strap's stored oldest/newest record range; #689 also logs a [diagnostic ring-buffer page backlog](#get_data_range-ring-backlog-689-diagnostic-only) |
 | 35 | `GET_HELLO_HARVARD` | `[0x00]` | identity/version hello; the response carries the [WHOOP 4 serial](PROTOCOL_WHOOP4.md#get_hello_harvard-35-response--the-whoop-40-serial) |
 | 63 | `SEND_R10_R11_REALTIME` | `[0x00]` off / `[0x01]` on | the **real** type-43 raw-stream switch |
-| 66 | `SET_ALARM_TIME` | `[0x01]+epoch u32 LE+subseconds u16 LE+[0,0]` (9-byte NOOP request) | seven semantic bytes; final two zero bytes are not evaluated |
+| 66 | `SET_ALARM_TIME` | `[0x01]+epoch u32 LE+subseconds u16 LE+[0,0]` (9-byte Healer S.I. request) | seven semantic bytes; final two zero bytes are not evaluated |
 | 67 | `GET_ALARM_TIME` | `[0x01]` | read armed alarm |
 | 68 | `RUN_ALARM` | `[0x01]` | app-driven alarm now |
 | 69 | `DISABLE_ALARM` | `[0x01]` | disarm firmware alarm |
 | 76 | `GET_ADVERTISING_NAME_HARVARD` | `[0x00]` | advertised name |
-| 77 | `SET_ADVERTISING_NAME_HARVARD` | two reserved bytes + client name + NUL | NOOP allows up to 24 client bytes; the documented device field retains at most 15 and forces its last byte to NUL |
+| 77 | `SET_ADVERTISING_NAME_HARVARD` | two reserved bytes + client name + NUL | Healer S.I. allows up to 24 client bytes; the documented device field retains at most 15 and forces its last byte to NUL |
 | 79 | `RUN_HAPTICS_PATTERN` | `[patternId, loops, 0,0,0]` | buzz a preset haptic pattern |
 | 81 / 82 | `START_RAW_DATA` / `STOP_RAW_DATA` | `[0x01]` | raw-data collection toggle |
 | 84 | `GET_BODY_LOCATION_AND_STATUS` | `[0x00]` | wrist/body-location status (read-only diagnostic probe, #690 — below) |
-| 96 / 97 | `ENTER_HIGH_FREQ_SYNC` / `EXIT_HIGH_FREQ_SYNC` | retained client `[0x00]` forms | NOOP uses 97 during watchdog recovery; these client forms do not replace the documented WHOOP 4 contracts |
+| 96 / 97 | `ENTER_HIGH_FREQ_SYNC` / `EXIT_HIGH_FREQ_SYNC` | retained client `[0x00]` forms | Healer S.I. uses 97 during watchdog recovery; these client forms do not replace the documented WHOOP 4 contracts |
 | 98 | `GET_EXTENDED_BATTERY_INFO` | `[0x00]` | extended battery (mV etc.) |
-| 106 | `TOGGLE_IMU_MODE` | `[0x01]` | older one-byte NOOP form; the 41.17.6.0 SET contract is `[01, state]` |
+| 106 | `TOGGLE_IMU_MODE` | `[0x01]` | older one-byte Healer S.I. form; the 41.17.6.0 SET contract is `[01, state]` |
 | 107 | `GET_IMU_DATA_STREAM` | `[0x01]` | reads stored IMU stream state on 41.17.6.0; the WHOOP 5/MG identifier `ENABLE_OPTICAL_DATA` does not describe this WHOOP 4 operation |
 | 117 | `START_FF_KEY_EXCHANGE` | `[0x01]` | the enumerated feature-name count (read-only enumeration probe, #761 — below) |
 | 118 | `SEND_NEXT_FF` | `[0x01]` | next feature-flag NAME (cursor, not index; read-only, #761 — below) |
@@ -435,7 +435,7 @@ sent to WHOOP 4.
 **WHOOP 5/MG raw-IMU sequence (hardware-verified):** command 106 accepting a write does not mean that the
 producer started. A bounded capture first sends `START_RAW_DATA` (81) `[0x01]`, then command 106 with
 the two-byte selector `[0x01, 0x01]`. Stop uses `STOP_RAW_DATA` (82) `[0x01]`, then command 106
-`[0x01, 0x00]`. The one-byte payload in the table is older NOOP behavior, not the
+`[0x01, 0x00]`. The one-byte payload in the table is older Healer S.I. behavior, not the
 WHOOP 4 41.17.6.0 request contract. See
 [WHOOP 5/MG raw data capture](RAW_DATA_CAPTURE.md) for storage, history repair, and export semantics.
 
@@ -452,18 +452,18 @@ WHOOP 4 41.17.6.0 request contract. See
   forms was observed to latch; read back to confirm.
 
 **WHOOP 5/MG battery decoder boundaries:** command 26 returns a four-byte `u32le`
-whole-percent value, including four zero bytes on the documented error path. NOOP
-currently reads only the lowest byte. For command 151, NOOP divides the raw `u16le`
+whole-percent value, including four zero bytes on the documented error path. Healer S.I.
+currently reads only the lowest byte. For command 151, Healer S.I. divides the raw `u16le`
 charge field by 10 for display; that scale is a client convention, not a confirmed
 property of the wire value.
 
-> **Note on `ENTER_HIGH_FREQ_SYNC` (96):** current builds do **not** enter high-freq sync. NOOP
+> **Note on `ENTER_HIGH_FREQ_SYNC` (96):** current builds do **not** enter high-freq sync. Healer S.I.
 > sends `EXIT_HIGH_FREQ_SYNC` (97) during watchdog recovery. Plain `SEND_HISTORICAL_DATA`
 > returns the type-47 store without it.
 
 ## Additional 5-class command numbers
 
-Command bytes present on a 5-class (MAVERICK) strap beyond the safe subset above. NOOP does not
+Command bytes present on a 5-class (MAVERICK) strap beyond the safe subset above. Healer S.I. does not
 send these; they are recorded for completeness.
 
 | Code | Command | Purpose |
@@ -498,7 +498,7 @@ establish a feature gate or contradict the later version-bound mapping. See
 #891. The three reply frames are pinned as decode fixtures in `Whoop5CommandResponseTests` /
 `CommandCatalogueTest`.
 
-NOOP sends these only from the gated, hand-run MG ECG probe described in
+Healer S.I. sends these only from the gated, hand-run MG ECG probe described in
 [ECG controls](PROTOCOL_ECG.md#commands-and-independent-output-gates) — never automatically, never on a plain WHOOP 5 or WHOOP 4, and only
 behind the Experimental opt-in plus a positively-identified MG. Existing probe implementation and
 older observations must be distinguished from the expanded contract.
@@ -515,7 +515,7 @@ current absence-of-support claims.
 ## Destructive commands — *do not send*
 
 These exist on the wire but are **deliberately excluded** from ordinary
-`WhoopCommand` use. They can wipe data, brick, or power-cycle the strap. NOOP must
+`WhoopCommand` use. They can wipe data, brick, or power-cycle the strap. Healer S.I. must
 never send them, except command 32 through the narrowly scoped, user-confirmed
 WHOOP 4 probe described below.
 
@@ -537,9 +537,9 @@ family answering at 145–147 on MAVERICK. It is named by the schema and absent 
 both platforms; it was missing from this table, so nothing recorded that it must stay that way. (83
 `VERIFY_FIRMWARE_IMAGE` is part of the same flow but is not itself a write, and is likewise unsent.)
 
-**Two guarded restart paths in NOOP.** These client paths are not proof of retained state or completed restart for every device. Neither is ever sent automatically or on any connect/offload path.
+**Two guarded restart paths in Healer S.I.** These client paths are not proof of retained state or completed restart for every device. Neither is ever sent automatically or on any connect/offload path.
 
-- **`REBOOT_STRAP` (29)** — the normal Restart. NOOP already triggers a reboot today via
+- **`REBOOT_STRAP` (29)** — the normal Restart. Healer S.I. already triggers a reboot today via
   `SET_ADVERTISING_NAME_HARVARD` (rename applies on reboot). In `WhoopCommand` as `rebootStrap`, sent only
   from the user-initiated, confirmation-gated "Restart strap" action (`BLEManager.rebootStrap()` /
   `WhoopBleClient.rebootStrap()`) (#166).
@@ -555,7 +555,7 @@ Everything else in this table stays out of the enum entirely.
 
 The documented 41.17.6.0 contract does not evaluate the body for either restart
 command: empty, `00` and `01` are equivalent, and an accepted request returns result 1.
-The NOOP probe (Test Centre → Connection, WHOOP 4 only) sends one candidate at a time:
+The Healer S.I. probe (Test Centre → Connection, WHOOP 4 only) sends one candidate at a time:
 `REBOOT_STRAP(29)` empty, `POWER_CYCLE_STRAP(32)` empty,
 `REBOOT_STRAP(29)` with `[0x01]`, `POWER_CYCLE_STRAP(32)` with `[0x01]`, or
 `REBOOT_STRAP(29)` with `[0x00]`. It reuses the reboot watchdog so the strap log shows
@@ -579,13 +579,13 @@ after command, origin sequence and result; the raw grid is shown and the record 
 until a real 5/MG capture maps the offset. **Never** feeds wear detection, sleep gating, or scoring.
 Driven by `BLEManager.probeBodyLocationAndStatus()` / `WhoopBleClient.probeBodyLocationAndStatus()`;
 formatted by the pure `BodyLocationProbe` twin (Swift↔Kotlin byte-parity locked by a golden test).
-The layout is implemented independently in NOOP; unknown enum values remain raw.
+The layout is implemented independently in Healer S.I.; unknown enum values remain raw.
 
 ## Feature-flag enumeration probe (#761, read-only)
 
 The probe’s older count model differs from the current u8 field; use the [named configuration interface](PROTOCOL_CONFIGURATION.md#named-configuration-interface).
 
-NOOP has always been able to WRITE a feature flag
+Healer S.I. has always been able to WRITE a feature flag
 (`SET_FF_VALUE` / 120, the R22 unlock in `Whoop5Config`). The feature-name walk uses
 117 `START_FF_KEY_EXCHANGE` followed by repeated 118 `SEND_NEXT_FF`: **names, no
 values, nothing written.** `GET_FF_VALUE` (128) is
@@ -621,7 +621,7 @@ reply are logged beside the fields decoded from them. Driven by `BLEManager.prob
 allowlisted for 5/MG framing **only while a probe is in flight**; parsed + rendered by the pure
 `FeatureFlagProbe` / `FeatureFlagProbeReport` twins (Swift↔Kotlin byte-parity, unit-tested on synthetic
 frames). Result goes to a copyable dialog + the strap log; no storage. The field
-order and opcode numbers are implemented in NOOP and agree with that WHOOP 4
+order and opcode numbers are implemented in Healer S.I. and agree with that WHOOP 4
 observation; unknown fields remain raw.
 **Historical probe scope:** the published comparison dump is a WHOOP 4 R19-era list.
 The reference-baseline enumeration commands and eligible-key inventory are now described in
@@ -629,7 +629,7 @@ The reference-baseline enumeration commands and eligible-key inventory are now d
 
 ## Device-config read probe (#103, read-only)
 
-The NOOP probe queries named values using commands 121 and 128, with a 64-round-trip
+The Healer S.I. probe queries named values using commands 121 and 128, with a 64-round-trip
 client cap. It is user-triggered and reports to a dialog and strap log without
 persisting values. The allowlist restricts this path to reads; it does not send
 119 or 120. Swift/Kotlin implementations have constructed-frame checks.
@@ -641,7 +641,7 @@ measurement establish an entitlement or subscription gate.
 
 ## GET_DATA_RANGE ring backlog (#689, diagnostic only)
 
- Beyond the oldest/newest timestamps NOOP already
+ Beyond the oldest/newest timestamps Healer S.I. already
 scans from a `GET_DATA_RANGE` reply, the app computes a ring-buffer page backlog from three u32s in the
 65-byte body (`01` followed by 16 `u32le` values): write page `W = V(2)`, acknowledged/trim boundary `D = V(3)`,
 ring capacity `T = V(5)`, where `V(i)` is the u32 at inner offset `i·4 + 3` (frame offsets `cmdOff + 12/16/24`
@@ -708,7 +708,7 @@ following records form the next chunk. An `END` with no accumulated records is *
 
 ## Safe-trim invariant
 
-NOOP sends the normal chunk acknowledgement only after local durability. This is a client persistence invariant; it does not prove all device read/erase behavior or exactly-once delivery. The Swift path in
+Healer S.I. sends the normal chunk acknowledgement only after local durability. This is a client persistence invariant; it does not prove all device read/erase behavior or exactly-once delivery. The Swift path in
 `Backfiller.finishChunk(...)` is:
 
 ```
@@ -733,7 +733,7 @@ written `.withResponse`. A BLE write confirmation is not itself proof of physica
   52. Both exclude the live type-43 flood. If the strap goes silent, the session
   exits and resumes next time via the durable cursor.
 - **Swift-specific stuck detector** (`StuckStrapDetector`): after an offload, if the strap reports records newer
-  than NOOP's frontier (from `GET_DATA_RANGE`, parsed by `dataRangeNewestUnix(from:)`) **and**
+  than Healer S.I.'s frontier (from `GET_DATA_RANGE`, parsed by `dataRangeNewestUnix(from:)`) **and**
   that frontier has been frozen for the detector window, it flags `strapNeedsReboot` and attempts
   a defensive recovery (`EXIT_HIGH_FREQ_SYNC` + `SET_CLOCK`). Off-wrist / caught-up (strap not
   ahead) is **not** treated as stuck.
@@ -814,7 +814,7 @@ inherit a base layout and override only what changed. The streamed decode that f
 ## SpO₂ on WHOOP 5/MG — what the wire does and does not carry
 
 No dedicated SpO₂ read operation is identified in the current command reference.
-R18 byte 82 has no established physiological meaning. NOOP imports
+R18 byte 82 has no established physiological meaning. Healer S.I. imports
 `blood_oxygen_pct` as a per-cycle value; that importer does not establish the
 vendor's aggregation or calibration algorithm. See the
 [raw-record interpretation limits](PROTOCOL_SENSORS.md).

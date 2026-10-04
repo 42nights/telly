@@ -34,14 +34,14 @@ A 3D home map is not required.
 | Vision | Gemini | Object detection for medicine boxes |
 | Messaging | Grokbot | Carries family messages (Muse is not used) |
 | Reports | Finchnode | Hospital report handoff |
-| WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
+| WHOOP data | Healer S.I. (friend-owned) | Only the Healer S.I.-to-server connection is stubbed |
 
-### NOOP boundary
+### Healer S.I. boundary
 
-NOOP is the existing WHOOP app. Its source and documentation are in [`noop/`](../noop), separate from the new application. A teammate owns its integration.
-The new server stubs only the NOOP-to-server connection. It returns `{"status":"not_connected","source":"noop"}`.
+Healer S.I. is the existing WHOOP app. Its source and documentation are in [`noop/`](../noop), separate from the new application. A teammate owns its integration.
+The new server stubs only the Healer S.I.-to-server connection. It returns `{"status":"not_connected","source":"noop"}`.
 The stub does no transport, ingestion, or database write. It supplies no readings and no WHOOP-derived nudges.
-Clients show "NOOP not connected". Other data sources stay available with their own provenance.
+Clients show "Healer S.I. not connected". Other data sources stay available with their own provenance.
 
 ### Rules that apply to every change
 
@@ -55,7 +55,7 @@ Clients show "NOOP not connected". Other data sources stay available with their 
 ## Repository layout
 
 The new application is the Bun workspace at the repository root, generated with Better-T-Stack.
-NOOP is a separate project in `noop/`. The new application does not import or build NOOP source.
+Healer S.I. is a separate project in `noop/`. The new application does not import or build Healer S.I. source.
 
 ```text
 apps/web/             Web HUD and family dashboard
@@ -64,7 +64,7 @@ apps/server/          Node + Hono + Effect service
 packages/contracts/   Shared Effect Schema contracts
 packages/config/      Shared strict TypeScript configuration
 packages/ui/          Generated shadcn/ui components for the web app
-noop/                 NOOP (separate project)
+noop/                 Healer S.I. (separate project)
 ```
 
 Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings, server-only), `agents/fetch/` (Python Agentverse worker), and `training/gemma/` (Python training).
@@ -74,7 +74,7 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 | Person | GitHub | Areas |
 | --- | --- | --- |
 | Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Grokbot family conversations, service reliability, optional glasses bridge |
-| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
+| Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, Healer S.I. connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
 | Mahesh | `maheshwarmurugesan` | Web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, optional square glasses layout |
 
 ## Build order

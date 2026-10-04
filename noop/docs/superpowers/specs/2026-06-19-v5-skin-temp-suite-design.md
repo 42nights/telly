@@ -1,29 +1,29 @@
-# NOOP v5 — Skin-Temperature Suite (codename Strand)
+# Healer S.I. v5 — Skin-Temperature Suite (codename Strand)
 
 **Pillar:** Three on-device features built on the underused **skin-temperature** signal — (1) **Cycle Phases** (menstrual / ovulatory / luteal awareness), (2) **Body Clock** (circadian-phase / jet-lag / shift-work optimiser), (3) **Heads-Up** (honest illness early-warning with false-positive suppression).
 
 **Status:** Design only. Not approved. No code yet.
 
-**One-line thesis:** WHOOP already streams skin temperature every night and NOOP already banks it (`skin_temp_raw@73`, centidegrees, wear-gated to a nightly mean) — but today NOOP only uses it as a 5% term in Charge and a flag in the illness banner. Three of the most-requested, most-validated wearable features fall straight out of that one signal when you reason from it properly. NOOP computes them **entirely on-device, free, and private** — the same things Oura sells as a paid cloud subscription and a "future feature" roadmap.
+**One-line thesis:** WHOOP already streams skin temperature every night and Healer S.I. already banks it (`skin_temp_raw@73`, centidegrees, wear-gated to a nightly mean) — but today Healer S.I. only uses it as a 5% term in Charge and a flag in the illness banner. Three of the most-requested, most-validated wearable features fall straight out of that one signal when you reason from it properly. Healer S.I. computes them **entirely on-device, free, and private** — the same things Oura sells as a paid cloud subscription and a "future feature" roadmap.
 
 ---
 
-## Goal & differentiation (why only NOOP)
+## Goal & differentiation (why only Healer S.I.)
 
 Skin temperature is the most information-dense passive signal a wrist wearable collects and the **least exploited** by every consumer app. The competitors that do use it ship it as a cloud, paywalled, account-bound feature:
 
-| Feature | Who sells it | How they sell it | NOOP v5 |
+| Feature | Who sells it | How they sell it | Healer S.I. v5 |
 |---|---|---|---|
 | Cycle / period prediction | Oura (flagship), Natural Cycles, Apple (Cycle Tracking) | Cloud AI, **paid subscription** (Oura), account + data upload | **Free, on-device, never leaves the wrist** |
 | Circadian / jet-lag / shift advice | Almost nobody at consumer scale (Timeshifter is a separate paid app with no wearable data; Oura has a thin "optimal bedtime") | Generic, not derived from *your* temperature minimum | **Derived from YOUR nightly temp minimum + rest-activity, on-device** |
 | Illness early-warning | Oura ("Symptom Radar"), WHOOP ("Health Monitor") | Cloud, opaque, prone to crying wolf | **On-device, multi-signal, with explicit false-positive suppression and a "why"** |
 
-**Why structurally only NOOP can offer all three free + private:**
+**Why structurally only Healer S.I. can offer all three free + private:**
 
-- **We already have the raw signal banked locally.** No competitor exposes the raw nightly skin-temp series to the user, let alone three derived products off it. NOOP's whole architecture is local raw → on-device engine.
-- **No cloud, no account, no subscription.** Reproductive-health data and illness signals are the single most sensitive category of health data a person owns. NOOP's selling point is the one thing a cloud product *cannot* promise: **this data is physically never transmitted.** That is the headline, not a footnote.
-- **We reason from raw signals + fuse them.** Cycle phase isn't temperature alone — it's temperature **+** the luteal resting-HR rise **+** the luteal HRV drop **+** (optionally) respiration. NOOP already computes all four nightly metrics and their personal baselines. The fusion is the moat; a single-signal product is weaker.
-- **Honesty as a feature.** Every competitor over-claims. NOOP's differentiator is calibrated humility: "awareness, not prediction"; "a heads-up to rest, not a diagnosis"; explicit confidence tiers and a visible "why this fired."
+- **We already have the raw signal banked locally.** No competitor exposes the raw nightly skin-temp series to the user, let alone three derived products off it. Healer S.I.'s whole architecture is local raw → on-device engine.
+- **No cloud, no account, no subscription.** Reproductive-health data and illness signals are the single most sensitive category of health data a person owns. Healer S.I.'s selling point is the one thing a cloud product *cannot* promise: **this data is physically never transmitted.** That is the headline, not a footnote.
+- **We reason from raw signals + fuse them.** Cycle phase isn't temperature alone — it's temperature **+** the luteal resting-HR rise **+** the luteal HRV drop **+** (optionally) respiration. Healer S.I. already computes all four nightly metrics and their personal baselines. The fusion is the moat; a single-signal product is weaker.
+- **Honesty as a feature.** Every competitor over-claims. Healer S.I.'s differentiator is calibrated humility: "awareness, not prediction"; "a heads-up to rest, not a diagnosis"; explicit confidence tiers and a visible "why this fired."
 
 ---
 
@@ -61,7 +61,7 @@ All three are deterministic, DB-free pure functions in the shared engine, scored
 
 ### 1. Cycle Phases — `CyclePhaseEngine`
 
-**Research basis (publicly documented, branded for legal cover):** the wrist skin-temperature method validated in *PMC11294004* and the broader literature on the **biphasic ovulatory temperature shift** — skin temperature is **~0.3–0.5 °C higher in the luteal phase** than the follicular phase, with a nadir around ovulation, mirrored by a **luteal resting-HR rise** and a **luteal HRV (RMSSD) drop**. NOOP re-derives this independently from the user's own banked signals; it does not reproduce any competitor's model.
+**Research basis (publicly documented, branded for legal cover):** the wrist skin-temperature method validated in *PMC11294004* and the broader literature on the **biphasic ovulatory temperature shift** — skin temperature is **~0.3–0.5 °C higher in the luteal phase** than the follicular phase, with a nadir around ovulation, mirrored by a **luteal resting-HR rise** and a **luteal HRV (RMSSD) drop**. Healer S.I. re-derives this independently from the user's own banked signals; it does not reproduce any competitor's model.
 
 **Inputs (per night, last ~60–90 days):** `skinTempDevC`, `restingHr` (vs baseline), `avgHrv` (vs baseline), optionally logged period-start days.
 
@@ -84,7 +84,7 @@ All three are deterministic, DB-free pure functions in the shared engine, scored
 **Method:**
 1. **Cosinor fit** (single 24 h component): least-squares fit of `M + A·cos(2π(t − φ)/24)` to the rest-activity series → **acrophase** (peak-activity clock time) and amplitude; corroborate the phase with the thermal-rhythm timing. Pure linear algebra (regress on `cos`/`sin`, recover amplitude+phase) — fits the existing "transparent published method" house style.
 2. **Phase estimate:** report the estimated body-clock phase as a familiar number — an **estimated temperature-minimum clock time** and a chronotype lean (earlier/later than your sleep schedule implies).
-3. **Jet-lag / shift advisor:** given a destination time-zone offset (or a new shift pattern the user enters), compute the **phase shift required** and prescribe a **light/sleep-timing plan** using the well-established **phase-response-curve direction rule**: to advance the clock (eastward / earlier shift) → bright light in the morning, dim evenings, earlier sleep, stepped ~1 h/day; to delay (westward / later shift) → bright light in the evening, the reverse. NOOP **does not** prescribe melatonin or any supplement/drug — light + sleep timing + a stepped schedule only.
+3. **Jet-lag / shift advisor:** given a destination time-zone offset (or a new shift pattern the user enters), compute the **phase shift required** and prescribe a **light/sleep-timing plan** using the well-established **phase-response-curve direction rule**: to advance the clock (eastward / earlier shift) → bright light in the morning, dim evenings, earlier sleep, stepped ~1 h/day; to delay (westward / later shift) → bright light in the evening, the reverse. Healer S.I. **does not** prescribe melatonin or any supplement/drug — light + sleep timing + a stepped schedule only.
 4. **Daily nudge:** "Your body clock looks ~40 min later than your alarm — get morning light and aim for lights-out by 23:10 to close the gap." Awareness + behaviour, never a guarantee.
 
 **Honest gating:** needs ≥ ~7–10 nights for a stable fit; thin/irregular wear → wide confidence, stated. Shift workers and the chronically irregular get an honest "your rhythm is hard to read right now."
@@ -93,7 +93,7 @@ All three are deterministic, DB-free pure functions in the shared engine, scored
 
 **Goal vs the current banner:** today's `AppModel.evaluateIllness` is a blunt 2-of-4 threshold rule (RHR +5 bpm, HRV −20%, skin-temp +0.6 °C, resp +1.5 bpm) with **no confounder handling** — it cries wolf after a night out. The engine keeps the same multi-signal spine but adds **calibrated scoring + false-positive suppression.**
 
-**Research basis:** the multi-parameter pre-symptomatic signature documented across the wearable-illness literature (e.g. the *Stanford/Snyder* resting-HR-elevation work and successor studies) — **resting-HR ↑, skin-temp ↑, HRV ↓, respiration ↑** together, days before symptoms. NOOP re-implements the *pattern*, transparently, against personal baselines.
+**Research basis:** the multi-parameter pre-symptomatic signature documented across the wearable-illness literature (e.g. the *Stanford/Snyder* resting-HR-elevation work and successor studies) — **resting-HR ↑, skin-temp ↑, HRV ↓, respiration ↑** together, days before symptoms. Healer S.I. re-implements the *pattern*, transparently, against personal baselines.
 
 **Method:**
 1. **Per-signal personal anomaly** via `Baselines.deviation` z-scores (recent 1–2 nights vs the trusted baseline ending a few days back, reusing the existing window logic): skin-temp ↑, RHR ↑, HRV ↓, respiration ↑. Each contributes a bounded, signed sub-score in the *illness* direction.
@@ -153,7 +153,7 @@ Per the cross-platform-parity rule, every feature must reach **all three clients
 ### Cycle Phases
 - **Today card (opt-in surface):** "Phase: Luteal · ~day 22" with a small thermal sparkline and a confidence chip ("Solid" / "Building" / "Learning your pattern"). Tap → detail.
 - **Detail screen:** the nightly skin-temp deviation curve over the last ~90 days with shift markers; the fused luteal index; phase bands; optional "Log period start" button (one tap, stored to `noop-cycle`); an honest **next-period *window*** ("likely in the next 3–6 days," never a hard date). A persistent, prominent privacy line: **"This stays on your device. It is never uploaded, never synced, never shared."**
-- **Empty/learning state:** "NOOP is learning your pattern from your nightly temperature — keep wearing it overnight. No data leaves your wrist."
+- **Empty/learning state:** "Healer S.I. is learning your pattern from your nightly temperature — keep wearing it overnight. No data leaves your wrist."
 - **Settings:** a single opt-in toggle (default OFF), with the privacy promise restated. Disabling **deletes** the logged period data on request.
 
 ### Body Clock
@@ -172,12 +172,12 @@ Per the cross-platform-parity rule, every feature must reach **all three clients
 
 ## Non-clinical / legal framing (wellness-only — NOT medical, NOT diagnostic)
 
-This is the load-bearing section. Reproductive-health + illness signals are the highest-sensitivity health category; NOOP is a **wellness** product, not a medical device, and every surface must read that way.
+This is the load-bearing section. Reproductive-health + illness signals are the highest-sensitivity health category; Healer S.I. is a **wellness** product, not a medical device, and every surface must read that way.
 
 - **Cycle Phases is awareness, NOT contraception and NOT a medical service.** Hard rules: never frame as fertility/contraception ("fertile window," "safe days," "ovulation prediction for conception/avoidance" — all banned). Never a guaranteed period date — only a probabilistic *window*. Never "diagnose" PCOS, endometriosis, pregnancy, menopause, or any condition; when the signal is flat/irregular, say "no clear pattern," not a verdict. A standing in-app line: *"For awareness only. Not a medical device, not contraception, not a substitute for professional care."*
 - **Heads-Up is "a heads-up to rest," NOT a diagnosis.** Never names an illness, infection, COVID, fever, or condition. Reuse the shipped copy: *"On-device estimate (approximate) — not a diagnosis."* Always "consider taking it easy" / "rest up," never "you are sick" or "see a doctor for X."
 - **Body Clock is behavioural awareness.** Light + sleep timing only. **No melatonin, no supplements, no drugs.** "Consider," "aim for," "try" — never "you must."
-- **Privacy as the headline, not the fine print.** Because there is no cloud, no account, no telemetry, **this data is physically incapable of leaving the device.** State it on every sensitive surface. This is both the ethical stance and the single biggest competitive wedge against Oura/Apple/Natural Cycles for cycle data specifically — the post-2022 reproductive-data-privacy concern is real and NOOP is the clean answer.
+- **Privacy as the headline, not the fine print.** Because there is no cloud, no account, no telemetry, **this data is physically incapable of leaving the device.** State it on every sensitive surface. This is both the ethical stance and the single biggest competitive wedge against Oura/Apple/Natural Cycles for cycle data specifically — the post-2022 reproductive-data-privacy concern is real and Healer S.I. is the clean answer.
 - **Anonymous-project rules hold.** No AI/LLM mentioned anywhere in shipped copy (the only legitimate AI mention remains the opt-in bring-your-own-key AI Coach). USD, never GBP, in any pricing/comparison copy. Methods cited as published science (PMC11294004, cosinor/Halberg, PRC light rules, Stanford illness-signature) — branded, transparent, our own re-derivation, never "AI."
 - **Reuse the existing `DISCLAIMER.md` / `TERMS.md` jurisdiction-neutral language.** Add a short cycle/illness wellness-scope clause; keep it neutral (no UK/governing-law leak per the TERMS precedent).
 - **Default OFF, opt-in per feature** (manual-first philosophy). Each is a toggle the user turns on, with the privacy promise at the point of opt-in.

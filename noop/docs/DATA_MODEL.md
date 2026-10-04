@@ -1,13 +1,13 @@
-# NOOP — On-Device Data Model
+# Healer S.I. — On-Device Data Model
 
-NOOP is a standalone, fully offline companion app for WHOOP straps (4.0 and 5.0). It talks to
+Healer S.I. is a standalone, fully offline companion app for WHOOP straps (4.0 and 5.0). It talks to
 the user's own strap directly over Bluetooth Low Energy — no WHOOP cloud or account
 is involved, and stores everything it decodes locally in a single SQLite database.
 This document describes that on-device database: every table, its columns, natural keys, indexes,
 and the migration history that produced the current schema.
 
 > **Scope note.** Interacting with the strap here means interoperating with the user's *own*
-> device and the data it has already recorded. NOOP is **not affiliated with, endorsed by, or
+> device and the data it has already recorded. Healer S.I. is **not affiliated with, endorsed by, or
 > connected to WHOOP**, and it is **not a medical device** — none of the stored values are
 > intended for diagnosis or treatment.
 
@@ -107,7 +107,7 @@ Migrations are registered in `Packages/WhoopStore/Sources/WhoopStore/Database.sw
 | **v8** | Adds `journal`, `workout`, and `appleDaily` (Apple-Health daily aggregates). |
 | **v9** | Adds the generic long-format `metricSeries` table and its `(deviceId, key, day)` index. |
 | **v24-rr-seq** | Rebuilds the `rrInterval` primary key as `(deviceId, ts, rrMs, seq)`, so an identical interval recurring within one second is no longer dropped. |
-| **v29-score-input-provenance** | Adds metric-level `scoreInputProvenance` for NOOP-computed headline scores. It does not change `dayOwnership` or score precedence. |
+| **v29-score-input-provenance** | Adds metric-level `scoreInputProvenance` for Healer S.I.-computed headline scores. It does not change `dayOwnership` or score precedence. |
 | **v30-rr-ord** | Adds the nullable `rrInterval.ord` column — emission order within a `ts` — and makes it lead the read sort (#823/#830). Additive; pre-existing rows keep `ord` NULL. |
 
 > This table is a selection, not the full list — it covers the migrations the tables above refer to.
@@ -118,7 +118,7 @@ Migrations are registered in `Packages/WhoopStore/Sources/WhoopStore/Database.sw
 ### The vestigial `synced` column
 
 Migration v5 added a per-row `synced` integer (`NOT NULL DEFAULT 0`) to each of the eight
-decoded-stream tables. It dates from a since-removed server-upload feature. **NOOP is fully
+decoded-stream tables. It dates from a since-removed server-upload feature. **Healer S.I. is fully
 offline: nothing writes or reads `synced`.** The insert path explicitly never sets it
 (`StreamStore.swift`), and no read query references it. The column is left in place only to avoid
 a `DROP COLUMN` migration over potentially millions of existing rows. Treat it as dead schema.
@@ -309,7 +309,7 @@ files split into fixed 30-minute UTC segments with independently compressed 30-s
 ### `rawBatch` *(v1)*
 
 The raw outbox stores the strap's original BLE frames — compressed and batched — so the exact
-bytes survive even for frames NOOP can't yet fully decode. Whereas the decoded streams are durable,
+bytes survive even for frames Healer S.I. can't yet fully decode. Whereas the decoded streams are durable,
 raw batches are **transient and prunable**. Implementation in `RawOutbox.swift`.
 
 | Column | Type | Notes |
@@ -490,7 +490,7 @@ those reads index-only. Accessors: `upsertMetricSeries(...)`, `metricSeries(...)
 
 ### `scoreInputProvenance` *(v29)*
 
-Records which sensor/import source supplied the inputs for each persisted NOOP-computed score.
+Records which sensor/import source supplied the inputs for each persisted Healer S.I.-computed score.
 This is deliberately separate from `dayOwnership`, which remains a scoring resolver override.
 Rows are replaced atomically with the corresponding `dailyMetric` / `metricSeries` score writes;
 legacy scores without a row have unknown provenance and the UI omits their provider badge.
@@ -565,7 +565,7 @@ served by the `(deviceId, ts)` / `(deviceId, day)` / `(deviceId, startTs)` prima
 
 ## Provenance
 
-NOOP's strap interoperability is built on community reverse-engineering work, which it credits and
+Healer S.I.'s strap interoperability is built on community reverse-engineering work, which it credits and
 builds upon:
 
 - **WHOOP 4.0 protocol** — [`johnmiddleton12/my-whoop`](https://github.com/johnmiddleton12/my-whoop)
@@ -575,5 +575,5 @@ The frame parsing, CRC, and command/event/packet decode that feed the decoded-st
 live in the `WhoopProtocol` package; persistence is `WhoopStore`; the local recovery / strain /
 HRV / sleep math is `StrandAnalytics`; and the CSV / Apple-Health importers are `StrandImport`.
 
-> **Reminder.** NOOP is not affiliated with WHOOP and is not a medical device. All stored data is
+> **Reminder.** Healer S.I. is not affiliated with WHOOP and is not a medical device. All stored data is
 > the user's own, kept entirely on the user's device.

@@ -1,5 +1,5 @@
 name: 🐞 Bug report
-description: Report something in NOOP that doesn't work the way it should
+description: Report something in Healer S.I. that doesn't work the way it should
 labels: [bug]
 body:
   - type: markdown
@@ -16,18 +16,18 @@ body:
         Many "bugs" are expected behaviour or a known limit. **Please check these before filing — it's the fastest way to an answer:**
         - **[FAQ](https://github.com/ryanbr/noop/blob/main/docs/FAQ.md)** — live HR, recovery/sleep, steps, importing, privacy, updates.
         - **[WHOOP 5.0 / MG status](https://github.com/ryanbr/noop/wiki/WHOOP-5.0-and-MG-Status)** — SpO₂, steps, recovery/sleep on the newer straps (the most common topic).
-        - **[Oura ring support](https://github.com/ryanbr/noop/blob/main/README.md#oura-ring-support)** — experimental; what a ring can and cannot give NOOP (Sleep and Strain but no Recovery on a ring-only day, no HRV or respiratory rate, live HR is partial).
+        - **[Oura ring support](https://github.com/ryanbr/noop/blob/main/README.md#oura-ring-support)** — experimental; what a ring can and cannot give Healer S.I. (Sleep and Strain but no Recovery on a ring-only day, no HRV or respiratory rate, live HR is partial).
         - **[Troubleshooting](https://github.com/ryanbr/noop/wiki/Troubleshooting)** — pairing, "syncs but no data", generic HR straps.
 
         ---
 
-        NOOP runs **entirely on your device** — there are no servers or accounts for us to check, so a bug is almost always diagnosed from your **strap log**. A report without one (and without an obvious repro) usually can't be investigated and may be closed asking for the log.
+        Healer S.I. runs **entirely on your device** — there are no servers or accounts for us to check, so a bug is almost always diagnosed from your **strap log**. A report without one (and without an obvious repro) usually can't be investigated and may be closed asking for the log.
 
         **Please don't strip out the fields below.** "Live HR works but no data" alone has half a dozen different causes — the version, platform, strap model and log are how we tell which one you've actually hit. A few seconds filling this in saves a day of back-and-forth. 🙏
   - type: input
     id: version
     attributes:
-      label: NOOP version
+      label: Healer S.I. version
       description: Settings → What's New, or the release tag (e.g. 2.0).
       placeholder: "2.0"
     validations:
@@ -53,7 +53,7 @@ body:
     id: strap
     attributes:
       label: WHOOP strap / Oura ring model
-      description: The model NOOP shows on the Devices screen for the device this report is about.
+      description: The model Healer S.I. shows on the Devices screen for the device this report is about.
       options:
         - WHOOP 4.0
         - WHOOP 5.0
@@ -147,7 +147,7 @@ body:
     attributes:
       label: Before you submit
       options:
-        - label: I attached my exported NOOP .zip (not a screenshot of the Live screen). If my bug is a clearly reproducible UI issue I described exactly how to see it instead.
+        - label: I attached my exported Healer S.I. .zip (not a screenshot of the Live screen). If my bug is a clearly reproducible UI issue I described exactly how to see it instead.
           required: true
         - label: I attached or pasted a strap log above — **or** my bug is a clearly reproducible UI issue that doesn't need one (e.g. a typo, a button that does nothing) and I've described exactly how to see it.
           required: true

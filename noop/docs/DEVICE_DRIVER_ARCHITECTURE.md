@@ -160,7 +160,7 @@ Per [AGENTS.md](../AGENTS.md), know the coverage before claiming it works:
   for the single-WHOOP user) and one generic HR strap, switch active device both ways, confirm live HR
   streams and stops cleanly. State exactly what was tested on hardware in the PR.
 
-## Scope guardrails (unchanged NOOP constraints)
+## Scope guardrails (unchanged Healer S.I. constraints)
 
 - **Clean-room only.** Recognition stays name-substring (see `ExperimentalBrand`); no decompiled app
   code, no vendor firmware, no DRM circumvention. Deep decoders are re-derived, never GPL-copied — see

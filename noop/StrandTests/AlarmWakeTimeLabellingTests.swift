@@ -183,7 +183,7 @@ final class AlarmWakeTimeLabellingTests: XCTestCase {
     func testFormattersUseTheInAppLocale() throws {
         let src = try Self.alarmViewSource()
         XCTAssertFalse(src.contains("formatter.locale = .current"),
-                       "a reader running NOOP in German on an English device must get German words")
+                       "a reader running Healer S.I. in German on an English device must get German words")
     }
 
     /// `nextSmartAlarmDate` is the contract this screen's answer leans on: an override for a weekday wins

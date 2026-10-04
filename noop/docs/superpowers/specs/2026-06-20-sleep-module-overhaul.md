@@ -28,7 +28,7 @@ Swift calls `analyzeRecent()` immediately after every sleep edit/delete/nap-add,
 
 ### E. NOT our bug: "Rest repeats across days" in Intelligence > By Day
 Exhaustive both-platform trace (adversarially verified): the By-Day Rest value is derived/persisted/merged/rendered strictly per-day, no shared/cached/reused value. The repeat almost certainly comes from an **imported source file** (the merge winner) or a sparse-strap detection artifact. Needs pikapik's data (a By-Day screenshot + their export + a `daily_metric` dump) to confirm; do **not** blind-fix.
-- Real adjacent find: the By-Day card hard-codes a "NOOP-computed" badge even on imported rows, so a user can't tell a strap-scored night from an imported one. Fixable, separate.
+- Real adjacent find: the By-Day card hard-codes a "Healer S.I.-computed" badge even on imported rows, so a user can't tell a strap-scored night from an imported one. Fixable, separate.
 
 ### F. Test gap (confirmed)
 The #525 reconciliation tests never exercised the divergent cases (daytime-onset longest block; bedtime-edited onset crossing the overnight boundary), which is exactly how A and C slipped through.
@@ -67,7 +67,7 @@ After `updateSleepSessionTimes` / `deleteSleepSession` / `addManualNap`, call `I
 Daily totals are always re-derived per day from the canonical session set when sessions change. Largely already true; B closes the Android gap. Add the observability the audit recommended: a one-line `persisted day=X totalSleepMin=Y matched=N` diagnostic so the next report ships proof of what was computed per day (and to settle E).
 
 ### 2.6 Honesty fixes
-- Show real source on the By-Day card (computed vs imported), not a hard-coded "NOOP-computed" badge.
+- Show real source on the By-Day card (computed vs imported), not a hard-coded "Healer S.I.-computed" badge.
 - Reply to pikapik on E honestly (not our bug, here's how to confirm), once we have the observability + the rest shipped.
 
 ### 2.7 Tests (F)
@@ -84,5 +84,5 @@ Add, both platforms: longest block with a daytime-gap onset + shorter overnight 
 
 ## 4. Open questions
 - **Main-night rule:** ship v1 (broad overnight band + duration score) now and v2 (habitual-midsleep anchor) as a follow-up, or build the habitual anchor straight away? v1 fixes pikapik; v2 is the fully-robust shift-worker answer.
-- **Nap vs sleep cutoff:** the research convergence is ~3h for "real sleep not a nap." NOOP currently scores shorter main sleeps. Keep scoring short main sleeps (no hard 3h floor, just the score), or adopt a soft 3h "this is a nap" lean?
+- **Nap vs sleep cutoff:** the research convergence is ~3h for "real sleep not a nap." Healer S.I. currently scores shorter main sleeps. Keep scoring short main sleeps (no hard 3h floor, just the score), or adopt a soft 3h "this is a nap" lean?
 - **Scope:** do all of section 2 in one verified update, or split (core selector first, parity/honesty second)?

@@ -23,7 +23,7 @@ later in this chapter.
 | 69 DISABLE_ALARM | `01` | **Supported behavior:** disarms the legacy slot when the command reaches a connected strap; a failed request leaves the strap possibly armed |
 | 79 RUN_HAPTICS_PATTERN | `02 03 00 00 00` for the proven preset | **Observed supported behavior:** preset 2, three loops, used for the graduated alarm buzz |
 | 80 GET_ALL_HAPTICS_PATTERN | legacy read operation | **Known operation:** complete response vocabulary and physical mapping unresolved |
-| 122 STOP_HAPTICS | `00` in the legacy request | **P / U · implemented by NOOP outside the documented 41.17.6.0 command set:** stops an in-progress haptic request; asynchronous completion and every firmware state are not mapped |
+| 122 STOP_HAPTICS | `00` in the legacy request | **P / U · implemented by Healer S.I. outside the documented 41.17.6.0 command set:** stops an in-progress haptic request; asynchronous completion and every firmware state are not mapped |
 
 ### Scheduled alarm lifecycle on WHOOP 4
 

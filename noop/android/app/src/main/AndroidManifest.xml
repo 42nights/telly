@@ -3,10 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      NOOP is offline by default. It talks to the strap over BLE and stores everything
+      Healer S.I. is offline by default. It talks to the strap over BLE and stores everything
       locally (Room). INTERNET supports only explicit opt-ins: the bring-your-own-key
       AI Coach and Experimental one-way push to a user-owned endpoint. No account,
-      NOOP server, telemetry, or network dependency is introduced by this permission.
+      Healer S.I. server, telemetry, or network dependency is introduced by this permission.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -105,7 +105,7 @@
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
     <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
     <!-- Health Connect writeback (optional, opt-in, default OFF): lets NOOP contribute its
-         on-device computed nightly metrics so other apps can read them. Only what NOOP itself
+         on-device computed nightly metrics so other apps can read them. Only what Healer S.I. itself
          computed from the strap is written — imported data is never echoed back. -->
     <uses-permission android:name="android.permission.health.WRITE_RESTING_HEART_RATE" />
     <uses-permission android:name="android.permission.health.WRITE_HEART_RATE_VARIABILITY" />
@@ -130,10 +130,10 @@
          the standard Health Connect permission dialog — it is granted in Settings or via the
          ExerciseRouteRequestContract dialog. Declaring it here lets a user who has granted it in
          Settings import routes alongside their workouts; without it, the route is gracefully skipped
-         and the workout still imports with its distance/HR. Read-only; NOOP never writes routes. -->
+         and the workout still imports with its distance/HR. Read-only; Healer S.I. never writes routes. -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
     <!-- Water logged in other apps (#949), so drinks tracked by a dedicated hydration app or a smart
-         bottle don't have to be entered twice. Read-only; NOOP never writes water back. MUST be
+         bottle don't have to be entered twice. Read-only; Healer S.I. never writes water back. MUST be
          declared or Health Connect silently drops the runtime request (same trap as #412 above). -->
     <uses-permission android:name="android.permission.health.READ_HYDRATION" />
 
@@ -185,7 +185,7 @@
                  Health Connect APK on API ≤33 DISCOVERS + lists compatible apps by this intent-filter, so
                  the action name must be the legacy `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE`.
                  The previous `androidx.health.connect.action.SHOW_PERMISSIONS_RATIONALE` is neither the
-                 API-33 nor API-34 form, so an Android-13 HC APK never enumerated NOOP — it was absent from
+                 API-33 nor API-34 form, so an Android-13 HC APK never enumerated Healer S.I. — it was absent from
                  Health Connect's "App permissions" entirely and permissions couldn't be granted. Android 14+
                  (HC in the platform) uses the `ViewPermissionUsageActivity` alias below instead. -->
             <intent-filter>
@@ -254,7 +254,7 @@
              gated by the Notifications-screen settings. Does nothing until access is granted + enabled. -->
         <service
             android:name="com.noop.notif.NoopNotificationListener"
-            android:label="NOOP wrist alerts"
+            android:label="Healer S.I. wrist alerts"
             android:exported="false"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>

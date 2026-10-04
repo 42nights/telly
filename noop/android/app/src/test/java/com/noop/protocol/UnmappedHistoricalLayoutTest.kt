@@ -72,7 +72,7 @@ class UnmappedHistoricalLayoutTest {
         )
         assertTrue(isUnmappedWhoop5HistoricalRecord(unmapped))
         assertEquals(
-            "a record from a layout NOOP cannot map must be archived whatever it decoded",
+            "a record from a layout Healer S.I. cannot map must be archived whatever it decoded",
             listOf(unmapped.toList()),
             rejectedHistoricalRecords(listOf(unmapped), DeviceFamily.WHOOP5).map { it.toList() },
         )

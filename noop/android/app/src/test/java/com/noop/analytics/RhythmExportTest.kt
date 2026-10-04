@@ -30,7 +30,7 @@ class RhythmExportTest {
         val lines = csv.split("\n")
 
         // The disclaimer is on the ARTIFACT, and it is explicitly non-diagnostic.
-        assertTrue(lines[0].startsWith("# NOOP Rhythm export"))
+        assertTrue(lines[0].startsWith("# Healer S.I. Rhythm export"))
         assertTrue(csv.contains("NOT a diagnosis"))
         assertTrue(
             csv.contains(

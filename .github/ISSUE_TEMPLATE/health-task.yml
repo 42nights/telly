@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Coordination rules: `CONTRIBUTING.md`. Plan: `docs/plan.md`. NOOP lives in `noop/`.
+        Coordination rules: `CONTRIBUTING.md`. Plan: `docs/plan.md`. Healer S.I. lives in `noop/`.
         Never paste secret values, real health records, or personal data here.
   - type: input
     id: owner

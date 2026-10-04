@@ -656,7 +656,7 @@ static let wearableImportSources = ["oura-import", "fitbit-import", "garmin-impo
 
 - [ ] **Step 2: Docs**
 
-- `docs/PRIVACY_SECURITY.md` §1: amend "exactly one opt-in exception (the AI Coach)" → "two opt-in exceptions: the AI Coach and the Oura cloud import." Add a short §1.1b describing the Oura lane: off-by-default, user-initiated, inbound (the user's own Oura data under their own OAuth app), tokens in Keychain, no NOOP server, raw data never exfiltrated.
+- `docs/PRIVACY_SECURITY.md` §1: amend "exactly one opt-in exception (the AI Coach)" → "two opt-in exceptions: the AI Coach and the Oura cloud import." Add a short §1.1b describing the Oura lane: off-by-default, user-initiated, inbound (the user's own Oura data under their own OAuth app), tokens in Keychain, no Healer S.I. server, raw data never exfiltrated.
 - `docs/DEVICE_SUPPORT_ROADMAP.md`: change the Oura row from "📋 Researched, not built | Cloud API v2 — off-by-default OAuth import lane only" to "🔬 Built (cloud import) | Cloud API v2 — off-by-default OAuth, one-time backfill; local BLE ring also supported."
 - `docs/DATA_MODEL.md`: note the current migrator version (v24) and add the `ouraRaw` table (deviceId, endpoint, documentId, day, payloadJSON, fetchedAt) to the metric-caches / new-tables section.
 

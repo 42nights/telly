@@ -1,7 +1,7 @@
 # WHOOP Design Language — reverse-engineered reference (2026-06-22)
 
 Pixel-sampled from 20 real WHOOP iOS screenshots (`~/Downloads/whoop-ref/` +
-`New Folder With Items 18/`). This is the target the NOOP "Design Reset" builds to. Applies
+`New Folder With Items 18/`). This is the target the Healer S.I. "Design Reset" builds to. Applies
 to the DEFAULT theme on dark; the Classic-throwback toggle is untouched.
 
 ## The one rule: NO GOLD
@@ -12,7 +12,7 @@ functional status (green good/up, amber warn/down) and blue links. Premium feel 
 near-black backgrounds, generous spacing, tight UPPERCASE labels and big white numbers —
 NOT a metallic accent.
 
-## Palette (sampled hexes → NOOP token)
+## Palette (sampled hexes → Healer S.I. token)
 
 ```
 surfaceBase    #121518   page canvas (cool dark blue-grey, not pure black)

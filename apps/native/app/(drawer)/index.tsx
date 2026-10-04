@@ -48,7 +48,9 @@ export default function Home() {
 					{state?.kind === "ready" &&
 						state.value.sources.map((source) => (
 							<View key={source.source}>
-								<Text style={[styles.title, text]}>NOOP not connected</Text>
+								<Text style={[styles.title, text]}>
+									Healer S.I. not connected
+								</Text>
 								<Text style={text}>
 									WHOOP readings and WHOOP-based nudges are unavailable.
 								</Text>

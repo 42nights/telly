@@ -4,7 +4,7 @@
 
 ## Goal
 
-Make NOOP foolproof. People should never have to guess whether something is working, whether a score is coming, or why a value was chosen. Every uncertain or derived value gets a clear state, a plain-English reason, and a next step. Honest always: never fabricate a number, always show where one came from.
+Make Healer S.I. foolproof. People should never have to guess whether something is working, whether a score is coming, or why a value was chosen. Every uncertain or derived value gets a clear state, a plain-English reason, and a next step. Honest always: never fabricate a number, always show where one came from.
 
 ## Principle (the one rule)
 
@@ -34,7 +34,7 @@ Plain English, no jargon, no em-dashes. Swift and Kotlin must say the *same word
 2. **Explained score states** (Today). Each score/tile renders its state instead of a bare blank: **Calibrating — N more nights**, **Last night · <date>**, **Needs the strap — was it worn + connected overnight?**, each with one line of what-to-do.
 3. **Recording status** (Today / Live). A clear, honest chip/banner so people know it's working, or know it isn't and why.
 4. **Provenance** (extends the By-Day badge already built). On-device / Whoop / Apple Health on every derived number, reflecting the REAL per-day merge winner.
-5. **"How NOOP works" primer** (new sheet, reachable from a "?"). Skimmable: how sleep classification works, how scores + calibration work, what recording means, what the provenance badges mean.
+5. **"How Healer S.I. works" primer** (new sheet, reachable from a "?"). Skimmable: how sleep classification works, how scores + calibration work, what recording means, what the provenance badges mean.
 
 ## Honesty rules
 

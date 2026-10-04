@@ -36,7 +36,7 @@ class UpdateDeepLinkTest {
      */
     @Test
     fun aWhatsNewRowPostedBeforeTheFixStillOpens() {
-        val legacyRow = UpdateItem(kind = UpdateKind.WHATS_NEW, title = "NOOP 9.2.3", message = "m")
+        val legacyRow = UpdateItem(kind = UpdateKind.WHATS_NEW, title = "Healer S.I. 9.2.3", message = "m")
         assertNull("precondition: the old row carries no link", legacyRow.deepLink)
         assertEquals(UpdateStore.WHATS_NEW_DEEP_LINK, UpdateStore.deepLinkTarget(legacyRow))
     }
