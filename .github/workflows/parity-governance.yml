@@ -29,22 +29,22 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Tools/issue_ref.py'
-      - 'Tools/parity_*.py'
-      - 'Tools/parity_*.json'
-      - 'Tools/parity_case_specs/**'
-      - 'Tools/tests/test_parity_*.py'
-      - 'Tools/tests/test_rr_legacy_preservation_contract.py'
+      - 'noop/Tools/issue_ref.py'
+      - 'noop/Tools/parity_*.py'
+      - 'noop/Tools/parity_*.json'
+      - 'noop/Tools/parity_case_specs/**'
+      - 'noop/Tools/tests/test_parity_*.py'
+      - 'noop/Tools/tests/test_rr_legacy_preservation_contract.py'
       - '.github/workflows/parity-governance.yml'
   push:
     branches: [main]
     paths:
-      - 'Tools/issue_ref.py'
-      - 'Tools/parity_*.py'
-      - 'Tools/parity_*.json'
-      - 'Tools/parity_case_specs/**'
-      - 'Tools/tests/test_parity_*.py'
-      - 'Tools/tests/test_rr_legacy_preservation_contract.py'
+      - 'noop/Tools/issue_ref.py'
+      - 'noop/Tools/parity_*.py'
+      - 'noop/Tools/parity_*.json'
+      - 'noop/Tools/parity_case_specs/**'
+      - 'noop/Tools/tests/test_parity_*.py'
+      - 'noop/Tools/tests/test_rr_legacy_preservation_contract.py'
       - '.github/workflows/parity-governance.yml'
   # Daily, so authority staleness is found on a schedule instead of by whoever
   # next edits Tools/. See the header note.
@@ -84,4 +84,4 @@ jobs:
             echo "::error::expected at least 159 parity-governance tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
-        working-directory: Tools
+        working-directory: noop/Tools

@@ -1,6 +1,7 @@
-# Checks for the health/ application (web, phone app, server). NOOP's own workflows are separate.
+# Checks for the health application at the repository root (apps/, packages/, root manifests).
+# NOOP's own workflows are separate and cover noop/.
 #
-# Every job runs on every PR so that `health / required` always reports: it passes when health/ is
+# Every job runs on every PR so that `health / required` always reports: it passes when the app is
 # untouched (all checks skipped on purpose), and otherwise only when every check succeeded. Make
 # `health / required` the one required status check; never require the individual jobs.
 name: health
@@ -19,10 +20,6 @@ concurrency:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: health
-
 env:
   SENTRUX_VERSION: v0.5.7
   SENTRUX_SHA256: 3237f80fe20d54aad4deefa8a143f0d60543bb5d2d6ad891eb42432f155725a6
@@ -35,9 +32,6 @@ jobs:
       pull-requests: read
     outputs:
       health: ${{ steps.filter.outputs.health }}
-    defaults:
-      run:
-        working-directory: .
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request'
@@ -46,7 +40,17 @@ jobs:
         with:
           filters: |
             health:
-              - 'health/**'
+              - 'apps/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'bun.lock'
+              - 'bunfig.toml'
+              - 'tsconfig.json'
+              - 'biome.json'
+              - 'bts.jsonc'
+              - '.fallowrc.json'
+              - '.sentrux/**'
+              - '.gitignore'
               - '.github/workflows/health.yml'
 
   check:
@@ -72,7 +76,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version-file: health/package.json
+          bun-version-file: package.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: matrix.name == 'build-smoke'
         with:
@@ -80,7 +84,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('health/bun.lock') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: ${{ matrix.run }}
@@ -109,7 +113,7 @@ jobs:
       # Rules: no cycles, no god files, client and contract boundaries (.sentrux/rules.toml).
       - run: sentrux check .
       # Regression gate against the committed .sentrux/baseline.json. Move the baseline only in a
-      # reviewed commit; see health/CONTRIBUTING.md.
+      # reviewed commit; see CONTRIBUTING.md.
       - run: sentrux gate .
 
   required:
@@ -117,9 +121,6 @@ jobs:
     needs: [changes, check, structure]
     if: always()
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
     steps:
       - env:
           CHANGED: ${{ needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch' }}
@@ -134,4 +135,4 @@ jobs:
             echo "::error::a health check failed, was cancelled, or was skipped"; exit 1
           fi
           [ "$CHECK" = skipped ] && [ "$STRUCTURE" = skipped ] && exit 0
-          echo "::error::checks ran although health/ did not change"; exit 1
+          echo "::error::checks ran although the health app did not change"; exit 1

@@ -19,12 +19,12 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'Tools/linux-capture/**'
+      - 'noop/Tools/linux-capture/**'
       - '.github/workflows/tools-python-windows.yml'
   push:
     branches: [main]
     paths:
-      - 'Tools/linux-capture/**'
+      - 'noop/Tools/linux-capture/**'
       - '.github/workflows/tools-python-windows.yml'
   workflow_dispatch:
 
@@ -47,7 +47,7 @@ jobs:
       # Keep Windows locale defaults and exercise a strict legacy console, including subprocesses.
       # UTF-8 mode would hide implicit file encodings; replacement output would hide console bugs.
       - name: Run Tools/linux-capture tests with legacy Windows encodings
-        working-directory: Tools/linux-capture
+        working-directory: noop/Tools/linux-capture
         env:
           PYTHONUTF8: '0'
           PYTHONIOENCODING: 'cp1252:strict'
