@@ -5,7 +5,7 @@ import { ArrowLeft, ScanSearch } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
-import { Window } from "@/components/hud/window";
+import { Page } from "@/components/hud/window";
 import {
 	RememberPlace,
 	SavedThings,
@@ -99,92 +99,91 @@ function FindThingsPage({
 	const way = useLiveWay(lockKey);
 
 	return (
-		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
-			<Window
-				icon={ScanSearch}
-				title={mode === "add" ? "Add a thing" : "Find things"}
-			>
-				<div className="grid gap-4 p-2 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:gap-x-6 md:p-4">
-					<div className="flex flex-wrap items-end justify-between gap-3 md:col-span-2">
-						<Link
-							className={buttonVariants({
-								variant: "ghost",
-								className: "h-12 text-[18px] [&_svg]:size-5",
-							})}
-							data-slot="button"
-							to="/hud"
-						>
-							<ArrowLeft aria-hidden />
-							Home
-						</Link>
-						<WhoseMedicinesPicker
-							choose={choose}
-							className="[&_select]:min-w-0 [&_select]:flex-1"
-							memory={memory}
-						/>
-						<YouAsked q={q} />
-					</div>
-
-					{/* The camera is the finder: edge to edge on a phone, the large left area on a desktop. */}
-					<div className="win95-inset relative -mx-2 h-[64dvh] min-h-80 min-w-0 overflow-hidden bg-card md:row-span-2 md:mx-0 md:h-[calc(100dvh-18rem)] md:min-h-[28rem]">
-						<CameraPreview
-							camera={camera}
-							onVideo={(element) => {
-								video.current = element;
-								showVideo();
-							}}
-						/>
-						{check !== null && (
-							<OverCamera
-								best={best}
-								check={check}
-								familyId={familyId}
-								key={lockKey}
-								live={live}
-								onWay={way.set}
-								video={video}
-							/>
-						)}
-					</div>
-
-					<div
-						aria-live="polite"
-						className="grid min-w-0 content-start gap-3 text-[20px]"
+		<Page
+			icon={ScanSearch}
+			title={mode === "add" ? "Add a thing" : "Find things"}
+		>
+			{/* Fills the window: the camera takes the room left, and the answer scrolls in its own box. */}
+			<div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3">
+				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
+					<Link
+						className={buttonVariants({
+							variant: "ghost",
+							className: "h-12 text-[18px] [&_svg]:size-5",
+						})}
+						data-slot="button"
+						to="/hud"
 					>
-						<ObjectAnswer
+						<ArrowLeft aria-hidden />
+						Home
+					</Link>
+					<WhoseMedicinesPicker
+						choose={choose}
+						className="[&_select]:min-w-0 [&_select]:flex-1"
+						memory={memory}
+					/>
+					<YouAsked q={q} />
+				</div>
+
+				{/* The camera is the finder: edge to edge on a phone, the large left area on a desktop. */}
+				<div className="win95-inset relative -mx-1 min-h-48 min-w-0 overflow-hidden bg-card md:mx-0">
+					<CameraPreview
+						camera={camera}
+						onVideo={(element) => {
+							video.current = element;
+							showVideo();
+						}}
+					/>
+					{check !== null && (
+						<OverCamera
 							best={best}
 							check={check}
-							choice={choice}
 							familyId={familyId}
+							key={lockKey}
 							live={live}
-							look={lookNow}
-							name={<AskedItem q={q} />}
-							startCamera={camera.start}
-							way={way.text}
-							stop={stop}
+							onWay={way.set}
+							video={video}
 						/>
-						{best !== null && saving && check !== null && (
-							<RememberPlace
-								ar={ar ? familyId : null}
-								best={best}
-								change={change}
-								check={check}
-								key={`${check.id}:${choice.skipped}`}
-								memory={memory}
-							/>
-						)}
-						<SavedThings
-							ar={ar}
-							asked={category}
-							change={change}
-							familyId={familyId}
-							memory={memory}
-							open={object ?? null}
-						/>
-					</div>
+					)}
 				</div>
-			</Window>
-		</main>
+
+				<div
+					aria-live="polite"
+					className="grid max-h-[24dvh] min-w-0 content-start gap-3 overflow-y-auto text-[20px] md:max-h-none"
+				>
+					<ObjectAnswer
+						best={best}
+						check={check}
+						choice={choice}
+						familyId={familyId}
+						live={live}
+						look={lookNow}
+						name={<AskedItem q={q} />}
+						startCamera={camera.start}
+						way={way.text}
+						stop={stop}
+					/>
+					{best !== null && saving && check !== null && (
+						<RememberPlace
+							ar={ar ? familyId : null}
+							best={best}
+							change={change}
+							check={check}
+							key={`${check.id}:${choice.skipped}`}
+							memory={memory}
+						/>
+					)}
+					<SavedThings
+						ar={ar}
+						asked={category}
+						change={change}
+						familyId={familyId}
+						memory={memory}
+						open={object ?? null}
+					/>
+				</div>
+			</div>
+		</Page>
 	);
 }
 
@@ -240,7 +239,7 @@ function useFirstLook(ready: boolean, lookNow: () => void) {
 function YouAsked({ q }: { q: string }) {
 	if (q.trim() === "") return null;
 	return (
-		<p className="ml-auto grid min-w-0 justify-items-end text-right">
+		<p className="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-2 text-right md:grid md:justify-items-end">
 			<span className="text-[16px] text-muted-foreground">You asked</span>
 			<b className="break-words text-[20px]">“{q}”</b>
 		</p>

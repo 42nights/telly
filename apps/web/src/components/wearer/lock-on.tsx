@@ -322,7 +322,7 @@ export function LockOn({
 					className="pointer-events-none absolute inset-0 grid place-items-center"
 				>
 					<ArrowUp
-						className="size-32 text-[#ffd400] drop-shadow-[0_0_3px_#000] md:size-44"
+						className="size-24 text-[#ffd400] drop-shadow-[0_0_3px_#000] md:size-44"
 						strokeWidth={3}
 						style={turn(view.guide)}
 					/>
@@ -330,7 +330,7 @@ export function LockOn({
 			)}
 			{view.guide !== null && (
 				<div className="pointer-events-none absolute inset-x-0 top-12 flex justify-center px-2">
-					<p className="flex items-center gap-3 border-2 border-[#ffd400] bg-black/85 px-4 py-2 font-bold text-[#ffd400] text-[26px] md:text-[32px]">
+					<p className="flex items-center gap-2 border-2 border-[#ffd400] bg-black/85 px-3 py-1 font-bold text-[#ffd400] text-[22px] md:gap-3 md:px-4 md:py-2 md:text-[32px]">
 						<ArrowUp
 							aria-hidden
 							className="size-10 shrink-0"
