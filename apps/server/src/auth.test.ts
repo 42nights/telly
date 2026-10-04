@@ -384,7 +384,8 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 		const bobFamilies = await (await call(bob, "GET", "/api/families")).json();
 		expect(bobFamilies).toEqual({ families: [] });
 
-		// Alice adds Bob by his identity; now the database lets him read the family.
+		// Alice adds Bob by his identity; now the database lets him read the family, and its samples
+		// once she shares health records with him (#26).
 		expect(
 			(
 				await call(alice, "POST", `${path}/members`, {
@@ -392,11 +393,25 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 				})
 			).status,
 		).toBe(204);
-		const read = await call(bob, "GET", path);
-		expect(read.status).toBe(200);
-		const records = Schema.decodeUnknownSync(FamilyRecords)(await read.json());
-		expect(records.families.map((f) => f.id)).toEqual([family.id]);
-		expect(records.samples.map((s) => s.source)).toEqual(["synthetic-demo"]);
+		const read = async () => {
+			const response = await call(bob, "GET", path);
+			expect(response.status).toBe(200);
+			return Schema.decodeUnknownSync(FamilyRecords)(await response.json());
+		};
+		const member = await read();
+		expect(member.families.map((f) => f.id)).toEqual([family.id]);
+		expect(member.samples).toEqual([]);
+		expect(
+			(
+				await call(alice, "POST", `${path}/care-access`, {
+					identity: bobMe.identity,
+					scope: "health_records",
+					granted: true,
+				})
+			).status,
+		).toBe(204);
+		const shared = await read();
+		expect(shared.samples.map((s) => s.source)).toEqual(["synthetic-demo"]);
 	});
 
 	test("a write cannot carry fields outside its contract", async () => {

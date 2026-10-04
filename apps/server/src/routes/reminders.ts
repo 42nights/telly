@@ -21,6 +21,7 @@ import {
 	readReminderSettings,
 	readReminders,
 } from "../reminders/records";
+import { requireHealthRecords } from "./care-profile";
 
 const HISTORY_LIMIT = 200;
 
@@ -43,6 +44,8 @@ const detail = (c: Context<FamilyEnv>) =>
 
 export const reminderRoutes = () =>
 	new Hono<FamilyEnv>()
+		// Occurrences are health records (#26); reminder settings and definitions are not.
+		.use("/reminder-occurrences/*", requireHealthRecords)
 		.get("/reminder-settings", (c) =>
 			c.json({
 				settings: readReminderSettings(c.var.db, c.var.familyId.toString()),

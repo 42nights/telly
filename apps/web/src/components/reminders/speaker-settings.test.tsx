@@ -87,8 +87,8 @@ describe("SpeakerSettingsWindow", () => {
 			[`GET ${FAMILY}/speaker-settings`]: failure(403, "Not your family"),
 		});
 		await waitFor(() =>
-			expect(view.getByRole("alert").textContent).toContain(
-				"Not a member of this familyNot your family",
+			expect(view.getByRole("status").textContent).toContain(
+				"Not shared with you",
 			),
 		);
 		expect(view.queryByRole("form")).toBeNull();
