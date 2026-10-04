@@ -103,6 +103,27 @@ export type Ask = {
 		| { readonly kind: "failed"; readonly message: string };
 };
 
+/**
+ * Where Send goes. `familyOnly` is the composer's "Family only" toggle; `replyTo` is the member
+ * label of the family message being answered. Either one sends only to the family thread.
+ */
+export type ChatTarget = {
+	readonly familyOnly: boolean;
+	readonly replyTo: string | null;
+};
+
+export const ASK_AGENT: ChatTarget = { familyOnly: false, replyTo: null };
+
+/** True when Send writes only to the family thread, so Gemini never sees the text. */
+export function sendsToFamily(target: ChatTarget): boolean {
+	return target.familyOnly || target.replyTo !== null;
+}
+
+/** Turning the toggle off also ends a reply, so Send never goes to the family by surprise. */
+export function setFamilyOnly(target: ChatTarget, on: boolean): ChatTarget {
+	return on ? { ...target, familyOnly: true } : ASK_AGENT;
+}
+
 /** What the header may claim about Gemini: only what this session has seen. */
 export type GeminiStatus =
 	| { readonly kind: "unknown" }

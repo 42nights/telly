@@ -28,7 +28,8 @@ const MAX_BODY_BYTES = Math.ceil(MAX_MEAL_IMAGE_BYTES / 3) * 4 + 16 * 1024;
 
 const Fact = Schema.fromJsonString(MealFact);
 
-const readMeals = (c: Context<FamilyEnv>): Meal[] => {
+/** The family's meals, newest first. The caller checks `health_records` first. */
+export const readMeals = (c: Context<FamilyEnv>): Meal[] => {
 	const meals = new Map<string, MealRecord[]>();
 	const rows = [...c.var.db.connection.db.myMealFacts.iter()]
 		.filter((row) => row.familyId === c.var.familyId)

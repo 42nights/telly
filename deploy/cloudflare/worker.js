@@ -1,6 +1,7 @@
 // Worker `telly` on the 42nights Cloudflare account (deploy/cloudflare/deploy.sh). It serves the web
 // app from static assets and sends /health and /api/* to the Node API, which runs in one Cloudflare
-// Container. The container pulls its own keys at start (deploy/cloudflare/entrypoint.sh).
+// Container. The container pulls its own keys at start (deploy/cloudflare/entrypoint.sh). On
+// LANDING_HOST it serves the static landing page (deploy/cloudflare/landing/) instead of the app.
 const port = 8080;
 // Public settings the API needs; deploy.sh puts them in the Worker's vars.
 const passed = [
@@ -79,9 +80,27 @@ export class Api {
 	}
 }
 
+// Extensionless pages of the landing (deploy/cloudflare/landing/); /privacy and /terms are the
+// links that Google's OAuth consent screen needs.
+const landingPages = new Set(["/", "/privacy", "/terms"]);
+
 export default {
 	fetch(request, env) {
-		const { pathname } = new URL(request.url);
+		const url = new URL(request.url);
+		const { pathname } = url;
+		if (url.hostname === env.LANDING_HOST) {
+			// Landing files have an extension, except the `landingPages`; any other path is an app
+			// route, so it goes to the app.
+			if (!landingPages.has(pathname) && !/\.[a-z0-9]+$/i.test(pathname))
+				return Response.redirect(
+					`https://app.${env.LANDING_HOST}${pathname}${url.search}`,
+					302,
+				);
+			// `/landing/` serves landing/index.html and `/landing/privacy` serves landing/privacy.html
+			// (asset html_handling redirects paths that end in `.html`).
+			url.pathname = `/landing${pathname}`;
+			return env.ASSETS.fetch(new Request(url, request));
+		}
 		if (pathname === "/health" || pathname.startsWith("/api/"))
 			// One Durable Object, and so one container, per deploy: a deploy never reuses a
 			// container that started with older settings. The previous one stops when idle.
