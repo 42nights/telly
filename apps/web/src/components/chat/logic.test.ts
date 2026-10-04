@@ -128,6 +128,9 @@ test("evidenceLine", () => {
 	expect(evidenceLine({ ...evidence, stale: true }, at)).toBe(
 		"heart_rate 72 bpm · Watch · at T · stale",
 	);
+	expect(evidenceLine({ ...evidence, synthetic: true }, at)).toBe(
+		"heart_rate 72 bpm · Watch · at T · demo, not real",
+	);
 });
 
 test("timeline interleaves messages and asks by time", () => {

@@ -5,12 +5,9 @@ import type {
 	ThresholdMonitoring,
 } from "@health/contracts/alerts";
 
-import {
-	deliveryText,
-	demoSampleSummary,
-	monitoringLevel,
-	newestPerMetric,
-} from "./logic";
+import { demoSampleSummary } from "@/lib/demo";
+
+import { deliveryText, monitoringLevel, newestPerMetric } from "./logic";
 
 const threshold: AlertThreshold = {
 	id: "1",
