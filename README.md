@@ -106,7 +106,7 @@ The alert outbox sends each delivery at least once, with the idempotency key `al
 
 The body is `MedicineDetectionRequest` from `@health/contracts/vision`: the frame (`id`, `capturedAt`, `width`, `height`, `crop`, `rotation`) and one base64 JPEG or PNG image of at most 4 MiB. The client crops `crop` from the camera frame, rotates it clockwise by `rotation` degrees, and may scale it. The server checks the image bytes, type, and aspect ratio against that provenance. The reply is `MedicineDetections`: the same frame, with each box in camera-frame pixels. Draw a marker only on the frame with that `id`.
 
-Set `GEMINI_API_KEY` in `apps/server/.env` (required in production). Without it, the route answers `503 unavailable`. `GEMINI_BASE_URL` changes the API origin, for example to a gateway. The server calls the Gemini Interactions API with `store: false` and a 20-second limit. It stops the call when the client disconnects. A provider failure is `502 upstream_error`, without provider text.
+Set `GEMINI_API_KEY` in `apps/server/.env`. Without it, the route answers `503 unavailable`. `GEMINI_BASE_URL` changes the API origin, for example to a gateway. The server calls the Gemini Interactions API with `store: false` and a 20-second limit. It stops the call when the client disconnects. A provider failure is `502 upstream_error`, without provider text.
 
 `needsVerification` is `true` when the model could not read the label or its confidence is below 0.7. The user must then check the label. A found box does not confirm a dose was taken.
 
