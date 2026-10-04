@@ -14,9 +14,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 import { Effect } from "effect";
 import { Timestamp } from "spacetimedb";
+import { readAlerts } from "../src/alerts/records";
 import {
 	callDb,
 	type DbConfig,
+	type FamilyDb,
 	openFamilyDb,
 	readFamilyRecords,
 } from "../src/db";
@@ -30,6 +32,8 @@ const work = mkdtempSync(join(tmpdir(), "health-drill-"));
 const original = join(work, "original");
 const restored = join(work, "restored");
 const archive = join(work, "backup.tar.gz");
+// A CLI config in the temporary directory, so the drill never reads or writes the user's config.
+const cli = ["--config-path", join(work, "cli.toml")];
 
 // The identity tokens are signed with this key pair, so a backup that leaves it out restores rows
 // that no existing token can read. `spacetime start` defaults to the keys in ~/.config/spacetime;
@@ -41,7 +45,9 @@ const keys = (dataDir: string) => ({
 
 const answers = (url: string) => {
 	try {
-		execFileSync("spacetime", ["server", "ping", url], { stdio: "ignore" });
+		execFileSync("spacetime", [...cli, "server", "ping", url], {
+			stdio: "ignore",
+		});
 		return true;
 	} catch {
 		return false;
@@ -56,6 +62,7 @@ const start = async (dataDir: string, at: number) => {
 	const server = spawn(
 		"spacetime",
 		[
+			...cli,
 			"start",
 			"--non-interactive",
 			"--data-dir",
@@ -83,7 +90,17 @@ const stop = async (server: ChildProcess, signal: NodeJS.Signals) => {
 	await exited;
 };
 
-// Writes one family with a sample, an alert, and a message, and returns the identity's token.
+// Every row the family identity sees, plus each alert with its delivery state.
+const snapshot = (family: FamilyDb) => {
+	const records = readFamilyRecords(family);
+	return {
+		records,
+		alerts: readAlerts(family, records.families[0]?.id ?? ""),
+	};
+};
+
+// Writes one family with a sample, an alert, a message, and a threshold alert whose delivery stays
+// queued (no outbox runs here). Returns the identity's token and what it sees.
 const seed = (config: DbConfig) =>
 	Effect.scoped(
 		Effect.gen(function* () {
@@ -116,16 +133,37 @@ const seed = (config: DbConfig) =>
 			yield* callDb(family, (c) =>
 				c.reducers.sendMessage({ familyId, body: "Drill message" }),
 			);
-			return { token: family.token, records: readFamilyRecords(family) };
+			yield* callDb(family, (c) =>
+				c.reducers.setAlertThreshold({
+					familyId,
+					metric: "heart_rate",
+					direction: { tag: "Above" },
+					limit: 110,
+					unit: "bpm",
+					maxAgeSeconds: 300,
+				}),
+			);
+			yield* callDb(family, (c) =>
+				c.reducers.recordSample({
+					familyId,
+					metric: "heart_rate",
+					value: 140,
+					unit: "bpm",
+					sourceTime: Timestamp.fromDate(new Date(Date.now() - 1000)),
+					source: "synthetic-drill",
+					synthetic: true,
+					quality: { tag: "Validated" },
+				}),
+			);
+			const seen = snapshot(family);
+			if (!seen.alerts.some((a) => a.delivery?.status === "queued"))
+				throw new Error("the threshold alert has no queued delivery");
+			return { token: family.token, seen };
 		}),
 	);
 
 const read = (config: DbConfig) =>
-	Effect.scoped(
-		openFamilyDb(config).pipe(
-			Effect.map((family) => readFamilyRecords(family)),
-		),
-	);
+	Effect.scoped(openFamilyDb(config).pipe(Effect.map(snapshot)));
 
 const servers: ChildProcess[] = [];
 try {
@@ -142,6 +180,7 @@ try {
 	execFileSync(
 		"spacetime",
 		[
+			...cli,
 			"publish",
 			"--server",
 			first.url,
@@ -154,7 +193,7 @@ try {
 		{ stdio: "ignore" },
 	);
 	const config = { uri: `ws://127.0.0.1:${port}`, database };
-	const { token, records } = await Effect.runPromise(seed(config));
+	const { token, seen: records } = await Effect.runPromise(seed(config));
 	console.log("seeded:", JSON.stringify(records, null, 2));
 
 	// Crash: SIGKILL gives the database no chance to flush, then restart on the same directory.

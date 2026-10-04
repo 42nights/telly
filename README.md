@@ -148,8 +148,11 @@ The server bounds every database call:
 | Reducer call (`callReducer(db, (c) => c.reducers.x(...))`, built on `callDb`) | 5 s; fails at once when the connection drops | none: a reducer call is not idempotent | `DbUnavailable` (`503 unavailable`), or `DbRejected`, which becomes `403` or `400` |
 | Read cached rows (`readFamilyRecords`) | none (local) | none | throws `DbUnavailable` (`503 unavailable`) when the connection has closed |
 | Shutdown (`SIGTERM`) | 3 s grace for requests in flight | none | then the server closes their sockets, which aborts each request and closes its database connection |
+| Alert outbox step (operator connection) | 5 s per database step; 20 s per send; 30 s claim lease | at most 5 send attempts, after 5, 10, 20, and 40 s; the connection reopens every 5 s | a dropped connection ends the loop at once, and the worker reopens it; deliveries wait in the database |
 
 Each request opens its own connection and closes it when the request ends or is cancelled. A dropped connection is not reopened in place: the cached rows count as stale, and the next request opens a new connection. An outage is always an `unavailable` error, never an empty result. With a token, the SDK first fetches a short-lived token over HTTP. The SDK patch in `patches/` aborts that fetch when the connection closes, so a cancelled or timed-out open releases it too.
+
+Queues and retention: each alert has one delivery row in the database, so the outbox queue lives in the database and survives a server crash, a dropped connection, and a database crash (all three are tested). The worker handles at most 4 due deliveries at a time and polls every second. No retention limit exists yet: alerts, deliveries, and samples stay until a retention policy is chosen.
 
 **Back up.** SpacetimeDB 2.10.2 has no online backup command, so take a cold backup:
 
@@ -164,7 +167,7 @@ Each request opens its own connection and closes it when the request ends or is 
 2. `spacetime start --data-dir <new-dir> --jwt-priv-key-path <key> --jwt-pub-key-path <key>.pub --listen-addr 127.0.0.1:<port>`
 3. Open a connection with a known token and compare its rows with the expected values before you send traffic to it.
 
-`bun run db:drill` runs these steps with synthetic records in temporary directories and its own key pair. It also kills the database with `SIGKILL`, restarts it, and checks that every committed row is present. `DRILL_PORT` picks its ports (default 3600 and 3601). It fails unless the restored rows equal the written rows.
+`bun run db:drill` runs these steps with synthetic records, including two alerts whose deliveries are still `queued`, in temporary directories with its own key pair and CLI config. It also kills the database with `SIGKILL`, restarts it, and checks that every committed row and delivery state is present. `DRILL_PORT` picks its ports (default 3600 and 3601); it stops if a port already answers. It fails unless the restored rows equal the written rows.
 
 </details>
 

@@ -5,7 +5,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:net";
+import { Effect } from "effect";
 import { sign } from "hono/jwt";
+import { Timestamp } from "spacetimedb";
+import { runAlertOutbox } from "./alerts/outbox";
+import { readAlerts } from "./alerts/records";
+import { callDb, type FamilyDb, openFamilyDb, readFamilyRecords } from "./db";
 import { closed, dbProxy } from "./db-proxy";
 
 const uri = process.env.SPACETIMEDB_URI;
@@ -58,26 +64,100 @@ const startFixtures = async (uri: string) => {
 };
 
 const fixtures = uri && database ? await startFixtures(uri) : undefined;
+const operatorToken = process.env.SPACETIMEDB_OPERATOR_TOKEN;
+
+/** A new family owned by `member` whose fresh 140 bpm sample raised one alert with a queued delivery. */
+const raiseQueuedAlert = (member: FamilyDb) =>
+	Effect.gen(function* () {
+		const name = crypto.randomUUID();
+		yield* callDb(member, (c) => c.reducers.createFamily({ name }));
+		const familyId = readFamilyRecords(member).families.find(
+			(family) => family.name === name,
+		)?.id;
+		if (familyId === undefined) throw new Error("no family");
+		yield* callDb(member, (c) =>
+			c.reducers.setAlertThreshold({
+				familyId: BigInt(familyId),
+				metric: "heart_rate",
+				direction: { tag: "Above" },
+				limit: 110,
+				unit: "bpm",
+				maxAgeSeconds: 300,
+			}),
+		);
+		yield* callDb(member, (c) =>
+			c.reducers.recordSample({
+				familyId: BigInt(familyId),
+				metric: "heart_rate",
+				value: 140,
+				unit: "bpm",
+				sourceTime: Timestamp.fromDate(new Date(Date.now() - 1000)),
+				source: "synthetic-demo",
+				synthetic: true,
+				quality: { tag: "Validated" },
+			}),
+		);
+		expect(readAlerts(member, familyId)[0]?.delivery?.status).toBe("queued");
+		return familyId;
+	});
+
+// Runs before the server starts, so no other worker takes the queued delivery first.
+describe.skipIf(fixtures === undefined)("the alert outbox loop", () => {
+	test("ends at once, instead of hanging, when its connection drops during a delivery step", async () => {
+		if (!uri || !database || !operatorToken)
+			throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
+		const cut = await dbProxy(uri);
+		cut.setMode("drop-call");
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					yield* raiseQueuedAlert(yield* openFamilyDb({ uri, database }));
+					const operator = yield* openFamilyDb({
+						uri: cut.uri,
+						database,
+						token: operatorToken,
+					});
+					const ended = yield* Effect.flip(
+						runAlertOutbox(operator, undefined, "10 millis"),
+					);
+					expect(ended).toEqual(new Error("operator connection closed"));
+				}),
+			),
+		);
+		cut.close();
+	});
+});
 
 describe.skipIf(fixtures === undefined)(
 	"the server under database failures",
 	() => {
 		if (fixtures === undefined || database === undefined) return;
 		const { link, issuerServer, issuer, token } = fixtures;
-		const port = 3700 + Math.floor(Math.random() * 100);
-		const base = `http://127.0.0.1:${port}`;
+		let base = "";
 		let server: ChildProcess;
-		beforeAll(async () => {
+		// Starts the server on a port the OS picked as free. The outbox worker runs as the delivery
+		// operator when db:test passes SPACETIMEDB_OPERATOR_TOKEN.
+		const startServer = async () => {
+			const probe = createServer();
+			const bound = Promise.withResolvers<void>();
+			probe.listen(0, "127.0.0.1", bound.resolve);
+			await bound.promise;
+			const address = probe.address();
+			if (address === null || typeof address === "string")
+				throw new Error("no free port");
+			probe.close();
+			base = `http://127.0.0.1:${address.port}`;
 			server = spawn("node", ["dist/index.mjs"], {
 				cwd: new URL("../", import.meta.url),
 				env: {
 					...process.env,
 					NODE_ENV: "production",
-					PORT: String(port),
+					PORT: String(address.port),
 					OIDC_ISSUER: issuer,
 					OIDC_AUDIENCE: audience,
 					SPACETIMEDB_URI: link.uri,
 					SPACETIMEDB_DATABASE: database,
+					ALERT_OPERATOR_TOKEN: process.env.SPACETIMEDB_OPERATOR_TOKEN,
 				},
 				stdio: ["ignore", "pipe", "inherit"],
 			});
@@ -88,7 +168,8 @@ describe.skipIf(fixtures === undefined)(
 				if (String(chunk).includes("server listening")) listening.resolve();
 			});
 			await listening.promise;
-		});
+		};
+		beforeAll(startServer);
 		afterAll(() => {
 			server.kill("SIGKILL");
 			link.close();
@@ -154,6 +235,46 @@ describe.skipIf(fixtures === undefined)(
 			await released;
 			link.setMode("pass");
 		});
+
+		test("a queued alert delivery survives an operator outage and a server crash, then the worker processes it", async () => {
+			if (uri === undefined || !operatorToken)
+				throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
+			// Cut the outbox worker off: drop its connection and refuse new ones.
+			link.setMode("refuse");
+			link.drop();
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						// A family member, connected directly to the database, raises an alert.
+						const member = yield* openFamilyDb({ uri, database });
+						const familyId = yield* raiseQueuedAlert(member);
+						const delivery = () => readAlerts(member, familyId)[0]?.delivery;
+
+						// Crash the server while the delivery is queued, then start a new one.
+						const exited = once(server, "exit");
+						server.kill("SIGKILL");
+						yield* Effect.promise(() => exited);
+						yield* Effect.promise(startServer);
+						expect(delivery()?.status).toBe("queued");
+						link.setMode("pass");
+
+						// The worker reopens its connection every 5 s. Without a transport it marks the
+						// delivery `unavailable`. Poll: the SDK has no event for another identity's write.
+						for (
+							const end = Date.now() + 15_000;
+							delivery()?.status === "queued" && Date.now() < end;
+						)
+							yield* Effect.promise(() => Bun.sleep(100));
+						expect(delivery()).toMatchObject({
+							status: "unavailable",
+							attempts: 0,
+							lastError: "No family delivery transport is configured",
+						});
+						expect(readAlerts(member, familyId)).toHaveLength(1);
+					}),
+				),
+			);
+		}, 30_000);
 
 		test("SIGTERM with a request waiting on the database exits within 5 s and closes its connection", async () => {
 			link.setMode("freeze");
