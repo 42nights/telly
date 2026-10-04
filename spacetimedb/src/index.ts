@@ -1,6 +1,6 @@
 // Family-scoped health data. Every table is private: clients read only through the per-sender views
 // below, and every reducer checks the caller's family membership itself, independent of the server.
-import { Timestamp } from "spacetimedb";
+import { type Identity, Timestamp } from "spacetimedb";
 import {
 	type Infer,
 	type InferSchema,
@@ -10,6 +10,7 @@ import {
 	schema,
 	t,
 	table,
+	type ViewCtx,
 } from "spacetimedb/server";
 
 const family = table(
@@ -77,6 +78,9 @@ const alert = table(
 		createdAt: t.timestamp(),
 	},
 );
+
+// An alert's family message uses this client id prefix plus the alert id. Members cannot use it.
+const ALERT_CLIENT_ID = "alert-";
 
 const message = table(
 	{
@@ -384,6 +388,69 @@ const ladderTimer = table(
 	},
 );
 
+// The wearer's care profile (#26). Each save is a new version, so the history keeps who changed
+// it and when. JSON that the server validates against `@health/contracts/care-profile`.
+const careProfileVersion = table(
+	{ name: "care_profile_version" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		profile: t.string(),
+		editedBy: t.identity(),
+		editedAt: t.timestamp(),
+	},
+);
+
+// What an editor writes for one medication or care instruction version.
+const careInstructionFields = {
+	kind: t.string(),
+	name: t.string(),
+	instruction: t.string(),
+	times: t.array(t.string()),
+	reason: t.option(t.string()),
+	source: t.string(),
+	effectiveDate: t.string(),
+};
+
+// A medication or care instruction. A change is a new row; only the verification fields are ever
+// set later, once. The server derives verified, unverified, conflicting, and stale from the rows.
+const careInstruction = table(
+	{ name: "care_instruction" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		...careInstructionFields,
+		editedBy: t.identity(),
+		editedAt: t.timestamp(),
+		verifiedBy: t.option(t.identity()),
+		verifiedAt: t.option(t.timestamp()),
+	},
+);
+
+// Per-recipient sharing: every grant and revoke, in order. A member holds a scope when their latest
+// event for it grants it. Membership alone holds no scope.
+const careGrantEvent = table(
+	{
+		name: "care_grant_event",
+		indexes: [
+			{
+				accessor: "byFamilyMember",
+				algorithm: "btree",
+				columns: ["familyId", "member"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		member: t.identity(),
+		scope: t.string(),
+		granted: t.bool(),
+		changedBy: t.identity(),
+		changedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -401,6 +468,9 @@ const spacetimedb = schema({
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	careProfileVersion,
+	careInstruction,
+	careGrantEvent,
 });
 export default spacetimedb;
 
@@ -416,6 +486,39 @@ const requireMember = (ctx: Ctx, familyId: bigint) => {
 
 const requireText = (field: string, value: string) => {
 	if (value.trim() === "") throw new SenderError(`${field} must not be empty`);
+};
+
+// The `CareScope` values of `@health/contracts/care-profile`.
+const careScopes: Record<string, true> = {
+	health_records: true,
+	care_plan_edit: true,
+	family_access: true,
+	location: true,
+	media: true,
+	clinician_delivery: true,
+	purchases: true,
+};
+
+/** Whether one member's grant events (from `careGrantEvent.byFamilyMember`) hold `scope` now. */
+const holdsCareScope = (
+	events: Iterable<{ id: bigint; scope: string; granted: boolean }>,
+	scope: string,
+) => {
+	let latest: { id: bigint; granted: boolean } | undefined;
+	for (const event of events)
+		if (event.scope === scope && (latest === undefined || event.id > latest.id))
+			latest = event;
+	return latest?.granted === true;
+};
+
+const requireCareScope = (ctx: Ctx, familyId: bigint, scope: string) => {
+	requireMember(ctx, familyId);
+	const events = ctx.db.careGrantEvent.byFamilyMember.filter([
+		familyId,
+		ctx.sender,
+	]);
+	if (!holdsCareScope(events, scope))
+		throw new SenderError(`no care access: ${scope}`);
 };
 
 type Need = Infer<typeof careNeed.rowType>;
@@ -782,6 +885,8 @@ export const sendMessage = spacetimedb.reducer(
 	(ctx, { familyId, clientId, body }) => {
 		requireMember(ctx, familyId);
 		requireText("clientId", clientId);
+		if (clientId.startsWith(ALERT_CLIENT_ID))
+			throw new SenderError(`clientId must not start with ${ALERT_CLIENT_ID}`);
 		requireText("body", body);
 		// A client resends after a lost reply; the first stored copy stands.
 		for (const sent of ctx.db.message.bySenderClientId.filter([
@@ -956,6 +1061,32 @@ export const markAlertDeliveryUnavailable = spacetimedb.reducer(
 			notBefore: ctx.timestamp,
 			lastError: reason,
 			updatedAt: ctx.timestamp,
+		});
+	},
+);
+
+/**
+ * The in-app family delivery: the operator posts the alert to its family's message thread. The
+ * client id is the delivery's idempotency key, so a resend after a lost report posts nothing new.
+ */
+export const postAlertMessage = spacetimedb.reducer(
+	{ alertId: t.u64() },
+	(ctx, { alertId }) => {
+		const { familyId, summary } = openDelivery(ctx, alertId);
+		const clientId = `${ALERT_CLIENT_ID}${alertId}`;
+		const posted = ctx.db.message.bySenderClientId.filter([
+			familyId,
+			ctx.sender,
+			clientId,
+		]);
+		if (!posted.next().done) return;
+		ctx.db.message.insert({
+			id: 0n,
+			familyId,
+			sender: ctx.sender,
+			body: summary,
+			sentAt: ctx.timestamp,
+			clientId,
 		});
 	},
 );
@@ -1260,6 +1391,117 @@ export const runLadderTimer = spacetimedb.reducer(
 	},
 );
 
+export const saveCareProfile = spacetimedb.reducer(
+	{ familyId: t.u64(), profile: t.string() },
+	(ctx, { familyId, profile }) => {
+		requireCareScope(ctx, familyId, "care_plan_edit");
+		requireText("profile", profile);
+		ctx.db.careProfileVersion.insert({
+			id: 0n,
+			familyId,
+			profile,
+			editedBy: ctx.sender,
+			editedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const addCareInstruction = spacetimedb.reducer(
+	{ familyId: t.u64(), ...careInstructionFields },
+	(ctx, added) => {
+		requireCareScope(ctx, added.familyId, "care_plan_edit");
+		if (added.kind !== "medication" && added.kind !== "care")
+			throw new SenderError("kind must be medication or care");
+		requireText("name", added.name);
+		requireText("instruction", added.instruction);
+		requireText("source", added.source);
+		requireText("effectiveDate", added.effectiveDate);
+		ctx.db.careInstruction.insert({
+			...added,
+			reason: added.reason,
+			id: 0n,
+			editedBy: ctx.sender,
+			editedAt: ctx.timestamp,
+			verifiedBy: undefined,
+			verifiedAt: undefined,
+		});
+	},
+);
+
+// Verifying is the only way a version takes effect. An older version cannot be verified over a
+// newer verified one, so a verified schedule never silently goes back.
+export const verifyCareInstruction = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		const found = ctx.db.careInstruction.id.find(id);
+		// A missing instruction fails like another family's, so ids reveal nothing.
+		if (found === null) throw new SenderError("not a member of this family");
+		requireCareScope(ctx, found.familyId, "care_plan_edit");
+		if (found.verifiedAt !== undefined) return;
+		const key = found.name.toLowerCase();
+		for (const other of ctx.db.careInstruction.familyId.filter(found.familyId))
+			if (
+				other.id > id &&
+				other.verifiedAt !== undefined &&
+				other.kind === found.kind &&
+				other.name.toLowerCase() === key
+			)
+				throw new SenderError("a newer version is already verified");
+		ctx.db.careInstruction.id.update({
+			...found,
+			verifiedBy: ctx.sender,
+			verifiedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Until anyone has ever held `family_access`, the family's founder (its first member) may change
+// grants, so a new family can set up sharing.
+const maySetUpSharing = (ctx: Ctx, familyId: bigint) => {
+	for (const event of ctx.db.careGrantEvent.familyId.filter(familyId))
+		if (event.scope === "family_access" && event.granted) return false;
+	let founder: { id: bigint; member: Identity } | undefined;
+	for (const m of ctx.db.familyMember.familyId.filter(familyId))
+		if (founder === undefined || m.id < founder.id) founder = m;
+	return founder?.member.isEqual(ctx.sender) === true;
+};
+
+// A `family_access` holder changes grants (see `maySetUpSharing` for a new family).
+export const setCareGrant = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		member: t.identity(),
+		scope: t.string(),
+		granted: t.bool(),
+	},
+	(ctx, grant) => {
+		requireMember(ctx, grant.familyId);
+		if (careScopes[grant.scope] !== true)
+			throw new SenderError("unknown care scope");
+		const grantee = ctx.db.familyMember.byFamilyMember.filter([
+			grant.familyId,
+			grant.member,
+		]);
+		if (grantee.next().done)
+			throw new SenderError("the grantee is not a member of this family");
+		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
+			grant.familyId,
+			ctx.sender,
+		]);
+		if (
+			!holdsCareScope(mine, "family_access") &&
+			!maySetUpSharing(ctx, grant.familyId)
+		)
+			throw new SenderError("no care access: family_access");
+		ctx.db.careGrantEvent.insert({
+			...grant,
+			id: 0n,
+			changedBy: ctx.sender,
+			changedAt: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1413,5 +1655,49 @@ export const myContactAttempts = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.contactAttempt, (m, a) =>
 				m.familyId.eq(a.familyId),
+			),
+);
+
+// Care views (#26): the profile and instructions only for families where the caller holds
+// `health_records` now, so a revoke empties them at once. Grants are visible to every member.
+const careReader = <Row>(
+	ctx: ViewCtx<InferSchema<typeof spacetimedb>>,
+	rows: (familyId: bigint) => Iterable<Row>,
+): Row[] =>
+	[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) =>
+		holdsCareScope(
+			ctx.db.careGrantEvent.byFamilyMember.filter([m.familyId, ctx.sender]),
+			"health_records",
+		)
+			? [...rows(m.familyId)]
+			: [],
+	);
+
+export const myCareProfiles = spacetimedb.view(
+	{ name: "my_care_profiles", public: true },
+	t.array(careProfileVersion.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) =>
+			ctx.db.careProfileVersion.familyId.filter(familyId),
+		),
+);
+
+export const myCareInstructions = spacetimedb.view(
+	{ name: "my_care_instructions", public: true },
+	t.array(careInstruction.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) =>
+			ctx.db.careInstruction.familyId.filter(familyId),
+		),
+);
+
+export const myCareGrants = spacetimedb.view(
+	{ name: "my_care_grants", public: true },
+	t.array(careGrantEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.careGrantEvent, (m, g) =>
+				m.familyId.eq(g.familyId),
 			),
 );

@@ -6,7 +6,7 @@ import { MessageSquare, Volume2 } from "lucide-react";
 
 import { ApiNotice } from "@/components/win95";
 import { type ApiState, useApi } from "@/lib/api";
-import { memberLabel } from "@/lib/members";
+import { senderLabel } from "@/lib/members";
 
 import { SpeechLine, useSpeech } from "./speech";
 
@@ -63,7 +63,7 @@ export function Messages({
 						>
 							<p className="flex justify-between gap-2 border-[#808080] border-b pb-1 font-bold text-[#000080] text-[15px]">
 								<span className="min-w-0 break-words">
-									{memberLabel(message.sender, me)}
+									{senderLabel(message, me)}
 								</span>
 								<time dateTime={message.sentAt}>{time(message.sentAt)}</time>
 							</p>

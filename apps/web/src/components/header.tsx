@@ -11,6 +11,7 @@ const links = [
 	{ to: "/hud", label: "Home" },
 	{ to: "/medicine", label: "Medicine" },
 	{ to: "/family", label: "Family" },
+	{ to: "/care-profile", label: "Care plan" },
 	{ to: "/chat", label: "Chat" },
 	{ to: "/care", label: "Care" },
 	{ to: "/dashboard", label: "Dashboard" },

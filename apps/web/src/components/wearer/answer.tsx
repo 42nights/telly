@@ -1,7 +1,7 @@
 import type { FamilyAnswer } from "@health/contracts/ask";
 import { Button } from "@health/ui/components/button";
 import { CloudOff, Mic, RotateCw, Snail, Square, Volume2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { useDemoWarning } from "@/lib/demo";
 
@@ -32,7 +32,7 @@ function AskAgain({ onDone }: { onDone: () => void }) {
 	);
 }
 
-function Asked({
+export function Asked({
 	asked,
 	languageCode = null,
 }: {
@@ -86,10 +86,13 @@ export function AnswerPanel({
 	reply,
 	familyId,
 	onDone,
+	support,
 }: {
 	reply: Reply;
 	familyId: string | null;
 	onDone: () => void;
+	/** A person to talk to and the help flow, shown under the answer. */
+	support: ReactNode;
 }) {
 	const { speech, say, stop } = useSpeech(familyId);
 	const speak = (slow = false) =>
@@ -144,6 +147,7 @@ export function AnswerPanel({
 				</div>
 			)}
 			{said && <SpeechLine speech={speech} />}
+			{support}
 			<AskAgain onDone={onDone} />
 		</div>
 	);
@@ -156,6 +160,7 @@ export function AnswerFailed({
 	detail,
 	onRetry,
 	onDone,
+	support,
 }: {
 	asked: string | null;
 	title: string;
@@ -163,6 +168,7 @@ export function AnswerFailed({
 	/** Sends the same request again: the typed text, or the kept recording. */
 	onRetry: () => void;
 	onDone: () => void;
+	support: ReactNode;
 }) {
 	return (
 		<div className="grid gap-3">
@@ -184,6 +190,7 @@ export function AnswerFailed({
 				<RotateCw aria-hidden />
 				Try again
 			</Button>
+			{support}
 			<AskAgain onDone={onDone} />
 		</div>
 	);

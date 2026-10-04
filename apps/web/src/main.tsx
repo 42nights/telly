@@ -2,6 +2,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
 import Loader from "./components/loader";
+import { startPendingSync } from "./lib/pending";
 import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({
@@ -27,4 +28,5 @@ if (!rootElement) {
 if (!rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement);
 	root.render(<RouterProvider router={router} />);
+	startPendingSync();
 }
