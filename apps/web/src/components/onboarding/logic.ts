@@ -39,6 +39,40 @@ export const noopLink = (serverUrl: string, token: string) =>
 		`${serverUrl}/api/noop/ingest?k=${encodeURIComponent(token)}`,
 	)}`;
 
+/** A required whole number from a text field, or null when empty or not a whole number. */
+const wholeNumber = (text: string) =>
+	/^\d+$/.test(text.trim()) ? Number(text.trim()) : null;
+
+export type ReminderRules = {
+	readonly timeZone: string;
+	readonly quietHours: null;
+	readonly repeatEveryMinutes: number;
+	readonly maxPrompts: number;
+	readonly snoozeMinutes: number;
+};
+
+/** The reminder rules to save from the typed fields, or null while one is missing or not whole. */
+export const reminderRules = (
+	timeZone: string,
+	typed: { repeat: string; max: string; snooze: string },
+): ReminderRules | null => {
+	const repeatEveryMinutes = wholeNumber(typed.repeat);
+	const maxPrompts = wholeNumber(typed.max);
+	const snoozeMinutes = wholeNumber(typed.snooze);
+	return timeZone !== "" &&
+		repeatEveryMinutes !== null &&
+		maxPrompts !== null &&
+		snoozeMinutes !== null
+		? {
+				timeZone,
+				quietHours: null,
+				repeatEveryMinutes,
+				maxPrompts,
+				snoozeMinutes,
+			}
+		: null;
+};
+
 /** Real WHOOP readings: pushed by NOOP, never synthetic. */
 export const whoopSamples = (samples: readonly HealthSample[]) =>
 	samples.filter((s) => s.source.startsWith("noop:") && !s.synthetic);

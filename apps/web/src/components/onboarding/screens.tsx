@@ -5,7 +5,7 @@ import { CareAccess, CareProfileRecord } from "@health/contracts/care-profile";
 import type { Me } from "@health/contracts/families";
 import { Button } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { apiRequest, familyPath } from "@/lib/api";
 import { useFamily } from "@/lib/family";
@@ -158,6 +158,107 @@ const FOUNDER_SCOPES = [
 	"care_plan_edit",
 ] as const;
 
+/** Gives the founder each care plan permission they do not hold yet. */
+async function grantFounderScopes(
+	familyId: string,
+	identity: Me["identity"],
+): Promise<string | null> {
+	const path = familyPath(familyId, "/care-access");
+	const access = await apiRequest(CareAccess, path);
+	if (access.kind !== "ready") return failureText(access);
+	for (const scope of FOUNDER_SCOPES) {
+		if (access.value.mine.includes(scope)) continue;
+		const grant = await apiRequest(null, path, {
+			method: "POST",
+			body: { identity, scope, granted: true },
+		});
+		if (grant.kind !== "ready") return failureText(grant);
+	}
+	return null;
+}
+
+/** Saves the name, time zone, and language; every other field keeps what the profile holds. */
+async function saveProfile(
+	familyId: string,
+	fields: {
+		preferredName: string;
+		timeZone: string | null;
+		language: string | null;
+	},
+): Promise<string | null> {
+	const path = familyPath(familyId, "/care-profile");
+	const record = await apiRequest(CareProfileRecord, path);
+	if (record.kind !== "ready") return failureText(record);
+	const saved = await apiRequest(null, path, {
+		method: "PUT",
+		body: { ...record.value.profile, ...fields },
+	});
+	return saved.kind === "ready" ? null : failureText(saved);
+}
+
+/** A field that holds a value from this device, marked and sourced while it still holds that seed. */
+function DeviceField({
+	value,
+	seed,
+	children,
+}: {
+	value: string;
+	seed: string;
+	children: ReactNode;
+}) {
+	const seeded = value !== "" && value === seed;
+	return (
+		<div className={`grid gap-1 ${seeded ? seededClass : ""}`}>
+			{children}
+			{seeded && <Source>this device</Source>}
+		</div>
+	);
+}
+
+/** A form whose submit button runs `save`, shows "Saving…" meanwhile, and then its refusal. */
+export function SaveForm({
+	label,
+	ready,
+	save,
+	className,
+	"aria-label": ariaLabel,
+	children,
+}: {
+	label: string;
+	ready: boolean;
+	/** Resolves to the refusal text, or null when saved. */
+	save: () => Promise<string | null>;
+	className: string;
+	"aria-label"?: string;
+	children: ReactNode;
+}) {
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	return (
+		<form
+			aria-label={ariaLabel}
+			className={className}
+			onSubmit={async (event) => {
+				event.preventDefault();
+				setBusy(true);
+				const refused = await save();
+				setBusy(false);
+				setError(refused);
+			}}
+		>
+			{children}
+			{error !== null && <p role="alert">{error}</p>}
+			<Button
+				type="submit"
+				className="win95-primary h-11 w-full"
+				disabled={busy || !ready}
+			>
+				{busy ? "Saving…" : label}
+			</Button>
+		</form>
+	);
+}
+
 /**
  * Screen 3: creates the family, gives its founder the care plan permissions (as the Care plan's
  * "Set up sharing" does), and saves the name, time zone, and language into the care profile.
@@ -173,17 +274,19 @@ export function WhoScreen({
 }) {
 	const { select, reload } = useFamily();
 	const seeded = mode === "seeded";
-	const [zoneSeed] = useState(() =>
-		seeded ? Intl.DateTimeFormat().resolvedOptions().timeZone : "",
+	const [seed] = useState(() =>
+		seeded
+			? {
+					zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+					language: navigator.language,
+				}
+			: { zone: "", language: "" },
 	);
-	const [languageSeed] = useState(() => (seeded ? navigator.language : ""));
 	const [name, setName] = useState("");
 	const [familyName, setFamilyName] = useState<string | null>(null);
-	const [zone, setZone] = useState(zoneSeed);
-	const [language, setLanguage] = useState(languageSeed);
+	const [zone, setZone] = useState(seed.zone);
+	const [language, setLanguage] = useState(seed.language);
 	const [created, setCreated] = useState<Family | null>(null);
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
 	// Built from the typed name until the user edits it; "by hand" builds nothing.
 	const family =
 		familyName ??
@@ -203,50 +306,23 @@ export function WhoScreen({
 			select(made.id);
 			reload();
 		}
-		const access = await apiRequest(
-			CareAccess,
-			familyPath(made.id, "/care-access"),
-		);
-		if (access.kind !== "ready") return failureText(access);
-		for (const scope of FOUNDER_SCOPES) {
-			if (access.value.mine.includes(scope)) continue;
-			const grant = await apiRequest(
-				null,
-				familyPath(made.id, "/care-access"),
-				{
-					method: "POST",
-					body: { identity: me.identity, scope, granted: true },
-				},
-			);
-			if (grant.kind !== "ready") return failureText(grant);
-		}
-		const profilePath = familyPath(made.id, "/care-profile");
-		const record = await apiRequest(CareProfileRecord, profilePath);
-		if (record.kind !== "ready") return failureText(record);
-		// Only these three change; every other field keeps what the profile already holds.
-		const saved = await apiRequest(null, profilePath, {
-			method: "PUT",
-			body: {
-				...record.value.profile,
+		const refused =
+			(await grantFounderScopes(made.id, me.identity)) ??
+			(await saveProfile(made.id, {
 				preferredName: name.trim(),
 				timeZone: zone === "" ? null : zone,
 				language: language.trim() === "" ? null : language.trim(),
-			},
-		});
-		if (saved.kind !== "ready") return failureText(saved);
-		onDone(made);
-		return null;
+			}));
+		if (refused === null) onDone(made);
+		return refused;
 	};
 
 	return (
-		<form
+		<SaveForm
 			className="grid gap-3 p-2"
-			onSubmit={async (event) => {
-				event.preventDefault();
-				setBusy(true);
-				setError(await save());
-				setBusy(false);
-			}}
+			label="Next"
+			ready={name.trim() !== "" && family.trim() !== ""}
+			save={save}
 		>
 			<div className="grid gap-1">
 				<label htmlFor="who-name">
@@ -273,18 +349,13 @@ export function WhoScreen({
 					onChange={(event) => setFamilyName(event.target.value)}
 				/>
 			</div>
-			<div
-				className={`grid gap-1 ${zone !== "" && zone === zoneSeed ? seededClass : ""}`}
-			>
+			<DeviceField value={zone} seed={seed.zone}>
 				<label htmlFor="who-zone" className="font-bold">
 					Time zone
 				</label>
 				<TimeZoneSelect id="who-zone" value={zone} onChange={setZone} />
-				{zone !== "" && zone === zoneSeed && <Source>this device</Source>}
-			</div>
-			<div
-				className={`grid gap-1 ${language !== "" && language === languageSeed ? seededClass : ""}`}
-			>
+			</DeviceField>
+			<DeviceField value={language} seed={seed.language}>
 				<label htmlFor="who-language" className="font-bold">
 					Language
 				</label>
@@ -295,10 +366,7 @@ export function WhoScreen({
 					value={language}
 					onChange={(event) => setLanguage(event.target.value)}
 				/>
-				{language !== "" && language === languageSeed && (
-					<Source>this device</Source>
-				)}
-			</div>
+			</DeviceField>
 			{seeded && you !== "" && (
 				<div className={`grid gap-1 ${seededClass}`}>
 					<b>You</b>
@@ -310,14 +378,6 @@ export function WhoScreen({
 				We make {family === "" ? "the family" : `“${family}”`} with you as the
 				first member and give you the care plan permissions.
 			</p>
-			{error !== null && <p role="alert">{error}</p>}
-			<Button
-				type="submit"
-				className="win95-primary h-11 w-full"
-				disabled={busy || name.trim() === "" || family.trim() === ""}
-			>
-				{busy ? "Saving…" : "Next"}
-			</Button>
-		</form>
+		</SaveForm>
 	);
 }

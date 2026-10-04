@@ -8,6 +8,7 @@ import {
 	newestHeartRate,
 	noopLink,
 	onboardingTarget,
+	reminderRules,
 	whoopSamples,
 } from "./logic";
 
@@ -100,4 +101,20 @@ test("WHOOP status reads only real NOOP samples, newest by source time", () => {
 	expect(samples.map((s) => s.id)).toEqual(["old", "new"]);
 	expect(newestHeartRate(samples)?.id).toBe("new");
 	expect(newestHeartRate([])).toBeNull();
+});
+
+test("reminder rules need a zone and three whole numbers", () => {
+	const typed = { repeat: " 10 ", max: "3", snooze: "15" };
+	expect(reminderRules("Europe/London", typed)).toEqual({
+		timeZone: "Europe/London",
+		quietHours: null,
+		repeatEveryMinutes: 10,
+		maxPrompts: 3,
+		snoozeMinutes: 15,
+	});
+	expect(reminderRules("", typed)).toBeNull();
+	expect(reminderRules("Europe/London", { ...typed, max: "" })).toBeNull();
+	expect(
+		reminderRules("Europe/London", { ...typed, snooze: "1.5" }),
+	).toBeNull();
 });
