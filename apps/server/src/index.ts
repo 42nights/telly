@@ -5,6 +5,8 @@ import { alertOutboxWorker } from "./alerts/outbox";
 import { createApp } from "./app";
 import { serverConfig } from "./config";
 import { ENV } from "./env.server";
+import { startCloudIMessage } from "./imessage/cloud";
+import { familyAnswer } from "./routes/ask";
 
 const config = serverConfig(ENV);
 
@@ -54,4 +56,28 @@ const AlertOutbox = Layer.effectDiscard(
 	),
 );
 
-NodeRuntime.runMain(Layer.launch(Layer.mergeAll(HttpServer, AlertOutbox)));
+// Answers allowlisted iMessage senders through Photon Spectrum Cloud; off without its configuration.
+const { imessage } = config;
+const ask = familyAnswer({
+	gemini: config.gemini,
+	fetchAgent: config.fetchAgent,
+});
+const IMessageAgent = Layer.effectDiscard(
+	imessage === undefined
+		? Effect.void
+		: Effect.gen(function* () {
+				yield* Effect.acquireRelease(
+					Effect.promise(() =>
+						startCloudIMessage(imessage, (familyId, question) =>
+							Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
+						),
+					),
+					(app) => Effect.promise(() => app.stop()),
+				);
+				yield* Effect.log("imessage agent listening");
+			}),
+);
+
+NodeRuntime.runMain(
+	Layer.launch(Layer.mergeAll(HttpServer, AlertOutbox, IMessageAgent)),
+);
