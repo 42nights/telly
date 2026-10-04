@@ -21,7 +21,7 @@ import type { R2Bucket } from "../integrations/r2";
 import type { Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
-import { readAccess } from "./care-profile";
+import { readAccess, requireHealthRecords } from "./care-profile";
 import { readMeals } from "./meal-facts";
 
 /** The marker rows of the board's lab report (docs/board.html#lab-table), always listed. */
@@ -207,6 +207,9 @@ const emailReport = async (
 /** The report flow: generate a draft, fill it, review it, then submit or email it. */
 export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 	new Hono<FamilyEnv>()
+		// Reports and their PDFs are health records (#26); the email settings are not.
+		.use("/reports/*", requireHealthRecords)
+		.use("/report-pdfs/*", requireHealthRecords)
 		.get("/report-email", (c) =>
 			c.json(readEmailSettings(c) satisfies ReportEmailSettings),
 		)
