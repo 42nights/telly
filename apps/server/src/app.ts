@@ -11,16 +11,19 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
+import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
 import { alertRoutes } from "./routes/alerts";
 import { accountRoutes, familyRoutes } from "./routes/families";
+import { voiceRoutes } from "./routes/voice";
 
 export const createApp = (config: ServerConfig) => {
 	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
 		.route("/", familyRoutes())
-		.route("/", alertRoutes());
+		.route("/", alertRoutes())
+		.route("/", voiceRoutes(elevenLabsVoice(config.voice)));
 
 	const app = new Hono()
 		.use(logger())

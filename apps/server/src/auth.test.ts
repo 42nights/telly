@@ -15,6 +15,12 @@ import { createApp } from "./app";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
+// Voice is not configured here; voice routes have their own tests.
+const noVoice = {
+	apiKey: undefined,
+	voiceId: "unused",
+	baseUrl: "http://127.0.0.1:1",
+};
 const audience = "telly-test";
 
 const rsaKey = async (kid: string) => {
@@ -84,6 +90,7 @@ const app =
 		? createApp({
 				corsOrigin: "http://localhost:3001",
 				auth: { issuer, audience, db: { uri, database } },
+				voice: noVoice,
 			})
 		: undefined;
 
@@ -151,6 +158,7 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 				audience,
 				db: { uri: "ws://127.0.0.1:1", database: "health-test" },
 			},
+			voice: noVoice,
 		});
 		const response = await offline.request("/api/families", {
 			headers: { Authorization: `Bearer ${await token("alice")}` },

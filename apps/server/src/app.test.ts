@@ -4,7 +4,15 @@ import { Exit, Schema } from "effect";
 import { createApp } from "./app";
 
 // Sign-in is not configured, as in a fresh checkout.
-const app = createApp({ corsOrigin: "http://localhost:3001", auth: undefined });
+const app = createApp({
+	corsOrigin: "http://localhost:3001",
+	auth: undefined,
+	voice: {
+		apiKey: undefined,
+		voiceId: "unused",
+		baseUrl: "http://127.0.0.1:1",
+	},
+});
 
 // Excess keys fail decoding, so a reading or nudge added to a source cannot slip through unseen.
 const strict = { onExcessProperty: "error" } as const;
