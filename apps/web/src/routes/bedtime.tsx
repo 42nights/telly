@@ -20,6 +20,7 @@ import {
 import { OvernightReminders } from "@/components/bedtime/reminders";
 import { STALE_MS, usePolled } from "@/components/hud/use-polled";
 import { Window } from "@/components/hud/window";
+import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
 import { useNow } from "@/components/wearer/use-now";
 import { useFamily } from "@/lib/family";
@@ -80,7 +81,8 @@ function OvernightCheck({
 
 function Bedtime() {
 	const now = useNow();
-	const { family } = useFamily();
+	const familyId = useFamily().family?.id ?? null;
+	const emergency = useEmergency(familyId);
 	const sound = useSleepSound();
 	const { allowed, chime } = useChime();
 	const [timer, setTimer] = useState<number | null>(30);
@@ -98,10 +100,7 @@ function Bedtime() {
 				<div className="grid gap-4 p-2 md:p-4">
 					<fieldset className="grid gap-2 border border-border p-2">
 						<legend className="px-1 font-bold">Reminders tonight</legend>
-						<OvernightReminders
-							familyId={family?.id ?? null}
-							onPrompt={onPrompt}
-						/>
+						<OvernightReminders familyId={familyId} onPrompt={onPrompt} />
 					</fieldset>
 
 					<OvernightCheck now={now} soundAllowed={allowed} />
@@ -168,9 +167,11 @@ function Bedtime() {
 					>
 						<h2 className="font-bold text-[16px]">Need something?</h2>
 						<Request
-							familyId={family?.id ?? null}
+							familyId={familyId}
+							onEmergency={emergency.start}
 							talkNote="Talk needs a paired person. You can still type."
 						/>
+						<Emergency emergency={emergency} familyId={familyId} />
 					</section>
 				</div>
 			</Window>

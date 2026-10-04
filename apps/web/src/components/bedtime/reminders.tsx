@@ -13,7 +13,7 @@ import { BellRing } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
-import { apiRequest, familyPath, useApi } from "@/lib/api";
+import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { ANSWERED, awaitsAnswer, fallbackText, tonight } from "./logic";
 
 const POLL_MS = 10_000;
@@ -88,6 +88,37 @@ function DuePrompt({
 	);
 }
 
+/** Tonight's saved reminders and what happens when one goes unanswered. */
+function Tonight({
+	occurrences,
+	settings,
+}: {
+	occurrences: readonly ReminderOccurrence[];
+	settings: ApiState<SavedReminderSettings>;
+}) {
+	const upcoming = tonight(occurrences, Date.now());
+	return (
+		<>
+			{upcoming.length === 0 ? (
+				<p>No saved reminder is due tonight, so nothing will wake you.</p>
+			) : (
+				<ul className="grid gap-1">
+					{upcoming.map(({ id, text }) => (
+						<li key={id}>{text}</li>
+					))}
+				</ul>
+			)}
+			<p className="text-[16px]">
+				Saved reminders only, from your family. Keep this screen open and the
+				phone plugged in: a closed tab cannot wake you.{" "}
+				{settings.kind === "ready" && settings.value.settings !== null
+					? fallbackText(settings.value.settings)
+					: "Nobody calls 911 when a reminder goes unanswered."}
+			</p>
+		</>
+	);
+}
+
 /** Saved reminders for tonight and any prompt due now. `onPrompt` runs once per new prompt. */
 export function OvernightReminders({
 	familyId,
@@ -138,7 +169,6 @@ export function OvernightReminders({
 		return <ApiNotice state={{ kind: "signed_out" }} what="reminders" />;
 	if (history.kind !== "ready")
 		return <ApiNotice state={history} what="reminders" />;
-	const upcoming = tonight(occurrences, Date.now());
 	return (
 		<div className="grid gap-2 text-[18px]">
 			{showing !== undefined && (
@@ -157,22 +187,7 @@ export function OvernightReminders({
 					{answered}
 				</p>
 			)}
-			{upcoming.length === 0 ? (
-				<p>No saved reminder is due tonight, so nothing will wake you.</p>
-			) : (
-				<ul className="grid gap-1">
-					{upcoming.map(({ id, text }) => (
-						<li key={id}>{text}</li>
-					))}
-				</ul>
-			)}
-			<p className="text-[16px]">
-				Saved reminders only, from your family. Keep this screen open and the
-				phone plugged in: a closed tab cannot wake you.{" "}
-				{settings.kind === "ready" && settings.value.settings !== null
-					? fallbackText(settings.value.settings)
-					: "Nobody calls 911 when a reminder goes unanswered."}
-			</p>
+			<Tonight occurrences={occurrences} settings={settings} />
 		</div>
 	);
 }
