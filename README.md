@@ -10,8 +10,7 @@ Alzheimer's care first. Phone and web first. Glasses optional.
 </div>
 
 > [!IMPORTANT]
-> Telly is a hackathon project. It uses synthetic demo data, and some outside actions are simulated (see [Status](#status)).
-> Telly is not a medical device and makes no medical safety claims.
+> Telly is not a medical device and makes no medical safety claims. Phone calls, SMS, emergency dispatch, food orders, clinician updates, and the home speaker are simulated (see [Simulated, with no provider](#providers)).
 
 ## What Telly does
 
@@ -19,15 +18,15 @@ Alzheimer's care first. Phone and web first. Glasses optional.
 | --- | --- |
 | Ask by voice or text, and hear the answer in their language | See alerts, acknowledge them, and follow a contact ladder until someone accepts |
 | Find a medicine box in the camera frame, and remember where it was last seen | Ask questions about the person's records; answers cite their source and age |
-| Medication, meal, drink, and bedtime reminders that can be snoozed or declined | Keep a care profile with verified instructions and per-person sharing |
-| Guided exercise, trip check-ins, and "Help me get home" | Review lab reports, correct values, and save private PDFs |
-| An urgent-help route and a fall check-in | Plan appointments and share updates with a clinician after consent |
+| Medication, meal, drink, and bedtime reminders that can be snoozed or declined | Keep each member's medicines, places, care profile, and verified instructions |
+| Guided exercise, trip check-ins, and "Help me get home" | Invite members, and share care per person and per scope; records need the `health_records` scope |
+| An urgent-help route and a fall check-in | Review lab reports, save private PDFs, email reviewed reports, and plan appointments |
 
 Missing data always shows as "unavailable", never as "all clear". No model decides whether an alert fires. Every feature works on the phone and the web; Meta Ray-Ban Display glasses are an optional adapter.
 
 ## Architecture
 
-Solid lines are live. Dashed boxes are simulated or not connected on the deployed app.
+Solid lines are live on production. Dashed boxes are simulated or not connected yet.
 
 ```mermaid
 flowchart LR
@@ -36,7 +35,7 @@ flowchart LR
     phone["Phone app"]
     imsg["iMessage<br/>Photon Spectrum"]
     glasses["Meta glasses<br/>optional"]
-    noop["WHOOP via NOOP"]
+    noop["WHOOP via NOOP<br/>per-family connect link"]
     hk["HealthKit"]
     worker["Cloudflare Worker<br/>serves the web app"]
     api["Telly API<br/>Node · Hono · Effect 4<br/>Cloudflare Container"]
@@ -55,15 +54,16 @@ flowchart LR
     glasses -.- phone
     web & phone --> worker --> api
     imsg --> api
-    noop & hk -.->|"unvalidated"| api
+    noop --> api
+    hk -.-> api
     secrets --> api
     api <--> db
     api --> r2
-    api --> google & gemini & eleven & fetch & finch
-    api -.-> qwen & sim
+    api --> google & gemini & eleven & fetch & finch & qwen
+    api -.-> sim
 
     classDef dashed stroke-dasharray: 5 5
-    class glasses,qwen,noop,hk,sim dashed
+    class glasses,hk,sim dashed
 ```
 
 ## Providers
@@ -136,10 +136,10 @@ flowchart LR
     worker -->|"own sign-in token"| tools["POST …/tools"]
     tools --> db[("SpacetimeDB<br/>family records")]
     db --> worker
-    worker -->|"synthetic records only"| asi
+    worker -->|"demo backend only"| asi
 ```
 
-- **Use:** Gemini calls family data tools (`health_samples`, `alerts`) through a bridge uAgent and a worker uAgent. The worker checks its grants and calls the signed-in tool route. It also speaks the Agent Chat Protocol, so ASI:One can ask about the synthetic demo family.
+- **Use:** Gemini calls family data tools (`health_samples`, `alerts`) through a bridge uAgent and a worker uAgent. Each question carries a delegation, so the worker reads only the asking member's family, and only while the question runs. The worker also speaks the Agent Chat Protocol: ASI:One chats reach a separate demo backend, never production records.
 - **Code:** `agents/fetch/` ([README](agents/fetch/README.md), [public profile](agents/fetch/agentverse.md)), `apps/server/src/integrations/fetch.ts`, `family-tools.ts`. **Keys:** `TELLY_FETCH_BRIDGE_TOKEN`, `TELLY_FETCH_AGENT_SEED`, `TELLY_FETCH_BRIDGE_SEED` ([agents/fetch/.env.schema](agents/fetch/.env.schema)).
 - **Used at:** every family question on [Home](https://app.saintess.tech/) and [Chat](https://app.saintess.tech/chat), and the [telly-fetch agent on Agentverse](https://agentverse.ai/agents/details/agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6/profile).
 - **Proof:** on production, 2026-10-04 12:58 UTC (commit `5675e6a2`), a new family 4, where the worker is not a member, asked a question. `POST /ask` answered 200 in 12.6 s, and the worker log shows `alerts` 200 and `health_samples` 200 for family 4 ([#293 comment](https://github.com/undeemed/telly/issues/293#issuecomment-5980182311), [#295](https://github.com/undeemed/telly/pull/295)). The worker `telly-fetch` is registered on Agentverse, and ASI:One received answers ([#173](https://github.com/undeemed/telly/pull/173)).
@@ -195,13 +195,17 @@ flowchart LR
     ckpt --> cue["One health cue<br/>advice only, no alert change"]
 ```
 
-- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns health samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. A cue from unvalidated samples, such as WHOOP readings, carries a `notice` that says so. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
+- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns health samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
 - **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_BASE_MODEL`, `QWEN_CHECKPOINT`.
 - **Used at:** no screen calls it yet. The production route is `POST https://api.saintess.tech/api/families/:familyId/cues`.
-- **Proof:** on production, 2026-10-04 13:14 UTC (commit `ca768e51`), `POST …/cues` with the three newest WHOOP heart-rate samples answered 200 in 5.4 s: "No cue right now.", with the River checkpoint and the advice-only notice ([#312](https://github.com/undeemed/telly/issues/312), [#265](https://github.com/undeemed/telly/pull/265)). Training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452) ([#177](https://github.com/undeemed/telly/pull/177)).
+- **Proof:** on production, 2026-10-04 13:46 UTC (commit `0d2b1409`), `POST …/cues` for family 3 with its three newest WHOOP heart-rate samples answered 200 in 5.6 s: "No cue right now.", from the River checkpoint. An earlier check at 13:14 UTC gave the same answer ([#312](https://github.com/undeemed/telly/issues/312), [#265](https://github.com/undeemed/telly/pull/265)). Training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452) ([#177](https://github.com/undeemed/telly/pull/177)).
 - **Limits:** River approved no dedicated deployment for the base model, so each cue waits in River's queue (3 to 12 s).
 
-- **Screenshots:** none: no screen shows a cue. The production reply is in [#312](https://github.com/undeemed/telly/issues/312).
+**Screenshots** (production, 2026-10-04 13:46 UTC):
+
+<p><img src="docs/proof/river-health-cue.webp" width="100%" alt="Production POST /cues reply from the River checkpoint"></p>
+
+<sub>1. Production <code>POST …/cues</code> reply from the River checkpoint (fields picked from the reply)</sub>
 
 </details>
 
@@ -219,7 +223,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. Telly marks the message Read and shows typing at once, then answers through the same question flow as the app, including the urgent-help path. A greeting, thanks, or goodbye gets one Gemini call without tools, so it calls no Fetch.ai tool; the tools that one answer calls run in parallel.
-- **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`, so the agent works while the API container sleeps between requests. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
+- **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`. A cron request every 5 minutes keeps the API warm, so a reply does not wait for a cold start ([docs/deploy.md](docs/deploy.md), [#322](https://github.com/undeemed/telly/pull/322)). **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Used at:** iMessage to the Telly Photon line, which posts to `https://api.saintess.tech/api/imessage/webhook`.
 - **Proof:** on production (commit `e6275e3`), the owner sent "What medicines are due today?" at 2026-10-04 11:59:59 UTC, and Telly replied at 12:00:18 UTC through the signed webhook ([#285](https://github.com/undeemed/telly/pull/285), [#267](https://github.com/undeemed/telly/pull/267)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.
@@ -238,7 +242,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     sample["POST …/samples"] --> red["recordSample reducer<br/>membership from token"]
-    red --> rules{"Validated, fresh,<br/>beyond a rule?"}
+    red --> rules{"Drives monitoring, fresh,<br/>beyond a rule?"}
     rules -->|"no"| store[("Sample only")]
     rules -->|"yes, same transaction"| alert[("Alert +<br/>queued delivery")]
     alert --> outbox["Outbox worker<br/>operator token"]
@@ -246,11 +250,10 @@ flowchart LR
     alert --> ack["Acknowledgement<br/>kept separate"]
 ```
 
-- **Use:** the module in `spacetimedb/` holds family-scoped tables and reducers. When a validated sample arrives, the same transaction checks the rules and writes an alert with its queued delivery. The database decides family membership from the caller's token. Only the server imports the bindings (`packages/db`).
+- **Use:** the module in `spacetimedb/` holds family-scoped tables and reducers. When a sample that drives monitoring arrives (a validated reading, or a real WHOOP reading through NOOP), the same transaction checks the rules and writes an alert with its queued delivery. The database decides family membership from the caller's token, and reads of samples, alerts, reports, and reminder history need the `health_records` sharing scope ([#318](https://github.com/undeemed/telly/pull/318)). Only the server imports the bindings (`packages/db`).
 - **Where:** SpacetimeDB Maincloud, database `telly` ([docs/deploy.md](docs/deploy.md)). **Keys:** `SPACETIMEDB_URI`, `SPACETIMEDB_DATABASE`, `ALERT_OPERATOR_TOKEN`.
 - **Used at:** every signed-in screen, for example the [Dashboard](https://app.saintess.tech/dashboard).
-- **Proof:** every production check in this section reads or writes Maincloud database `telly`; the WHOOP seed wrote 2,223 samples to it ([#244](https://github.com/undeemed/telly/pull/244), [#212](https://github.com/undeemed/telly/pull/212)). Cross-family denial, outbox replay, crash recovery, and backup restore run on a real local database in CI (`bun run db:test`, `bun run db:drill`; [#62](https://github.com/undeemed/telly/pull/62), [#67](https://github.com/undeemed/telly/pull/67), [#73](https://github.com/undeemed/telly/pull/73)).
-
+- **Proof:** every production check in this section reads or writes Maincloud database `telly`; the real WHOOP export wrote 2,223 samples to it ([#244](https://github.com/undeemed/telly/pull/244), [#212](https://github.com/undeemed/telly/pull/212)). Cross-family denial, outbox replay, crash recovery, and backup restore run on a real local database in CI (`bun run db:test`, `bun run db:drill`; [#62](https://github.com/undeemed/telly/pull/62), [#67](https://github.com/undeemed/telly/pull/67), [#73](https://github.com/undeemed/telly/pull/73)).
 
 **Screenshots** (captured 2026-10-04 about 08:00 UTC):
 
@@ -305,15 +308,14 @@ flowchart LR
 - **Use:** the Worker `telly` serves the web app and sends `/health` and `/api/*` to the Node API in a Cloudflare Container. The container pulls its keys from the secrets store at start. Report PDFs and AR medicine-pin world maps (`ar-pins/<familyId>/<containerId>.worldmap`) go to the private R2 bucket `telly-reports`.
 - **Code:** `deploy/cloudflare/`, [docs/deploy.md](docs/deploy.md), [docs/cloudflare-keys.md](docs/cloudflare-keys.md), `apps/server/src/integrations/r2.ts`. **Keys:** `TELLY_R2_*`.
 - **Used at:** [app.saintess.tech](https://app.saintess.tech/) ([live commit](https://app.saintess.tech/version.txt)), [API health](https://api.saintess.tech/health), and [Reports](https://app.saintess.tech/reports) → **Save as PDF** → **Past PDFs** for R2.
-- **Proof:** on production, 2026-10-04 09:35 UTC, **Download** of a saved report gave a presigned `r2.cloudflarestorage.com` link (300 s) to a 2-page PDF. At 09:40 UTC, every key in `TELLY_PULL_KEYS` was Active in the secrets store ([provider pass](data/telly-provider-pass/report.md)). A deploy waits for `/health` 200 and rolls back to the last healthy build when it fails ([#212](https://github.com/undeemed/telly/pull/212), [#292](https://github.com/undeemed/telly/pull/292)).
-- **Limits:** the CI deploy workflow is skipped until the repository variables `HEALTH_SERVER_URL` and `HEALTH_WEB_URL` are set, so deploys run from an operator machine ([#2](https://github.com/undeemed/telly/issues/2)).
+- **Proof:** on production, 2026-10-04 09:35 UTC, **Download** of a saved report gave a presigned `r2.cloudflarestorage.com` link (300 s) to a 2-page PDF. At 09:40 UTC, every key in `TELLY_PULL_KEYS` was Active in the secrets store ([provider pass](data/telly-provider-pass/report.md)). At 13:40 UTC, the CI deploy of `0d2b1409` passed ([run](https://github.com/undeemed/telly/actions/runs/37206245026)), and `version.txt` shows that commit.
+- **Deploys:** each push to `main` that changes app files runs [`health-deploy.yml`](.github/workflows/health-deploy.yml). The build goes to the candidate Worker first and reaches `telly` only when the candidate passes the signed-out smoke check; a live failure rolls back to the last good build ([#310](https://github.com/undeemed/telly/pull/310), [#292](https://github.com/undeemed/telly/pull/292)). A cron request every 5 minutes keeps the API warm, and the web app waits through a cold start instead of showing an error ([#307](https://github.com/undeemed/telly/pull/307), [#322](https://github.com/undeemed/telly/pull/322)). Details: [docs/deploy.md](docs/deploy.md).
 
+**Screenshots** (captured 2026-10-04):
 
-**Screenshots** (captured 2026-10-04 about 08:00 UTC):
+<p><img src="docs/readme/cloudflare-app.webp" width="49%" alt="Deployed web app on the Worker, signed out"> <img src="docs/readme/cloudflare-health.webp" width="49%" alt="Deployed API /health"> <img src="docs/proof/r2-report-pdf.webp" width="49%" alt="Report PDF downloaded from R2"></p>
 
-<p><img src="docs/readme/cloudflare-app.webp" width="49%" alt="Deployed web app on the Worker, signed out: data shows as unavailable"> <img src="docs/readme/cloudflare-health.webp" width="49%" alt="Deployed API /health"> <img src="docs/readme/cloudflare-sources.webp" width="49%" alt="Deployed API /api/sources: NOOP not connected"> <img src="docs/proof/r2-report-pdf.webp" width="49%" alt="Report PDF downloaded from R2"></p>
-
-<sub>1. Deployed web app on the Worker, signed out: data shows as unavailable<br>2. Deployed API /health<br>3. Deployed API /api/sources: NOOP not connected<br>4. Report PDF downloaded from R2 (production, 09:35 UTC)</sub>
+<sub>1. Deployed web app on the Worker, signed out<br>2. Deployed API /health<br>3. Report PDF downloaded from R2 (production, 09:35 UTC)</sub>
 
 </details>
 
@@ -345,24 +347,25 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    strap["WHOOP strap"] --> noop["NOOP app<br/>iPhone or Mac"]
-    noop -->|"new rows · Bearer ingest key"| api["POST /api/noop/ingest"]
-    api --> db[("Sample, quality<br/>unvalidated")]
-    db --> show["Screens and answers:<br/>WHOOP (via NOOP) · unvalidated"]
-    db -.->|"never"| alert["Alerts"]
+    strap["WHOOP strap"] --> noop["NOOP app<br/>iPhone"]
+    link["Family connect link<br/>one per family"] --> noop
+    noop -->|"new rows · ?k=family token"| api["POST /api/noop/ingest"]
+    api --> db[("Family samples")]
+    db --> show["Family view · Trends ·<br/>answers"]
+    db -->|"real readings"| alert["Monitoring and alerts"]
 ```
 
-- **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. Unvalidated samples never raise an alert. Screens and answers label them "WHOOP (via NOOP) · unvalidated".
-- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family push tokens: `POST /api/families/:familyId/whoop-token` makes one, and NOOP pushes to `/api/noop/ingest?k=<token>`. `NOOP_INGEST_KEY` with `NOOP_FAMILY_ID` keeps the single-family key. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
-- **Used at:** the [Dashboard](https://app.saintess.tech/dashboard) and [Trends](https://app.saintess.tech/trends).
-- **Proof:** the real WHOOP export was written to production through the NOOP contract: 2,223 samples (2,143 heart-rate minutes, 43 wrist events, 37 daily scores) in family 3, now named "Telly" ([#244](https://github.com/undeemed/telly/pull/244)). On a team Mac mini, a live NOOP push reached a family answer ([#174](https://github.com/undeemed/telly/pull/174), [#80](https://github.com/undeemed/telly/pull/80), [#81](https://github.com/undeemed/telly/pull/81), [#97](https://github.com/undeemed/telly/pull/97)).
-- **Limits:** the deployed API does not have NOOP ingest set up, so its `/api/sources` reports `not_connected`.
+- **Use:** a family member taps **Connect** next to WHOOP in setup and sends the link to the person with the strap. They open it on the iPhone that runs NOOP, and NOOP pushes new strap rows to `POST /api/noop/ingest?k=<family token>`. A new link stops the old one. Real WHOOP readings drive monitoring and alerts like any other reading ([#272](https://github.com/undeemed/telly/pull/272)).
+- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family tokens (`POST /api/families/:familyId/whoop-token`). Production uses only these per-family links. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
+- **Used at:** the [Family view](https://app.saintess.tech/family), the [Dashboard](https://app.saintess.tech/dashboard), [Trends](https://app.saintess.tech/family/trends), and the WHOOP **Connect** step in [setup](https://app.saintess.tech/welcome?step=connect).
+- **Proof:** the real WHOOP export was written to production through the NOOP contract: 2,223 samples (2,143 heart-rate minutes, 43 wrist events, 37 daily scores) in family 3, "Telly" ([#244](https://github.com/undeemed/telly/pull/244)). On 2026-10-04 13:45 UTC, the production Family view showed these readings (heart rate 55 bpm, HRV 104 ms, sleep 536.6 min), and a River cue used the newest heart-rate samples. On a team Mac mini, a live NOOP push reached a family answer ([#174](https://github.com/undeemed/telly/pull/174), [#80](https://github.com/undeemed/telly/pull/80), [#81](https://github.com/undeemed/telly/pull/81), [#97](https://github.com/undeemed/telly/pull/97)).
+- **Limits:** WHOOP shows as connected for 10 minutes after the newest push; after a restart, the status comes from the newest stored sample ([#307](https://github.com/undeemed/telly/pull/307)).
 
 **Screenshots** (production, 2026-10-04):
 
-<p><img src="docs/proof/whoop-dashboard.webp" width="100%" alt="Family dashboard with the seeded WHOOP readings"></p>
+<p><img src="docs/proof/whoop-dashboard.webp" width="100%" alt="Family view with the WHOOP readings from the export"></p>
 
-<sub>1. Family dashboard with the seeded WHOOP readings</sub>
+<sub>1. Family view with the WHOOP readings from the export</sub>
 
 </details>
 
@@ -374,15 +377,14 @@ flowchart LR
     hk["iPhone HealthKit"] --> phone["Phone app<br/>decodes samples"]
     phone -->|"POST …/healthkit/samples"| api["Telly API"]
     api -.->|"WHOOP-origin rows"| skip["Skipped: NOOP<br/>already supplies them"]
-    api --> db[("Sample, quality<br/>unvalidated · source + device")]
+    api --> db[("Sample<br/>source + device")]
 ```
 
-- **Use:** `POST …/healthkit/samples` records decoded HealthKit samples with their source and device, as `unvalidated`, without duplicates.
+- **Use:** `POST …/healthkit/samples` records decoded HealthKit samples with their source and device, without duplicates.
 - **Code:** `apps/server/src/routes/healthkit.ts`, [docs/healthkit.md](docs/healthkit.md).
 - **Proof:** route tests on a real local database ([#128](https://github.com/undeemed/telly/pull/128)).
-- **Limits:** no iPhone has sent data yet ([#176](https://github.com/undeemed/telly/issues/176)).
-
-- **Screenshots:** No screenshot yet: no iPhone has sent data.
+- **Used at:** no screen yet; the phone app has not sent data. The production route is `POST https://api.saintess.tech/api/families/:familyId/healthkit/samples`.
+- **Limits:** no iPhone has sent data yet, so there is no live proof or screenshot ([#176](https://github.com/undeemed/telly/issues/176)).
 
 </details>
 
@@ -391,12 +393,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    need["Care need · emergency ·<br/>food order · reminder"] --> api["Telly API"]
-    api --> sim["Simulated call, SMS,<br/>dispatch, order, or speaker"]
+    need["Care need · emergency ·<br/>food order · reminder ·<br/>clinician update"] --> api["Telly API"]
+    api --> sim["Simulated call, SMS, dispatch,<br/>order, speaker, or send"]
     sim --> log[("Recorded attempt<br/>labelled simulated")]
 ```
 
-Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and the home speaker are simulated. Family messages stay in the app. The screens that show these actions label them as simulated; food ordering has no screen yet.
+Phone calls and SMS in the contact ladder, emergency dispatch, food orders, clinician updates from Visits, and the home speaker are simulated. Family messages stay in the app. The screens that show these actions label them as simulated.
 
 </details>
 
@@ -404,10 +406,10 @@ Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and 
 
 | Area | State |
 | --- | --- |
-| Web app | Merged and deployed at <https://app.saintess.tech>. Sign-in uses Google; the consent screen is in production |
-| Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud |
+| Web app | Deployed at <https://app.saintess.tech>. Sign-in uses Google; the consent screen is in production |
+| Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud; CI deploys each change through a candidate Worker |
 | Phone app | iOS shell: the web app <https://app.saintess.tech> full screen in a WebView, with native Google sign-in. The self-hosted MacBook runner `telly-mac-xiao` builds the unsigned `.ipa` for SideStore ([run](https://github.com/undeemed/telly/actions/runs/37201518308), [#300](https://github.com/undeemed/telly/pull/300)). No device test yet ([#176](https://github.com/undeemed/telly/issues/176)) |
-| AR medicine pin | Simulation passes (`tools/ar-sim/run.py --quick`): pairing 100 %, marker 100 %, p95 error 1.78 cm and 9.3 px. In review: [#303](https://github.com/undeemed/telly/pull/303) |
+| AR medicine pin | Merged ([#303](https://github.com/undeemed/telly/pull/303)): ARKit save, relocalize, and marker on the phone; world maps go to R2. The simulation passes (`tools/ar-sim/run.py --quick`: pairing 100 %, marker 100 %, p95 error 1.78 cm and 9.3 px). No device test yet |
 | Providers | See [Providers](#providers): each one lists where it is used, its live proof, and its limits |
 | Hospital report delivery | Finchnode only reads records, so it cannot deliver a report. A reviewed report goes by email through Resend instead ([#201](https://github.com/undeemed/telly/pull/201)) |
 | Meta glasses | Optional; needs hardware ([#18](https://github.com/undeemed/telly/issues/18), [#19](https://github.com/undeemed/telly/issues/19)) |
@@ -463,7 +465,7 @@ bun run db:test           # Access, alert, outbox, recovery, and lifecycle tests
 bun run db:drill          # Crash-restart and backup/restore drill on local data
 ```
 
-After you change `spacetimedb/`, run `bun run db:generate` and commit `packages/db/` with it. CI ([`.github/workflows/health.yml`](.github/workflows/health.yml)) runs these checks in parallel; the one required status is `health / required`. Deployment is in [docs/deploy.md](docs/deploy.md).
+After you change `spacetimedb/`, run `bun run db:generate` and commit `packages/db/` with it. CI ([`.github/workflows/health.yml`](.github/workflows/health.yml)) runs only the checks whose files changed; a change with no app code runs one `no app code changed` entry, and `structure` always runs. The one required status is `health / required`. Deployment is in [docs/deploy.md](docs/deploy.md).
 
 <details>
 <summary><strong>Database limits, backup, and restore</strong></summary>
@@ -482,7 +484,7 @@ The server bounds every database call:
 
 Each request opens its own connection and closes it when the request ends or is cancelled. An outage is always an `unavailable` error, never an empty result.
 
-Queues and retention: each alert has one delivery row, so the outbox survives a server crash, a dropped connection, and a database crash (all three are tested). The worker handles at most 4 due deliveries at a time and polls every second. Nothing is deleted automatically during the hackathon (owner decision); alerts, deliveries, and samples stay.
+Queues and retention: each alert has one delivery row, so the outbox survives a server crash, a dropped connection, and a database crash (all three are tested). The worker handles at most 4 due deliveries at a time and polls every second. Nothing is deleted automatically (owner decision, [docs/plan.md](docs/plan.md)); alerts, deliveries, and samples stay.
 
 **Back up.** SpacetimeDB 2.10.2 has no online backup command, so take a cold backup:
 
@@ -502,11 +504,11 @@ Queues and retention: each alert has one delivery row, so the outbox survives a 
 </details>
 
 <details>
-<summary><strong>Namespace runners</strong></summary>
+<summary><strong>CI runners</strong></summary>
 
 <br>
 
-The `check` and `structure` jobs run on the runner that the repository variable `HEALTH_RUNNER` names (currently `nscloud-ubuntu-24.04-amd64-2x4`). When the variable is unset, they run on `ubuntu-latest`. `changes` and `required` always run on `ubuntu-latest`, so `health / required` reports even when no Namespace runner is available. Sentrux needs Linux AMD64 with Ubuntu 24.04. Setup record: [#21](https://github.com/undeemed/telly/issues/21).
+Every `health` job runs on the runner that the repository variable `HEALTH_RUNNER` names (currently the self-hosted `telly-local`), and on `ubuntu-latest` when it is unset. Sentrux needs Linux AMD64 with Ubuntu 24.04. The iOS build uses `HEALTH_IOS_RUNNER` ([#300](https://github.com/undeemed/telly/pull/300)). Namespace setup record: [#21](https://github.com/undeemed/telly/issues/21).
 
 </details>
 
