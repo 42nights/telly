@@ -78,6 +78,9 @@ const alert = table(
 	},
 );
 
+// An alert's family message uses this client id prefix plus the alert id. Members cannot use it.
+const ALERT_CLIENT_ID = "alert-";
+
 const message = table(
 	{
 		name: "message",
@@ -782,6 +785,8 @@ export const sendMessage = spacetimedb.reducer(
 	(ctx, { familyId, clientId, body }) => {
 		requireMember(ctx, familyId);
 		requireText("clientId", clientId);
+		if (clientId.startsWith(ALERT_CLIENT_ID))
+			throw new SenderError(`clientId must not start with ${ALERT_CLIENT_ID}`);
 		requireText("body", body);
 		// A client resends after a lost reply; the first stored copy stands.
 		for (const sent of ctx.db.message.bySenderClientId.filter([
@@ -956,6 +961,32 @@ export const markAlertDeliveryUnavailable = spacetimedb.reducer(
 			notBefore: ctx.timestamp,
 			lastError: reason,
 			updatedAt: ctx.timestamp,
+		});
+	},
+);
+
+/**
+ * The in-app family delivery: the operator posts the alert to its family's message thread. The
+ * client id is the delivery's idempotency key, so a resend after a lost report posts nothing new.
+ */
+export const postAlertMessage = spacetimedb.reducer(
+	{ alertId: t.u64() },
+	(ctx, { alertId }) => {
+		const { familyId, summary } = openDelivery(ctx, alertId);
+		const clientId = `${ALERT_CLIENT_ID}${alertId}`;
+		const posted = ctx.db.message.bySenderClientId.filter([
+			familyId,
+			ctx.sender,
+			clientId,
+		]);
+		if (!posted.next().done) return;
+		ctx.db.message.insert({
+			id: 0n,
+			familyId,
+			sender: ctx.sender,
+			body: summary,
+			sentAt: ctx.timestamp,
+			clientId,
 		});
 	},
 );

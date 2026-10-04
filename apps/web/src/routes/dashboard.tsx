@@ -37,7 +37,7 @@ import { ApiNotice, Tip } from "@/components/win95";
 import { ENV } from "@/env";
 import type { ApiState } from "@/lib/api";
 import { PersonPicker } from "@/lib/family";
-import { memberLabel } from "@/lib/members";
+import { memberLabel, senderLabel } from "@/lib/members";
 
 export const Route = createFileRoute("/dashboard")({
 	component: Dashboard,
@@ -286,7 +286,7 @@ function RecentMessages({
 			{messages.map((m) => (
 				<li key={m.id} className="grid gap-0.5 p-2">
 					<span className="flex justify-between gap-2 text-xs">
-						<b>{memberLabel(m.sender, me)}</b>
+						<b>{senderLabel(m, me)}</b>
 						<time dateTime={m.sentAt}>{clock(m.sentAt)}</time>
 					</span>
 					<span className="line-clamp-2 break-words">{m.body}</span>

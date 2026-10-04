@@ -44,6 +44,7 @@ import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
+import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
@@ -179,6 +180,7 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
+  __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
