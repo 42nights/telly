@@ -7,13 +7,10 @@ export const Health = Schema.Struct({
 });
 export type Health = typeof Health.Type;
 
-/**
- * The NOOP-to-server connection is intentionally stubbed (friend-owned integration).
- * It carries no readings and no WHOOP-derived nudges; clients must show the source as unavailable.
- */
 export const NoopConnection = Schema.Struct({
 	source: Schema.Literal("noop"),
-	status: Schema.Literal("not_connected"),
+	status: Schema.Literals(["not_connected", "connected"]),
+	lastSeenAt: Schema.NullOr(Schema.String),
 });
 export type NoopConnection = typeof NoopConnection.Type;
 

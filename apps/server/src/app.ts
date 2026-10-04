@@ -1,5 +1,4 @@
 import type { ApiError, Health, Sources } from "@health/contracts";
-import { Effect } from "effect";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -12,12 +11,12 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
-import { noopConnection } from "./integrations/noop";
-import { type NoopIngest, noopIngestRoute } from "./integrations/noop-ingest";
+import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
 import { accountRoutes } from "./routes/families";
 import { familyDomainRoutes } from "./routes/index";
 
 export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
+	const noop = noopRoutes(ingest);
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
@@ -35,14 +34,10 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 		.get("/health", (c) =>
 			c.json({ status: "ok", service: "server" } satisfies Health),
 		)
-		.get("/api/sources", async (c) => {
-			// The request signal interrupts the effect when the client disconnects.
-			const noop = await Effect.runPromise(noopConnection, {
-				signal: c.req.raw.signal,
-			});
-			return c.json({ sources: [noop] } satisfies Sources);
-		})
-		.post("/api/noop/ingest", noopIngestRoute(ingest))
+		.get("/api/sources", (c) =>
+			c.json({ sources: [noop.status(Date.now())] } satisfies Sources),
+		)
+		.post("/api/noop/ingest", noop.ingest)
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())

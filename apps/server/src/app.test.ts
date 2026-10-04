@@ -98,8 +98,19 @@ describe("server boundaries", () => {
 		);
 		expect((await post(ingest, "?k=relay-key", fractionalTs)).status).toBe(400);
 		expect(recorded).toEqual([]);
+		const noopStatus = async () =>
+			Schema.decodeUnknownSync(Sources)(
+				await (await ingest.request("/api/sources")).json(),
+				strict,
+			).sources[0];
+		expect((await noopStatus())?.status).toBe("not_connected");
 
 		expect((await post(ingest, "?k=relay-key", batch)).status).toBe(204);
+		expect(await noopStatus()).toMatchObject({
+			source: "noop",
+			status: "connected",
+			lastSeenAt: expect.any(String),
+		});
 		const sample = (
 			metric: string,
 			value: number,

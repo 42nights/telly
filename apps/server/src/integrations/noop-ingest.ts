@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
-import { NoopBatch } from "@health/contracts";
+import { NoopBatch, type NoopConnection } from "@health/contracts";
 import { Schema } from "effect";
 import type { Context } from "hono";
 import { Timestamp } from "spacetimedb";
@@ -146,8 +146,20 @@ export const recordNoopSamples =
 		}
 	};
 
-export const noopIngestRoute =
-	(noop: NoopIngest | undefined) => async (c: Context) => {
+const NOOP_FRESH_MS = 10 * 60_000;
+
+export const noopRoutes = (noop: NoopIngest | undefined) => {
+	let lastSeenAt: number | undefined;
+	const status = (now: number): NoopConnection => ({
+		source: "noop",
+		status:
+			lastSeenAt !== undefined && now - lastSeenAt < NOOP_FRESH_MS
+				? "connected"
+				: "not_connected",
+		lastSeenAt:
+			lastSeenAt === undefined ? null : new Date(lastSeenAt).toISOString(),
+	});
+	const ingest = async (c: Context) => {
 		if (noop === undefined)
 			throw new ApiFailure("unavailable", "NOOP ingest is not configured");
 		if (!noopKeyMatches(c.req.query("k"), noop.key))
@@ -162,5 +174,8 @@ export const noopIngestRoute =
 			);
 		}
 		await noop.record(samples);
+		lastSeenAt = Date.now();
 		return c.body(null, 204);
 	};
+	return { status, ingest };
+};
