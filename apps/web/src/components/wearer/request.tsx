@@ -214,7 +214,10 @@ export function Request({
 	useEffect(() => () => release.current(), []);
 	const done = () => setStep({ kind: "ready" });
 	const support = (
-		<SupportActions onHelp={() => setStep({ kind: "help", asked: null })} />
+		<SupportActions
+			familyId={familyId}
+			onHelp={() => setStep({ kind: "help", asked: null })}
+		/>
 	);
 	const openFinder = (q: string) =>
 		void navigate({ to: "/find", search: { q } });
@@ -348,7 +351,7 @@ export function Request({
 		case "thinking":
 			return <Listening action={step.cancel} thinking />;
 		case "help":
-			return <HelpPanel asked={step.asked} onDone={done} />;
+			return <HelpPanel asked={step.asked} familyId={familyId} onDone={done} />;
 		case "answer":
 			return (
 				<AnswerPanel

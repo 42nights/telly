@@ -1,7 +1,7 @@
 // First: registers Happy DOM before React DOM and the router load.
 import "../test/dom-routed";
 
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type {
 	AlertThreshold,
@@ -9,14 +9,17 @@ import type {
 	Monitoring,
 	ThresholdMonitoring,
 } from "@health/contracts/alerts";
-
 import type { ApiState } from "@/lib/api";
+import * as contacts from "@/lib/contacts";
 
 import {
 	fireEvent,
 	render,
 	renderRouted,
+	serve,
 	setupDom,
+	signIn,
+	waitFor,
 	within,
 } from "../test/dom-routed";
 import type { FamilyData } from "./data";
@@ -24,6 +27,28 @@ import { clock } from "./logic";
 import { AlertSection, FamilyGate, ReadingsGlance } from "./parts";
 
 setupDom();
+const dialed = spyOn(contacts, "dial").mockImplementation(() => {});
+afterEach(() => {
+	dialed.mockClear();
+	localStorage.clear();
+});
+
+const careProfile = {
+	preferredName: null,
+	language: null,
+	timeZone: null,
+	accessibilityNeeds: null,
+	diagnoses: null,
+	allergies: null,
+	dietaryRestrictions: null,
+	fluidRestrictions: null,
+	activityRestrictions: null,
+	routines: null,
+	contacts: null,
+	familiarDestinations: null,
+	devices: null,
+	declinedPrompts: [],
+};
 
 const NOW = Date.parse("2026-01-10T12:00:00Z");
 const ME = "a".repeat(64);
@@ -287,21 +312,59 @@ describe("AlertSection with an alert", () => {
 		expect(markSeen.mock.calls).toEqual([["a1"]]);
 	});
 
-	test("with no saved numbers, Call Mom is off and Settings is offered", async () => {
+	test("Mom with no number asks for it: a short number is refused; Save & Call saves and dials", async () => {
+		signIn();
+		const calls = serve({
+			"GET /api/families/f1/care-profile": {
+				json: {
+					familyId: "f1",
+					profile: careProfile,
+					editedBy: null,
+					editedAt: null,
+					history: [],
+				},
+			},
+			"PUT /api/families/f1/care-profile": { status: 204 },
+		});
 		const { view } = await card(
 			data({ alerts: ready({ alerts: [alertItem()] }) }),
 		);
-		const callMom = await view.findByRole("button", { name: "Call Mom" });
-		expect((callMom as HTMLButtonElement).disabled).toBe(true);
 		expect(
 			view.getByRole("link", { name: "Call 911" }).getAttribute("href"),
 		).toBe("tel:911");
-		expect(view.getByText(/Call Mom is off: no number saved/)).toBeDefined();
+		expect(view.queryByText(/no number saved/)).toBeNull();
+		fireEvent.click(await view.findByRole("button", { name: "Call Mom" }));
+		const field = view.getByLabelText("Phone number");
+
+		fireEvent.change(field, { target: { value: "5550" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		view.getByText("Enter the full phone number, with the area code.");
+		expect(dialed).not.toHaveBeenCalled();
+
+		await waitFor(() => expect(calls.map((c) => c.method)).toContain("GET"));
+		fireEvent.change(field, { target: { value: "+1 555 010 0300" } });
+		fireEvent.click(view.getByRole("button", { name: "Save & Call" }));
+		expect(dialed.mock.calls).toEqual([["+1 555 010 0300"]]);
+		// The Mom button now calls the saved number, and the care profile has it for every device.
 		expect(
-			view
-				.getByRole("link", { name: "Add it in Settings" })
-				.getAttribute("href"),
-		).toBe("/settings");
+			(await view.findByRole("link", { name: "Call Mom" })).getAttribute(
+				"href",
+			),
+		).toBe("tel:+15550100300");
+		await waitFor(() =>
+			expect(calls.filter((c) => c.method === "PUT")).toEqual([
+				{
+					method: "PUT",
+					path: "/api/families/f1/care-profile",
+					body: {
+						...careProfile,
+						contacts: [
+							{ name: "Mom", relationship: "Mom", phone: "+1 555 010 0300" },
+						],
+					},
+				},
+			]),
+		);
 	});
 
 	test("saved numbers become call links", async () => {
