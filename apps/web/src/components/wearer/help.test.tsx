@@ -27,22 +27,11 @@ const saveContacts = (contacts: object) =>
 	localStorage.setItem("telly.contacts", JSON.stringify(contacts));
 
 describe("SupportActions", () => {
-	test("with a saved family number, Call family dials it in the phone's dialer", async () => {
+	test("Call family always dials the fixed family number, whatever is saved", async () => {
 		saveContacts({ familyPhone: "+1 (555) 010-2030" });
 		const view = inRouter(<SupportActions onHelp={() => {}} />);
 		const call = await view.findByRole("link", { name: "Call family" });
-		expect(call.getAttribute("href")).toBe("tel:+15550102030");
-	});
-
-	test("without a family number, Call family is off and points to Settings", async () => {
-		const view = inRouter(<SupportActions onHelp={() => {}} />);
-		const settings = await view.findByRole("link", {
-			name: "Add it in Settings",
-		});
-		expect(settings.getAttribute("href")).toBe("/settings");
-		const call = view.getByRole("button", { name: "Call family" });
-		expect(call.hasAttribute("disabled")).toBe(true);
-		expect(view.container.textContent).toContain("No family number is saved.");
+		expect(call.getAttribute("href")).toBe("tel:+19197170390");
 	});
 
 	test("I need help now opens the help panel", async () => {
@@ -68,7 +57,7 @@ describe("HelpPanel", () => {
 			]),
 		).toEqual([
 			["Call 112", "tel:112"],
-			["Call family", "tel:5550102030"],
+			["Call family", "tel:+19197170390"],
 		]);
 		expect(view.getByRole("alert").textContent).toContain(
 			"This sounds urgent.",

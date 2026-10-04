@@ -5,7 +5,7 @@ setupDom();
 
 // Dynamic: these modules read `document`, which `@/lib/test/dom` sets up first.
 const { act, renderHook } = await import("@testing-library/react");
-const { isFullPhoneNumber, telHref, useContacts } = await import(
+const { FAMILY_PHONE, isFullPhoneNumber, telHref, useContacts } = await import(
 	"@/lib/contacts"
 );
 
@@ -38,11 +38,11 @@ test("a tel: link keeps only a leading plus and the digits", () => {
 	expect(telHref("911")).toBe("tel:911");
 });
 
-test("with nothing saved, there are no family numbers and the emergency number is 911", () => {
+test("with nothing saved, family calls go to the fixed number and the emergency number is 911", () => {
 	const { result } = renderHook(() => useContacts());
 	expect(result.current[0]).toEqual({
 		momPhone: null,
-		familyPhone: null,
+		familyPhone: FAMILY_PHONE,
 		emergency: "911",
 		savedAt: null,
 	});
@@ -54,7 +54,7 @@ test("saved data that is corrupt, not an object, or holds bad numbers falls back
 		const { result, unmount } = renderHook(() => useContacts());
 		expect(result.current[0]).toEqual({
 			momPhone: null,
-			familyPhone: null,
+			familyPhone: FAMILY_PHONE,
 			emergency: "911",
 			savedAt: null,
 		});
@@ -73,7 +73,7 @@ test("saved data that is corrupt, not an object, or holds bad numbers falls back
 	const { result } = renderHook(() => useContacts());
 	expect(result.current[0]).toEqual({
 		momPhone: "555-0100",
-		familyPhone: null,
+		familyPhone: FAMILY_PHONE,
 		emergency: "911",
 		savedAt: null,
 	});
@@ -96,7 +96,7 @@ test("a save is stored with its time and updates every screen that shows the num
 
 	const saved = {
 		momPhone: "+1 555 010 0199",
-		familyPhone: "555-0123",
+		familyPhone: FAMILY_PHONE,
 		emergency: "112",
 		savedAt: Date.parse("2026-10-04T12:00:00.000Z"),
 	};

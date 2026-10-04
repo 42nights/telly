@@ -4,12 +4,14 @@ import {
 	type Handoff,
 	type LocationReading,
 } from "@health/contracts/emergency";
-import { Button } from "@health/ui/components/button";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { cn } from "@health/ui/lib/utils";
 import { Loader2, Phone, Siren, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Hint } from "@/components/win95";
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
+import { FAMILY_PHONE, telHref } from "@/lib/contacts";
 
 import { xl } from "./answer";
 import type { EmergencyIntent } from "./logic";
@@ -317,14 +319,19 @@ export function Emergency({
 						)}
 						Call emergency help
 					</Button>
-					<Button className={xl} disabled={off} onClick={family}>
+					<a
+						className={cn(buttonVariants(), xl)}
+						data-slot="button"
+						href={telHref(FAMILY_PHONE)}
+						onClick={off ? undefined : family}
+					>
 						{step.kind === "calling" && step.what === "family" ? (
 							<Loader2 aria-hidden className="animate-spin" />
 						) : (
 							<Users aria-hidden />
 						)}
 						Call my family
-					</Button>
+					</a>
 				</div>
 			)}
 

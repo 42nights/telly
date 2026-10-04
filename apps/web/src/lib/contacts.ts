@@ -3,10 +3,12 @@
 // Calls start in the phone's own dialer through `tel:` links; the app never calls or texts by itself.
 import { useEffect, useState } from "react";
 
+export const FAMILY_PHONE = "+1 919 717 0390";
+
 export type Contacts = {
 	readonly momPhone: string | null;
 	/** The family member the wearer screen's "Call family" button calls. */
-	readonly familyPhone: string | null;
+	readonly familyPhone: string;
 	readonly emergency: string;
 	/** `Date.now()` of the last save on this device, or null when never saved. */
 	readonly savedAt: number | null;
@@ -15,7 +17,7 @@ export type Contacts = {
 const KEY = "telly.contacts";
 const DEFAULT_CONTACTS: Contacts = {
 	momPhone: null,
-	familyPhone: null,
+	familyPhone: FAMILY_PHONE,
 	emergency: "911",
 	savedAt: null,
 };
@@ -43,7 +45,7 @@ const read = (): Contacts => {
 		const savedAt = "savedAt" in stored ? stored.savedAt : null;
 		return {
 			momPhone: phoneOrNull(stored, "momPhone"),
-			familyPhone: phoneOrNull(stored, "familyPhone"),
+			familyPhone: FAMILY_PHONE,
 			emergency: phoneOrNull(stored, "emergency") ?? DEFAULT_CONTACTS.emergency,
 			savedAt: typeof savedAt === "number" ? savedAt : null,
 		};
