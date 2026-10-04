@@ -65,3 +65,78 @@ test("when records are unavailable, shows the offline banner and retries", async
 		calls.filter((c) => c.path === "/api/families/fam-1").length,
 	).toBeGreaterThan(before);
 });
+
+test("Today shows the next reminder and only the alerts I have not seen", async () => {
+	signIn();
+	const me = "a".repeat(64);
+	const iso = (ms: number) =>
+		new Date(ms).toISOString().replace(/\.\d+Z$/, "Z");
+	const occurrence = (
+		id: string,
+		title: string,
+		at: number,
+		state: string,
+	) => ({
+		occurrence: {
+			id,
+			reminderId: id,
+			familyId: "7",
+			kind: "meal",
+			subjectId: null,
+			title,
+			scheduledFor: iso(at),
+			state,
+			promptDue: false,
+			prompts: 0,
+			nextPromptAt: null,
+		},
+		events: [],
+	});
+	const alert = (id: string, summary: string) => ({
+		id,
+		familyId: "fam-1",
+		sampleId: null,
+		summary,
+		raisedBy: "monitor",
+		createdAt: iso(Date.now() - 60_000),
+	});
+	const hour = 3600_000;
+	serve({
+		"GET /api/families": { families: [FAMILY] },
+		"GET /api/me": {
+			issuer: "https://issuer.test",
+			subject: "user-1",
+			identity: me,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		},
+		"GET /api/families/fam-1": {
+			...RECORDS,
+			alerts: [alert("1", "Heart rate high"), alert("2", "Fall detected")],
+			acknowledgements: [
+				{
+					id: "9",
+					alertId: "2",
+					familyId: "fam-1",
+					member: me,
+					acknowledgedAt: iso(Date.now()),
+				},
+			],
+		},
+		"GET /api/families/fam-1/reminder-occurrences": {
+			occurrences: [
+				occurrence("3", "Dinner", Date.now() + 5 * hour, "scheduled"),
+				occurrence("2", "Lunch", Date.now() + hour, "scheduled"),
+				occurrence("1", "Breakfast", Date.now() - hour, "scheduled"),
+			],
+		},
+	});
+	renderRoute("/hud");
+
+	const next = await screen.findByText(/^Next:/);
+	expect(next.textContent).toStartWith("Next: Lunch at ");
+	expect(await screen.findByText("Heart rate high")).toBeTruthy();
+	await waitFor(() => expect(screen.queryByText("Fall detected")).toBeNull());
+});

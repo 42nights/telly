@@ -89,14 +89,68 @@ describe("wearer texts", () => {
 		fire(h);
 		fire(h);
 		expect(pending(h).map((t) => t.key)).toEqual(["missed-1"]);
-		h.call(mod.answerTextedReminder, op, { familyId: 1n });
+		h.call(mod.answerTextedReminder, op, { familyId: 1n, wording: "Done" });
 		const occurrence = h
 			.rows<{ id: bigint; state: string }>("reminderOccurrence")
 			.find((o) => o.id === 1n);
 		expect(occurrence?.state).toBe("self_reported_complete");
 		expect(() =>
-			h.call(mod.answerTextedReminder, op, { familyId: 1n }),
+			h.call(mod.answerTextedReminder, op, { familyId: 1n, wording: "Done" }),
 		).toThrow("no texted reminder is open");
+	});
+
+	test("a family meal time texts the wearer; their reply is recorded in their words", () => {
+		// Quiet from 22:00 to 07:00 UTC: a 23:00 drink waits until 07:00.
+		const h = setup({ quietStart: 22 * 60, quietEnd: 7 * 60 });
+		h.call(mod.createReminder, bob, {
+			familyId: 1n,
+			clientId: "lunch",
+			kind: "meal",
+			subjectId: undefined,
+			title: "Lunch",
+			times: [12 * 60 + 30],
+		});
+		h.call(mod.createReminder, bob, {
+			familyId: 1n,
+			clientId: "water",
+			kind: "hydration",
+			subjectId: undefined,
+			title: "Drink water",
+			times: [23 * 60],
+		});
+		const lunch = h.rows<{ dueAt: never }>("reminderTimer")[0];
+		if (lunch === undefined) throw new Error("no lunch timer");
+		h.now = lunch.dueAt;
+		h.call(mod.runReminderTimer, MODULE, { timer: lunch });
+		expect(pending(h)).toMatchObject([
+			{
+				key: "reminder-1",
+				body: "Time to eat: Lunch. Reply DONE when you have eaten.",
+			},
+		]);
+		h.call(mod.settleWearerText, op, {
+			key: "reminder-1",
+			sent: true,
+			note: undefined,
+		});
+		h.call(mod.answerTextedReminder, op, {
+			familyId: 1n,
+			wording: "I ate lunch",
+		});
+		expect(
+			h.view(mod.myReminderEvents, bob).filter((e) => e.source === "imessage"),
+		).toMatchObject([
+			{ state: "delivered" },
+			{ state: "self_reported_complete", wording: "I ate lunch" },
+		]);
+		const water = h
+			.rows<{ occurrenceId: bigint; dueAt: { toDate(): Date } }>(
+				"reminderTimer",
+			)
+			.find((t) => t.occurrenceId === 2n);
+		expect(water?.dueAt.toDate().toISOString()).toBe(
+			"2026-01-06T07:00:00.000Z",
+		);
 	});
 
 	test("an alert inside quiet hours waits for their end; a synthetic sample texts nothing", () => {

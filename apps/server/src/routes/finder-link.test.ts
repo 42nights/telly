@@ -105,9 +105,9 @@ describe.skipIf(dbConfig === undefined || operatorToken === undefined)(
 					});
 					expect(forged.status).toBe(401);
 
-					expect(yield* Effect.promise(() => wearer.done(familyId))).toBe(
-						"I have no reminder for you to answer right now.",
-					);
+					expect(
+						yield* Effect.promise(() => wearer.done(familyId, "Done")),
+					).toBe("I have no reminder for you to answer right now.");
 				}),
 			));
 	},

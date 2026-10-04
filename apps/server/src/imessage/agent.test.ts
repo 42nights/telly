@@ -63,8 +63,8 @@ test("item questions, done replies, and photos go to the wearer actions", async 
 			calls.push(`find ${familyId} ${item}`);
 			return `found ${item}`;
 		},
-		done: async (familyId) => {
-			calls.push(`done ${familyId}`);
+		done: async (familyId, words) => {
+			calls.push(`done ${familyId} ${words}`);
 			return "noted";
 		},
 		savePhoto: async (familyId, image) => {
@@ -93,6 +93,7 @@ test("item questions, done replies, and photos go to the wearer actions", async 
 		message("Where did I put my blood pressure pills this morning?"),
 		message("I can't find my keys"),
 		message("Done"),
+		message("I ate lunch"),
 		message("where is my daughter?"),
 		photo("image/HEIC"),
 		photo("application/pdf"),
@@ -101,12 +102,14 @@ test("item questions, done replies, and photos go to the wearer actions", async 
 	expect(calls).toEqual([
 		"find 7 blood pressure pills",
 		"find 7 keys",
-		"done 7",
+		"done 7 Done",
+		"done 7 I ate lunch",
 		"photo 7 image/heic aW1n",
 	]);
 	expect(sent).toEqual([
 		"found blood pressure pills",
 		"found keys",
+		"noted",
 		"noted",
 		"re: where is my daughter?",
 		"saved",

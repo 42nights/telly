@@ -12,4 +12,5 @@ import {
 
 export default {
   familyId: __t.u64(),
+  wording: __t.string(),
 };

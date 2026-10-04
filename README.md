@@ -193,7 +193,7 @@ flowchart LR
 </details>
 
 <details>
-<summary><strong>Photon Spectrum</strong> · family questions over iMessage</summary>
+<summary><strong>Photon Spectrum</strong> · family questions and wearer texts over iMessage</summary>
 
 ```mermaid
 flowchart LR
@@ -206,6 +206,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. The server answers through the same question flow as the app, including the urgent-help path.
+- **Wearer texts ([#308](https://github.com/undeemed/telly/issues/308)):** when a family has exactly one sender address, that address is the wearer's phone. The agent texts it each reminder (medicine, meal, drink, charging) at its time, a missed dose, each alert, and trip and help confirmations: one text per event, after quiet hours. A reply such as "done" or "I ate" records the reminder as done in the wearer's words. "Where are my keys?" gets the last saved place and a finder link (`/medicine?person=…&link=…`). The link opens without sign-in, once, for 15 minutes, and shows only that person's places; then it asks for sign-in. A photo sent by text saves where an item is. The delivery operator (`ALERT_OPERATOR_TOKEN`) sends the texts; a database timer opens `<app>/health` when a text is due, so a sleeping container starts in time.
 - **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`, so the agent works while the API container sleeps between requests. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Proof:** a live round trip on 2026-10-04 at 06:38 UTC. "I need help" got the urgent reply. "How did I sleep last night?" got the designed "cannot answer" fallback, because Fetch.ai was off in that run ([#175](https://github.com/ayaangazali/telly/pull/175)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.

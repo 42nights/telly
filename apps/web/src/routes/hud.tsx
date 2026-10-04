@@ -5,6 +5,7 @@ import { CloudOff, Home, RotateCw } from "lucide-react";
 import { Window } from "@/components/hud/window";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { Request } from "@/components/wearer/request";
+import { Today } from "@/components/wearer/today";
 import { useNow } from "@/components/wearer/use-now";
 import { useWearerRecords } from "@/components/wearer/use-wearer-records";
 
@@ -65,27 +66,9 @@ function HudComponent() {
 	});
 
 	return (
-		<main className="mx-auto grid w-full max-w-3xl gap-2 p-2 md:p-4">
-			<Window icon={Home} title={`Home · ${clock}`}>
-				<div className="grid gap-5 p-2 md:p-5">
-					<div>
-						<time
-							className="block font-semibold text-[34px] leading-none tracking-tight sm:text-[40px]"
-							dateTime={new Date(now).toISOString()}
-						>
-							{clock}
-						</time>
-						<p className="mt-1.5 text-[18px] text-muted-foreground">
-							{new Date(now).toLocaleDateString([], {
-								weekday: "long",
-								day: "numeric",
-								month: "long",
-							})}
-						</p>
-					</div>
-					<p className="text-[20px]">
-						Reminders and alerts come to your phone as texts.
-					</p>
+		<main className="mx-auto flex h-full w-full max-w-[720px] flex-col p-2">
+			<Window className="min-h-0 flex-1" icon={Home} title={`Home · ${clock}`}>
+				<div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_auto_1fr] gap-2 p-1 md:gap-3 md:p-3">
 					{records?.kind === "unavailable" || records?.kind === "error" ? (
 						<OfflineBanner message={records.message} onRetry={retry} />
 					) : (
@@ -96,6 +79,7 @@ function HudComponent() {
 						/>
 					)}
 					<Emergency emergency={emergency} familyId={familyId} />
+					<Today familyId={familyId} now={now} records={records} />
 				</div>
 			</Window>
 		</main>

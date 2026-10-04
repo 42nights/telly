@@ -214,9 +214,9 @@ export const itemAsk = (text: string): string | undefined => {
 	return item === "" || PERSON.test(item) ? undefined : item;
 };
 
-/** A short reply that says a texted reminder is done: "Done", "Taken", "I took it". */
+/** A short reply that says a texted reminder is done: "Done", "Taken", "I ate", "Drank it". */
 export const isDoneReply = (text: string) =>
-	/^\s*(?:done|taken|took (?:it|them)|i took (?:it|them)|did it|finished)\b[^?]{0,20}$/i.test(
+	/^\s*(?:i\s+)?(?:done|taken|took (?:it|them)|did it|finished|ate|eaten|have eaten|drank|had (?:it|a drink|some))\b[^?]{0,30}$/i.test(
 		text,
 	);
 
@@ -282,7 +282,8 @@ const finderUrl = (
 /** What the iMessage agent does for the wearer's item questions, "done" replies, and photos. */
 export type WearerActions = {
 	readonly findItem: (familyId: bigint, item: string) => Promise<string>;
-	readonly done: (familyId: bigint) => Promise<string>;
+	/** `words`: the wearer's reply, recorded for the family. */
+	readonly done: (familyId: bigint, words: string) => Promise<string>;
 	readonly savePhoto: (familyId: bigint, image: FinderImage) => Promise<string>;
 };
 
@@ -301,11 +302,16 @@ export const wearerActions = (
 				Date.now(),
 			);
 		}),
-	done: (familyId) =>
+	done: (familyId, words) =>
 		withOperator(operator, async (db) => {
 			const answered = await Effect.runPromise(
 				Effect.result(
-					callDb(db, (c) => c.reducers.answerTextedReminder({ familyId })),
+					callDb(db, (c) =>
+						c.reducers.answerTextedReminder({
+							familyId,
+							wording: words.trim().slice(0, 200),
+						}),
+					),
 				),
 			);
 			if (answered._tag === "Success")

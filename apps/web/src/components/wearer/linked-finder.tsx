@@ -13,11 +13,11 @@ import { Schema } from "effect";
 import { Camera, MapPinOff, RotateCw, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ago } from "@/components/family/logic";
 import { Window } from "@/components/hud/window";
 import { ENV } from "@/env";
 import { failureFor } from "@/lib/api";
 
-import { ago } from "./logic";
 import { useNow } from "./use-now";
 
 type Reply<A> =
@@ -83,7 +83,7 @@ const photoData = async (file: File): Promise<string> => {
 };
 
 const big = "h-16 w-full text-[22px] [&_svg]:size-7";
-const box = "win95-raised grid gap-3 p-3";
+const box = "win95-raised grid gap-2 p-3";
 
 type Photo =
 	| { readonly kind: "idle" }
@@ -130,10 +130,8 @@ function AddPlace({
 			aria-label="Add a place"
 			className={cn(box, highlight && "outline-4 outline-primary")}
 		>
-			<h3 className="font-semibold text-[24px]">Add a place</h3>
-			<p>
-				Take a photo of one thing where it is now. I save what it is and where.
-			</p>
+			<h3 className="font-semibold text-[22px]">Add a place</h3>
+			<p>Take a photo of one thing where it is now.</p>
 			<Button
 				className={cn(big, "win95-primary")}
 				disabled={photo.kind === "saving"}
@@ -173,22 +171,25 @@ function AddPlace({
 function Places({ finder }: { finder: LinkedFinderReply }) {
 	const now = useNow();
 	return (
-		<section aria-label="Your places" className={box}>
-			<h3 className="font-semibold text-[24px]">Where things were last seen</h3>
+		<section
+			aria-label="Your places"
+			className="win95-raised flex min-h-0 flex-1 flex-col gap-2 p-3"
+		>
+			<h3 className="font-semibold text-[22px]">Where things were last seen</h3>
 			{finder.sightings.length === 0 ? (
 				<p>Nothing is saved yet.</p>
 			) : (
 				<>
-					<ul className="grid gap-2">
+					<ul className="win95-inset grid min-h-24 flex-1 content-start overflow-y-auto bg-card">
 						{finder.sightings.map((sighting) => (
 							<li
-								className="win95-inset grid gap-1 bg-card p-3"
+								className="grid gap-0.5 border-b border-b-[var(--win95-shadow)] px-3 py-2 last:border-b-0"
 								key={sighting.id}
 							>
 								<b className="break-words">{sighting.container}</b>
 								<span className="break-words">{sighting.place}</span>
 								<span className="text-[18px] text-muted-foreground">
-									Seen {ago(now - Date.parse(sighting.seenAt))}
+									Seen {ago(sighting.seenAt, now)}
 								</span>
 								{sighting.notFoundAt !== null && (
 									<span className="flex items-center gap-2 font-semibold">
@@ -199,9 +200,7 @@ function Places({ finder }: { finder: LinkedFinderReply }) {
 							</li>
 						))}
 					</ul>
-					<p className="text-[18px]">
-						These are past places. The thing can be in a different place now.
-					</p>
+					<p className="text-[16px]">These are past places. Things can move.</p>
 				</>
 			)}
 		</section>
@@ -291,9 +290,9 @@ export function LinkedFinder({
 	);
 
 	return (
-		<main className="mx-auto grid w-full max-w-3xl gap-2 p-2 md:p-4">
-			<Window icon={Search} title="Find your things">
-				<div className="grid gap-4 p-2 text-[20px] md:p-5">
+		<main className="mx-auto flex h-full w-full max-w-[720px] flex-col p-2">
+			<Window className="min-h-0 flex-1" icon={Search} title="Find your things">
+				<div className="flex min-h-0 flex-1 flex-col gap-3 p-1 text-[20px] md:p-3">
 					{q.trim() !== "" && (
 						<p>
 							You asked about <b className="break-words">“{q}”</b>.

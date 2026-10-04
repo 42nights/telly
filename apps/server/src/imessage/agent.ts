@@ -57,7 +57,7 @@ export const iMessageHandler = (deps: {
 		}
 		if (content.type !== "text") return undefined;
 		if (wearer !== undefined && isDoneReply(content.text))
-			return wearer.done(familyId);
+			return wearer.done(familyId, content.text);
 		const item = itemAsk(content.text);
 		if (wearer !== undefined && item !== undefined)
 			return wearer.findItem(familyId, item);

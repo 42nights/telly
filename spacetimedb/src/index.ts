@@ -4243,9 +4243,13 @@ const textReminder = (ctx: Ctx, o: OccurrenceRow) =>
 		`reminder-${o.id}`,
 		o.kind === "medication"
 			? `Time for your medicine: ${o.title}. Reply DONE when you have taken it.`
-			: o.kind === "charging"
-				? "Bedtime: please plug in your phone so it charges overnight. Reply DONE when it is charging."
-				: `Reminder: ${o.title}. Reply DONE when you have done it.`,
+			: o.kind === "meal"
+				? `Time to eat: ${o.title}. Reply DONE when you have eaten.`
+				: o.kind === "hydration"
+					? `Time for a drink: ${o.title}. Reply DONE when you have had it.`
+					: o.kind === "charging"
+						? "Bedtime: please plug in your phone so it charges overnight. Reply DONE when it is charging."
+						: `Reminder: ${o.title}. Reply DONE when you have done it.`,
 		o.id,
 	);
 
@@ -4366,10 +4370,14 @@ export const settleWearerText = spacetimedb.reducer(
 	},
 );
 
-/** The wearer replied "done": the newest texted reminder that is still open is self-reported done. */
+/**
+ * The wearer replied "done" (or "ate", "taken"): the newest texted reminder that is still open is
+ * self-reported done, with their words, so the family sees what they said.
+ */
 export const answerTextedReminder = spacetimedb.reducer(
-	{ familyId: t.u64() },
-	(ctx, { familyId }) => {
+	{ familyId: t.u64(), wording: t.string() },
+	(ctx, { familyId, wording }) => {
+		requireWording(wording);
 		requireOperator(ctx);
 		let newest: { occurrence: OccurrenceRow; at: bigint } | undefined;
 		for (const text of ctx.db.wearerText.familyId.filter(familyId)) {
@@ -4391,6 +4399,7 @@ export const answerTextedReminder = spacetimedb.reducer(
 		recordReminderEvent(ctx, occurrence, "self_reported_complete", {
 			response: "done",
 			source: "imessage",
+			wording,
 		});
 		ctx.db.reminderOccurrence.id.update({
 			...occurrence,
