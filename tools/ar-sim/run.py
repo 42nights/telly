@@ -85,9 +85,10 @@ def vio(rng, true_poses):
     return out
 
 
-def scan_path(rng, pin, span, n):
-    """Session 1: walk an arc in front of the box, looking around it; the middle frame aims at the box."""
-    phi0, r, h = np.pi + rng.uniform(-0.3, 0.3), rng.uniform(1.3, 2.2), rng.uniform(1.2, 1.6)
+def scan_path(rng, pin, span, n, phi=np.pi):
+    """Session 1: walk an arc in front of the box, looking around it; the middle frame aims at the box.
+    `phi` is the side of the box the arc is on (pi: the -x side, toward the room from the cabinet)."""
+    phi0, r, h = phi + rng.uniform(-0.3, 0.3), rng.uniform(1.3, 2.2), rng.uniform(1.2, 1.6)
     poses = []
     for k in range(n):
         phi = phi0 + np.radians(span) * (k / max(n - 1, 1) - 0.5)
@@ -207,9 +208,9 @@ def load_pin(request):
     return m["points"], m["descriptors"], m["anchor_transform"][:3, 3]
 
 
-def relocalize(orb, bf, img, pts, des):
-    """Camera pose in map coordinates from ORB matches + PnP + RANSAC, or None."""
-    p, d = features(orb, img)
+def relocalize(bf, feat, pts, des):
+    """Camera pose in map coordinates from ORB matches (feat: the frame's `features`) + PnP + RANSAC, or None."""
+    p, d = feat
     m = [x for x in bf.match(d, des) if x.distance < 50] if d is not None else []
     if len(m) < MIN_INLIERS:
         return None
@@ -272,7 +273,7 @@ def trial(job):
         k, est = len(true2), drift @ origin @ T
         true2.append(T)
         img = R.capture(R.render(faces, T), rng, light, cfg["gradient"], tint, rng.uniform(0, 6), occluder=True)
-        T_mc = relocalize(orb, bf, img, mpts, mdes)
+        T_mc = relocalize(bf, features(orb, img), mpts, mdes)
         if T_mc is not None:
             fixes.append(to_cam(T_mc @ np.linalg.inv(est), manchor[None])[0])
             paired = k if paired is None else paired
