@@ -52,6 +52,7 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
+import RecordDeliveryEventReducer from "./record_delivery_event_reducer";
 import RecordExerciseEventReducer from "./record_exercise_event_reducer";
 import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
@@ -83,6 +84,7 @@ import MyCareNeedsRow from "./my_care_needs_table";
 import MyCareProfilesRow from "./my_care_profiles_table";
 import MyContactAttemptsRow from "./my_contact_attempts_table";
 import MyContactLaddersRow from "./my_contact_ladders_table";
+import MyDeliveryEventsRow from "./my_delivery_events_table";
 import MyExerciseEventsRow from "./my_exercise_events_table";
 import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
@@ -173,6 +175,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyContactLaddersRow),
+  myDeliveryEvents: __table({
+    name: 'my_delivery_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyDeliveryEventsRow),
   myExerciseEvents: __table({
     name: 'my_exercise_events',
     indexes: [
@@ -300,6 +309,7 @@ const reducersSchema = __reducers(
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
+  __reducerSchema("record_delivery_event", RecordDeliveryEventReducer),
   __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
   __reducerSchema("record_meal_fact", RecordMealFactReducer),
   __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),

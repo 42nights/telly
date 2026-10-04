@@ -642,6 +642,36 @@ const exerciseEvent = table(
 		at: t.timestamp(),
 	},
 );
+
+// A food-delivery proposal's status (#43). The provider is simulated; no row means a real order.
+const OrderStatus = t.enum("OrderStatus", {
+	Proposed: t.unit(),
+	Approved: t.unit(),
+	Replaced: t.unit(),
+	Placed: t.unit(),
+	Uncertain: t.unit(),
+	Failed: t.unit(),
+	Delivered: t.unit(),
+	Eaten: t.unit(),
+});
+
+// Append-only: each row is one status change of one proposal. The first row (`Proposed`) holds the
+// proposal as JSON that the server validates against `@health/contracts/delivery`.
+const deliveryEvent = table(
+	{ name: "delivery_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server; also the provider's idempotency key for the order.
+		proposalId: t.string().index("btree"),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+		actor: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -673,6 +703,7 @@ const spacetimedb = schema({
 	tripEvent,
 	exercisePlan,
 	exerciseEvent,
+	deliveryEvent,
 });
 export default spacetimedb;
 
@@ -2442,6 +2473,60 @@ export const recordExerciseEvent = spacetimedb.reducer(
 		});
 	},
 );
+
+type OrderStatusTag = Infer<typeof OrderStatus>["tag"];
+
+// The statuses each status may follow. A retry after `Uncertain` or `Failed` may record either again.
+const ORDER_STEPS: Record<OrderStatusTag, readonly OrderStatusTag[]> = {
+	Proposed: [],
+	Approved: ["Proposed"],
+	Replaced: ["Proposed", "Approved", "Failed"],
+	Placed: ["Approved", "Uncertain", "Failed"],
+	Uncertain: ["Approved", "Uncertain", "Failed"],
+	Failed: ["Approved", "Uncertain", "Failed"],
+	Delivered: ["Placed"],
+	Eaten: ["Delivered"],
+};
+
+export const recordDeliveryEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		proposalId: t.string(),
+		status: OrderStatus,
+		proposal: t.option(t.string()),
+		note: t.string(),
+	},
+	(ctx, event) => {
+		requireMember(ctx, event.familyId);
+		requireText("proposalId", event.proposalId);
+		let last: Infer<typeof deliveryEvent.rowType> | undefined;
+		for (const row of ctx.db.deliveryEvent.proposalId.filter(event.proposalId))
+			if (last === undefined || row.id > last.id) last = row;
+		if (last !== undefined && last.familyId !== event.familyId)
+			throw new SenderError("proposal id already exists");
+		if ((event.status.tag === "Proposed") !== (event.proposal !== undefined))
+			throw new SenderError("only a new proposal carries proposal JSON");
+		if (event.status.tag === "Proposed") {
+			if (last !== undefined)
+				throw new SenderError("proposal id already exists");
+			requireText("proposal", event.proposal ?? "");
+		} else if (
+			last === undefined ||
+			!ORDER_STEPS[event.status.tag].includes(last.status.tag)
+		)
+			throw new SenderError(
+				`a ${last?.status.tag ?? "missing"} proposal cannot become ${event.status.tag}`,
+			);
+		ctx.db.deliveryEvent.insert({
+			...event,
+			id: 0n,
+			proposal: event.proposal,
+			actor: ctx.sender,
+			at: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -2731,5 +2816,16 @@ export const mySpeakerSettings = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.speakerSettings, (m, s) =>
 				m.familyId.eq(s.familyId),
+			),
+);
+
+export const myDeliveryEvents = spacetimedb.view(
+	{ name: "my_delivery_events", public: true },
+	t.array(deliveryEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.deliveryEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
 			),
 );

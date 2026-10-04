@@ -24,6 +24,7 @@ import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavaila
 import OpenCareNeedReducer from "../open_care_need_reducer";
 import PostAlertMessageReducer from "../post_alert_message_reducer";
 import RaiseAlertReducer from "../raise_alert_reducer";
+import RecordDeliveryEventReducer from "../record_delivery_event_reducer";
 import RecordExerciseEventReducer from "../record_exercise_event_reducer";
 import RecordMealFactReducer from "../record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "../record_reminder_delivery_reducer";
@@ -60,6 +61,7 @@ export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliver
 export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
 export type PostAlertMessageParams = __Infer<typeof PostAlertMessageReducer>;
 export type RaiseAlertParams = __Infer<typeof RaiseAlertReducer>;
+export type RecordDeliveryEventParams = __Infer<typeof RecordDeliveryEventReducer>;
 export type RecordExerciseEventParams = __Infer<typeof RecordExerciseEventReducer>;
 export type RecordMealFactParams = __Infer<typeof RecordMealFactReducer>;
 export type RecordReminderDeliveryParams = __Infer<typeof RecordReminderDeliveryReducer>;

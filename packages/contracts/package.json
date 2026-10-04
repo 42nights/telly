@@ -23,7 +23,8 @@
 		"./reminders": "./src/reminders.ts",
 		"./emergency": "./src/emergency.ts",
 		"./speaker": "./src/speaker.ts",
-		"./trips": "./src/trips.ts"
+		"./trips": "./src/trips.ts",
+		"./delivery": "./src/delivery.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

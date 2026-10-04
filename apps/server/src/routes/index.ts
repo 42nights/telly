@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ServerConfig } from "../config";
 import type { FamilyEnv, FamilyRoutes } from "../http";
+import { simulatedDelivery } from "../integrations/delivery";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { r2Bucket } from "../integrations/r2";
 import { alertRoutes } from "./alerts";
@@ -9,6 +10,7 @@ import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
+import { deliveryRoutes } from "./delivery";
 import { emergencyRoutes } from "./emergency";
 import { exerciseRoutes } from "./exercise";
 import { familyRoutes } from "./families";
@@ -58,5 +60,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", cueRoutes(config.gemma))
 		.route("/", careProfileRoutes())
 		.route("/", tripRoutes())
-		.route("/", exerciseRoutes());
+		.route("/", exerciseRoutes())
+		.route("/", deliveryRoutes(simulatedDelivery()));
 };
