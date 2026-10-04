@@ -1,8 +1,7 @@
-import "../test/env";
+import "../test/setup";
 
 import { describe, expect, test } from "bun:test";
-import { render } from "@testing-library/react";
-import { installDom, serve } from "../test/dom";
+import { installDom, render } from "../test/dom";
 
 import { DataTable } from "./data-table";
 
@@ -10,7 +9,6 @@ installDom();
 
 describe("DataTable", () => {
 	test("shows each header as a column and the rows as the body", () => {
-		serve({});
 		const view = render(
 			<DataTable headers={["Test", "Value"]}>
 				<tr>
