@@ -15,6 +15,7 @@ import { ExerciseInvite } from "@/components/exercise/session";
 import { Alerts } from "@/components/hud/alerts";
 import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
+import { DueReminders } from "@/components/reminders/due-reminders";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
 import { MedicationReminders } from "@/components/wearer/medication-reminder";
@@ -270,9 +271,10 @@ function HudComponent() {
 					</div>
 
 					<section
-						aria-label="Messages and alerts"
+						aria-label="Reminders, alerts, and messages"
 						className="grid min-w-0 content-start gap-2 md:row-span-2"
 					>
+						<DueReminders familyId={familyId} />
 						<h2 className="font-bold text-[16px]">Alerts</h2>
 						{records === null ? (
 							<p className="win95-inset bg-card p-3 text-[18px]">

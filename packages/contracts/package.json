@@ -21,7 +21,8 @@
 		"./exercise": "./src/exercise.ts",
 		"./trends": "./src/trends.ts",
 		"./reminders": "./src/reminders.ts",
-		"./emergency": "./src/emergency.ts"
+		"./emergency": "./src/emergency.ts",
+		"./speaker": "./src/speaker.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

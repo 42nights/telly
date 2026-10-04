@@ -64,6 +64,7 @@ import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
+import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
 import VerifyExercisePlanReducer from "./verify_exercise_plan_reducer";
@@ -93,6 +94,7 @@ import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
 import MyReminderSettingsRow from "./my_reminder_settings_table";
 import MyRemindersRow from "./my_reminders_table";
 import MyReportsRow from "./my_reports_table";
+import MySpeakerSettingsRow from "./my_speaker_settings_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -253,6 +255,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyReportsRow),
+  mySpeakerSettings: __table({
+    name: 'my_speaker_settings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MySpeakerSettingsRow),
   pendingAlertDeliveries: __table({
     name: 'pending_alert_deliveries',
     indexes: [
@@ -294,6 +303,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
+  __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
   __reducerSchema("update_report", UpdateReportReducer),
   __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
   __reducerSchema("verify_exercise_plan", VerifyExercisePlanReducer),

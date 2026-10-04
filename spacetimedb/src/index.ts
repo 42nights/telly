@@ -501,6 +501,19 @@ const reminderTimer = table(
 	},
 );
 
+// Home-speaker handoff settings (issue #46), one row per family. No row means off.
+const speakerSettings = table(
+	{ name: "speaker_settings" },
+	{
+		familyId: t.u64().primaryKey(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 // The wearer's care profile (#26). Each save is a new version, so the history keeps who changed
 // it and when. JSON that the server validates against `@health/contracts/care-profile`.
 const careProfileVersion = table(
@@ -621,6 +634,7 @@ const spacetimedb = schema({
 	reminderEvent,
 	reminderRequest,
 	reminderTimer,
+	speakerSettings,
 	mealFact,
 	careProfileVersion,
 	careInstruction,
@@ -1608,6 +1622,9 @@ const REMINDER_RESPONSES = [
 	"repeat",
 ];
 const CLIENT_SOURCES = ["phone", "web", "glasses"];
+// A home speaker only delivers: it cannot hear an answer (#46). The server records its deliveries.
+const DELIVERY_SOURCES = [...CLIENT_SOURCES, "speaker"];
+const SPEAKER_ROOMS = ["private", "shared"];
 const COMPLETE_STATES = ["self_reported_complete", "caregiver_confirmed"];
 const MINUTES_PER_DAY = 24 * 60;
 
@@ -1847,7 +1864,8 @@ export const recordReminderDelivery = spacetimedb.reducer(
 	{ occurrenceId: t.u64(), clientId: t.string(), source: t.string() },
 	(ctx, { occurrenceId, clientId, source }) => {
 		const occurrence = requireOccurrence(ctx, occurrenceId);
-		requireClientSource(source);
+		if (!DELIVERY_SOURCES.includes(source))
+			throw new SenderError("source must be phone, web, glasses, or speaker");
 		if (seenRequest(ctx, occurrenceId, clientId, `delivery:${source}`)) return;
 		if (!occurrence.promptDue) return;
 		recordReminderEvent(ctx, occurrence, "delivered", { source });
@@ -2000,6 +2018,31 @@ export const runReminderTimer = spacetimedb.reducer(
 			nextPromptAt: next,
 		});
 		scheduleReminderTimer(ctx, occurrence.id, next);
+	},
+);
+
+export const setSpeakerSettings = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		enabled: t.bool(),
+		room: t.string(),
+		sharedRoomKinds: t.array(t.string()),
+	},
+	(ctx, settings) => {
+		requireMember(ctx, settings.familyId);
+		if (!SPEAKER_ROOMS.includes(settings.room))
+			throw new SenderError("room must be private or shared");
+		if (settings.sharedRoomKinds.some((k) => !REMINDER_KINDS.includes(k)))
+			throw new SenderError("sharedRoomKinds must be reminder kinds");
+		const row = {
+			...settings,
+			sharedRoomKinds: [...new Set(settings.sharedRoomKinds)],
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.speakerSettings.familyId.find(settings.familyId) === null)
+			ctx.db.speakerSettings.insert(row);
+		else ctx.db.speakerSettings.familyId.update(row);
 	},
 );
 
@@ -2487,5 +2530,16 @@ export const myExerciseEvents = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.exerciseEvent, (m, e) =>
 				m.familyId.eq(e.familyId),
+			),
+);
+
+export const mySpeakerSettings = spacetimedb.view(
+	{ name: "my_speaker_settings", public: true },
+	t.array(speakerSettings.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.speakerSettings, (m, s) =>
+				m.familyId.eq(s.familyId),
 			),
 );

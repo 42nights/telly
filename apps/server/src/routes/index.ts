@@ -16,6 +16,7 @@ import { finchnodeRoutes } from "./finchnode";
 import { mealRoutes } from "./meal-facts";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
+import { speakerRoutes } from "./speaker";
 import { toolRoutes } from "./tools";
 import { trendRoutes } from "./trends";
 import { visionRoutes } from "./vision";
@@ -46,6 +47,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			reportRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
 		)
 		.route("/", reminderRoutes())
+		.route("/", speakerRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
