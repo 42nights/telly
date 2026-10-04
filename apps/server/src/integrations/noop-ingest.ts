@@ -39,22 +39,22 @@ const noopKeyMatches = (given: string | undefined, key: string) =>
 
 type Tables = NoopBatch["tables"];
 
+/** The newest reading of each device-minute: a later reading in the same minute replaces it. */
 const heartRate = (rows: NonNullable<Tables["hrSample"]>) => {
-	const minutes = new Set<string>();
-	const samples: NoopSample[] = [];
+	const newest = new Map<string, NoopSample>();
 	for (const { deviceId, ts, bpm } of rows) {
 		const minute = `${deviceId}|${Math.floor(ts / 60)}`;
-		if (minutes.has(minute)) continue;
-		minutes.add(minute);
-		samples.push({
-			metric: "heart_rate",
-			value: bpm,
-			unit: "bpm",
-			time: ts * 1000,
-			source: `noop:${deviceId}`,
-		});
+		const seen = newest.get(minute);
+		if (seen === undefined || ts * 1000 > seen.time)
+			newest.set(minute, {
+				metric: "heart_rate",
+				value: bpm,
+				unit: "bpm",
+				time: ts * 1000,
+				source: `noop:${deviceId}`,
+			});
 	}
-	return samples;
+	return [...newest.values()];
 };
 
 const onWrist = (rows: NonNullable<Tables["event"]>): NoopSample[] =>
@@ -106,35 +106,53 @@ const noopSamples = (body: ArrayBuffer): NoopSample[] => {
 	);
 };
 
-const slot = (source: string, metric: string, time: number) =>
+const slot = ({ source, metric, time }: NoopSample) =>
 	metric === "heart_rate"
 		? `${source}|${metric}|${Math.floor(time / 60_000)}`
 		: `${source}|${metric}|${time}`;
 
+/**
+ * The samples to store, given the stored ones in receive order. A heart rate is stored when it is
+ * newer than the stored one of its minute, so each push shows; any other metric when its value
+ * changed.
+ */
+export const unstoredSamples = (
+	stored: readonly NoopSample[],
+	samples: readonly NoopSample[],
+) => {
+	const latest = new Map<string, NoopSample>();
+	for (const sample of stored) latest.set(slot(sample), sample);
+	return samples.filter((sample) => {
+		const previous = latest.get(slot(sample));
+		if (
+			previous !== undefined &&
+			(sample.metric === "heart_rate"
+				? previous.time >= sample.time
+				: previous.value === sample.value)
+		)
+			return false;
+		latest.set(slot(sample), sample);
+		return true;
+	});
+};
+
 export const recordNoopSamples =
 	(db: FamilyDb, familyId: bigint) =>
 	async (samples: readonly NoopSample[]) => {
-		const latest = new Map<string, number>();
-		const rows = [...db.connection.db.myHealthSamples.iter()]
+		const stored = [...db.connection.db.myHealthSamples.iter()]
 			.filter((row) => row.familyId === familyId)
 			.sort(
 				(a, b) =>
 					a.receivedAt.toDate().getTime() - b.receivedAt.toDate().getTime(),
-			);
-		for (const row of rows)
-			latest.set(
-				slot(row.source, row.metric, row.sourceTime.toDate().getTime()),
-				row.value,
-			);
-		for (const sample of samples) {
-			const key = slot(sample.source, sample.metric, sample.time);
-			const previous = latest.get(key);
-			if (
-				previous !== undefined &&
-				(sample.metric === "heart_rate" || previous === sample.value)
 			)
-				continue;
-			latest.set(key, sample.value);
+			.map((row) => ({
+				metric: row.metric,
+				value: row.value,
+				unit: row.unit,
+				time: row.sourceTime.toDate().getTime(),
+				source: row.source,
+			}));
+		for (const sample of unstoredSamples(stored, samples))
 			await callReducer(db, (connection) =>
 				connection.reducers.recordSample({
 					familyId,
@@ -147,7 +165,6 @@ export const recordNoopSamples =
 					quality: { tag: "Unvalidated" },
 				}),
 			);
-		}
 	};
 
 const NOOP_FRESH_MS = 10 * 60_000;

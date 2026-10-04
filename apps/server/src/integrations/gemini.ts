@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import type { MedicineDetectionRequest } from "@health/contracts/vision";
 import { Data, Effect, Schema } from "effect";
 
@@ -5,28 +6,73 @@ import { Data, Effect, Schema } from "effect";
 export const GEMINI_VISION_MODEL = "gemini-3.8-flash";
 export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 
-const overloaded = (status: number) => status === 429 || status === 503;
+/** 429 and 503 are Google's "high demand" refusals: nothing ran, so a retry is safe and unbilled. */
+export const overloaded = (status: number) => status === 429 || status === 503;
 
+type Reply = { readonly response: Response; readonly model: string };
+
+/**
+ * Sends one interaction. When the model is overloaded it tries the fallback model at once, then
+ * both again after each wait in `backoffMs`. With `primaryTimeoutMs`, a primary model that has not
+ * answered by then is cut off and counts as overloaded, so a slow primary leaves time for the
+ * fallback. Other replies, including errors, return at once. The last overloaded reply returns
+ * when every try was refused; `signal` also ends a wait.
+ */
 export const postInteraction = async (
 	{ apiKey, baseUrl }: Pick<GeminiConfig, "apiKey" | "baseUrl">,
 	body: Readonly<Record<string, unknown>> & { readonly model: string },
 	signal: AbortSignal,
-): Promise<{ readonly response: Response; readonly model: string }> => {
-	const send = (model: string) =>
-		fetch(new URL("/v1beta/interactions", baseUrl), {
-			method: "POST",
-			headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-			body: JSON.stringify({ ...body, model }),
-			signal,
-		});
-	const response = await send(body.model);
-	if (!overloaded(response.status) || body.model === GEMINI_FALLBACK_MODEL)
-		return { response, model: body.model };
-	await response.body?.cancel();
-	return {
-		response: await send(GEMINI_FALLBACK_MODEL),
-		model: GEMINI_FALLBACK_MODEL,
+	{
+		backoffMs = [],
+		primaryTimeoutMs,
+	}: {
+		readonly backoffMs?: readonly number[];
+		readonly primaryTimeoutMs?: number;
+	} = {},
+): Promise<Reply> => {
+	const send = async (model: string): Promise<Reply | undefined> => {
+		const limit = new AbortController();
+		// The fallback has no own limit, so the last try always gets a reply or fails for real.
+		const timer =
+			primaryTimeoutMs === undefined || model === GEMINI_FALLBACK_MODEL
+				? undefined
+				: setTimeout(() => limit.abort(), primaryTimeoutMs);
+		try {
+			return {
+				model,
+				response: await fetch(new URL("/v1beta/interactions", baseUrl), {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-goog-api-key": apiKey,
+					},
+					body: JSON.stringify({ ...body, model }),
+					signal: AbortSignal.any([signal, limit.signal]),
+				}),
+			};
+		} catch (error) {
+			if (limit.signal.aborted && !signal.aborted) return undefined;
+			throw error;
+		} finally {
+			clearTimeout(timer);
+		}
 	};
+	const models =
+		body.model === GEMINI_FALLBACK_MODEL
+			? [body.model]
+			: [body.model, GEMINI_FALLBACK_MODEL];
+	let reply: Reply | undefined;
+	for (const wait of [0, ...backoffMs])
+		for (const [index, model] of models.entries()) {
+			if (reply !== undefined && !overloaded(reply.response.status))
+				return reply;
+			await reply?.response.body?.cancel();
+			if (index === 0 && wait > 0) await sleep(wait, undefined, { signal });
+			reply = await send(model);
+		}
+	// Unreachable: the last try is the fallback, or the only model, and neither has a limit.
+	if (reply === undefined) throw new Error("Gemini gave no reply");
+	return reply;
 };
 
 export type GeminiConfig = {
@@ -35,6 +81,8 @@ export type GeminiConfig = {
 	readonly baseUrl: string;
 	/** Upper bound for one provider call, including reading its response. */
 	readonly timeout?: number;
+	/** Chat only: waits before each extra try of an overloaded call. Tests set short ones. */
+	readonly overloadBackoffMs?: readonly number[];
 };
 
 /** A provider failure. `reason` is for logs and status mapping only; it never carries provider text. */
@@ -161,13 +209,18 @@ const parseDetections = (body: unknown) =>
 		return boxes;
 	});
 
+// ponytail: fixed split from one load probe on 2026-10-04 (3.8 Flash 9.5–14 s, 3.5 Flash 16.5–17.5 s
+// for one word); tune when timings are measured again.
+const primaryShare = 0.4;
+
 /**
  * Gemini object detection through the Interactions API (`POST /v1beta/interactions`). The request
  * sets `store: false`, so Google keeps no copy for server-side state. The key stays on the server,
- * and the effect aborts the HTTP call when interrupted or after `timeout` milliseconds.
+ * and the effect aborts the HTTP call when interrupted or after `timeout` milliseconds. The primary
+ * model gets 40% of `timeout`; when it is slow or overloaded, the fallback gets the rest.
  */
 export const createGeminiDetector =
-	({ apiKey, baseUrl, timeout = 20_000 }: GeminiConfig): MedicineDetector =>
+	({ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig): MedicineDetector =>
 	(image) =>
 		Effect.tryPromise({
 			try: (signal) =>
@@ -191,6 +244,7 @@ export const createGeminiDetector =
 						},
 					},
 					signal,
+					{ primaryTimeoutMs: timeout * primaryShare },
 				),
 			catch: () => new VisionUpstreamError({ reason: "network" }),
 		}).pipe(

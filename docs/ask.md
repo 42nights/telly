@@ -54,7 +54,8 @@ This part is for [#35](https://github.com/ayaangazali/telly/issues/35). Plan: [`
 - Attachments go in the `user_input` step: PDF as `document`, images as `image`, and plain text as a `text` part with the file name.
 - Requests set `store: false`. The server sends the whole conversation each round, so Google keeps no copy for later retrieval.
 - The tools come from `familyTools` (the Fetch.ai tool set in `@health/contracts/tools`). Each call goes through `callAgentTool`: bridge, Agentverse, worker, then `POST /api/families/:familyId/tools`. There is no direct database fallback.
-- One provider request is bounded at 30 s. The model gets at most 4 tool rounds. Calls are not retried, because each call is billed and has no idempotency key.
+- One provider request is bounded at 30 s, and one question (all rounds and retries) at 45 s, so a voice reply with transcription and speech comes before a phone gives up at about 60 s. The model gets at most 4 tool rounds.
+- An overloaded call (HTTP 429 or 503: nothing ran, nothing is billed) goes at once to `gemini-3.5-flash`, then to both models again after 1 s and after 3 s. Only the refused round is sent again: finished tool rounds and their tool calls are kept. When every try is refused, or the 45 s pass, the answer fails with `upstream_error` and the message "The assistant is busy right now. Try again in a minute", followed by the cause. Other failures are not retried, because each call is billed and has no idempotency key.
 - Every reply is validated. An empty, incomplete, or endless answer fails; the server never makes up an answer.
 - The server does not log questions, files, answers, audio, records, or keys. Error messages carry only the failed step and the HTTP status.
 
