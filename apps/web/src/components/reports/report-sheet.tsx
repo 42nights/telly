@@ -10,6 +10,7 @@ import { useFamily } from "@/lib/family";
 
 import { formatTime } from "./logic";
 import {
+	DailyTab,
 	MarkersTab,
 	NotesTab,
 	PatientTab,
@@ -18,7 +19,7 @@ import {
 } from "./report-tabs";
 import { failureText, useReportSheet } from "./use-report-sheet";
 
-const TABS = ["Patient", "Markers", "Notes", "Send"] as const;
+const TABS = ["Patient", "Markers", "Meals & events", "Notes", "Send"] as const;
 type Tab = (typeof TABS)[number];
 
 /** Lab report, variation B: a tabbed property sheet. Hospital delivery is unavailable on the server. */
@@ -191,7 +192,7 @@ function TabStrip({
 					key={name}
 					type="button"
 					role="tab"
-					id={`report-tab-${name}`}
+					id={`report-tab-${TABS.indexOf(name)}`}
 					aria-selected={tab === name}
 					aria-controls="report-tab-panel"
 					className={`win95-raised min-h-11 px-4 text-sm ${tab === name ? "relative z-10 -mb-px font-bold" : "mt-1"}`}
@@ -238,13 +239,14 @@ function ReportSheet({
 				<div
 					role="tabpanel"
 					id="report-tab-panel"
-					aria-labelledby={`report-tab-${tab}`}
+					aria-labelledby={`report-tab-${TABS.indexOf(tab)}`}
 					className="win95-raised grid gap-3 p-3"
 				>
 					{tab === "Patient" && <PatientTab sheet={sheet} report={report} />}
 					{tab === "Markers" && (
 						<MarkersTab report={report} familyId={familyId} sheet={sheet} />
 					)}
+					{tab === "Meals & events" && <DailyTab report={report} />}
 					{tab === "Notes" && <NotesTab sheet={sheet} />}
 					{tab === "Send" && (
 						<SendTab
