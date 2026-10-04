@@ -147,6 +147,11 @@ export default function WebApp() {
 				}}
 				mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
 				allowsInlineMediaPlayback
+				// The live camera preview is a muted autoplay <video>. WebKit's default holds every video
+				// until a tap, so the camera box stayed black.
+				mediaPlaybackRequiresUserAction={false}
+				// Pull down to reload, such as after a deploy replaced the page's scripts.
+				pullToRefreshEnabled
 				style={styles.fill}
 			/>
 		</SafeAreaView>
