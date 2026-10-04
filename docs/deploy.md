@@ -36,7 +36,7 @@ If the module change needs a data wipe or breaks clients, the publish stops at i
 
 ### Auto-deploy from the operator host
 
-The systemd user timer `telly-autodeploy` checks `origin/main` every 60 s. When main moved, `deploy/cloudflare/autodeploy.sh` runs `release.sh` from its own clone (`~/.local/share/telly-autodeploy/telly`), one run at a time. It does not retry a failed commit. It needs `gh` signed in.
+The systemd user timer `telly-autodeploy` checks `origin/main` every 2 minutes, so its GitHub API calls stay under the account rate limit. When main moved, `deploy/cloudflare/autodeploy.sh` runs `release.sh` from its own clone (`~/.local/share/telly-autodeploy/telly`), one run at a time. It does not retry a failed commit. It needs `gh` signed in.
 
 - It waits while the commit's `health-deploy` run is unfinished. If that run's `deploy` job succeeded, it publishes only the module (`TELLY_RELEASE_PART=module`), so CI and the host never deploy the same Worker twice.
 - After a healthy release it keeps the artifact. If a release fails and `/health` is not 200, it deploys that last healthy artifact again.

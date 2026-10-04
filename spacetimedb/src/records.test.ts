@@ -391,6 +391,14 @@ describe("recordMealFact", () => {
 		expect(h.view(mod.myMealFacts, bob)).toMatchObject([
 			{ mealId: "m1", recordedBy: bob },
 		]);
+		// The founder holds health_records (#188); once she gives it up, she sees no meal facts.
+		expect(h.view(mod.myMealFacts, alice)).toMatchObject([{ mealId: "m1" }]);
+		h.call(mod.setCareGrant, alice, {
+			familyId: 1n,
+			member: alice,
+			scope: "health_records",
+			granted: false,
+		});
 		expect(h.view(mod.myMealFacts, alice)).toEqual([]);
 	});
 
