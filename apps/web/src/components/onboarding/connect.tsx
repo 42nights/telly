@@ -15,7 +15,7 @@ import { FirstMedicine } from "./medicine";
 import { ShareLink } from "./share-link";
 import { useSetupStatus, WhoopStatus } from "./status";
 
-type Open = "whoop" | "medicine" | "invite";
+type Open = "whoop" | "replace-whoop" | "medicine" | "invite";
 
 function Row({
 	done,
@@ -103,8 +103,38 @@ export function ConnectScreen({ family }: { family: Family }) {
 						</>
 					}
 					action="Connect"
-					onAction={() => void connectWhoop()}
+					onAction={() =>
+						status.records.kind === "ready" &&
+						!status.hasWhoop &&
+						whoopLink === null
+							? void connectWhoop()
+							: setOpen("replace-whoop")
+					}
 				>
+					{open === "replace-whoop" && (
+						<div className="grid gap-2">
+							<p>
+								A new link turns off the current one. The phone with the strap
+								stops sending until the new link is opened on it.
+							</p>
+							<div className="grid grid-cols-2 gap-2">
+								<Button
+									type="button"
+									className="h-11"
+									onClick={() => void connectWhoop()}
+								>
+									Make a new link
+								</Button>
+								<Button
+									type="button"
+									className="h-11"
+									onClick={() => setOpen(whoopLink === null ? null : "whoop")}
+								>
+									Cancel
+								</Button>
+							</div>
+						</div>
+					)}
 					{open === "whoop" && whoopLink !== null && (
 						<div className="grid gap-2">
 							<p>
