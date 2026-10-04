@@ -52,14 +52,15 @@ export class Api {
 		let failure = "";
 		for (;;) {
 			if (!container.running) this.start(this.env.TELLY_DEPLOY_ID);
-			const ready = await tcp
-				.fetch("http://api/health", { signal: AbortSignal.timeout(3_000) })
-				.then(
-					(response) =>
-						response.ok || ((failure = `HTTP ${response.status}`), false),
-				)
-				.catch((error) => ((failure = String(error).slice(0, 200)), false));
-			if (ready) break;
+			try {
+				const response = await tcp.fetch("http://api/health", {
+					signal: AbortSignal.timeout(3_000),
+				});
+				if (response.ok) break;
+				failure = `HTTP ${response.status}`;
+			} catch (error) {
+				failure = String(error).slice(0, 200);
+			}
 			if (Date.now() > deadline) {
 				console.log(
 					`the API container did not answer /health within 60 s: ${failure}`,
