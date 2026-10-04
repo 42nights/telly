@@ -10,13 +10,4 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-export default {
-  familyId: __t.u64(),
-  personId: __t.identity(),
-  container: __t.string(),
-  place: __t.string(),
-  seenAt: __t.timestamp(),
-  source: __t.string(),
-  confidence: __t.f64(),
-  labelRead: __t.bool(),
-};
+export default {};

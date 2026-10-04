@@ -422,7 +422,7 @@ describe.skipIf(!integration)("medication reminders", () => {
 			).toEqual(detail);
 	});
 
-	test("a second family member sees the acknowledged and snoozed states and the sighting", async () => {
+	test("a second family member sees the acknowledged and snoozed states, not the owner's medicine", async () => {
 		await addMember(owner, family.path, member);
 		const seen = await ownOccurrences(member);
 		expect(seen).toEqual(
@@ -435,9 +435,19 @@ describe.skipIf(!integration)("medication reminders", () => {
 			MedicineMemory,
 			await member.call("GET", `${family.path}/medicine-memory`),
 		);
-		expect(memory.sightings.map((s) => [s.container, s.savedBy])).toEqual([
-			[LABEL, owner.identity],
-		]);
+		expect(memory).toMatchObject({
+			personId: member.identity,
+			people: [member.identity],
+			sightings: [],
+		});
+		expect(
+			await errorOf(
+				await member.call(
+					"GET",
+					`${family.path}/medicine-memory?person=${owner.identity}`,
+				),
+			),
+		).toEqual([403, "forbidden"]);
 	});
 
 	/** This reminder's occurrences as `user` reads them, soonest first. */

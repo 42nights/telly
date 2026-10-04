@@ -187,6 +187,7 @@ describe("did I take it?", () => {
 		const sighting = (id: string, seenAt: string) => ({
 			id,
 			familyId: "1",
+			personId: "a".repeat(64),
 			container: "SYNTHETIC A 10 mg tablets",
 			place: "Kitchen counter",
 			seenAt,

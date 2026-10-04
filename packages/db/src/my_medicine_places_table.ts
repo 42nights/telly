@@ -11,7 +11,9 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  familyId: __t.u64().primaryKey().name("family_id"),
+  id: __t.u64().primaryKey(),
+  familyId: __t.u64().name("family_id"),
+  personId: __t.identity().name("person_id"),
   places: __t.array(__t.string()),
   setBy: __t.identity().name("set_by"),
   setAt: __t.timestamp().name("set_at"),

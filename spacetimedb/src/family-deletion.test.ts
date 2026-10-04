@@ -118,6 +118,7 @@ const fill = (
 	});
 	h.call(mod.setMedicineMemory, founder, {
 		familyId,
+		personId: founder,
 		enabled: true,
 		places: ["Kitchen"],
 	});
