@@ -28,11 +28,11 @@ A 3D home map is not required.
 | Data | SpacetimeDB | Health data, alerts, messages, acknowledgements |
 | Contracts | Effect Schema in `@health/contracts` | One source for request and response shapes |
 | Model training | Gemma on River AI | Health cues; inference runs in the cloud, not on the glasses |
-| Family agents | Grokbot | Family chat agents |
+| Family agents | Gemini | Family chat agents; their data tools run through Fetch.ai |
 | Tool routing | Fetch.ai Agentverse (required) | Routes agent tool requests to the service API |
 | Voice | ElevenLabs (required) | Multilingual speech |
 | Vision | Gemini | Object detection for medicine boxes |
-| Messaging | Grokbot | Carries family messages (Muse is not used) |
+| Messaging | SpacetimeDB | Stores family messages (Muse is not used) |
 | Reports | Finchnode | Hospital report handoff |
 | WHOOP data | NOOP (friend-owned) | Only the NOOP-to-server connection is stubbed |
 
@@ -73,7 +73,7 @@ Issues add `spacetimedb/` (database module), `packages/db/` (generated bindings,
 
 | Person | GitHub | Areas |
 | --- | --- | --- |
-| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Grokbot family conversations, service reliability, optional glasses bridge |
+| Jerry | `undeemed` | Workspace and CI, phone app, family dashboard, Gemma training and inference, Gemini family conversations, service reliability, optional glasses bridge |
 | Ayaan | `ayaangazali` | SpacetimeDB, threshold alerts and durable delivery, data quality, NOOP connection boundary, Fetch.ai Agentverse, Finchnode handoff, River setup |
 | Mahesh | `maheshwarmurugesan` | Web HUD, Gemini vision and medicine markers, ElevenLabs voice, lab-report UI, optional square glasses layout |
 

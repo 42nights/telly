@@ -44,7 +44,7 @@ const HttpServer = Layer.effectDiscard(
 
 const db = config.auth?.db;
 // ponytail: no family delivery transport exists yet, so every delivery becomes `unavailable`.
-// Pass the Grokbot family transport here when it lands (issue #11).
+// Pass the family delivery transport here when it lands (issue #11).
 const AlertOutbox = Layer.effectDiscard(
 	Effect.forkScoped(
 		alertOutboxWorker(

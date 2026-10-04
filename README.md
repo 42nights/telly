@@ -47,7 +47,8 @@ The source of truth is the approved planning board, [`docs/board.html`](docs/boa
 | Gemini medicine detection (server only) | Route, frame mapping, and errors are tested against a local protocol server. No live Gemini call is verified yet, and no client draws the markers ([#15](https://github.com/ayaangazali/telly/issues/15)) |
 | Fetch.ai agent tools: server caller, bridge and worker uAgents (`agents/fetch/`), and the signed-in route `POST /api/families/:familyId/tools` | Tested end to end on a local database with local agents and a local test sign-in issuer. No live Agentverse round trip is verified yet |
 | Gemma health cues (server only): `POST /api/families/:familyId/cues` and the River training entry point (`training/`) | The route is tested on a local database against a local protocol server. River access, Gemma on River, a trained model, and a deployment are not confirmed ([#10](https://github.com/ayaangazali/telly/issues/10), [#9](https://github.com/ayaangazali/telly/issues/9)) |
-| Providers: ElevenLabs, Grokbot | Planned. No provider is connected |
+| Family questions (server only): Gemini chat with Fetch.ai tools, `POST /api/families/:familyId/ask` and `/ask/voice` with ElevenLabs | Tested on the real server with a local database and local Gemini, ElevenLabs, and bridge servers. No live Gemini or ElevenLabs call is verified yet ([#86](https://github.com/ayaangazali/telly/issues/86)) |
+| Providers: ElevenLabs | Planned. No provider is connected |
 | Deployment | Planned. No hosted instance exists |
 | Optional glasses adapter | Planned |
 
@@ -218,7 +219,7 @@ flowchart TB
 
     subgraph services ["Cloud services"]
         ai["Cloud inference<br/>Gemini vision · Gemma cues · ElevenLabs voice"]
-        agents["Grokbot family agents<br/>tools via Fetch.ai Agentverse"]
+        agents["Gemini family agents<br/>tools via Fetch.ai Agentverse"]
         db[("SpacetimeDB<br/>health data · alerts · messages")]
         rules["Threshold rules<br/>fall · breathing · heart"]
         reports["Lab report generator"]
@@ -250,7 +251,7 @@ flowchart TB
 | Server | Node, Hono for HTTP, Effect 4 for service logic |
 | Contracts | Effect Schema in `@health/contracts` |
 | Data | SpacetimeDB (TypeScript module in `spacetimedb/`, generated bindings in `@health/db`) |
-| Providers (planned) | Gemini vision, ElevenLabs voice, Grokbot family agents and messages, Fetch.ai Agentverse tool routing, Finchnode report handoff, Gemma on River AI |
+| Providers (planned) | Gemini vision and family chat, ElevenLabs voice, Fetch.ai Agentverse tool routing, Finchnode report handoff, Gemma on River AI |
 
 ```text
 apps/
