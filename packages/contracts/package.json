@@ -10,6 +10,7 @@
 		"./voice": "./src/voice.ts",
 		"./vision": "./src/vision.ts",
 		"./reports": "./src/reports.ts",
+		"./appointments": "./src/appointments.ts",
 		"./tools": "./src/tools.ts",
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
