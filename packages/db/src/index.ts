@@ -49,6 +49,7 @@ import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordExerciseEventReducer from "./record_exercise_event_reducer";
+import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
@@ -79,6 +80,7 @@ import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
+import MyMealFactsRow from "./my_meal_facts_table";
 import MyMessagesRow from "./my_messages_table";
 import MyReportsRow from "./my_reports_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
@@ -192,6 +194,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyHealthSamplesRow),
+  myMealFacts: __table({
+    name: 'my_meal_facts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMealFactsRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -232,6 +241,7 @@ const reducersSchema = __reducers(
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
+  __reducerSchema("record_meal_fact", RecordMealFactReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
