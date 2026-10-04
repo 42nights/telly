@@ -28,7 +28,7 @@ Not done (each item has a GitHub issue):
 - Provider integrations: Gemini, ElevenLabs, Grokbot, Fetch.ai Agentverse, Finchnode, and Gemma on River AI. No provider is connected.
 - Deployment. No hosted instance exists.
 - The optional Meta Ray-Ban Display glasses adapter.
-- Namespace CI runners ([#21](https://github.com/ayaangazali/telly/issues/21)). The Namespace Runners app is not installed on the repository yet, so CI runs on GitHub-hosted runners.
+- Namespace CI runners ([#21](https://github.com/ayaangazali/telly/issues/21)). The Namespace Runners app is installed, but the `HEALTH_RUNNER` variable is not set yet, so CI still runs on GitHub-hosted runners.
 
 The product scope, owners, and build order are in [`docs/plan.md`](docs/plan.md). Open work is in the [GitHub issues](https://github.com/ayaangazali/telly/issues).
 
@@ -69,6 +69,21 @@ bun run build             # Production build of every app
 ```
 
 `bun run check` runs Biome and writes fixes.
+
+### CI on Namespace
+
+The `check` and `structure` jobs in `.github/workflows/health.yml` run on the runner that the repository variable `HEALTH_RUNNER` names. When it is unset, they run on `ubuntu-latest`. `changes` and `required` always run on `ubuntu-latest`, so `health / required` reports even when no Namespace runner is available. Tracked in #21.
+
+To connect (repository owner only, because the Namespace Runners app needs `Administration: Read and write` on the repository):
+
+1. Sign in at [cloud.namespace.so](https://cloud.namespace.so) on the Developer plan. Do not start a paid plan.
+2. Open [GitHub runners](https://cloud.namespace.so/workspace/ghrunners), install the Namespace Runners app, and select only `ayaangazali/telly`.
+3. Set the repository variable: `gh variable set HEALTH_RUNNER --body nscloud-ubuntu-24.04-amd64-2x4 -R ayaangazali/telly`.
+4. Run the workflow: `gh workflow run health.yml -R ayaangazali/telly`. Each `check` and `structure` log must show a Namespace runner.
+
+Use Linux AMD64 with Ubuntu 24.04: the Sentrux release is an x86-64 binary, and its fallback installs `libgtk-3-0t64`, which exists only on Ubuntu 24.04. The 2x4 shape (2 vCPU, 4 GB) is the smallest standard shape. The largest local process (`check-types`) peaks at about 1.5 GB. If a job runs out of memory, use `nscloud-ubuntu-24.04-amd64-4x8`.
+
+To return to GitHub-hosted runners, delete the variable: `gh variable delete HEALTH_RUNNER -R ayaangazali/telly`.
 
 ## Layout
 

@@ -4,6 +4,10 @@
 # Every job runs on every PR so that `health / required` always reports: it passes when the app is
 # untouched (all checks skipped on purpose), and otherwise only when every check succeeded. Make
 # `health / required` the one required status check; never require the individual jobs.
+#
+# `check` and `structure` run on the runner named by the repository variable HEALTH_RUNNER (a
+# Namespace label, see health/README.md) and on ubuntu-latest when it is unset. `changes` and
+# `required` always use ubuntu-latest, so the gate reports even when no Namespace runner is available.
 name: health
 
 on:
@@ -57,7 +61,7 @@ jobs:
   check:
     needs: changes
     if: needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -93,7 +97,7 @@ jobs:
   structure:
     needs: changes
     if: needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
