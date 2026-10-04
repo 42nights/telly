@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Telly</title>
+<meta name="description" content="How Telly, a hackathon health assistant, stores and uses data.">
+<meta name="theme-color" content="#008080">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+	<article class="window" aria-labelledby="title">
+		<div class="titlebar" aria-hidden="true"><span>Privacy policy</span><span class="controls"><b>_</b><b>□</b><b>×</b></span></div>
+		<div class="body doc">
+			<h1 id="title">Privacy policy</h1>
+			<p>Last updated: October 4, 2026.</p>
+			<p>Telly is a hackathon health assistant for a person with memory loss and their family. This page tells you what Telly stores and why.</p>
+
+			<h2>Sign-in</h2>
+			<p>Telly uses Google sign-in only to know who you are. Telly asks Google for the <code>openid</code> scope and gets a stable account ID. Telly does not read your Gmail, contacts, files, or calendar.</p>
+
+			<h2>What Telly stores</h2>
+			<p>When you use Telly, it stores the data that the app needs to work: your family group and its members, health readings and alerts, messages, reminders, medicine and meal check-ins, care notes, and shared locations if you turn location sharing on.</p>
+			<p>This data is in a SpacetimeDB Maincloud database. Lab report PDFs are in a private Cloudflare R2 bucket. Only members of your family group can see your family's data.</p>
+			<p>Some settings, such as phone numbers for calls, stay in your browser and do not go to the server.</p>
+
+			<h2>Services that process requests</h2>
+			<p>To answer a question, read a picture, or speak an answer, Telly sends the content of that request to the AI and voice services it uses, such as Google Gemini and ElevenLabs. If you connect lab records, Telly gets them through FinchNode.</p>
+
+			<h2>What Telly does not do</h2>
+			<p>Telly does not sell your data. Telly does not use your data for advertising.</p>
+
+			<h2>Not a medical device</h2>
+			<p>Telly is a hackathon project. It is not a medical device, and it does not give medical advice.</p>
+
+			<h2>Contact</h2>
+			<p>To ask a question, or to ask us to delete your data, write to <a href="mailto:vexzyl@pm.me">vexzyl@pm.me</a>.</p>
+
+			<p class="actions"><a class="button" href="/">Back to Telly</a></p>
+		</div>
+	</article>
+</main>
+<footer class="taskbar">
+	<p><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · Telly is a hackathon project, not a medical device.</p>
+</footer>
+</body>
+</html>
