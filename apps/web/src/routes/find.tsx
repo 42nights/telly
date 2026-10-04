@@ -2,7 +2,7 @@ import type { ObjectDetection } from "@health/contracts/vision";
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ScanSearch, X } from "lucide-react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Page } from "@/components/hud/window";
@@ -119,7 +119,6 @@ function FindThingsPage({
 	const ar = useArSupported();
 	const video = useRef<HTMLVideoElement | null>(null);
 	const lookNow = () => void look(video.current);
-	const showVideo = useFirstLook(families.kind !== "loading", lookNow);
 
 	const category = categoryOfRequest(q);
 	const { best, choice, saving } = useArrow(check, category, mode === "add");
@@ -127,19 +126,15 @@ function FindThingsPage({
 	// The lock-on follows one object of one check; its live direction belongs to that pair.
 	const lockKey = `${check?.id}:${choice.skipped}`;
 	const way = useLiveWay(lockKey);
-	const screen = useFullScreen<HTMLDivElement>();
-	const phone = usePhone();
-	const layout = LAYOUT[phone || screen.full ? "overlay" : "page"];
+	const screen = useFinderScreen();
+	const { layout } = screen;
 
 	return (
 		<Page
 			icon={ScanSearch}
 			title={mode === "add" ? "Add a thing" : "Find things"}
 		>
-			<div
-				className={`${layout.frame} ${phone ? "" : "[--voice-right:4rem]"}`}
-				{...screen.frame}
-			>
+			<div {...screen.frame}>
 				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
 					<Link
 						className={buttonVariants({
@@ -165,8 +160,8 @@ function FindThingsPage({
 					<CameraPreview
 						camera={camera}
 						onVideo={(element) => {
+							// Preview only: nothing is captured or sent until the person taps Check.
 							video.current = element;
-							showVideo();
 						}}
 					/>
 					<OverCamera
@@ -178,20 +173,7 @@ function FindThingsPage({
 						onWay={way.set}
 						video={video}
 					/>
-					{phone ? (
-						<Link
-							aria-label="Close the finder"
-							className={buttonVariants({
-								className: "absolute top-2 left-2 z-10 size-12 [&_svg]:size-6",
-							})}
-							data-slot="button"
-							to="/hud"
-						>
-							<X aria-hidden />
-						</Link>
-					) : (
-						<FullScreenButton full={screen.full} toggle={screen.toggle} />
-					)}
+					<FinderCorner screen={screen} />
 				</div>
 
 				<div aria-live="polite" className={layout.answer}>
@@ -232,6 +214,45 @@ function FindThingsPage({
 	);
 }
 
+/**
+ * The finder's layout: `overlay` on a phone and in desktop full screen, else `page`. A desktop
+ * keeps room top-right for the full-screen toggle next to the voice toggle.
+ */
+function useFinderScreen() {
+	const screen = useFullScreen<HTMLDivElement>();
+	const phone = usePhone();
+	const layout = phone || screen.full ? LAYOUT.overlay : LAYOUT.page;
+	const voiceRoom = phone ? "" : "[--voice-right:4rem]";
+	return {
+		...screen,
+		phone,
+		layout,
+		frame: { ...screen.frame, className: `${layout.frame} ${voiceRoom}` },
+	};
+}
+
+/** Top corner: a close button on a phone (the finder is the whole screen), else full screen. */
+function FinderCorner({
+	screen,
+}: {
+	screen: { phone: boolean; full: boolean; toggle: () => void };
+}) {
+	if (!screen.phone)
+		return <FullScreenButton full={screen.full} toggle={screen.toggle} />;
+	return (
+		<Link
+			aria-label="Close the finder"
+			className={buttonVariants({
+				className: "absolute top-2 left-2 z-10 size-12 [&_svg]:size-6",
+			})}
+			data-slot="button"
+			to="/hud"
+		>
+			<X aria-hidden />
+		</Link>
+	);
+}
+
 /** The lock-on's live direction words for `key` (one check and object); null for any other. */
 function useLiveWay(key: string) {
 	const [way, setWay] = useState({ key: "", text: "" });
@@ -264,21 +285,6 @@ function OverCamera({
 	) : (
 		<CheckedPicture best={best} check={check} cover />
 	);
-}
-
-/**
- * Runs the first check once the video shows a frame and `ready` (the family list answered) holds.
- * Returns what to call when the video shows.
- */
-function useFirstLook(ready: boolean, lookNow: () => void) {
-	const [videoShown, setVideoShown] = useState(false);
-	const looked = useRef(false);
-	useEffect(() => {
-		if (!videoShown || looked.current || !ready) return;
-		looked.current = true;
-		lookNow();
-	});
-	return () => setVideoShown(true);
 }
 
 /** The request this screen answers, when there is one. */

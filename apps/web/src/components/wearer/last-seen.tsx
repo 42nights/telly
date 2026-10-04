@@ -311,13 +311,7 @@ export function SavedThings({
 	open: string | null;
 	compact?: boolean;
 }) {
-	const now = useNow();
-	const [picked, setPicked] = useState<{
-		readonly id: string;
-		readonly byTap: boolean;
-	} | null>(open === null ? null : { id: open, byTap: true });
 	if (memory.kind === "loading" || familyId === null) return null;
-	const box = "win95-raised grid gap-2 p-3 text-[18px]";
 	if (memory.kind !== "ready")
 		return (
 			<p className="text-[16px] text-muted-foreground">
@@ -325,14 +319,52 @@ export function SavedThings({
 				{memory.kind === "signed_out" ? "Sign in first." : memory.message}
 			</p>
 		);
-	const { places, sightings } = memory.value;
-	if (sightings.length === 0)
+	if (memory.value.sightings.length === 0)
 		return compact ? null : (
 			<p className="text-[16px] text-muted-foreground">
 				No saved things yet. Point the camera at something you often lose, then
 				tap Save.
 			</p>
 		);
+	return (
+		<Saved
+			ar={ar}
+			asked={asked}
+			change={change}
+			compact={compact}
+			familyId={familyId}
+			open={open}
+			places={memory.value.places}
+			sightings={memory.value.sightings}
+		/>
+	);
+}
+
+/** The saved things once read: the list and the picked one, or (`compact`) the picked one only. */
+function Saved({
+	sightings,
+	places,
+	change,
+	familyId,
+	asked,
+	ar,
+	open,
+	compact,
+}: {
+	sightings: readonly MedicineSighting[];
+	places: readonly string[];
+	change: Change;
+	familyId: string;
+	asked: ObjectDetection["category"] | null;
+	ar: boolean;
+	open: string | null;
+	compact: boolean;
+}) {
+	const now = useNow();
+	const [picked, setPicked] = useState<{
+		readonly id: string;
+		readonly byTap: boolean;
+	} | null>(open === null ? null : { id: open, byTap: true });
 	const shown =
 		sightings.find((s) => s.id === picked?.id) ??
 		(asked === null ? undefined : sightings.find((s) => s.category === asked));
@@ -354,7 +386,44 @@ export function SavedThings({
 			<section aria-label="Where is my…?">{detail}</section>
 		) : null;
 	return (
-		<section aria-label="Where is my…?" className={box}>
+		<SavedList
+			now={now}
+			pick={(id) => setPicked({ id, byTap: true })}
+			shown={shown}
+			sightings={sightings}
+		>
+			{detail && (
+				<>
+					{detail}
+					<p className="text-[16px]">
+						This is where it was seen before, not where it is now. Go there and
+						check with the camera.
+					</p>
+				</>
+			)}
+		</SavedList>
+	);
+}
+
+/** The "Where is my…?" list: one button per saved thing, `shown` pressed, then `children`. */
+function SavedList({
+	sightings,
+	shown,
+	now,
+	pick,
+	children,
+}: {
+	sightings: readonly MedicineSighting[];
+	shown: MedicineSighting | undefined;
+	now: number;
+	pick: (id: string) => void;
+	children: ReactNode;
+}) {
+	return (
+		<section
+			aria-label="Where is my…?"
+			className="win95-raised grid gap-2 p-3 text-[18px]"
+		>
 			<h3 className="flex items-center gap-2 font-semibold">
 				<History aria-hidden className="size-5" />
 				Where is my…?
@@ -365,7 +434,7 @@ export function SavedThings({
 						<Button
 							aria-pressed={sighting === shown}
 							className="h-auto min-h-14 w-full justify-start gap-3 px-2 text-left text-[18px]"
-							onClick={() => setPicked({ id: sighting.id, byTap: true })}
+							onClick={() => pick(sighting.id)}
 							variant="outline"
 						>
 							<Thumb sighting={sighting} />
@@ -381,15 +450,7 @@ export function SavedThings({
 					</li>
 				))}
 			</ul>
-			{detail && (
-				<>
-					{detail}
-					<p className="text-[16px]">
-						This is where it was seen before, not where it is now. Go there and
-						check with the camera.
-					</p>
-				</>
-			)}
+			{children}
 		</section>
 	);
 }
