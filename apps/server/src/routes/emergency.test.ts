@@ -6,6 +6,7 @@ import type { Handoff } from "@health/contracts/emergency";
 import { EmergencyOutcome } from "@health/contracts/emergency";
 import { Effect, Schema } from "effect";
 import { readFamilyRecords } from "../db";
+import { careProfileRoutes } from "./care-profile";
 import { type Dispatcher, emergencyRoutes } from "./emergency";
 import {
 	dbConfig,
@@ -83,7 +84,10 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 						callback: "+1 555 0100",
 						report: "Call 911",
 						responsiveness: "responding",
-						care: { status: "unavailable" },
+						care: {
+							status: "unavailable",
+							reason: "Your care access does not include health records.",
+						},
 						location: { status: "current", accuracyMeters: 25 },
 					},
 					family: { status: "raised" },
@@ -205,11 +209,83 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 				});
 				expect(calls).toHaveLength(5);
 
+				// With health_records access, the handoff carries the saved care facts (#26): the
+				// profile's name when the device sends none, and only verified medicines.
+				const care = familyApp(db, familyId, careProfileRoutes());
+				for (const scope of [
+					"family_access",
+					"health_records",
+					"care_plan_edit",
+				])
+					yield* send(care, "POST", "/care-access", {
+						identity: db.identity,
+						scope,
+						granted: true,
+					});
+				yield* send(care, "PUT", "/care-profile", {
+					preferredName: "Synthetic Sam",
+					language: "en",
+					timeZone: null,
+					accessibilityNeeds: null,
+					diagnoses: null,
+					allergies: ["synthetic-penicillin"],
+					dietaryRestrictions: null,
+					fluidRestrictions: null,
+					activityRestrictions: null,
+					routines: null,
+					contacts: null,
+					familiarDestinations: null,
+					devices: null,
+					declinedPrompts: [],
+				});
+				const medicine = (name: string) => ({
+					kind: "medication",
+					name,
+					instruction: "1 tablet",
+					times: ["08:00"],
+					reason: null,
+					source: "pharmacy label",
+					effectiveDate: "2026-10-01",
+				});
+				yield* send(
+					care,
+					"POST",
+					"/care-instructions",
+					medicine("Synthetic A"),
+				);
+				yield* send(
+					care,
+					"POST",
+					"/care-instructions",
+					medicine("Synthetic B"),
+				);
+				const first = [...db.connection.db.myCareInstructions.iter()].find(
+					(row) => row.name === "Synthetic A",
+				);
+				yield* send(care, "POST", `/care-instructions/${first?.id}/verify`);
+				const profiled = yield* post("/emergency", {
+					kind: "help",
+					report: null,
+					wearer: { name: null, callback: null },
+					location: { status: "unavailable" },
+				});
+				expect(profiled.outcome).toMatchObject({
+					handoff: {
+						name: "Synthetic Sam",
+						care: {
+							status: "available",
+							conditions: null,
+							allergies: ["synthetic-penicillin"],
+							medications: ["Synthetic A"],
+						},
+					},
+				});
+
 				// Every raised alert is in the family's durable alert records.
 				const summaries = readFamilyRecords(db).alerts.map((a) => a.summary);
 				expect(
 					summaries.filter((s) => s.includes("simulated call")),
-				).toHaveLength(5);
+				).toHaveLength(6);
 				expect(summaries).toContain("Asked to reach the family.");
 				expect(outbound).toBe(0);
 			}),

@@ -12,14 +12,17 @@ import {
 	type SimulatedCall,
 	type Wearer,
 } from "@health/contracts/emergency";
+import type { Context } from "hono";
 import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
 import {
+	ApiFailure,
 	callReducer,
 	decodeBody,
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "../http";
+import { readInstructions, readProfile } from "./care-profile";
 
 /** Places one emergency call with the handoff. Only simulators exist; a live dialer is out of scope. */
 export type Dispatcher = (handoff: Handoff) => Promise<"connected" | "failed">;
@@ -59,7 +62,45 @@ const NOT_AN_EMERGENCY = {
 	family: null,
 } as const satisfies EmergencyOutcome;
 
+/**
+ * The care facts for the handoff, read as the caller: the module shows the profile only to members
+ * with `health_records`. Any failure is reported as unavailable; it never holds back the call.
+ */
+const careFacts = (
+	c: Context<FamilyEnv>,
+): { care: Handoff["care"]; name: string | null } => {
+	try {
+		const { profile, editedAt } = readProfile(c);
+		return {
+			name: profile.preferredName,
+			care: {
+				status: "available",
+				conditions: profile.diagnoses,
+				allergies: profile.allergies,
+				medications: readInstructions(c, profile.timeZone)
+					.filter(
+						(i) => i.kind === "medication" && i.verification === "verified",
+					)
+					.map((i) => i.name),
+				savedAt: editedAt,
+			},
+		};
+	} catch (error) {
+		return {
+			name: null,
+			care: {
+				status: "unavailable",
+				reason:
+					error instanceof ApiFailure && error.code === "forbidden"
+						? "Your care access does not include health records."
+						: "The care profile could not be read.",
+			},
+		};
+	}
+};
+
 const handoff = (
+	c: Context<FamilyEnv>,
 	wearer: Wearer,
 	event: string,
 	report: string | null,
@@ -81,16 +122,14 @@ const handoff = (
 			ageSeconds,
 		};
 	}
+	const { care, name } = careFacts(c);
 	return {
-		name: wearer.name,
+		name: wearer.name ?? name,
 		callback: wearer.callback,
 		event,
 		report,
 		responsiveness,
-		care: {
-			status: "unavailable",
-			reason: "No verified care profile exists yet (issue #26).",
-		},
+		care,
 		location,
 	};
 };
@@ -170,6 +209,7 @@ export const emergencyRoutes = (
 					c,
 					dispatcher,
 					handoff(
+						c,
 						request.wearer,
 						"Asked for emergency help",
 						request.report,
@@ -206,7 +246,7 @@ export const emergencyRoutes = (
 				outcome = await dispatch(
 					c,
 					dispatcher,
-					handoff(wearer, label, event.report, "not_responding", location),
+					handoff(c, wearer, label, event.report, "not_responding", location),
 				);
 			else if (reply.speaker === "other")
 				outcome = {
@@ -222,6 +262,7 @@ export const emergencyRoutes = (
 						c,
 						dispatcher,
 						handoff(
+							c,
 							wearer,
 							label,
 							`${event.report} / reply: ${reply.text}`,

@@ -29,17 +29,20 @@ A `none` outcome always has `safety: "unconfirmed"`. Missing or normal wearable 
 ## Dispatch and handoff
 
 - `dispatch` runs the simulated call and the family alert together, so neither waits for the other. The reply has `call.simulated: true`, the states (`connecting`, then `connected` or `failed`), and `recordDelivered: false`.
-- The handoff has the known name and callback number (null shows "Not on file"), the event, the wearer's exact words, and the responsiveness. It also has the location: `current` or `last_known` (a fix older than 120 s), with its accuracy and age, or `denied` or `unavailable`.
-- Conditions, medications, and allergies are `unavailable` until a verified care profile exists (#26).
+- The handoff has the name, the callback number, the event, the wearer's exact words, and the responsiveness. When the device sends no name, the handoff uses the care profile's preferred name. A null value shows "Not on file". The handoff also has the location: `current` or `last_known` (a fix older than 120 s) with its accuracy and age, or `denied` or `unavailable`.
+- Care facts come from the #26 care profile, read as the caller. Conditions and allergies are as saved: null is unknown, and `[]` is none recorded. Medications are the verified medication instructions only. Without `health_records` access, or when the profile cannot be read, `care` is `unavailable` with the reason. A care read never holds back the call.
 - The family alert uses the existing `raise_alert` reducer, so the #5 outbox delivers it. A failed alert shows as `failed` and never stops the call.
 - During a real approved call, the dispatcher's instructions come first. The web panel says so.
 
 ## Web
 
-The wearer's home (`/hud`) has an Emergency panel labeled "Practice mode · calls are simulated". A typed or spoken request goes to `emergencyIntent` (`apps/web/src/components/wearer/logic.ts`) before the medicine finder and Gemini. "Help", "call 911", and "I can't breathe" dispatch. "I fell" and "ouch" start a 30 s check-in. When the check-in has no reply, the request is sent as `no_response`.
+The wearer's home (`/hud`) has an Emergency panel labeled "Practice mode · calls are simulated". A typed or spoken request goes to `emergencyIntent` (`apps/web/src/components/wearer/logic.ts`) before the medicine finder and Gemini.
+
+- An urgent request, such as "help", "call 911", "I fell", or "I can't breathe", starts the simulated dispatch. The rule is `urgentRequest` from `@health/contracts/ask`, the same rule that the server's `/ask` route uses. The request also opens the help panel from #106. That panel has phone-dialer links, and the wearer chooses whether to call.
+- "Ouch" alone starts a 30 s check-in. When the check-in gets no reply, the panel sends `no_response`.
 
 Automatic fall detection is not a source. It waits for a validated signal (#6). The panel has no "test fall" button.
 
 ## Verification
 
-`bun run db:test` runs `apps/server/src/routes/emergency.test.ts` against a local SpacetimeDB with a fake dispatcher. It covers explicit help, a television "ouch", a denial, a suspected fall with no reply and a denied location, an old fix, a failed call, a missed reminder, an unheard vibration, and Call my family. It asserts zero outbound requests.
+`bun run db:test` runs `apps/server/src/routes/emergency.test.ts` against a local SpacetimeDB with a fake dispatcher. It covers explicit help, a television "ouch", a denial, a suspected fall with no reply and a denied location, an old fix, a failed call, a missed reminder, an unheard vibration, Call my family, and the care facts with and without `health_records` access. It asserts zero outbound requests.

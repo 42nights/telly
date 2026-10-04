@@ -83,7 +83,7 @@ export const requireScope = (c: Ctx, scope: CareScope) => {
 		);
 };
 
-const readProfile = (c: Ctx): CareProfileRecord => {
+export const readProfile = (c: Ctx): CareProfileRecord => {
 	requireScope(c, "health_records");
 	const versions = [...c.var.db.connection.db.myCareProfiles.iter()]
 		.filter((row) => row.familyId === c.var.familyId)
@@ -108,7 +108,7 @@ const readProfile = (c: Ctx): CareProfileRecord => {
  * Every version, newest first. Versions of one instruction share kind and name (case-insensitive).
  * The verified version with the highest id is in effect; the module refuses to verify an older one.
  */
-const readInstructions = (c: Ctx, timeZone: string | null) => {
+export const readInstructions = (c: Ctx, timeZone: string | null) => {
 	const rows = [...c.var.db.connection.db.myCareInstructions.iter()]
 		.filter((row) => row.familyId === c.var.familyId)
 		.sort(newestFirst);

@@ -116,11 +116,24 @@ export const Handoff = Schema.Struct({
 	/** The wearer's exact words, when there are any. */
 	report: Schema.NullOr(Schema.String),
 	responsiveness: Schema.Literals(["responding", "not_responding"]),
-	/** Verified conditions, medications, and allergies. Unavailable until a care profile exists (#26). */
-	care: Schema.Struct({
-		status: Schema.Literal("unavailable"),
-		reason: Schema.String,
-	}),
+	/**
+	 * From the family's care profile (#26). Conditions and allergies are as saved; null is unknown,
+	 * `[]` is none recorded. Medications are verified medication instructions only. Unavailable
+	 * when the caller has no `health_records` access or the profile cannot be read.
+	 */
+	care: Schema.Union([
+		Schema.Struct({
+			status: Schema.Literal("available"),
+			conditions: Schema.NullOr(Schema.Array(Schema.String)),
+			allergies: Schema.NullOr(Schema.Array(Schema.String)),
+			medications: Schema.Array(Schema.String),
+			savedAt: Schema.NullOr(Schema.String),
+		}),
+		Schema.Struct({
+			status: Schema.Literal("unavailable"),
+			reason: Schema.String,
+		}),
+	]),
 	location: Schema.Union([
 		Schema.Struct({
 			status: Schema.Literals(["current", "last_known"]),

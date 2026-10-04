@@ -79,7 +79,24 @@ const where = (location: Handoff["location"]) => {
 	return `${location.status === "current" ? "Current" : "Last known"}: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} · ±${Math.round(location.accuracyMeters)} m · ${age}`;
 };
 
+/** A saved list: null is unknown, empty is none recorded. Never shown as "none" when unknown. */
+const listed = (items: readonly string[] | null) =>
+	items === null
+		? "Unknown"
+		: items.length === 0
+			? "None recorded"
+			: items.join(", ");
+
 function HandoffList({ handoff }: { handoff: Handoff }) {
+	const { care } = handoff;
+	const careRows: [string, string][] =
+		care.status === "available"
+			? [
+					["Conditions", listed(care.conditions)],
+					["Allergies", listed(care.allergies)],
+					["Verified medicines", listed(care.medications)],
+				]
+			: [["Conditions, medicines, allergies", care.reason]];
 	const rows: [string, string][] = [
 		["Name", handoff.name ?? "Not on file"],
 		["Callback", handoff.callback ?? "Not on file"],
@@ -89,7 +106,7 @@ function HandoffList({ handoff }: { handoff: Handoff }) {
 			"Responding",
 			handoff.responsiveness === "responding" ? "Yes" : "No answer",
 		],
-		["Conditions, medicines, allergies", handoff.care.reason],
+		...careRows,
 		["Location", where(handoff.location)],
 	];
 	return (
