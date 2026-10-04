@@ -103,11 +103,15 @@ describe("SpeakerSettingsWindow", () => {
 		expect(
 			within(form).getByRole("checkbox", { name: /Say due reminders/ }),
 		).toHaveProperty("checked", false);
-		expect(form.textContent).toContain("It says only “You have a reminder.");
+		expect(
+			within(form).getByRole("button", {
+				name: /It says only “You have a reminder\./,
+			}),
+		).toBeDefined();
 		expect(
 			within(form).getByRole("group", { name: /shared room/ }),
 		).toHaveProperty("disabled", false);
-		expect(await view.findByText("Nothing yet.")).toBeDefined();
+		expect(await view.findByText(/nothing yet\./)).toBeDefined();
 		expect(
 			view.getByRole("combobox", { name: "Speaker state" }),
 		).toHaveProperty("value", "online");
@@ -143,9 +147,11 @@ describe("SpeakerSettingsWindow", () => {
 		fireEvent.change(box.getByRole("combobox", { name: /Where is/ }), {
 			target: { value: "private" },
 		});
-		expect(form.textContent).toContain(
-			"It says the reminder name, such as the medicine.",
-		);
+		expect(
+			box.getByRole("button", {
+				name: "It says the reminder name, such as the medicine.",
+			}),
+		).toBeDefined();
 		expect(box.getByRole("group", { name: /shared room/ })).toHaveProperty(
 			"disabled",
 			true,

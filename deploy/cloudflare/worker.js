@@ -104,6 +104,21 @@ export class Api {
 	}
 }
 
+// A missing file is a 404, so a page of an older build that asks for a removed chunk sees the
+// failure instead of index.html, which the browser refuses as JavaScript. Only a page navigation (no
+// file extension, Accept text/html) gets the app's index.html for its client-side route.
+async function app(request, env) {
+	const response = await env.ASSETS.fetch(request);
+	if (
+		response.status !== 404 ||
+		/\.[a-z0-9]+$/i.test(new URL(request.url).pathname) ||
+		!request.headers.get("Accept")?.includes("text/html")
+	)
+		return response;
+	await response.body?.cancel();
+	return env.ASSETS.fetch(new Request(new URL("/", request.url), request));
+}
+
 // Extensionless pages of the landing (deploy/cloudflare/landing/); /privacy and /terms are the
 // links that Google's OAuth consent screen needs.
 const landingPages = new Set(["/", "/privacy", "/terms"]);
@@ -131,7 +146,7 @@ export default {
 			return env.API.get(env.API.idFromName(env.TELLY_DEPLOY_ID)).fetch(
 				request,
 			);
-		return env.ASSETS.fetch(request);
+		return app(request, env);
 	},
 	// The cron in deploy.sh (`telly` only) asks the API for /health every 5 minutes. Each request
 	// restarts the 10-minute inactivity timer, so the container never sleeps and a reply never

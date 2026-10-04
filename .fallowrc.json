@@ -6,6 +6,7 @@
 		"packages/contracts/src/**/*.test.ts",
 		"apps/web/smoke/*.smoke.ts",
 		"deploy/cloudflare/worker.js",
+		"deploy/cloudflare/worker.test.ts",
 		"deploy/cloudflare/landing/style.css",
 		"apps/native/modules/*/app.plugin.js"
 	],

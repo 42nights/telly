@@ -1,6 +1,7 @@
 // Health trends (docs/board.html#db-hrv, #ph-chat): a question answered from dated records. Each kind
-// of evidence shows in its own group with source, period, unit, quality, and sync age. Missing and
-// conflicting data stay visible, and the only next steps are a check-in or a review.
+// of evidence shows in its own group; source, period, count, and sync age sit in each row's
+// tooltip. Missing and conflicting data stay visible, and the only next steps are a check-in or a
+// review.
 import { Me } from "@health/contracts/families";
 import {
 	type EvidenceKind,
@@ -12,12 +13,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { TrendingUp } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
-import { ago, metricLabel } from "@/components/family/logic";
+import { ago } from "@/components/family/logic";
 import { Window } from "@/components/hud/window";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Hint } from "@/components/win95";
 import { type ApiResult, apiRequest, familyPath, useApi } from "@/lib/api";
 import { PersonPicker, useFamily } from "@/lib/family";
 import { memberLabel } from "@/lib/members";
+import { metricLabel, readingValue, sourceName } from "@/lib/readings";
 
 export const Route = createFileRoute("/family_/trends")({ component: Trends });
 
@@ -36,9 +38,8 @@ const directionText: Record<TrendObservation["direction"], string> = {
 	text: "not a number",
 };
 
-const qualityText: Record<TrendObservation["quality"], string> = {
-	validated: "validated",
-	unvalidated: "not validated",
+/** Only provenance a reader needs: a lab's own value or a family member's report. */
+const qualityText: Partial<Record<TrendObservation["quality"], string>> = {
 	source_reported: "as the lab reported it",
 	self_reported: "self-reported",
 };
@@ -163,8 +164,7 @@ function Explanation({ trend }: { trend: TrendExplanation }) {
 				</p>
 			)}
 			<p className="text-muted-foreground text-xs">
-				Records from {day(trend.from)} to {day(trend.to)}. Labs keep their own
-				dates.
+				Records from {day(trend.from)} to {day(trend.to)}.
 			</p>
 			{groups.map(({ kind, title }) => {
 				const rows = trend.observations.filter((o) => o.kind === kind);
@@ -242,33 +242,39 @@ function Observation({
 	source: string;
 	now: number;
 }) {
-	const unit = o.unit === null ? "" : ` ${o.unit}`;
+	const value = (v: string | number) =>
+		typeof v === "number" && o.unit !== null
+			? readingValue({ metric: o.label, value: v, unit: o.unit })
+			: `${v}${o.unit === null ? "" : ` ${o.unit}`}`;
+	const detail = [
+		o.kind === "reported" ? source : sourceName(source),
+		qualityText[o.quality],
+		o.from === o.to ? day(o.from) : `${day(o.from)} – ${day(o.to)}`,
+		`${o.count} ${o.count === 1 ? "value" : "values"}`,
+		o.lastSyncAt === null
+			? "sync time unknown"
+			: `synced ${ago(o.lastSyncAt, now)}`,
+	];
 	return (
-		<li className="grid gap-0.5 p-2">
-			<div className="flex flex-wrap items-baseline gap-x-2">
+		<li className="grid">
+			<Hint
+				text={detail.filter((part) => part !== undefined).join(" · ")}
+				className="flex flex-wrap items-baseline gap-x-2 p-2"
+			>
 				<b>{o.kind === "reported" ? "Question" : metricLabel(o.label)}</b>
 				{o.kind === "reported" ? (
 					<span>“{o.last}”</span>
 				) : (
 					<span>
-						{o.count > 1 && `${o.first}${unit} → `}
-						{o.last}
-						{unit} · {directionText[o.direction]} · {o.count}{" "}
-						{o.count === 1 ? "value" : "values"}
+						{o.count > 1 && `${value(o.first)} → `}
+						{value(o.last)} · {directionText[o.direction]}
 					</span>
 				)}
 				{o.synthetic && (
 					<span className="win95-inset px-1 text-xs">Synthetic demo data</span>
 				)}
 				{o.stale && <span className="win95-inset px-1 text-xs">Old</span>}
-			</div>
-			<span className="text-muted-foreground text-xs">
-				{source} · {qualityText[o.quality]} ·{" "}
-				{o.from === o.to ? day(o.from) : `${day(o.from)} – ${day(o.to)}`} ·{" "}
-				{o.lastSyncAt === null
-					? "sync time unknown"
-					: `synced ${ago(o.lastSyncAt, now)}`}
-			</span>
+			</Hint>
 		</li>
 	);
 }

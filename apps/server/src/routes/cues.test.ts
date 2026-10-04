@@ -268,6 +268,15 @@ describe("cue route", () => {
 			synthetic: false,
 			quality: "unvalidated",
 		}),
+		sample({
+			id: "7",
+			metric: "heart_rate",
+			value: 70,
+			unit: "bpm",
+			source: "apple-health",
+			synthetic: false,
+			quality: "unvalidated",
+		}),
 	]);
 	const cueFor = (sampleIds: ReadonlyArray<string>) =>
 		post(qwen, JSON.stringify({ sampleIds }), familyDb);
@@ -351,7 +360,7 @@ describe("cue route", () => {
 		});
 	});
 
-	test("answers a cue from an unvalidated WHOOP sample with a notice that says so", async () => {
+	test("treats a real WHOOP sample as accurate and names only unchecked sources", async () => {
 		answers = [completion('{"kind":"none","text":"No cue right now."}')];
 		const response = await cueFor(["6"]);
 		expect(response.status).toBe(200);
@@ -360,10 +369,17 @@ describe("cue route", () => {
 			sampleIds: ["6"],
 			sources: ["noop:my-whoop"],
 			synthetic: false,
-			validated: false,
+			validated: true,
 		});
-		expect(cue.notice).toBe(
-			"Based on unvalidated readings from noop:my-whoop. Advice only; it never raises an alert.",
+		expect(cue.notice).toBeNull();
+
+		answers = [completion('{"kind":"none","text":"No cue right now."}')];
+		const mixed = Schema.decodeUnknownSync(HealthCue)(
+			await (await cueFor(["6", "7"])).json(),
+		);
+		expect(mixed.input.validated).toBe(false);
+		expect(mixed.notice).toBe(
+			"Based on unchecked readings from apple-health. Advice only; it never raises an alert.",
 		);
 	});
 

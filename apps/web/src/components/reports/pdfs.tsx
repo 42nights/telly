@@ -7,7 +7,7 @@ import {
 import { Button } from "@health/ui/components/button";
 import { useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { type ApiFailure, apiRequest, familyPath, useApi } from "@/lib/api";
 
 import { DataTable } from "./data-table";
@@ -63,8 +63,9 @@ export function PdfActions({
 			>
 				Past PDFs…
 			</Button>
+			<Tip text="Saving a PDF does not send it to anyone." />
 			<p role="status" className="basis-full">
-				{result ?? "Saving a PDF does not send it to anyone."}
+				{result}
 			</p>
 			{open && (
 				<PastPdfsDialog

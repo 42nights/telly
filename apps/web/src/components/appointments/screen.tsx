@@ -19,8 +19,7 @@ import { buttonClass, fieldClass, useAction } from "./action";
 import { emptyPrep, localToUtc, prepOf } from "./logic";
 import { PrepFields, VisitCard } from "./visit";
 
-const NOTICE =
-	"Simulated: Telly has no scheduling or clinician access. A request books nothing; only the provider's confirmation does.";
+const NOTICE = "Telly books nothing: only the provider's confirmation does.";
 
 export function AppointmentsScreen() {
 	const { state, family } = useFamily();
@@ -63,22 +62,35 @@ function FamilyAppointments({ familyId }: { familyId: string }) {
 			/>
 		));
 	return (
-		<div className="grid gap-3">
-			<Window title="Upcoming visits" icon={CalendarClock} status={NOTICE}>
-				<div className="grid gap-2">
-					{upcoming.length === 0 ? (
-						<p className="p-2 text-sm">No upcoming visits recorded.</p>
-					) : (
-						cards(upcoming)
-					)}
-				</div>
-			</Window>
-			<NewVisit familyId={familyId} />
-			{past.length > 0 && (
-				<Window title="Past and cancelled" icon={CalendarClock}>
-					<div className="grid gap-2">{cards(past)}</div>
+		<div className="flex min-h-0 flex-1 flex-col gap-2 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+			<div className="flex min-h-0 flex-col gap-2 max-lg:max-h-[35%]">
+				<Window
+					title="Upcoming visits"
+					icon={CalendarClock}
+					status={NOTICE}
+					className="min-h-0 flex-1"
+				>
+					<div className="grid min-h-0 content-start gap-2 overflow-y-auto">
+						{upcoming.length === 0 ? (
+							<p className="p-2 text-sm">No upcoming visits recorded.</p>
+						) : (
+							cards(upcoming)
+						)}
+					</div>
 				</Window>
-			)}
+				{past.length > 0 && (
+					<Window
+						title="Past and cancelled"
+						icon={CalendarClock}
+						className="min-h-0 flex-1"
+					>
+						<div className="grid min-h-0 content-start gap-2 overflow-y-auto">
+							{cards(past)}
+						</div>
+					</Window>
+				)}
+			</div>
+			<NewVisit familyId={familyId} />
 		</div>
 	);
 }
@@ -138,6 +150,7 @@ function NewVisit({ familyId }: { familyId: string }) {
 		<Window
 			title="Suggest a visit"
 			icon={CalendarClock}
+			className="min-h-0 flex-1"
 			status={
 				busy ??
 				(failure === null
@@ -146,42 +159,45 @@ function NewVisit({ familyId }: { familyId: string }) {
 			}
 		>
 			<form
-				className="grid gap-2 p-1 text-sm md:grid-cols-2"
+				className="flex min-h-0 flex-1 flex-col gap-2 p-1 text-sm"
 				onSubmit={(event) => {
 					event.preventDefault();
 					void save();
 				}}
 			>
-				{text("title", "Visit")}
-				{text("clinician", "Clinician (optional)")}
-				{text("location", "Place (optional)")}
-				<label className="grid gap-1">
-					Date and time (local to the visit)
-					<input
-						type="datetime-local"
-						className={`${fieldClass} h-11`}
-						value={visit.local}
-						onChange={(e) => setVisit({ ...visit, local: e.target.value })}
-					/>
-				</label>
-				<label className="grid gap-1">
-					Time zone of the visit
-					<select
-						className={`${fieldClass} h-11`}
-						value={visit.timeZone}
-						onChange={(e) => setVisit({ ...visit, timeZone: e.target.value })}
-					>
-						{zones.map((zone) => (
-							<option key={zone}>{zone}</option>
-						))}
-					</select>
-				</label>
-				<div className="grid gap-2 md:col-span-2">
-					<PrepFields draft={prep} onChange={setPrep} />
+				{/* ponytail: the visit's questions scroll in their own box when the window is short. */}
+				<div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto md:grid-cols-2">
+					{text("title", "Visit")}
+					{text("clinician", "Clinician (optional)")}
+					{text("location", "Place (optional)")}
+					<label className="grid gap-1">
+						Date and time (local to the visit)
+						<input
+							type="datetime-local"
+							className={`${fieldClass} h-11`}
+							value={visit.local}
+							onChange={(e) => setVisit({ ...visit, local: e.target.value })}
+						/>
+					</label>
+					<label className="grid gap-1">
+						Time zone of the visit
+						<select
+							className={`${fieldClass} h-11`}
+							value={visit.timeZone}
+							onChange={(e) => setVisit({ ...visit, timeZone: e.target.value })}
+						>
+							{zones.map((zone) => (
+								<option key={zone}>{zone}</option>
+							))}
+						</select>
+					</label>
+					<div className="grid gap-2 md:col-span-2">
+						<PrepFields draft={prep} onChange={setPrep} />
+					</div>
 				</div>
 				<Button
 					type="submit"
-					className={`${buttonClass} win95-primary justify-self-start`}
+					className={`${buttonClass} win95-primary self-start`}
 					disabled={!ready || busy !== null}
 				>
 					Save suggestion

@@ -199,7 +199,7 @@ describe("AnswerPanel", () => {
 		expect(view.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
 			"Heart rate 72 bpm · from phone · 3 min ago",
 			"Steps 72 bpm · from phone · 3 min ago (demo, not real)",
-			"Spo2 72 bpm · from phone · 3 min ago",
+			"SpO2 72 bpm · from phone · 3 min ago",
 			"No records for: blood pressure, health samples",
 		]);
 		expect(error).toHaveBeenCalledWith(
