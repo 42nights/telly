@@ -80,18 +80,24 @@ export class Api {
 	}
 }
 
+// Extensionless pages of the landing (deploy/cloudflare/landing/); /privacy and /terms are the
+// links that Google's OAuth consent screen needs.
+const landingPages = new Set(["/", "/privacy", "/terms"]);
+
 export default {
 	fetch(request, env) {
 		const url = new URL(request.url);
 		const { pathname } = url;
 		if (url.hostname === env.LANDING_HOST) {
-			// Landing files have an extension; any other path is an app route, so it goes to the app.
-			if (pathname !== "/" && !/\.[a-z0-9]+$/i.test(pathname))
+			// Landing files have an extension, except the `landingPages`; any other path is an app
+			// route, so it goes to the app.
+			if (!landingPages.has(pathname) && !/\.[a-z0-9]+$/i.test(pathname))
 				return Response.redirect(
 					`https://app.${env.LANDING_HOST}${pathname}${url.search}`,
 					302,
 				);
-			// `/landing/` serves landing/index.html (asset html_handling redirects `/index.html` paths).
+			// `/landing/` serves landing/index.html and `/landing/privacy` serves landing/privacy.html
+			// (asset html_handling redirects paths that end in `.html`).
 			url.pathname = `/landing${pathname}`;
 			return env.ASSETS.fetch(new Request(url, request));
 		}
