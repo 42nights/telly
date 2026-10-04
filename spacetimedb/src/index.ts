@@ -3353,24 +3353,25 @@ export const myFamilies = spacetimedb.view(
 			.rightSemijoin(ctx.from.family, (m, f) => m.familyId.eq(f.id)),
 );
 
+// Health records (#26): the views below need `health_records`, except for the wearer (see
+// `healthReader`). Family chat stays visible to every member.
 export const myHealthSamples = spacetimedb.view(
 	{ name: "my_health_samples", public: true },
 	t.array(healthSample.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.healthSample, (m, s) =>
-				m.familyId.eq(s.familyId),
-			),
+		// A recorder keeps its own samples, so the NOOP ingest identity can skip stored ones.
+		healthReader(
+			ctx,
+			(familyId) => ctx.db.healthSample.familyId.filter(familyId),
+			(s) => s.recordedBy.isEqual(ctx.sender),
+		),
 );
 
 export const myAlerts = spacetimedb.view(
 	{ name: "my_alerts", public: true },
 	t.array(alert.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.alert, (m, a) => m.familyId.eq(a.familyId)),
+		healthReader(ctx, (familyId) => ctx.db.alert.familyId.filter(familyId)),
 );
 
 export const myMessages = spacetimedb.view(
@@ -3404,15 +3405,14 @@ export const myAlertThresholds = spacetimedb.view(
 			),
 );
 
+// Each delivery repeats its alert's summary, so it is a health record too.
 export const myAlertDeliveries = spacetimedb.view(
 	{ name: "my_alert_deliveries", public: true },
 	t.array(alertDelivery.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.alertDelivery, (m, d) =>
-				m.familyId.eq(d.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.alertDelivery.familyId.filter(familyId),
+		),
 );
 
 // The delivery operator's work queue across families. Empty for every other identity.
@@ -3452,9 +3452,7 @@ export const myReports = spacetimedb.view(
 	{ name: "my_reports", public: true },
 	t.array(report.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.report, (m, r) => m.familyId.eq(r.familyId)),
+		healthReader(ctx, (familyId) => ctx.db.report.familyId.filter(familyId)),
 );
 
 export const myFinchnodeLinks = spacetimedb.view(
@@ -3583,22 +3581,18 @@ export const myReminderOccurrences = spacetimedb.view(
 	{ name: "my_reminder_occurrences", public: true },
 	t.array(reminderOccurrence.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reminderOccurrence, (m, o) =>
-				m.familyId.eq(o.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.reminderOccurrence.familyId.filter(familyId),
+		),
 );
 
 export const myReminderEvents = spacetimedb.view(
 	{ name: "my_reminder_events", public: true },
 	t.array(reminderEvent.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.reminderEvent, (m, e) =>
-				m.familyId.eq(e.familyId),
-			),
+		healthReader(ctx, (familyId) =>
+			ctx.db.reminderEvent.familyId.filter(familyId),
+		),
 );
 
 // The caller's own locations, and those of people who share theirs with the caller. Another
@@ -3652,6 +3646,30 @@ const careReader = <Row>(
 			? [...rows(m.familyId)]
 			: [],
 	);
+
+// Health records (#26): rows of families where the caller holds `health_records` now, or is the
+// wearer (the founder, the family's first member), who always reads their own. Without either,
+// only rows that `own` accepts. A revoke empties them at once.
+// ponytail: re-reads each family's rows on every change; a query-builder view needs the latest
+// grant event as a column.
+const healthReader = <Row>(
+	ctx: ViewCtx<InferSchema<typeof spacetimedb>>,
+	rows: (familyId: bigint) => Iterable<Row>,
+	own: (row: Row) => boolean = () => false,
+): Row[] =>
+	[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((m) => {
+		const all = [...rows(m.familyId)];
+		const wearer = [...ctx.db.familyMember.familyId.filter(m.familyId)].every(
+			(other) => other.id >= m.id,
+		);
+		return wearer ||
+			holdsCareScope(
+				ctx.db.careGrantEvent.byFamilyMember.filter([m.familyId, ctx.sender]),
+				"health_records",
+			)
+			? all
+			: all.filter(own);
+	});
 
 export const myCareProfiles = spacetimedb.view(
 	{ name: "my_care_profiles", public: true },

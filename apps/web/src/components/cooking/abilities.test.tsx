@@ -147,7 +147,7 @@ test("without care access, the profile is not shown", async () => {
 		},
 	});
 	const view = render(<CookingAbilities familyId="f1" />);
-	expect(await view.findByText("Not a member of this family")).toBeDefined();
+	expect(await view.findByText("Not shared with you")).toBeDefined();
 	expect(
 		view.queryByRole("button", { name: "Save cooking abilities" }),
 	).toBeNull();

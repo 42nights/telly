@@ -31,10 +31,12 @@ export function KeyNumbers({
 	data: FamilyData;
 	family: Family;
 }) {
-	const { alerts, records } = data;
+	const { alerts, readings } = data;
+	// The readings glance below says "Not shared with you".
+	if (readings.kind === "forbidden") return null;
 	const hrv =
-		records.kind === "ready" &&
-		records.value.samples.some(
+		readings.kind === "ready" &&
+		readings.value.samples.some(
 			(s) => s.familyId === family.id && s.metric === "hrv" && !s.synthetic,
 		);
 	return (

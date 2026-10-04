@@ -360,9 +360,7 @@ test("shows each section's failure when the server refuses or fails", async () =
 
 	// The alert card and the list both say why.
 	const alerts = await alertsTab();
-	expect(
-		await alerts.findAllByText("Not a member of this family"),
-	).toHaveLength(2);
+	expect(await alerts.findAllByText("Not shared with you")).toHaveLength(2);
 	const rules = await thresholdsTab();
 	expect(await rules.findByText("Thresholds unavailable")).toBeTruthy();
 	expect(rules.getByText("Database down")).toBeTruthy();

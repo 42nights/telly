@@ -324,7 +324,7 @@ test("shows why the explanation failed", async () => {
 	signIn();
 	const replies = [
 		json(503, { error: "unavailable", message: "Wearable provider is down." }),
-		json(403, { error: "forbidden", message: "Not a member of this family." }),
+		json(403, { error: "forbidden", message: "Not shared with you." }),
 		{ ...empty, observations: [{ kind: "guess" }] },
 	];
 	serve({
@@ -344,7 +344,7 @@ test("shows why the explanation failed", async () => {
 	expect(screen.getByText("The trend explanation unavailable")).toBeTruthy();
 
 	fireEvent.click(screen.getByRole("button", { name: "Explain the trend" }));
-	expect(await screen.findByText("Not a member of this family.")).toBeTruthy();
+	expect(await screen.findByText("Not shared with you")).toBeTruthy();
 
 	// A 2xx reply that does not match the contract is an error, never an empty explanation.
 	fireEvent.click(screen.getByRole("button", { name: "Explain the trend" }));
@@ -359,7 +359,7 @@ test("shows why the explanation failed", async () => {
 		await screen.findByText("Could not load the trend explanation"),
 	).toBeTruthy();
 	expect(screen.getByRole("alert").textContent).not.toContain(
-		"Not a member of this family.",
+		"Not shared with you.",
 	);
 });
 

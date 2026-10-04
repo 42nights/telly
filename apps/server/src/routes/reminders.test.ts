@@ -10,18 +10,13 @@ import {
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
 import { Effect, Schema } from "effect";
-import { Identity } from "spacetimedb";
-import {
-	type DbConfig,
-	type FamilyDb,
-	openFamilyDb,
-	readFamilyRecords,
-} from "../db";
+import { openFamilyDb, readFamilyRecords } from "../db";
 import { reminderRoutes } from "./reminders";
 import {
 	dbConfig,
 	failure,
 	familyApp,
+	joinFamily,
 	openFamily,
 	send,
 	withDb,
@@ -48,18 +43,6 @@ const settings = (timeZone: string, extra: object = {}) => ({
 	snoozeMinutes: 1,
 	...extra,
 });
-
-const joinAs = (config: DbConfig, owner: FamilyDb, familyId: string) =>
-	Effect.gen(function* () {
-		const member = yield* openFamilyDb(config);
-		yield* Effect.promise(() =>
-			owner.connection.reducers.addFamilyMember({
-				familyId: BigInt(familyId),
-				member: Identity.fromString(member.identity),
-			}),
-		);
-		return member;
-	});
 
 describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 	test("settings come first; each time is one scheduled occurrence, readable by the family only", () =>
@@ -325,7 +308,9 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 
 					// The restarted server, as the same identity.
 					const db = yield* openFamilyDb({ ...config, token: saved.token });
-					const caregiver = yield* joinAs(config, db, saved.familyId);
+					const caregiver = yield* joinFamily(config, db, saved.familyId, [
+						"health_records",
+					]);
 					const app = familyApp(db, saved.familyId, reminderRoutes());
 					const path = `/reminder-occurrences/${occurrence.id}`;
 					const read = Effect.map(send(app, "GET", path), (r) =>

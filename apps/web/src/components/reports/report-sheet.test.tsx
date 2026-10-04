@@ -98,7 +98,7 @@ describe("ReportScreen before a report", () => {
 				body: { error: "forbidden", message: "Not a member." },
 			},
 		});
-		await waitFor(() => view.getByText("Not a member."));
+		await waitFor(() => view.getByText("Not shared with you"));
 	});
 
 	test("shows why the reports failed", async () => {

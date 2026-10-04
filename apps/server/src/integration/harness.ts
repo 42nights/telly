@@ -275,3 +275,17 @@ export const addMember = async (owner: User, path: string, member: User) => {
 	});
 	expect(added.status).toBe(204);
 };
+
+/** Shares health records (#26) with `member` as `owner`, as the care-access screen does. */
+export const shareHealthRecords = async (
+	owner: User,
+	path: string,
+	member: User,
+) => {
+	const granted = await owner.call("POST", `${path}/care-access`, {
+		identity: member.identity,
+		scope: "health_records",
+		granted: true,
+	});
+	expect(granted.status).toBe(204);
+};
