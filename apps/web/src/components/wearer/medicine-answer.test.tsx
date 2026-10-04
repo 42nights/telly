@@ -1,7 +1,7 @@
 import "../test/setup";
 
 import { describe, expect, mock, test } from "bun:test";
-import type { MedicineDetection } from "@health/contracts/vision";
+import type { ObjectDetection } from "@health/contracts/vision";
 import {
 	createMemoryHistory,
 	createRootRoute,
@@ -13,24 +13,25 @@ import {
 import type { ComponentProps } from "react";
 import { FakeAudio, installFakeAudio } from "../test/audio";
 import { fireEvent, installDom, render, serve, waitFor } from "../test/dom";
-import { MedicineAnswer } from "./medicine-answer";
+import { ObjectAnswer } from "./medicine-answer";
 import type { CheckResult, PictureCheck } from "./medicine-check";
 
 installDom();
 installFakeAudio();
 
-type Props = ComponentProps<typeof MedicineAnswer>;
+type Props = ComponentProps<typeof ObjectAnswer>;
 
 /** Renders the answer at `/` in a router that also has `/hud`, with spies for its actions. */
 const show = async (over: Partial<Props>) => {
 	const actions = { look: mock(), stop: mock(), startCamera: mock() };
+	const choice = { save: mock(), notThis: mock(), skipped: 0 };
 	const props: Props = {
 		check: null,
 		best: null,
 		name: "your pills",
-		item: "your pills",
 		familyId: "f1",
 		live: true,
+		choice,
 		...actions,
 		...over,
 	};
@@ -40,7 +41,7 @@ const show = async (over: Partial<Props>) => {
 			createRoute({
 				getParentRoute: () => root,
 				path: "/",
-				component: () => <MedicineAnswer {...props} />,
+				component: () => <ObjectAnswer {...props} />,
 			}),
 			createRoute({
 				getParentRoute: () => root,
@@ -53,7 +54,7 @@ const show = async (over: Partial<Props>) => {
 	await router.load();
 	const view = render(<RouterProvider router={router} />);
 	await waitFor(() => expect(view.container.textContent).not.toBe(""));
-	return { view, router, ...actions };
+	return { view, router, ...actions, ...choice };
 };
 
 const check = (result: CheckResult): PictureCheck => ({
@@ -66,7 +67,7 @@ const check = (result: CheckResult): PictureCheck => ({
 
 const box = { x: 10, y: 250, width: 40, height: 40 };
 
-describe("MedicineAnswer", () => {
+describe("ObjectAnswer", () => {
 	test("asks to check the live picture", async () => {
 		const { view, look } = await show({});
 		expect(
@@ -162,80 +163,74 @@ describe("MedicineAnswer", () => {
 		expect(look).toHaveBeenCalledTimes(1);
 	});
 
-	test("guides to one unsure find, reads it aloud, and I found it goes home", async () => {
+	test("names an unsure medicine, reads it aloud, and offers Save and Not this", async () => {
 		const calls = serve({
 			"POST /api/families/f1/voice/speech": { json: "mp3" },
 		});
-		const best: MedicineDetection = {
+		const best: ObjectDetection = {
+			category: "medicine",
 			label: "Lisinopril",
 			confidence: 0.6,
 			needsVerification: true,
 			box,
 		};
-		const { view, router } = await show({
+		const { view, save, notThis } = await show({
 			check: check({ kind: "done", detections: [best] }),
 			best,
 		});
+		expect(view.getByText(/Looks like:/).textContent).toBe(
+			"Looks like: medicine. The label looks like “Lisinopril”",
+		);
 		for (const line of [
 			"Look to the left, low down.",
-			"The label looks like “Lisinopril”.",
 			"I'm not sure about this one. Look closely at the label.",
 			"Check the label on the box before you take anything.",
 		])
 			expect(view.getByText(line)).toBeDefined();
-		expect(view.getByText(/I marked/).textContent).toBe(
-			"I marked your pills in the picture.",
-		);
 
 		fireEvent.click(view.getByRole("button", { name: "Read it aloud" }));
 		await waitFor(() =>
 			expect(view.getByRole("status").textContent).toBe("Speaking…"),
 		);
 		expect(calls[0]?.body).toEqual({
-			text: "I marked your pills in the picture. Look to the left, low down. The label looks like “Lisinopril”. I'm not sure about this one. Look closely at the label. Check the label on the box before you take anything.",
+			text: "Looks like medicine. The label looks like “Lisinopril”. Look to the left, low down. I'm not sure about this one. Look closely at the label. Check the label on the box before you take anything.",
 		});
 		expect(FakeAudio.made.length).toBe(1);
 		expect(view.getByRole("button", { name: "Say it again" })).toBeDefined();
 
-		fireEvent.click(view.getByRole("button", { name: "I found it" }));
-		await view.findByText("HUD screen");
-		expect(router.state.location.pathname).toBe("/hud");
+		fireEvent.click(view.getByRole("button", { name: "Save" }));
+		expect(save).toHaveBeenCalledTimes(1);
+		fireEvent.click(view.getByRole("button", { name: "Not this" }));
+		expect(notThis).toHaveBeenCalledTimes(1);
 	});
 
-	test("points to the most likely of several sure finds", async () => {
-		const calls = serve({
-			"POST /api/families/f1/voice/speech": { json: "mp3" },
-		});
-		const best: MedicineDetection = {
-			label: null,
+	test("names any other thing plainly, with no label rule", async () => {
+		const best: ObjectDetection = {
+			category: "keys",
+			label: "keys",
 			confidence: 0.9,
 			needsVerification: false,
 			box: { x: 130, y: 0, width: 40, height: 40 },
 		};
 		const { view, look } = await show({
-			check: check({
-				kind: "done",
-				detections: [best, { ...best, box, confidence: 0.8 }],
-			}),
+			check: check({ kind: "done", detections: [best] }),
 			best,
 		});
-		expect(
-			view.getByText(
-				"I marked 2 medicine containers. The arrow points to the most likely one.",
-			),
-		).toBeDefined();
-		expect(view.getByText("Look straight ahead, high up.")).toBeDefined();
-		expect(view.queryByText(/The label looks like/)).toBeNull();
-		expect(view.queryByText(/not sure/)).toBeNull();
-
-		fireEvent.click(view.getByRole("button", { name: "Read it aloud" }));
-		await waitFor(() =>
-			expect(view.getByRole("status").textContent).toBe("Speaking…"),
+		expect(view.getByText(/Looks like:/).textContent).toBe(
+			"Looks like: your keys",
 		);
-		expect(calls[0]?.body).toEqual({
-			text: "I marked 2 medicine containers. The arrow points to the most likely one. Look straight ahead, high up. Check the label on the box before you take anything.",
-		});
+		expect(view.getByText("Look straight ahead, high up.")).toBeDefined();
+		expect(view.queryByText(/label/)).toBeNull();
+		expect(view.queryByText(/not sure/)).toBeNull();
 		fireEvent.click(view.getByRole("button", { name: "Look again" }));
 		expect(look).toHaveBeenCalledTimes(1);
+	});
+
+	test("after Not this on every thing, says that was everything", async () => {
+		const { view } = await show({
+			check: check({ kind: "done", detections: [] }),
+			choice: { save: mock(), notThis: mock(), skipped: 2 },
+		});
+		expect(view.getByText("That was everything I found here.")).toBeDefined();
 	});
 });

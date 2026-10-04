@@ -1,5 +1,5 @@
-// Pin a remembered medicine container in AR, and show it later (contract: telly-ar-pin). The
-// container id is the sighting id, which stays the same for one container name in a family. The
+// Pin a remembered object in AR, and show it later (contract: telly-ar-pin; #301). The
+// object id is the sighting id, which stays the same for one object name of a member. The
 // world map is a scan of the person's home: it goes only to the shell and to the family's server.
 import type { MedicineSighting } from "@health/contracts/medicine-memory";
 import { Schema } from "effect";
@@ -24,10 +24,10 @@ const StoredPin = Schema.Struct({
 	worldMap: Schema.String,
 });
 
-const pinPath = (familyId: string, containerId: string) =>
+const pinPath = (familyId: string, objectId: string) =>
 	familyPath(
 		familyId,
-		`/medicine-memory/containers/${encodeURIComponent(containerId)}/ar-pin`,
+		`/medicine-memory/objects/${encodeURIComponent(objectId)}/ar-pin`,
 	);
 
 const arFailed = (failure: ArFailure, flow: "pin" | "find"): ArOutcome => {
@@ -74,14 +74,14 @@ const apiFailed = (failure: ApiFailure, title: string): ArOutcome => ({
 	text: failure.kind === "signed_out" ? "Sign in first." : failure.message,
 });
 
-/** Opens AR to pin the container, then stores the anchor and world map on the server. */
+/** Opens AR to pin the object, then stores the anchor and world map on the server. */
 export const pinInAr = async (
 	familyId: string,
 	sighting: MedicineSighting,
 ): Promise<ArOutcome> => {
 	const pin = await savePin({
 		familyId,
-		containerId: sighting.id,
+		objectId: sighting.id,
 		label: sighting.container,
 	});
 	if (pin.kind === "error") return arFailed(pin, "pin");
@@ -113,7 +113,7 @@ export const showInAr = async (
 	if (stored.kind !== "ready")
 		return apiFailed(stored, "I could not read the AR pin");
 	const found = await findPin({
-		containerId: sighting.id,
+		objectId: sighting.id,
 		label: sighting.container,
 		anchorId: stored.value.anchorId,
 		worldMap: stored.value.worldMap,

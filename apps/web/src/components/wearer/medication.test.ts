@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { CareInstruction } from "@health/contracts/care-profile";
+import type { MedicineSighting } from "@health/contracts/medicine-memory";
 import type {
 	ReminderEvent,
 	ReminderOccurrence,
@@ -184,18 +185,26 @@ describe("did I take it?", () => {
 	});
 
 	test("a container sighting since the dose time reads as found, never taken", () => {
-		const sighting = (id: string, seenAt: string) => ({
+		const sighting = (
+			id: string,
+			seenAt: string,
+			category: MedicineSighting["category"] = "medicine",
+		): MedicineSighting => ({
 			id,
 			familyId: "1",
 			personId: "a".repeat(64),
 			container: "SYNTHETIC A 10 mg tablets",
 			place: "Kitchen counter",
 			seenAt,
-			source: "camera_check" as const,
+			source: "camera_check",
 			confidence: 0.9,
 			labelRead: true,
 			savedBy: "me",
 			notFoundAt: null,
+			category,
+			thumbnail: "",
+			usualPlace: null,
+			pinned: false,
 		});
 		const answer = uncertaintyAnswer(
 			occurrence,
@@ -204,6 +213,8 @@ describe("did I take it?", () => {
 				sighting("9", "2026-10-04T08:03:00.000Z"),
 				// Before this dose time: not evidence for it.
 				sighting("8", "2026-10-03T20:00:00.000Z"),
+				// Not medicine (#301): never evidence about a dose.
+				sighting("7", "2026-10-04T08:04:00.000Z", "keys"),
 			],
 			(actor) => actor,
 			time,
@@ -213,5 +224,6 @@ describe("did I take it?", () => {
 			"08:05, me: the reminder was left open.",
 		]);
 		expect(answer.join("\n")).not.toContain("20:00");
+		expect(answer.join("\n")).not.toContain("08:04");
 	});
 });

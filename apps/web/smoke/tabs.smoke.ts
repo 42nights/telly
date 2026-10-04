@@ -81,7 +81,7 @@ const replies: Record<string, unknown> = {
 	"/api/families/1/medicine-memory": {
 		personId: "a".repeat(64),
 		people: ["a".repeat(64)],
-		permission: null,
+		places: [],
 		sightings: [],
 	},
 	"/api/families/1/care/needs": { needs: [] },
@@ -167,7 +167,7 @@ const tabs = [
 	{ name: "Visits", path: "/appointments", heading: "Upcoming visits" },
 	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
 	{ name: "Home", path: "/hud", heading: /^Home · / },
-	{ name: "Medicine", path: "/medicine", heading: "Find medicine" },
+	{ name: "Find things", path: "/find", heading: "Find things" },
 	{ name: "Bedtime", path: "/bedtime", heading: "Bedtime" },
 	{ name: "Going out", path: "/trip", heading: "Going out" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },

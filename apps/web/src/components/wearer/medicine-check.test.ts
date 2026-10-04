@@ -12,8 +12,9 @@ import {
 import type { FamilyList } from "@health/contracts/families";
 import {
 	MAX_VISION_IMAGE_BYTES,
-	type MedicineDetection,
-	MedicineDetectionRequest,
+	type ObjectCategory,
+	type ObjectDetection,
+	ObjectDetectionRequest,
 } from "@health/contracts/vision";
 import { Schema } from "effect";
 import type { ApiState } from "@/lib/api";
@@ -28,8 +29,9 @@ import {
 } from "../test/dom";
 
 import {
-	bestDetection,
+	bestMedicine,
 	type CheckResult,
+	candidates,
 	capture,
 	usePictureCheck,
 } from "./medicine-check";
@@ -37,7 +39,7 @@ import {
 installDom();
 
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
-const detectionsPath = "POST /api/families/f1/vision/medicine-detections";
+const detectionsPath = "POST /api/families/f1/vision/object-detections";
 
 /**
  * The brightness each video or canvas shows. A canvas takes the brightness of what is drawn on it;
@@ -93,7 +95,11 @@ const video = (width: number, height: number, brightness?: number) => {
 	return v;
 };
 
-const detection = (confidence: number): MedicineDetection => ({
+const detection = (
+	confidence: number,
+	category: ObjectCategory = "medicine",
+): ObjectDetection => ({
+	category,
 	label: `conf ${confidence}`,
 	confidence,
 	needsVerification: confidence < 0.7,
@@ -102,9 +108,9 @@ const detection = (confidence: number): MedicineDetection => ({
 
 /** Answers a detection request for the frame it was sent, or for `frameId` when given. */
 const detected =
-	(detections: MedicineDetection[], frameId?: string) =>
+	(detections: ObjectDetection[], frameId?: string) =>
 	(call: Call): ServerReply => {
-		const { frame } = Schema.decodeUnknownSync(MedicineDetectionRequest)(
+		const { frame } = Schema.decodeUnknownSync(ObjectDetectionRequest)(
 			call.body,
 		);
 		return {
@@ -150,16 +156,36 @@ describe("capture", () => {
 	});
 });
 
-describe("bestDetection", () => {
-	test("is null without detections", () => {
-		expect(bestDetection([])).toBeNull();
+describe("candidates", () => {
+	test("offers the asked category first, then the rest, each in the model's order", () => {
+		const keys = detection(0.6, "keys");
+		const pills = detection(0.9);
+		const glasses = detection(0.8, "glasses");
+		expect(candidates([keys, pills, glasses], "medicine")).toEqual([
+			pills,
+			keys,
+			glasses,
+		]);
+		// Without a request the main object in view, which the model puts first, leads.
+		expect(candidates([keys, pills, glasses], null)).toEqual([
+			keys,
+			pills,
+			glasses,
+		]);
+	});
+});
+
+describe("bestMedicine", () => {
+	test("is null without a medicine detection", () => {
+		expect(bestMedicine([])).toBeNull();
+		expect(bestMedicine([detection(0.9, "keys")])).toBeNull();
 	});
 
-	test("is the most confident one, the first on a tie", () => {
+	test("is the most confident medicine, the first on a tie", () => {
 		const a = detection(0.5);
 		const b = detection(0.9);
 		const c = detection(0.9);
-		expect(bestDetection([a, b, c])).toBe(b);
+		expect(bestMedicine([detection(1, "keys"), a, b, c])).toBe(b);
 	});
 });
 

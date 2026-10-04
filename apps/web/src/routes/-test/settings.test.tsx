@@ -10,7 +10,7 @@ const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 );
 
 // #254: each setting is its own tab of the Settings screen.
-test("shows the phone, speaker, going out, medicine place, report email, device, and family settings as tabs in that order", async () => {
+test("shows the phone, speaker, going out, saved things, report email, device, and family settings as tabs in that order", async () => {
 	signIn();
 	serve({});
 	renderRoute("/settings");
@@ -22,7 +22,7 @@ test("shows the phone, speaker, going out, medicine place, report email, device,
 		["Phone numbers", "/settings"],
 		["Home speaker", "/settings/speaker"],
 		["Going out", "/settings/going-out"],
-		["Medicine places", "/settings/places"],
+		["Saved things", "/settings/things"],
 		["Report email", "/settings/reports"],
 		["This device", "/settings/device"],
 		["Family", "/settings/family"],
@@ -31,7 +31,7 @@ test("shows the phone, speaker, going out, medicine place, report email, device,
 	for (const [tab, heading] of [
 		["Home speaker", "Settings · Home speaker (simulated)"],
 		["Going out", "Settings · Going out"],
-		["Medicine places", "Settings · Medicine places"],
+		["Saved things", "Settings · Saved things"],
 		["Report email", "Settings · Report email"],
 		["This device", "Settings · This device"],
 		["Family", "Settings · Family"],

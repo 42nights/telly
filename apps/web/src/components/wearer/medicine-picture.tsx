@@ -1,32 +1,37 @@
-import type { MedicineDetection } from "@health/contracts/vision";
+import type { ObjectDetection } from "@health/contracts/vision";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { ago, marker } from "./logic";
+import { ago, marker, objectName } from "./logic";
 import type { CheckResult, PictureCheck } from "./medicine-check";
 import { useNow } from "./use-now";
 
 const SURE = "#fff";
 const UNSURE = "#ffd400";
 
-/** The tag text: an icon character plus words, so the marker never relies on color alone. */
-const tagText = ({ label, needsVerification }: MedicineDetection) => {
+/**
+ * The tag text: an icon character plus words, so the marker never relies on color alone. Medicine
+ * asks for a label check; anything else asks the person to check it is theirs.
+ */
+const tagText = ({ category, label, needsVerification }: ObjectDetection) => {
+	const full = category === "medicine" ? label : objectName(category, label);
 	const name =
-		label !== null && label.length > 24 ? `${label.slice(0, 23)}…` : label;
+		full !== null && full.length > 24 ? `${full.slice(0, 23)}…` : full;
 	if (!needsVerification) return `✓ ${name ?? "Medicine box"}`;
+	if (category !== "medicine") return `? ${name} · check it`;
 	return name === null ? "? Check the label" : `? ${name} · check label`;
 };
 
 /**
- * One box in frame pixels with a tag, and the arrow when it is the most confident one. A box that
- * needs a label check is yellow and dashed and its tag starts with "?"; a sure one is white with "✓".
+ * One box in frame pixels with a tag, and the arrow when the person's attention is on it. A box
+ * that needs a check is yellow and dashed and its tag starts with "?"; a sure one is white with "✓".
  */
 function Marker({
 	detection,
 	frame,
 	arrow,
 }: {
-	detection: MedicineDetection;
+	detection: ObjectDetection;
 	frame: PictureCheck["frame"];
 	arrow: boolean;
 }) {
@@ -141,7 +146,7 @@ export function CheckedPicture({
 	best,
 }: {
 	check: PictureCheck;
-	best: MedicineDetection | null;
+	best: ObjectDetection | null;
 }) {
 	if (check.result.kind === "cleared") return null;
 	const detections =

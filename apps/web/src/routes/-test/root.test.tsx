@@ -13,6 +13,7 @@ const PATHS = [
 	"/",
 	"/hud",
 	"/medicine",
+	"/find",
 	"/bedtime",
 	"/trip",
 	"/family",
@@ -32,7 +33,7 @@ const PATHS = [
 	"/care/sharing",
 	"/settings/device",
 	"/settings/going-out",
-	"/settings/places",
+	"/settings/things",
 	"/settings/reports",
 	"/settings/speaker",
 	"/welcome",
@@ -76,7 +77,7 @@ test("/ redirects to Family inside the app layout with its head tags", async () 
 test("each page names itself in the tab title", async () => {
 	for (const [path, title] of [
 		["/sign-in", "Sign in · Telly"],
-		["/medicine", "Medicine · Telly"],
+		["/find", "Find · Telly"],
 		["/settings/device", "Device · Telly"],
 		["/family/alerts", "Alerts · Telly"],
 		["/hud", "HUD · Telly"],

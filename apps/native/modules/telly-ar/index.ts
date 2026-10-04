@@ -14,7 +14,7 @@ export type TellyArModule = {
 		reason?: "no-arkit" | "no-camera-permission";
 	}>;
 	savePin(
-		containerId: string,
+		objectId: string,
 		label: string,
 	): Promise<
 		| {
@@ -26,7 +26,7 @@ export type TellyArModule = {
 		| ArErrorAnswer
 	>;
 	findPin(
-		containerId: string,
+		objectId: string,
 		label: string,
 		anchorId: string,
 		worldMap: string,
