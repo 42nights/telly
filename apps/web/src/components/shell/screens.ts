@@ -72,6 +72,7 @@ export const settingsScreen = {
 		{ to: "/settings/places", label: "Medicine places" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
+		{ to: "/settings/family", label: "Delete family" },
 	],
 } as const satisfies Screen;
 

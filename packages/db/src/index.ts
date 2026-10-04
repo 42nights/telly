@@ -49,6 +49,7 @@ import CreateFamilyReducer from "./create_family_reducer";
 import CreateFamilyInviteReducer from "./create_family_invite_reducer";
 import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
+import DeleteFamilyReducer from "./delete_family_reducer";
 import DeleteReminderReducer from "./delete_reminder_reducer";
 import JoinFamilyByInviteReducer from "./join_family_by_invite_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
@@ -418,6 +419,7 @@ const reducersSchema = __reducers(
   __reducerSchema("create_family_invite", CreateFamilyInviteReducer),
   __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
+  __reducerSchema("delete_family", DeleteFamilyReducer),
   __reducerSchema("delete_reminder", DeleteReminderReducer),
   __reducerSchema("join_family_by_invite", JoinFamilyByInviteReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),

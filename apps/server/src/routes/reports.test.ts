@@ -13,10 +13,11 @@ import { Effect, Schema } from "effect";
 import type { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
-import { openFamilyDb } from "../db";
+import { openFamilyDb, readFamilyRecords } from "../db";
 import type { FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
 import type { Mail, Mailer } from "../integrations/resend";
+import { familyRoutes } from "./families";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import {
@@ -62,6 +63,27 @@ const recordSamples = (db: FamilyDb, familyId: string) =>
 				}),
 			),
 	);
+
+// The storage stand-in keeps objects by key; the routes alone decide the keys.
+const memoryBucket = () => {
+	const objects = new Map<string, { body: Uint8Array; at: string }>();
+	const bucket: R2Bucket = {
+		put: async (key, body) =>
+			void objects.set(key, { body, at: new Date().toISOString() }),
+		exists: async (key) => objects.has(key),
+		presign: async (key) => `https://storage.test/${key}?signed`,
+		list: async (prefix) =>
+			[...objects]
+				.filter(([key]) => key.startsWith(prefix))
+				.map(([key, { body, at }]) => ({
+					key,
+					size: body.length,
+					lastModified: at,
+				})),
+		remove: async (key) => void objects.delete(key),
+	};
+	return { objects, bucket };
+};
 
 describe.skipIf(dbConfig === undefined)("lab reports", () => {
 	test("a report is generated from family samples, filled, reviewed, then frozen", () =>
@@ -260,22 +282,7 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 	test("a saved PDF belongs to the member who made it", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
-				// The storage stand-in keeps objects by key; the routes alone decide the keys.
-				const objects = new Map<string, { body: Uint8Array; at: string }>();
-				const bucket: R2Bucket = {
-					put: async (key, body) =>
-						void objects.set(key, { body, at: new Date().toISOString() }),
-					exists: async (key) => objects.has(key),
-					presign: async (key) => `https://storage.test/${key}?signed`,
-					list: async (prefix) =>
-						[...objects]
-							.filter(([key]) => key.startsWith(prefix))
-							.map(([key, { body, at }]) => ({
-								key,
-								size: body.length,
-								lastModified: at,
-							})),
-				};
+				const { objects, bucket } = memoryBucket();
 				const { db: owner, familyId } = yield* openFamily(config, "Pdf");
 				const relative = yield* openFamilyDb(config);
 				yield* Effect.promise(() =>
@@ -331,6 +338,61 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				const unset = familyApp(owner, familyId, reportRoutes());
 				const none = yield* send(unset, "GET", "/report-pdfs");
 				expect(failure(none)).toEqual([503, "unavailable"]);
+			}),
+		));
+
+	test("deleting a family deletes its records and every member's PDFs, and nothing else", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { objects, bucket } = memoryBucket();
+				const { db: owner, familyId } = yield* openFamily(config, "Doomed");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				yield* recordSamples(owner, familyId);
+				const kept = yield* openFamily(config, "Kept");
+				for (const [db, id] of [
+					[owner, familyId],
+					[kept.db, kept.familyId],
+				] as const) {
+					const app = familyApp(db, id, reportRoutes(bucket));
+					const created = yield* send(app, "POST", "/reports");
+					const report = Schema.decodeUnknownSync(Report)(created.json);
+					yield* send(app, "POST", `/reports/${report.id}/pdfs`);
+				}
+				const keys = () => [...objects.keys()].map((key) => key.split("/")[1]);
+				expect(keys().sort()).toEqual([familyId, kept.familyId].sort());
+
+				// A member without family_access, or the wrong name, deletes nothing.
+				const relativeApp = familyApp(relative, familyId, familyRoutes(bucket));
+				const refused = yield* send(relativeApp, "DELETE", "/", {
+					name: "Doomed",
+				});
+				expect(failure(refused)).toEqual([403, "forbidden"]);
+				const ownerApp = familyApp(owner, familyId, familyRoutes(bucket));
+				const wrong = yield* send(ownerApp, "DELETE", "/", { name: "doomed" });
+				expect(failure(wrong)).toEqual([400, "invalid_request"]);
+				expect(keys()).toHaveLength(2);
+
+				const deleted = yield* send(ownerApp, "DELETE", "/", {
+					name: "Doomed",
+				});
+				expect(deleted.status).toBe(204);
+				expect(keys()).toEqual([kept.familyId]);
+				// The caller's own view is current when the reducer returns; another member's view
+				// follows over its own connection.
+				const left = readFamilyRecords(owner);
+				expect(left.families.map((f) => f.id)).not.toContain(familyId);
+				expect(left.samples).toEqual([]);
+				const other = familyApp(kept.db, kept.familyId, reportRoutes(bucket));
+				const reports = yield* send(other, "GET", "/reports");
+				expect(
+					Schema.decodeUnknownSync(Reports)(reports.json).reports,
+				).toHaveLength(1);
 			}),
 		));
 });

@@ -48,16 +48,23 @@ function Item({
 	);
 }
 
-/** The checklist of the selected family, if any; it reads the family itself to keep Home's imports few. */
+/** Set when onboarding creates a family on this device; Home shows that family's checklist until hidden. */
+export const checklistKey = (familyId: string) =>
+	`telly.checklist.open.${familyId}`;
+
+/**
+ * The setup checklist of the selected family, only after this device set it up through onboarding.
+ * A person who already belonged to a family goes straight to its Home and never sees it.
+ */
 export function SetupChecklist() {
 	const { family } = useFamily();
 	return family === null ? null : <Checklist family={family} key={family.id} />;
 }
 
 function Checklist({ family }: { family: Family }) {
-	const key = `telly.checklist.hidden.${family.id}`;
+	const key = checklistKey(family.id);
 	const [hidden, setHidden] = useState(true);
-	useEffect(() => setHidden(localStorage.getItem(key) !== null), [key]);
+	useEffect(() => setHidden(localStorage.getItem(key) === null), [key]);
 	const status = useSetupStatus(family.id);
 	const [contacts] = useContacts();
 	if (hidden) return null;
@@ -91,7 +98,7 @@ function Checklist({ family }: { family: Family }) {
 					type="button"
 					className="h-11 justify-self-start px-4"
 					onClick={() => {
-						localStorage.setItem(key, new Date().toISOString());
+						localStorage.removeItem(key);
 						setHidden(true);
 					}}
 				>

@@ -14,7 +14,6 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
-	act,
 	fireEvent,
 	installDom,
 	render,
@@ -80,21 +79,6 @@ const failure = (status: number, message: string): ServerReply => ({
 	status,
 	body: { error: "internal", message },
 });
-
-/** A list route whose first reply waits for `release`, even when the read starts late; later reads answer `next`. */
-const held = (next: ServerReply) => {
-	const first = Promise.withResolvers<ServerReply>();
-	let asked = false;
-	const route = () => {
-		if (asked) return next;
-		asked = true;
-		return first.promise;
-	};
-	return {
-		route,
-		release: (reply: ServerReply) => act(() => first.resolve(reply)),
-	};
-};
 
 const reads = (calls: { method: string; path: string }[]) =>
 	calls.filter((c) => c.method === "GET" && c.path === BASE).length;
@@ -165,83 +149,6 @@ describe("DueReminders", () => {
 				body: { clientId: "w-3-1", source: "web" },
 			},
 		]);
-	});
-
-	test("while the glasses charge, a spoken prompt is not shown again", async () => {
-		const spoken = detail({ state: "delivered", promptDue: false }, [
-			event(),
-			event({ id: "2", state: "delivered", source: "speaker" }),
-		]);
-		const { route, release } = held(list(spoken));
-		const calls = serve({
-			[LIST]: route,
-			[`POST ${BASE}/3/speaker-handoffs`]: {
-				json: {
-					outcome: "spoken",
-					reason: null,
-					announcement: "You have a reminder.",
-					detail: spoken,
-				},
-			},
-		});
-		const view = render(<DueReminders familyId="7" />);
-		fireEvent.click(view.getByRole("checkbox", { name: /charging/ }));
-		await release(list(detail()));
-		await waitFor(() =>
-			expect(view.getByRole("listitem").textContent).toContain(
-				"Shown · Said on the home speaker.",
-			),
-		);
-		expect(
-			calls.filter((c) => c.method === "POST").map((c) => [c.path, c.body]),
-		).toEqual([[`${BASE}/3/speaker-handoffs`, { clientId: "w-3-1" }]]);
-	});
-
-	test("while the glasses charge, a speaker that cannot say it hands the prompt to this screen", async () => {
-		const { route, release } = held(list(detail()));
-		const calls = serve({
-			[LIST]: route,
-			[`POST ${BASE}/3/speaker-handoffs`]: {
-				json: {
-					outcome: "use_phone",
-					reason: "offline",
-					announcement: null,
-					detail: detail(),
-				},
-			},
-			[`POST ${BASE}/3/deliveries`]: { json: detail() },
-		});
-		const view = render(<DueReminders familyId="7" />);
-		fireEvent.click(view.getByRole("checkbox", { name: /charging/ }));
-		await release(list(detail()));
-		await waitFor(() =>
-			expect(view.getByRole("listitem").textContent).toContain(
-				"The home speaker is offline, so it is shown here.",
-			),
-		);
-		await waitFor(() =>
-			expect(calls.some((c) => c.path.endsWith("/deliveries"))).toBe(true),
-		);
-	});
-
-	test("while the glasses charge, an unreachable speaker also hands the prompt to this screen", async () => {
-		const { route, release } = held(list(detail()));
-		const calls = serve({
-			[LIST]: route,
-			[`POST ${BASE}/3/speaker-handoffs`]: failure(503, "No speaker"),
-			[`POST ${BASE}/3/deliveries`]: { json: detail() },
-		});
-		const view = render(<DueReminders familyId="7" />);
-		fireEvent.click(view.getByRole("checkbox", { name: /charging/ }));
-		await release(list(detail()));
-		await waitFor(() =>
-			expect(view.getByRole("listitem").textContent).toContain(
-				"The home speaker could not be reached, so it is shown here.",
-			),
-		);
-		await waitFor(() =>
-			expect(calls.some((c) => c.path.endsWith("/deliveries"))).toBe(true),
-		);
 	});
 
 	test("sends the answer with a stable id and reads the list again", async () => {

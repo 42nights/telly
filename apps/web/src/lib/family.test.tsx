@@ -5,7 +5,9 @@ setupDom();
 // Static imports load before `setupDom` registers `document` and mocks `@/env`.
 const { fireEvent, render, waitFor } = await import("@testing-library/react");
 const { FAMILY, json, screen, serve, signIn } = await import("@/lib/test/app");
-const { FamilyProvider, PersonPicker, useFamily } = await import("./family");
+const { chooseFamily, FamilyProvider, PersonPicker, useFamily } = await import(
+	"./family"
+);
 
 const OTHER = { ...FAMILY, id: "fam-2", name: "Grandpa Joe" };
 
@@ -114,4 +116,22 @@ test("useFamily outside FamilyProvider fails loudly", () => {
 	} finally {
 		consoleError.mockRestore();
 	}
+});
+
+test("a member opens the family with the newest real data, not an empty remembered one", () => {
+	const at = (id: string, newestSampleAt: string | null) => ({
+		...FAMILY,
+		id,
+		newestSampleAt,
+	});
+	const empty = at("1", null);
+	const old = at("2", "2026-10-03T08:00:00Z");
+	const live = at("3", "2026-10-04T08:00:00Z");
+	expect(chooseFamily([empty, old, live], null, null)).toBe(live);
+	expect(chooseFamily([empty, old, live], null, "1")).toBe(live);
+	expect(chooseFamily([empty, old, live], null, "2")).toBe(old);
+	expect(chooseFamily([empty, live], "1", "1")).toBe(empty);
+	expect(chooseFamily([empty, at("4", null)], null, "4")?.id).toBe("4");
+	expect(chooseFamily([empty, at("4", null)], null, null)).toBe(empty);
+	expect(chooseFamily([], null, "1")).toBeNull();
 });
