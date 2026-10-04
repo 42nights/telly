@@ -37,7 +37,10 @@ import {
 import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
 import AddCareInstructionReducer from "./add_care_instruction_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
+import ApproveClinicianShareReducer from "./approve_clinician_share_reducer";
+import CancelAppointmentReducer from "./cancel_appointment_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
+import ConfirmAppointmentReducer from "./confirm_appointment_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
 import CreateReportReducer from "./create_report_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
@@ -50,12 +53,18 @@ import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import RequestAppointmentReducer from "./request_appointment_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
+import ReviewAppointmentSummaryReducer from "./review_appointment_summary_reducer";
+import RevokeClinicianShareReducer from "./revoke_clinician_share_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
+import SendClinicianShareReducer from "./send_clinician_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
+import SuggestAppointmentReducer from "./suggest_appointment_reducer";
+import UpdateAppointmentPrepReducer from "./update_appointment_prep_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
 
@@ -66,10 +75,12 @@ import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
+import MyAppointmentsRow from "./my_appointments_table";
 import MyCareGrantsRow from "./my_care_grants_table";
 import MyCareInstructionsRow from "./my_care_instructions_table";
 import MyCareNeedsRow from "./my_care_needs_table";
 import MyCareProfilesRow from "./my_care_profiles_table";
+import MyClinicianSharesRow from "./my_clinician_shares_table";
 import MyContactAttemptsRow from "./my_contact_attempts_table";
 import MyContactLaddersRow from "./my_contact_ladders_table";
 import MyFamiliesRow from "./my_families_table";
@@ -112,6 +123,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAlertsRow),
+  myAppointments: __table({
+    name: 'my_appointments',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAppointmentsRow),
   myCareGrants: __table({
     name: 'my_care_grants',
     indexes: [
@@ -140,6 +158,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyCareProfilesRow),
+  myClinicianShares: __table({
+    name: 'my_clinician_shares',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyClinicianSharesRow),
   myContactAttempts: __table({
     name: 'my_contact_attempts',
     indexes: [
@@ -210,7 +235,10 @@ const reducersSchema = __reducers(
   __reducerSchema("acknowledge_alert", AcknowledgeAlertReducer),
   __reducerSchema("add_care_instruction", AddCareInstructionReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
+  __reducerSchema("approve_clinician_share", ApproveClinicianShareReducer),
+  __reducerSchema("cancel_appointment", CancelAppointmentReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
+  __reducerSchema("confirm_appointment", ConfirmAppointmentReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
   __reducerSchema("create_report", CreateReportReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
@@ -223,12 +251,18 @@ const reducersSchema = __reducers(
   __reducerSchema("record_meal_fact", RecordMealFactReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("request_appointment", RequestAppointmentReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
+  __reducerSchema("review_appointment_summary", ReviewAppointmentSummaryReducer),
+  __reducerSchema("revoke_clinician_share", RevokeClinicianShareReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
+  __reducerSchema("send_clinician_share", SendClinicianShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
+  __reducerSchema("suggest_appointment", SuggestAppointmentReducer),
+  __reducerSchema("update_appointment_prep", UpdateAppointmentPrepReducer),
   __reducerSchema("update_report", UpdateReportReducer),
   __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
 );

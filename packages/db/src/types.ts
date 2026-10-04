@@ -58,6 +58,27 @@ export const AlertThreshold = __t.object("AlertThreshold", {
 });
 export type AlertThreshold = __Infer<typeof AlertThreshold>;
 
+export const Appointment = __t.object("Appointment", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  visit: __t.string(),
+  prep: __t.string(),
+  source: __t.string(),
+  suggestedBy: __t.identity(),
+  suggestedAt: __t.timestamp(),
+  requestedBy: __t.option(__t.identity()),
+  requestedAt: __t.option(__t.timestamp()),
+  confirmation: __t.option(__t.string()),
+  confirmedBy: __t.option(__t.identity()),
+  confirmedAt: __t.option(__t.timestamp()),
+  cancelledBy: __t.option(__t.identity()),
+  cancelledAt: __t.option(__t.timestamp()),
+  summary: __t.option(__t.string()),
+  summaryReviewedBy: __t.option(__t.identity()),
+  summaryReviewedAt: __t.option(__t.timestamp()),
+});
+export type Appointment = __Infer<typeof Appointment>;
+
 // The tagged union or sum type for the algebraic type `AttemptChannel`.
 export const AttemptChannel = __t.enum("AttemptChannel", {
   Call: __t.unit(),
@@ -145,6 +166,24 @@ export const CareProfileVersion = __t.object("CareProfileVersion", {
   editedAt: __t.timestamp(),
 });
 export type CareProfileVersion = __Infer<typeof CareProfileVersion>;
+
+export const ClinicianShare = __t.object("ClinicianShare", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  appointmentId: __t.string(),
+  recipient: __t.string(),
+  sections: __t.string(),
+  consent: __t.string(),
+  frequency: __t.string(),
+  approvedBy: __t.identity(),
+  approvedAt: __t.timestamp(),
+  approvedSummaryAt: __t.option(__t.timestamp()),
+  revokedBy: __t.option(__t.identity()),
+  revokedAt: __t.option(__t.timestamp()),
+  sends: __t.u32(),
+  lastSentAt: __t.option(__t.timestamp()),
+});
+export type ClinicianShare = __Infer<typeof ClinicianShare>;
 
 export const ContactAttempt = __t.object("ContactAttempt", {
   key: __t.string(),
@@ -302,6 +341,9 @@ export type MyAlertThresholds = __Infer<typeof MyAlertThresholds>;
 export const MyAlerts = __t.object("MyAlerts", {});
 export type MyAlerts = __Infer<typeof MyAlerts>;
 
+export const MyAppointments = __t.object("MyAppointments", {});
+export type MyAppointments = __Infer<typeof MyAppointments>;
+
 export const MyCareGrants = __t.object("MyCareGrants", {});
 export type MyCareGrants = __Infer<typeof MyCareGrants>;
 
@@ -313,6 +355,9 @@ export type MyCareNeeds = __Infer<typeof MyCareNeeds>;
 
 export const MyCareProfiles = __t.object("MyCareProfiles", {});
 export type MyCareProfiles = __Infer<typeof MyCareProfiles>;
+
+export const MyClinicianShares = __t.object("MyClinicianShares", {});
+export type MyClinicianShares = __Infer<typeof MyClinicianShares>;
 
 export const MyContactAttempts = __t.object("MyContactAttempts", {});
 export type MyContactAttempts = __Infer<typeof MyContactAttempts>;

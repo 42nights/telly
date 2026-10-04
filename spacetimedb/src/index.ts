@@ -468,6 +468,63 @@ const careGrantEvent = table(
 	},
 );
 
+// A proposed visit (#44). `visit` is fixed when it is suggested. A request and a provider
+// confirmation each keep who recorded them and when, so a suggestion or a request is never a
+// booking. Nothing here contacts a provider: every step is a member's record.
+const appointment = table(
+	{ name: "appointment" },
+	{
+		// Chosen by the server, so it knows which appointment it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts` appointment schemas.
+		visit: t.string(),
+		prep: t.string(),
+		// "model" or "member": who proposed the visit.
+		source: t.string(),
+		suggestedBy: t.identity(),
+		suggestedAt: t.timestamp(),
+		requestedBy: t.option(t.identity()),
+		requestedAt: t.option(t.timestamp()),
+		// The provider's confirmation as a member received it (JSON).
+		confirmation: t.option(t.string()),
+		confirmedBy: t.option(t.identity()),
+		confirmedAt: t.option(t.timestamp()),
+		cancelledBy: t.option(t.identity()),
+		cancelledAt: t.option(t.timestamp()),
+		// The summary a member reviewed (JSON); replaced by each new review.
+		summary: t.option(t.string()),
+		summaryReviewedBy: t.option(t.identity()),
+		summaryReviewedAt: t.option(t.timestamp()),
+	},
+);
+
+// A member's consent to send an appointment's reviewed summary to one clinician. `explicit` covers
+// one send of the summary as reviewed at approval; `standing` covers repeated sends at the agreed
+// frequency. Sends are simulated: no clinician delivery path is approved.
+const clinicianShare = table(
+	{ name: "clinician_share" },
+	{
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		appointmentId: t.string(),
+		// JSON: the recipient and the chosen summary sections.
+		recipient: t.string(),
+		sections: t.string(),
+		// "explicit" (frequency "once") or "standing" (frequency "weekly" or "monthly").
+		consent: t.string(),
+		frequency: t.string(),
+		approvedBy: t.identity(),
+		approvedAt: t.timestamp(),
+		// For explicit consent: the summary review it covers.
+		approvedSummaryAt: t.option(t.timestamp()),
+		revokedBy: t.option(t.identity()),
+		revokedAt: t.option(t.timestamp()),
+		sends: t.u32(),
+		lastSentAt: t.option(t.timestamp()),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -489,6 +546,8 @@ const spacetimedb = schema({
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	appointment,
+	clinicianShare,
 });
 export default spacetimedb;
 
@@ -1557,6 +1616,220 @@ export const setCareGrant = spacetimedb.reducer(
 	},
 );
 
+const requireAppointment = (ctx: Ctx, id: string) => {
+	const found = ctx.db.appointment.id.find(id);
+	// A missing appointment fails like another family's, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.cancelledAt !== undefined)
+		throw new SenderError("appointment is cancelled");
+	return found;
+};
+
+export const suggestAppointment = spacetimedb.reducer(
+	{
+		id: t.string(),
+		familyId: t.u64(),
+		visit: t.string(),
+		prep: t.string(),
+		source: t.string(),
+	},
+	(ctx, suggested) => {
+		requireMember(ctx, suggested.familyId);
+		requireText("id", suggested.id);
+		requireText("visit", suggested.visit);
+		requireText("prep", suggested.prep);
+		if (suggested.source !== "model" && suggested.source !== "member")
+			throw new SenderError("source must be model or member");
+		if (ctx.db.appointment.id.find(suggested.id) !== null)
+			throw new SenderError("appointment id already exists");
+		ctx.db.appointment.insert({
+			...suggested,
+			suggestedBy: ctx.sender,
+			suggestedAt: ctx.timestamp,
+			requestedBy: undefined,
+			requestedAt: undefined,
+			confirmation: undefined,
+			confirmedBy: undefined,
+			confirmedAt: undefined,
+			cancelledBy: undefined,
+			cancelledAt: undefined,
+			summary: undefined,
+			summaryReviewedBy: undefined,
+			summaryReviewedAt: undefined,
+		});
+	},
+);
+
+export const updateAppointmentPrep = spacetimedb.reducer(
+	{ id: t.string(), prep: t.string() },
+	(ctx, { id, prep }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("prep", prep);
+		ctx.db.appointment.id.update({ ...found, prep });
+	},
+);
+
+// A member's explicit request. It records intent only; nothing reaches the provider.
+export const requestAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt !== undefined)
+			throw new SenderError("appointment is already requested");
+		ctx.db.appointment.id.update({
+			...found,
+			requestedBy: ctx.sender,
+			requestedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Only a requested appointment takes the provider's confirmation: a suggestion never skips ahead.
+export const confirmAppointment = spacetimedb.reducer(
+	{ id: t.string(), confirmation: t.string() },
+	(ctx, { id, confirmation }) => {
+		const found = requireAppointment(ctx, id);
+		if (found.requestedAt === undefined)
+			throw new SenderError("only a requested appointment can be confirmed");
+		if (found.confirmedAt !== undefined)
+			throw new SenderError("appointment is already confirmed");
+		requireText("confirmation", confirmation);
+		ctx.db.appointment.id.update({
+			...found,
+			confirmation,
+			confirmedBy: ctx.sender,
+			confirmedAt: ctx.timestamp,
+		});
+	},
+);
+
+export const cancelAppointment = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireAppointment(ctx, id);
+		ctx.db.appointment.id.update({
+			...found,
+			cancelledBy: ctx.sender,
+			cancelledAt: ctx.timestamp,
+		});
+	},
+);
+
+export const reviewAppointmentSummary = spacetimedb.reducer(
+	{ id: t.string(), summary: t.string() },
+	(ctx, { id, summary }) => {
+		const found = requireAppointment(ctx, id);
+		requireText("summary", summary);
+		ctx.db.appointment.id.update({
+			...found,
+			summary,
+			summaryReviewedBy: ctx.sender,
+			summaryReviewedAt: ctx.timestamp,
+		});
+	},
+);
+
+const frequencies: Record<string, string[]> = {
+	explicit: ["once"],
+	standing: ["weekly", "monthly"],
+};
+// Keep in step with `shareIntervalDays` in apps/server/src/routes/appointments.ts.
+const intervalMicros: Record<string, bigint> = {
+	weekly: 7n * 86_400_000_000n,
+	monthly: 30n * 86_400_000_000n,
+};
+
+// Approving and sending a clinician update need the `clinician_delivery` care scope (#26) as well
+// as the per-update consent.
+export const approveClinicianShare = spacetimedb.reducer(
+	{
+		id: t.string(),
+		appointmentId: t.string(),
+		recipient: t.string(),
+		sections: t.string(),
+		consent: t.string(),
+		frequency: t.string(),
+	},
+	(ctx, share) => {
+		const found = requireAppointment(ctx, share.appointmentId);
+		requireCareScope(ctx, found.familyId, "clinician_delivery");
+		requireText("id", share.id);
+		requireText("recipient", share.recipient);
+		requireText("sections", share.sections);
+		if (found.summaryReviewedAt === undefined)
+			throw new SenderError("review the summary before sharing it");
+		if (!frequencies[share.consent]?.includes(share.frequency))
+			throw new SenderError("consent and frequency do not match");
+		if (ctx.db.clinicianShare.id.find(share.id) !== null)
+			throw new SenderError("share id already exists");
+		ctx.db.clinicianShare.insert({
+			...share,
+			familyId: found.familyId,
+			approvedBy: ctx.sender,
+			approvedAt: ctx.timestamp,
+			approvedSummaryAt:
+				share.consent === "explicit" ? found.summaryReviewedAt : undefined,
+			revokedBy: undefined,
+			revokedAt: undefined,
+			sends: 0,
+			lastSentAt: undefined,
+		});
+	},
+);
+
+const requireShare = (ctx: Ctx, id: string) => {
+	const found = ctx.db.clinicianShare.id.find(id);
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	if (found.revokedAt !== undefined) throw new SenderError("share is revoked");
+	return found;
+};
+
+// Records one simulated send, only inside the consent: once for explicit consent, and no sooner
+// than the agreed interval for a standing arrangement.
+export const sendClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		requireCareScope(ctx, share.familyId, "clinician_delivery");
+		const found = requireAppointment(ctx, share.appointmentId);
+		if (share.consent === "explicit") {
+			if (share.sends > 0)
+				throw new SenderError("explicit consent covers one send");
+			if (
+				found.summaryReviewedAt?.microsSinceUnixEpoch !==
+				share.approvedSummaryAt?.microsSinceUnixEpoch
+			)
+				throw new SenderError("the summary changed after approval");
+		} else if (
+			share.lastSentAt !== undefined &&
+			ctx.timestamp.microsSinceUnixEpoch <
+				share.lastSentAt.microsSinceUnixEpoch +
+					(intervalMicros[share.frequency] ?? 0n)
+		)
+			throw new SenderError("not due yet at the agreed frequency");
+		ctx.db.clinicianShare.id.update({
+			...share,
+			sends: share.sends + 1,
+			lastSentAt: ctx.timestamp,
+		});
+	},
+);
+
+// Any member may withdraw consent; stopping a share never needs more access than starting one.
+export const revokeClinicianShare = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const share = requireShare(ctx, id);
+		ctx.db.clinicianShare.id.update({
+			...share,
+			revokedBy: ctx.sender,
+			revokedAt: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1762,5 +2035,25 @@ export const myCareGrants = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.careGrantEvent, (m, g) =>
 				m.familyId.eq(g.familyId),
+			),
+);
+
+export const myAppointments = spacetimedb.view(
+	{ name: "my_appointments", public: true },
+	t.array(appointment.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.appointment, (m, a) => m.familyId.eq(a.familyId)),
+);
+
+export const myClinicianShares = spacetimedb.view(
+	{ name: "my_clinician_shares", public: true },
+	t.array(clinicianShare.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.clinicianShare, (m, s) =>
+				m.familyId.eq(s.familyId),
 			),
 );
