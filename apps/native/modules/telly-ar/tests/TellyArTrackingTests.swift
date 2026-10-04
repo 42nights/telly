@@ -119,6 +119,36 @@ private func lookAndLock() {
   check(near(top.origin.y, 0.9) && near(top.origin.y + top.size.y, 1), "top box: \(top)")
 }
 
+// #384: the voice says what the card draws, only once the words hold for 0.8 s.
+private func voiceMatchesGuide() {
+  let words = Tracking.guideWords(look: .right, distance: 2.14, reached: false)
+  check(words.title == "Turn right" && words.walk == "Walk 2.1 m", "card words: \(words)")
+  check(Tracking.guideWords(look: nil, distance: 1, reached: false).title == "In view", "in view")
+  check(Tracking.guideWords(look: .left, distance: 0.4, reached: true).title == "You're there", "reached wins")
+  check(Tracking.spokenGuide(look: .right, distance: 2.14, reached: false) == "Turn right. Walk about 2 meters.", "spoken right")
+  check(Tracking.spokenGuide(look: .behind, distance: 2.3, reached: false) == "Turn around. Walk about 2.5 meters.", "spoken behind")
+  check(Tracking.spokenGuide(look: nil, distance: 0.6, reached: false) == "In view. Walk about 0.5 meters.", "spoken near")
+  check(Tracking.spokenGuide(look: .left, distance: 0.3, reached: true) == "You're there.", "spoken reached")
+  // The spoken title is the card's title for every direction.
+  for look in [Tracking.Look.up, .right, .down, .left, .behind] {
+    let card = Tracking.guideWords(look: look, distance: 3, reached: false).title
+    check(Tracking.spokenGuide(look: look, distance: 3, reached: false).hasPrefix(card + "."), "same source: \(look)")
+  }
+
+  var voice = Voice()
+  check(voice.update("Turn left.", at: 0) == nil, "new words wait")
+  check(voice.update("Turn left.", at: 0.5) == nil, "0.5 s is too soon")
+  // The person keeps turning: the words change before 0.8 s, so the old ones are never spoken.
+  check(voice.update("Turn right.", at: 0.7) == nil, "changed words restart the wait")
+  check(voice.update("Turn right.", at: 1.4) == nil, "0.7 s after the change")
+  check(voice.update("Turn right.", at: 1.5) == "Turn right.", "spoken after 0.8 s")
+  check(voice.update("Turn right.", at: 3) == nil, "spoken once")
+  // A flicker back to the spoken words does not repeat them; nil (nothing drawn) is silent.
+  check(voice.update("In view.", at: 3.1) == nil && voice.update("Turn right.", at: 3.2) == nil, "flicker")
+  check(voice.update("Turn right.", at: 5) == nil, "no repeat")
+  check(voice.update(nil, at: 6) == nil && voice.update(nil, at: 7) == nil, "silence")
+}
+
 private func moveThreshold() {
   let anchor = simd_float3(1, 0.8, -2)
   check(!Tracking.moved(from: anchor, to: anchor + simd_float3(0.3, 0, 0.3)), "0.42 m is the same spot")
@@ -175,6 +205,7 @@ struct TellyArTrackingTests {
     rayMath()
     moveThreshold()
     lookAndLock()
+    voiceMatchesGuide()
     bookkeeping()
     if failures > 0 {
       print("\(failures) failed")
