@@ -5,6 +5,7 @@ import { Camera, Check, CloudOff, Info, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { ApiFailure } from "@/lib/api";
+import { signInConfig } from "@/lib/sign-in";
 
 import { direction } from "./logic";
 import type { PictureCheck } from "./medicine-check";
@@ -15,7 +16,9 @@ const lg = "h-14 w-full text-[20px] [&_svg]:size-6";
 
 const failureText: Record<ApiFailure["kind"], string> = {
 	signed_out:
-		"Sign in to check pictures. Sign-in is not set up yet (issue #4).",
+		signInConfig() === null
+			? "Sign in to check pictures. Sign-in is not set up on this server."
+			: "Sign in to check pictures.",
 	forbidden: "You can't check pictures for this person.",
 	unavailable: "The picture checker is not available right now.",
 	error: "Something went wrong while checking the picture.",

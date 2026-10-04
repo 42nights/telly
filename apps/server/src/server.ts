@@ -5,7 +5,7 @@ import { createApp } from "./app";
 import type { NoopConfig, ServerConfig } from "./config";
 import { openFamilyDb } from "./db";
 import { startCloudIMessage } from "./imessage/cloud";
-import { type NoopIngest, recordNoopSamples } from "./integrations/noop-ingest";
+import { type NoopIngest, noopIngest } from "./integrations/noop-ingest";
 import { familyAnswer } from "./routes/ask";
 
 export type ListenEnv = {
@@ -14,13 +14,10 @@ export type ListenEnv = {
 	readonly ALERT_OPERATOR_TOKEN?: string | undefined;
 };
 
-const noopIngest = (noop: NoopConfig | undefined) =>
+const openNoopIngest = (noop: NoopConfig | undefined) =>
 	noop === undefined
 		? Effect.succeed(undefined)
-		: Effect.map(openFamilyDb(noop.db), (db) => ({
-				key: noop.key,
-				record: recordNoopSamples(db, noop.familyId),
-			}));
+		: Effect.map(openFamilyDb(noop.db), (db) => noopIngest(db, noop.legacy));
 
 // In-flight requests get this long to finish after SIGTERM. Then their sockets close, which aborts
 // each request's signal, interrupts its scope, and closes its database connection. `close` itself
@@ -53,7 +50,7 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 
 	const HttpServer = Layer.effectDiscard(
 		Effect.gen(function* () {
-			const ingest = yield* noopIngest(config.noop);
+			const ingest = yield* openNoopIngest(config.noop);
 			yield* Effect.acquireRelease(listen(ingest), close);
 			yield* Effect.log(`server listening on http://${env.HOST}:${env.PORT}`);
 		}),

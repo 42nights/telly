@@ -84,7 +84,7 @@ export const authorizationUrl = (
 		response_type: "code",
 		client_id: request.clientId,
 		redirect_uri: request.redirectUri,
-		scope: "openid",
+		scope: "openid email profile",
 		// A refresh token. Google sends one only at consent, so every sign-in asks for consent.
 		access_type: "offline",
 		prompt: "consent",
@@ -112,13 +112,32 @@ export const tokenMatches = (
 	);
 };
 
+/** How long a sign-in call may take before the client gives up. */
+const SIGN_IN_TIMEOUT_MS = 20_000;
+
+/** Rejects with "Telly is not answering" when no full reply comes within `SIGN_IN_TIMEOUT_MS`. */
 const postSignIn = async (url: string, request: unknown) => {
-	const response = await fetch(url, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(request),
-	});
-	const body: unknown = await response.json().catch(() => null);
+	// A timer, not `AbortSignal.timeout`, so the phone's JavaScript engine needs nothing newer.
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), SIGN_IN_TIMEOUT_MS);
+	const { signal } = controller;
+	const notAnswering = new Error("Telly is not answering. Try again.");
+	let response: Response;
+	let body: unknown;
+	try {
+		response = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(request),
+			signal,
+		});
+		body = await response.json().catch(() => null);
+	} catch (error) {
+		throw signal.aborted ? notAnswering : error;
+	} finally {
+		clearTimeout(timer);
+	}
+	if (signal.aborted) throw notAnswering;
 	if (response.ok)
 		return { status: 200, token: Schema.decodeUnknownSync(SignInToken)(body) };
 	const failure = Schema.decodeUnknownOption(ApiError)(body);

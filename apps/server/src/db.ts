@@ -53,6 +53,8 @@ const views = [
 	"SELECT * FROM my_cooking_profiles",
 	"SELECT * FROM my_report_email_settings",
 	"SELECT * FROM my_report_emails",
+	"SELECT * FROM my_family_invites",
+	"SELECT * FROM my_push_tokens",
 	// Rows only for the delivery operator identity; empty for every family member.
 	"SELECT * FROM pending_alert_deliveries",
 ];
@@ -234,4 +236,18 @@ export const readFamilyRecords = ({ connection }: FamilyDb): FamilyRecords => {
 			acknowledgedAt: row.acknowledgedAt.toISOString(),
 		})),
 	};
+};
+
+/** The family a WHOOP push token hash belongs to, as seen by the NOOP ingest identity. */
+export const pushTokenFamily = (
+	{ connection }: FamilyDb,
+	tokenHash: string,
+) => {
+	if (!connection.isActive)
+		throw new DbUnavailable({
+			reason: "connection closed; cached rows are stale",
+		});
+	for (const row of connection.db.myPushTokens.iter())
+		if (row.tokenHash === tokenHash) return row.familyId;
+	return undefined;
 };

@@ -8,8 +8,9 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "@/components/header";
+import { OnboardingRedirect } from "@/components/onboarding/redirect";
 import { ThemeProvider } from "@/components/theme-provider";
-import { FamilyProvider, NewFamilyBar } from "@/lib/family";
+import { FamilyProvider } from "@/lib/family";
 import { requireSession } from "@/lib/session";
 
 import "../index.css";
@@ -59,10 +60,10 @@ function RootComponent() {
 					</div>
 				) : (
 					<FamilyProvider>
-						<div className="win95-desktop flex h-svh flex-col">
+						<OnboardingRedirect />
+						<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
 							<Header />
-							<NewFamilyBar />
-							<div className="min-h-0 flex-1 overflow-y-auto">
+							<div className="min-h-0 overflow-y-auto">
 								<Outlet />
 							</div>
 						</div>

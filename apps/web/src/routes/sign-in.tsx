@@ -45,19 +45,21 @@ const failure = (error: unknown): Step => {
 	};
 };
 
-/** A first-time user with no family starts on Family, which tells how to pair a person. */
+/** A first-time user with no family starts onboarding, unless they came to join a family by invite. */
 const landing = async (returnTo: string) => {
+	const path = returnPath(returnTo);
 	const families = await apiRequest(FamilyList, "/api/families");
-	return families.kind === "ready" && families.value.families.length === 0
-		? "/family"
-		: returnPath(returnTo);
+	return families.kind === "ready" &&
+		families.value.families.length === 0 &&
+		!path.startsWith("/join/")
+		? "/welcome"
+		: path;
 };
 
 function SignIn() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
 	const [step, setStep] = useState<Step>({ kind: "ready" });
-
 	useEffect(() => {
 		if (config === null) return;
 		if (search.error !== undefined) {

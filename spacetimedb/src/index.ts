@@ -866,6 +866,34 @@ const reportEmail = table(
 	},
 );
 
+// One-time join codes (onboarding). Only the code's SHA-256 is stored; the code itself is shown
+// once to the member who made it. One person may join with it, before `expiresAt`.
+const familyInvite = table(
+	{ name: "family_invite" },
+	{
+		codeHash: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+		expiresAt: t.timestamp(),
+		usedBy: t.option(t.identity()),
+		usedAt: t.option(t.timestamp()),
+	},
+);
+
+// The family's WHOOP push token (SHA-256 only). NOOP pushes with the token, and the server's NOOP
+// ingest identity records the samples into this family. One per family; a new token replaces it.
+const familyPushToken = table(
+	{ name: "family_push_token" },
+	{
+		familyId: t.u64().primaryKey(),
+		tokenHash: t.string().unique(),
+		ingest: t.identity().index("btree"),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -907,6 +935,8 @@ const spacetimedb = schema({
 	cookingProfile,
 	reportEmailSettings,
 	reportEmail,
+	familyInvite,
+	familyPushToken,
 });
 export default spacetimedb;
 
@@ -3664,6 +3694,45 @@ export const settleReportEmail = spacetimedb.reducer(
 	},
 );
 
+// Onboarding: one-time join codes and the family's WHOOP push token.
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+const INVITE_MAX_MICROS = 7n * 24n * 3_600n * 1_000_000n;
+
+/** Adds `member` with no care grants, unless they already belong to the family. */
+const addMemberIfAbsent = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
+	if (!rows.next().done) return;
+	ctx.db.familyMember.insert({
+		id: 0n,
+		familyId,
+		member,
+		addedAt: ctx.timestamp,
+	});
+};
+
+export const createFamilyInvite = spacetimedb.reducer(
+	{ familyId: t.u64(), codeHash: t.string(), expiresAt: t.timestamp() },
+	(ctx, { familyId, codeHash, expiresAt }) => {
+		requireMember(ctx, familyId);
+		if (!SHA256_HEX.test(codeHash))
+			throw new SenderError("codeHash must be 64 lowercase hex characters");
+		// The server's clock may run slightly ahead of the database's.
+		const ahead =
+			expiresAt.microsSinceUnixEpoch - ctx.timestamp.microsSinceUnixEpoch;
+		if (ahead <= 0n || ahead > INVITE_MAX_MICROS + MAX_CLOCK_AHEAD_MICROS)
+			throw new SenderError("expiresAt must be within the next 7 days");
+		ctx.db.familyInvite.insert({
+			codeHash,
+			familyId,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+			expiresAt,
+			usedBy: undefined,
+			usedAt: undefined,
+		});
+	},
+);
+
 export const myReportEmailSettings = spacetimedb.view(
 	{ name: "my_report_email_settings", public: true },
 	t.array(reportEmailSettings.rowType),
@@ -3682,4 +3751,84 @@ export const myReportEmails = spacetimedb.view(
 		ctx.from.familyMember
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.reportEmail, (m, e) => m.familyId.eq(e.familyId)),
+);
+
+// A member who joins again succeeds (a reloaded join page) and leaves the invite unchanged.
+export const joinFamilyByInvite = spacetimedb.reducer(
+	{ codeHash: t.string() },
+	(ctx, { codeHash }) => {
+		const invalid = new SenderError("this invite is unknown, used, or expired");
+		const invite = ctx.db.familyInvite.codeHash.find(codeHash);
+		if (invite === null) throw invalid;
+		const rows = ctx.db.familyMember.byFamilyMember.filter([
+			invite.familyId,
+			ctx.sender,
+		]);
+		if (!rows.next().done) return;
+		if (
+			invite.usedAt !== undefined ||
+			invite.expiresAt.microsSinceUnixEpoch <=
+				ctx.timestamp.microsSinceUnixEpoch
+		)
+			throw invalid;
+		addMemberIfAbsent(ctx, invite.familyId, ctx.sender);
+		ctx.db.familyInvite.codeHash.update({
+			...invite,
+			usedBy: ctx.sender,
+			usedAt: ctx.timestamp,
+		});
+	},
+);
+
+// Same gate as `setCareGrant`: a `family_access` holder, or the founder of a new family. The new
+// token revokes the old one, and the ingest identity becomes a member with no care grants.
+export const setFamilyPushToken = spacetimedb.reducer(
+	{ familyId: t.u64(), tokenHash: t.string(), ingest: t.identity() },
+	(ctx, { familyId, tokenHash, ingest }) => {
+		requireMember(ctx, familyId);
+		const mine = ctx.db.careGrantEvent.byFamilyMember.filter([
+			familyId,
+			ctx.sender,
+		]);
+		if (
+			!holdsCareScope(mine, "family_access") &&
+			!maySetUpSharing(ctx, familyId)
+		)
+			throw new SenderError("no care access: family_access");
+		if (!SHA256_HEX.test(tokenHash))
+			throw new SenderError("tokenHash must be 64 lowercase hex characters");
+		const row = {
+			familyId,
+			tokenHash,
+			ingest,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+		};
+		if (ctx.db.familyPushToken.familyId.find(familyId) === null)
+			ctx.db.familyPushToken.insert(row);
+		else ctx.db.familyPushToken.familyId.update(row);
+		addMemberIfAbsent(ctx, familyId, ingest);
+	},
+);
+
+// Invites of the caller's families, so a joiner finds the family of the code they used.
+export const myFamilyInvites = spacetimedb.view(
+	{ name: "my_family_invites", public: true },
+	t.array(familyInvite.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.familyInvite, (m, i) =>
+				m.familyId.eq(i.familyId),
+			),
+);
+
+// The push tokens that name the caller as their ingest identity. Empty for family members.
+export const myPushTokens = spacetimedb.view(
+	{ name: "my_push_tokens", public: true },
+	t.array(t.object("PushToken", { familyId: t.u64(), tokenHash: t.string() })),
+	(ctx) =>
+		[...ctx.db.familyPushToken.ingest.filter(ctx.sender)].map(
+			({ familyId, tokenHash }) => ({ familyId, tokenHash }),
+		),
 );
