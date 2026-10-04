@@ -35,6 +35,7 @@ import {
 
 // Import all reducer arg schemas
 import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
+import AddCareInstructionReducer from "./add_care_instruction_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
@@ -46,9 +47,12 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import SaveCareProfileReducer from "./save_care_profile_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
+import SetCareGrantReducer from "./set_care_grant_reducer";
 import UpdateReportReducer from "./update_report_reducer";
+import VerifyCareInstructionReducer from "./verify_care_instruction_reducer";
 
 // Import all procedure arg schemas
 
@@ -57,6 +61,9 @@ import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
+import MyCareGrantsRow from "./my_care_grants_table";
+import MyCareInstructionsRow from "./my_care_instructions_table";
+import MyCareProfilesRow from "./my_care_profiles_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
@@ -96,6 +103,27 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAlertsRow),
+  myCareGrants: __table({
+    name: 'my_care_grants',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCareGrantsRow),
+  myCareInstructions: __table({
+    name: 'my_care_instructions',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCareInstructionsRow),
+  myCareProfiles: __table({
+    name: 'my_care_profiles',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCareProfilesRow),
   myFamilies: __table({
     name: 'my_families',
     indexes: [
@@ -143,6 +171,7 @@ const tablesSchema = __schema({
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("acknowledge_alert", AcknowledgeAlertReducer),
+  __reducerSchema("add_care_instruction", AddCareInstructionReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
@@ -154,9 +183,12 @@ const reducersSchema = __reducers(
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("save_care_profile", SaveCareProfileReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
+  __reducerSchema("set_care_grant", SetCareGrantReducer),
   __reducerSchema("update_report", UpdateReportReducer),
+  __reducerSchema("verify_care_instruction", VerifyCareInstructionReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

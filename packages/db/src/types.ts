@@ -58,6 +58,43 @@ export const AlertThreshold = __t.object("AlertThreshold", {
 });
 export type AlertThreshold = __Infer<typeof AlertThreshold>;
 
+export const CareGrantEvent = __t.object("CareGrantEvent", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  member: __t.identity(),
+  scope: __t.string(),
+  granted: __t.bool(),
+  changedBy: __t.identity(),
+  changedAt: __t.timestamp(),
+});
+export type CareGrantEvent = __Infer<typeof CareGrantEvent>;
+
+export const CareInstruction = __t.object("CareInstruction", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  kind: __t.string(),
+  name: __t.string(),
+  instruction: __t.string(),
+  times: __t.array(__t.string()),
+  reason: __t.option(__t.string()),
+  source: __t.string(),
+  effectiveDate: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+  verifiedBy: __t.option(__t.identity()),
+  verifiedAt: __t.option(__t.timestamp()),
+});
+export type CareInstruction = __Infer<typeof CareInstruction>;
+
+export const CareProfileVersion = __t.object("CareProfileVersion", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  profile: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+});
+export type CareProfileVersion = __Infer<typeof CareProfileVersion>;
+
 // The tagged union or sum type for the algebraic type `DeliveryStatus`.
 export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Queued: __t.unit(),
@@ -130,6 +167,15 @@ export type MyAlertThresholds = __Infer<typeof MyAlertThresholds>;
 
 export const MyAlerts = __t.object("MyAlerts", {});
 export type MyAlerts = __Infer<typeof MyAlerts>;
+
+export const MyCareGrants = __t.object("MyCareGrants", {});
+export type MyCareGrants = __Infer<typeof MyCareGrants>;
+
+export const MyCareInstructions = __t.object("MyCareInstructions", {});
+export type MyCareInstructions = __Infer<typeof MyCareInstructions>;
+
+export const MyCareProfiles = __t.object("MyCareProfiles", {});
+export type MyCareProfiles = __Infer<typeof MyCareProfiles>;
 
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;

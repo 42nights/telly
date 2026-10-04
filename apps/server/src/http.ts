@@ -78,7 +78,7 @@ export const decodeBody = async <T>(
 /**
  * Runs one reducer call through `callDb`: at most 5 s, and it fails at once when the connection
  * drops. Use it as `callReducer(c.var.db, (db) => db.reducers.createFamily({ name }))`. The
- * database's membership rejection becomes `forbidden`; its other refusals are validation messages
+ * database's membership or care-grant rejection becomes `forbidden`; its other refusals are validation messages
  * written by the module, so they become `invalid_request`. An outage stays `DbUnavailable`, which
  * `app.onError` answers as `503 unavailable`.
  */
@@ -91,7 +91,8 @@ export const callReducer = async (
 	} catch (error) {
 		if (error instanceof DbRejected)
 			throw new ApiFailure(
-				error.reason === "not a member of this family"
+				error.reason === "not a member of this family" ||
+					error.reason.startsWith("no care access:")
 					? "forbidden"
 					: "invalid_request",
 				error.reason,
