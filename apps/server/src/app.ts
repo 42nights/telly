@@ -11,15 +11,20 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "./http";
+import { elevenLabsVoice } from "./integrations/elevenlabs";
 import { noopConnection } from "./integrations/noop";
 import { type NoopIngest, noopIngestRoute } from "./integrations/noop-ingest";
+import { alertRoutes } from "./routes/alerts";
 import { accountRoutes, familyRoutes } from "./routes/families";
+import { voiceRoutes } from "./routes/voice";
 
 export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes());
+		.route("/", familyRoutes())
+		.route("/", alertRoutes())
+		.route("/", voiceRoutes(elevenLabsVoice(config.voice)));
 
 	const app = new Hono()
 		.use(logger())
@@ -27,7 +32,7 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 			"/*",
 			cors({
 				origin: config.corsOrigin,
-				allowMethods: ["GET", "POST", "OPTIONS"],
+				allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 			}),
 		)
 		.get("/health", (c) =>

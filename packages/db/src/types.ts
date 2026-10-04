@@ -29,6 +29,44 @@ export const Alert = __t.object("Alert", {
 });
 export type Alert = __Infer<typeof Alert>;
 
+export const AlertDelivery = __t.object("AlertDelivery", {
+  alertId: __t.u64(),
+  familyId: __t.u64(),
+  summary: __t.string(),
+  get status() {
+    return DeliveryStatus;
+  },
+  attempts: __t.u32(),
+  notBefore: __t.timestamp(),
+  lastError: __t.option(__t.string()),
+  updatedAt: __t.timestamp(),
+});
+export type AlertDelivery = __Infer<typeof AlertDelivery>;
+
+export const AlertThreshold = __t.object("AlertThreshold", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  metric: __t.string(),
+  get direction() {
+    return ThresholdDirection;
+  },
+  limit: __t.f64(),
+  unit: __t.string(),
+  maxAgeSeconds: __t.u32(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type AlertThreshold = __Infer<typeof AlertThreshold>;
+
+// The tagged union or sum type for the algebraic type `DeliveryStatus`.
+export const DeliveryStatus = __t.enum("DeliveryStatus", {
+  Queued: __t.unit(),
+  Sent: __t.unit(),
+  Failed: __t.unit(),
+  Unavailable: __t.unit(),
+});
+export type DeliveryStatus = __Infer<typeof DeliveryStatus>;
+
 export const Family = __t.object("Family", {
   id: __t.u64(),
   name: __t.string(),
@@ -73,6 +111,12 @@ export type Message = __Infer<typeof Message>;
 export const MyAcknowledgements = __t.object("MyAcknowledgements", {});
 export type MyAcknowledgements = __Infer<typeof MyAcknowledgements>;
 
+export const MyAlertDeliveries = __t.object("MyAlertDeliveries", {});
+export type MyAlertDeliveries = __Infer<typeof MyAlertDeliveries>;
+
+export const MyAlertThresholds = __t.object("MyAlertThresholds", {});
+export type MyAlertThresholds = __Infer<typeof MyAlertThresholds>;
+
 export const MyAlerts = __t.object("MyAlerts", {});
 export type MyAlerts = __Infer<typeof MyAlerts>;
 
@@ -85,10 +129,44 @@ export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
 
+export const Operator = __t.object("Operator", {
+  identity: __t.identity(),
+});
+export type Operator = __Infer<typeof Operator>;
+
+export const PendingAlertDeliveries = __t.object("PendingAlertDeliveries", {});
+export type PendingAlertDeliveries = __Infer<typeof PendingAlertDeliveries>;
+
+export const PendingDelivery = __t.object("PendingDelivery", {
+  alertId: __t.u64(),
+  familyId: __t.u64(),
+  summary: __t.string(),
+  get status() {
+    return DeliveryStatus;
+  },
+  attempts: __t.u32(),
+  notBefore: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {
   Validated: __t.unit(),
   Unvalidated: __t.unit(),
 });
 export type SampleQuality = __Infer<typeof SampleQuality>;
+
+// The tagged union or sum type for the algebraic type `ThresholdDirection`.
+export const ThresholdDirection = __t.enum("ThresholdDirection", {
+  Above: __t.unit(),
+  Below: __t.unit(),
+});
+export type ThresholdDirection = __Infer<typeof ThresholdDirection>;
+
+export const ThresholdTrigger = __t.object("ThresholdTrigger", {
+  key: __t.string(),
+  alertId: __t.u64(),
+});
+export type ThresholdTrigger = __Infer<typeof ThresholdTrigger>;
 

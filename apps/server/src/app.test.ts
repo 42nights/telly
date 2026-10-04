@@ -6,7 +6,16 @@ import { createApp } from "./app";
 import type { NoopSample } from "./integrations/noop-ingest";
 
 // Sign-in is not configured, as in a fresh checkout.
-const app = createApp({ corsOrigin: "http://localhost:3001", auth: undefined });
+const config = {
+	corsOrigin: "http://localhost:3001",
+	auth: undefined,
+	voice: {
+		apiKey: undefined,
+		voiceId: "unused",
+		baseUrl: "http://127.0.0.1:1",
+	},
+};
+const app = createApp(config);
 
 // Excess keys fail decoding, so a reading or nudge added to a source cannot slip through unseen.
 const strict = { onExcessProperty: "error" } as const;
@@ -35,15 +44,12 @@ describe("server boundaries", () => {
 
 	test("NOOP ingest records only an authorised, well-formed relay batch", async () => {
 		const recorded: NoopSample[][] = [];
-		const ingest = createApp(
-			{ corsOrigin: "http://localhost:3001", auth: undefined },
-			{
-				key: "relay-key",
-				record: async (samples) => {
-					recorded.push([...samples]);
-				},
+		const ingest = createApp(config, {
+			key: "relay-key",
+			record: async (samples) => {
+				recorded.push([...samples]);
 			},
-		);
+		});
 		const minute = 1_789_999_980;
 		const day = Date.parse("2026-10-03T00:00:00Z");
 		const batch = deflateRawSync(

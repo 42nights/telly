@@ -1,11 +1,14 @@
 import { NodeRuntime } from "@effect/platform-node";
 import { type ServerType, serve } from "@hono/node-server";
 import { Effect, Layer } from "effect";
+import { alertOutboxWorker } from "./alerts/outbox";
 import { createApp } from "./app";
-import { type NoopConfig, type ServerConfig, serverConfig } from "./config";
+import { type NoopConfig, serverConfig } from "./config";
 import { openFamilyDb } from "./db";
 import { ENV } from "./env.server";
 import { type NoopIngest, recordNoopSamples } from "./integrations/noop-ingest";
+
+const config = serverConfig(ENV);
 
 const noopIngest = (noop: NoopConfig | undefined) =>
 	noop === undefined
@@ -15,11 +18,7 @@ const noopIngest = (noop: NoopConfig | undefined) =>
 				record: recordNoopSamples(db, noop.familyId),
 			}));
 
-const listen = (
-	port: number,
-	config: ServerConfig,
-	ingest: NoopIngest | undefined,
-) =>
+const listen = (port: number, ingest: NoopIngest | undefined) =>
 	Effect.callback<ServerType, Error>((resume) => {
 		const app = createApp(config, ingest);
 		const server = serve({ fetch: app.fetch, hostname: ENV.HOST, port }, () =>
@@ -36,11 +35,24 @@ const close = (server: ServerType) =>
 // The server is a scoped resource: SIGINT/SIGTERM interrupt the layer, which closes the listener.
 const HttpServer = Layer.effectDiscard(
 	Effect.gen(function* () {
-		const config = serverConfig(ENV);
 		const ingest = yield* noopIngest(config.noop);
-		yield* Effect.acquireRelease(listen(ENV.PORT, config, ingest), close);
+		yield* Effect.acquireRelease(listen(ENV.PORT, ingest), close);
 		yield* Effect.log(`server listening on http://${ENV.HOST}:${ENV.PORT}`);
 	}),
 );
 
-NodeRuntime.runMain(Layer.launch(HttpServer));
+const db = config.auth?.db;
+// ponytail: no family delivery transport exists yet, so every delivery becomes `unavailable`.
+// Pass the Grokbot family transport here when it lands (issue #11).
+const AlertOutbox = Layer.effectDiscard(
+	Effect.forkScoped(
+		alertOutboxWorker(
+			ENV.ALERT_OPERATOR_TOKEN && db
+				? { ...db, token: ENV.ALERT_OPERATOR_TOKEN }
+				: undefined,
+			undefined,
+		),
+	),
+);
+
+NodeRuntime.runMain(Layer.launch(Layer.mergeAll(HttpServer, AlertOutbox)));

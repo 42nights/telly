@@ -36,19 +36,28 @@ import {
 // Import all reducer arg schemas
 import AcknowledgeAlertReducer from "./acknowledge_alert_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
+import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
+import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
+import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
+import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
+import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import SendMessageReducer from "./send_message_reducer";
+import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import MyAcknowledgementsRow from "./my_acknowledgements_table";
+import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
+import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
 import MyFamiliesRow from "./my_families_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
 import MyMessagesRow from "./my_messages_table";
+import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -61,6 +70,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAcknowledgementsRow),
+  myAlertDeliveries: __table({
+    name: 'my_alert_deliveries',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAlertDeliveriesRow),
+  myAlertThresholds: __table({
+    name: 'my_alert_thresholds',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAlertThresholdsRow),
   myAlerts: __table({
     name: 'my_alerts',
     indexes: [
@@ -89,16 +112,29 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessagesRow),
+  pendingAlertDeliveries: __table({
+    name: 'pending_alert_deliveries',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, PendingAlertDeliveriesRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("acknowledge_alert", AcknowledgeAlertReducer),
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
+  __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
   __reducerSchema("create_family", CreateFamilyReducer),
+  __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
+  __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
+  __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
+  __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("send_message", SendMessageReducer),
+  __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

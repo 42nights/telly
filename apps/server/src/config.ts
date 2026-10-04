@@ -1,5 +1,6 @@
 import type { AuthConfig } from "./auth";
 import type { DbConfig } from "./db";
+import type { ElevenLabsConfig } from "./integrations/elevenlabs";
 
 export type NoopConfig = {
 	readonly key: string;
@@ -11,6 +12,8 @@ export type ServerConfig = {
 	readonly corsOrigin: string;
 	/** Undefined when sign-in is not configured: protected routes then answer `unavailable`. */
 	readonly auth: AuthConfig | undefined;
+	/** Without `apiKey`, voice routes answer `unavailable`. */
+	readonly voice: ElevenLabsConfig;
 	readonly noop?: NoopConfig | undefined;
 };
 
@@ -20,6 +23,9 @@ type Env = {
 	readonly OIDC_AUDIENCE?: string | undefined;
 	readonly SPACETIMEDB_URI?: string | undefined;
 	readonly SPACETIMEDB_DATABASE?: string | undefined;
+	readonly ELEVENLABS_API_KEY?: string | undefined;
+	readonly ELEVENLABS_VOICE_ID: string;
+	readonly ELEVENLABS_API_URL: string;
 	readonly NOOP_INGEST_KEY?: string | undefined;
 	readonly NOOP_FAMILY_ID?: string | undefined;
 	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
@@ -71,5 +77,10 @@ export const serverConfig = (env: Env): ServerConfig => {
 	);
 	if ((uri || database) && !auth && !noop)
 		throw new Error(`Set all of ${SIGN_IN}, or none`);
-	return { corsOrigin: env.CORS_ORIGIN, auth, noop };
+	const voice = {
+		apiKey: env.ELEVENLABS_API_KEY,
+		voiceId: env.ELEVENLABS_VOICE_ID,
+		baseUrl: env.ELEVENLABS_API_URL,
+	};
+	return { corsOrigin: env.CORS_ORIGIN, auth, voice, noop };
 };
