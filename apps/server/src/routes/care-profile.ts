@@ -74,7 +74,8 @@ const readAccess = (c: Ctx): CareAccess => {
 	};
 };
 
-const requireScope = (c: Ctx, scope: CareScope) => {
+/** Answers `forbidden` unless the caller holds `scope` in this family now. Other features reuse it. */
+export const requireScope = (c: Ctx, scope: CareScope) => {
 	if (!readAccess(c).mine.includes(scope))
 		throw new ApiFailure(
 			"forbidden",

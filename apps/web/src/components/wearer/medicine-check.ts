@@ -52,7 +52,7 @@ type Frame = {
 };
 
 /** Encodes the video's current frame as JPEG, scaled down until it fits the vision limit. */
-const capture = (video: HTMLVideoElement): Frame | null => {
+export const capture = (video: HTMLVideoElement): Frame | null => {
 	const width = video.videoWidth;
 	const height = video.videoHeight;
 	const canvas = document.createElement("canvas");

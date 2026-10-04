@@ -236,6 +236,23 @@ const finchnodeLink = table(
 	},
 );
 
+// One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
+// report, or caregiver help. The photo itself is never stored. The server validates `fact` against
+// `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
+// Meal facts are health records (#26 `health_records`); photo facts also need `media`.
+const mealFact = table(
+	{ name: "meal_fact" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The client's id for one meal occasion; it groups the meal's facts.
+		mealId: t.string(),
+		fact: t.string(),
+		recordedBy: t.identity(),
+		recordedAt: t.timestamp(),
+	},
+);
+
 // The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
 // the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
 const NeedKind = t.enum("NeedKind", {
@@ -451,6 +468,41 @@ const careGrantEvent = table(
 	},
 );
 
+// An activity the family agreed with the wearer, from a named source such as a physiotherapist's
+// handout (#41). The app never writes exercise steps and never picks one from a health reading.
+// Only a verified plan is offered to the wearer; a plan never changes after it is created.
+const exercisePlan = table(
+	{ name: "exercise_plan" },
+	{
+		// Chosen by the server, so it knows which plan it created.
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		// JSON that the server validates against the `@health/contracts/exercise` schemas.
+		plan: t.string(),
+		createdBy: t.identity(),
+		createdAt: t.timestamp(),
+		verifiedBy: t.option(t.identity()),
+		verifiedAt: t.option(t.timestamp()),
+	},
+);
+
+// One wearer answer or control in one exercise session. Ids are chosen by the client, so an event
+// sent again after a lost reply is stored once.
+const exerciseEvent = table(
+	{ name: "exercise_event" },
+	{
+		id: t.string().primaryKey(),
+		familyId: t.u64().index("btree"),
+		planId: t.string(),
+		sessionId: t.string().index("btree"),
+		kind: t.string(),
+		// Why a `stopped` session stopped; empty for every other kind.
+		reason: t.option(t.string()),
+		actor: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -468,9 +520,12 @@ const spacetimedb = schema({
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	mealFact,
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	exercisePlan,
+	exerciseEvent,
 });
 export default spacetimedb;
 
@@ -1161,6 +1216,43 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+// Whether a fact comes from a photo: the photo was taken, or an estimate was made from it.
+const fromPhoto = (fact: string) => {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(fact);
+	} catch {
+		throw new SenderError("fact must be JSON");
+	}
+	if (typeof parsed !== "object" || parsed === null || !("type" in parsed))
+		throw new SenderError("fact must have a type");
+	if (parsed.type === "photo_taken") return true;
+	return (
+		parsed.type === "food_estimate" &&
+		"estimate" in parsed &&
+		typeof parsed.estimate === "object" &&
+		parsed.estimate !== null &&
+		"source" in parsed.estimate &&
+		parsed.estimate.source === "photo"
+	);
+};
+
+export const recordMealFact = spacetimedb.reducer(
+	{ familyId: t.u64(), mealId: t.string(), fact: t.string() },
+	(ctx, recorded) => {
+		requireCareScope(ctx, recorded.familyId, "health_records");
+		requireText("mealId", recorded.mealId);
+		if (fromPhoto(recorded.fact))
+			requireCareScope(ctx, recorded.familyId, "media");
+		ctx.db.mealFact.insert({
+			...recorded,
+			id: 0n,
+			recordedBy: ctx.sender,
+			recordedAt: ctx.timestamp,
+		});
+	},
+);
+
 const MAX_CONTACTS = 5;
 
 export const setContactLadder = spacetimedb.reducer(
@@ -1502,6 +1594,111 @@ export const setCareGrant = spacetimedb.reducer(
 	},
 );
 
+const requireExercisePlan = (ctx: Ctx, id: string) => {
+	const found = ctx.db.exercisePlan.id.find(id);
+	// A missing plan fails like another family's plan, so ids reveal nothing.
+	if (found === null) throw new SenderError("not a member of this family");
+	requireMember(ctx, found.familyId);
+	return found;
+};
+
+export const createExercisePlan = spacetimedb.reducer(
+	{ id: t.string(), familyId: t.u64(), plan: t.string() },
+	(ctx, created) => {
+		requireMember(ctx, created.familyId);
+		requireText("id", created.id);
+		requireText("plan", created.plan);
+		if (ctx.db.exercisePlan.id.find(created.id) !== null)
+			throw new SenderError("exercise plan id already exists");
+		ctx.db.exercisePlan.insert({
+			...created,
+			createdBy: ctx.sender,
+			createdAt: ctx.timestamp,
+			verifiedBy: undefined,
+			verifiedAt: undefined,
+		});
+	},
+);
+
+// A member confirms the plan matches its source. Verifying again keeps the first verification.
+export const verifyExercisePlan = spacetimedb.reducer(
+	{ id: t.string() },
+	(ctx, { id }) => {
+		const found = requireExercisePlan(ctx, id);
+		if (found.verifiedAt !== undefined) return;
+		ctx.db.exercisePlan.id.update({
+			...found,
+			verifiedBy: ctx.sender,
+			verifiedAt: ctx.timestamp,
+		});
+	},
+);
+
+// The wearer's answer opens a session: `declined` or `started`. Only a started session takes
+// controls, and `stopped` or `completed` ends it. No answer records nothing, so silence is never a
+// completed exercise.
+const exerciseControls = ["paused", "resumed", "repeated", "slowed", "help"];
+const exerciseEnds = ["stopped", "completed"];
+const stopReasons = ["wearer", "pain", "dizziness", "distress"];
+
+export const recordExerciseEvent = spacetimedb.reducer(
+	{
+		id: t.string(),
+		planId: t.string(),
+		sessionId: t.string(),
+		kind: t.string(),
+		reason: t.option(t.string()),
+	},
+	(ctx, event) => {
+		const plan = requireExercisePlan(ctx, event.planId);
+		requireText("id", event.id);
+		requireText("sessionId", event.sessionId);
+		const resent = ctx.db.exerciseEvent.id.find(event.id);
+		if (resent !== null) {
+			if (
+				resent.planId !== event.planId ||
+				resent.sessionId !== event.sessionId ||
+				resent.kind !== event.kind ||
+				resent.reason !== event.reason
+			)
+				throw new SenderError("id is already used for another event");
+			return;
+		}
+		if (plan.verifiedAt === undefined)
+			throw new SenderError("the exercise plan is not verified");
+		const stopped = event.kind === "stopped";
+		if (
+			stopped !== (event.reason !== undefined) ||
+			(stopped && !stopReasons.includes(event.reason ?? ""))
+		)
+			throw new SenderError(
+				"only a stop has a reason: wearer, pain, dizziness, or distress",
+			);
+		const earlier = [...ctx.db.exerciseEvent.sessionId.filter(event.sessionId)];
+		if (earlier.some((e) => e.planId !== event.planId))
+			throw new SenderError("the session belongs to another plan");
+		const opened = earlier.some((e) => e.kind === "started");
+		const ended = earlier.some(
+			(e) => e.kind === "declined" || exerciseEnds.includes(e.kind),
+		);
+		const allowed =
+			event.kind === "declined" || event.kind === "started"
+				? earlier.length === 0
+				: [...exerciseControls, ...exerciseEnds].includes(event.kind) &&
+					opened &&
+					!ended;
+		if (!allowed)
+			throw new SenderError(`${event.kind} is not allowed in this session now`);
+		ctx.db.exerciseEvent.insert({
+			...event,
+			reason: event.reason,
+			familyId: plan.familyId,
+			actor: ctx.sender,
+			at: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1627,6 +1824,14 @@ export const myFinchnodeLinks = spacetimedb.view(
 			),
 );
 
+// Only for families where the caller holds `health_records` now (#26).
+export const myMealFacts = spacetimedb.view(
+	{ name: "my_meal_facts", public: true },
+	t.array(mealFact.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => ctx.db.mealFact.familyId.filter(familyId)),
+);
+
 export const myContactLadders = spacetimedb.view(
 	{ name: "my_contact_ladders", public: true },
 	t.array(contactLadder.rowType),
@@ -1699,5 +1904,27 @@ export const myCareGrants = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.careGrantEvent, (m, g) =>
 				m.familyId.eq(g.familyId),
+			),
+);
+
+export const myExercisePlans = spacetimedb.view(
+	{ name: "my_exercise_plans", public: true },
+	t.array(exercisePlan.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.exercisePlan, (m, p) =>
+				m.familyId.eq(p.familyId),
+			),
+);
+
+export const myExerciseEvents = spacetimedb.view(
+	{ name: "my_exercise_events", public: true },
+	t.array(exerciseEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.exerciseEvent, (m, e) =>
+				m.familyId.eq(e.familyId),
 			),
 );
