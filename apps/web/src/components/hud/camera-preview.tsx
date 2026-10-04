@@ -1,0 +1,135 @@
+import { Button } from "@health/ui/components/button";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@health/ui/components/empty";
+import { Camera, CameraOff, ScanSearch } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { type CameraFailure, type CameraState, openCamera } from "./camera";
+
+type Idle = "off" | "starting" | "lost" | CameraFailure;
+
+/** What the camera region says when no live video shows. `problem` marks a failure to announce. */
+const idleText: Record<
+	Idle,
+	{ title: string; description: string; problem: boolean }
+> = {
+	off: {
+		title: "Camera is off",
+		description:
+			"Use this device's camera to see the scene. Glasses are not needed.",
+		problem: false,
+	},
+	starting: {
+		title: "Waiting for camera permission…",
+		description: "Allow camera access in the browser prompt.",
+		problem: false,
+	},
+	lost: {
+		title: "Camera stopped",
+		description:
+			"The browser ended the camera feed. The camera may be disconnected or its permission removed.",
+		problem: true,
+	},
+	denied: {
+		title: "Camera permission denied",
+		description:
+			"Allow camera access for this site in the browser settings, then try again.",
+		problem: true,
+	},
+	"no-camera": {
+		title: "No camera found",
+		description: "Connect a camera or open the HUD on a phone, then try again.",
+		problem: true,
+	},
+	busy: {
+		title: "Camera could not start",
+		description:
+			"Another app may be using the camera. Close it, then try again.",
+		problem: true,
+	},
+	unsupported: {
+		title: "Camera unavailable in this browser",
+		description:
+			"The browser allows the camera only on HTTPS or localhost. Open the HUD on a secure address.",
+		problem: true,
+	},
+	error: {
+		title: "Camera failed to start",
+		description: "Try again. If it fails again, reload the page.",
+		problem: true,
+	},
+};
+
+/** HUD region 3: the live camera scene that object markers will draw on. */
+export function CameraPreview() {
+	const [state, setState] = useState<CameraState>({ kind: "off" });
+	// 0 = camera off; each start or retry increments it, so the effect reopens the camera.
+	const [session, setSession] = useState(0);
+
+	// Cleanup stops every track on stop, retry, route exit, and unmount.
+	useEffect(
+		() =>
+			session === 0 ? undefined : openCamera(navigator.mediaDevices, setState),
+		[session],
+	);
+
+	if (state.kind === "live")
+		return (
+			<>
+				<video
+					aria-label="Live camera preview"
+					autoPlay
+					className="absolute inset-0 size-full object-cover"
+					muted
+					playsInline
+					ref={(video) => {
+						if (video) video.srcObject = state.stream;
+					}}
+				/>
+				<div className="absolute inset-x-2 bottom-2 flex flex-wrap items-end justify-between gap-2">
+					<p className="win95-raised flex items-center gap-1.5 px-2 py-1 text-sm">
+						<ScanSearch aria-hidden className="size-4" />
+						Medicine markers are not available yet
+					</p>
+					<Button
+						onClick={() => {
+							setSession(0);
+							setState({ kind: "off" });
+						}}
+					>
+						<CameraOff aria-hidden />
+						Stop camera
+					</Button>
+				</div>
+			</>
+		);
+
+	const text = idleText[state.kind === "failed" ? state.reason : state.kind];
+	return (
+		<Empty className="absolute inset-0 overflow-y-auto">
+			<EmptyHeader>
+				<EmptyMedia variant="icon">
+					{text.problem ? <CameraOff /> : <Camera />}
+				</EmptyMedia>
+				<EmptyTitle className="text-base">{text.title}</EmptyTitle>
+				<EmptyDescription role={text.problem ? "alert" : undefined}>
+					{text.description}
+				</EmptyDescription>
+			</EmptyHeader>
+			{state.kind !== "starting" && (
+				<EmptyContent>
+					<Button onClick={() => setSession((n) => n + 1)}>
+						<Camera aria-hidden />
+						{state.kind === "off" ? "Start camera" : "Try again"}
+					</Button>
+				</EmptyContent>
+			)}
+		</Empty>
+	);
+}
