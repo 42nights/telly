@@ -52,6 +52,7 @@ import CreateReportReducer from "./create_report_reducer";
 import DeleteFamilyReducer from "./delete_family_reducer";
 import DeleteMedicineArPinReducer from "./delete_medicine_ar_pin_reducer";
 import DeleteReminderReducer from "./delete_reminder_reducer";
+import ForgetMedicineSightingReducer from "./forget_medicine_sighting_reducer";
 import JoinFamilyByInviteReducer from "./join_family_by_invite_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
@@ -450,6 +451,7 @@ const reducersSchema = __reducers(
   __reducerSchema("delete_family", DeleteFamilyReducer),
   __reducerSchema("delete_medicine_ar_pin", DeleteMedicineArPinReducer),
   __reducerSchema("delete_reminder", DeleteReminderReducer),
+  __reducerSchema("forget_medicine_sighting", ForgetMedicineSightingReducer),
   __reducerSchema("join_family_by_invite", JoinFamilyByInviteReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),

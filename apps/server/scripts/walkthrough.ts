@@ -352,13 +352,7 @@ try {
 	);
 
 	// Find the container. The sighting is a synthetic fixture: no camera check ran.
-	await call(
-		"rosa",
-		"POST",
-		`${f}/vision/medicine-detections`,
-		{},
-		unavailable,
-	);
+	await call("rosa", "POST", `${f}/vision/object-detections`, {}, unavailable);
 	await call("rosa", "PUT", `${f}/medicine-memory`, {
 		enabled: true,
 		places: ["kitchen counter", "bedside table"],

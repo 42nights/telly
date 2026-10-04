@@ -75,7 +75,7 @@ Each section says how Telly uses the provider, where the code and keys are, and 
 
 ```mermaid
 flowchart LR
-    cam["Camera frame<br/>crop · rotation"] -->|"POST …/vision/medicine-detections"| api["Telly API"]
+    cam["Camera frame<br/>crop · rotation"] -->|"POST …/vision/object-detections"| api["Telly API"]
     q["Family question"] -->|"POST …/ask"| api
     meal["Meal photo"] -->|"…/meals"| api
     api -->|"store: false"| gem["Gemini<br/>gemini-3.8-flash"]
@@ -85,7 +85,7 @@ flowchart LR
     out --> app["App draws the marker<br/>or shows the answer"]
 ```
 
-- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. Vision has 30 s: `gemini-3.8-flash` gets the first 12 s, and when it answers 429 or 503 or is slower, `gemini-3.5-flash` gets the rest. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
+- **Use:** names the main personal object in one camera frame, such as keys, glasses, or a medicine box (`POST …/vision/object-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. Vision has 30 s: `gemini-3.8-flash` gets the first 12 s, and when it answers 429 or 503 or is slower, `gemini-3.5-flash` gets the rest. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
 - **Code:** `apps/server/src/integrations/gemini.ts`, `gemini-chat.ts`, `gemini-meal.ts`. **Key:** `GEMINI_API_KEY`.
 - **Used at:** the question box on [Home](https://app.saintess.tech/), [Chat](https://app.saintess.tech/chat), [Medicine](https://app.saintess.tech/medicine), and [Meal](https://app.saintess.tech/meal).
 - **Proof:** on production, 2026-10-04 09:33 UTC, **Meal** → "Rice, dal, and a glass of milk" → **Estimate** returned three items with portions and kcal (`gemini-3.8-flash`). At 12:07 UTC, a typed question answered 200 in 6.6 s with the newest WHOOP heart rate, and a medicine check answered 200 in 2.9 s ([#187 comment](https://github.com/undeemed/telly/issues/187#issuecomment-5979753457)). Earlier checks: [#174](https://github.com/undeemed/telly/pull/174), [#180](https://github.com/undeemed/telly/pull/180).
@@ -441,7 +441,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 | Account and family | `GET /api/me`, `GET`/`POST /api/families`, `POST /api/invites/:code/join`, `GET /`, `POST /members`, `POST /invites`, `POST /whoop-token`, `POST /samples` |
 | Alerts | `/alerts`, `/alerts/:id/acknowledgements`, `/alert-thresholds`, `/monitoring` |
 | Questions, voice, chat | `/ask`, `/ask/voice`, `/voice/transcriptions`, `/voice/speech`, `/messages`, `/tools` ([docs/ask.md](docs/ask.md), [docs/chat.md](docs/chat.md)) |
-| Medicine and meals | `/vision/medicine-detections`, `/medicine-memory`, `/meals`, `/cooking/…`, `/delivery/…` |
+| Things, medicine, and meals | `/vision/object-detections`, `/medicine-memory`, `/meals`, `/cooking/…`, `/delivery/…` |
 | Care | `/care/ladder`, `/care/needs`, `/care-profile`, `/care-instructions`, `/care-access`, `/emergency`, `/emergency/check-in` |
 | Reminders | `/reminders`, `/reminder-settings`, `/reminder-occurrences/…`, `/speaker…` |
 | Health data | `/cues`, `/trends`, `/finchnode/…`, `/healthkit/samples`, `/exercise/…` |

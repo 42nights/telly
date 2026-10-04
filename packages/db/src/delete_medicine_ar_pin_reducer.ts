@@ -12,5 +12,5 @@ import {
 
 export default {
   familyId: __t.u64(),
-  containerId: __t.u64(),
+  objectId: __t.u64(),
 };

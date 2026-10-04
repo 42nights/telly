@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { SettingsForm } from "@/components/settings/settings-form";
 
-// Settings › Phone numbers. The other tabs: Home speaker, Medicine places, Report email, This device,
+// Settings › Phone numbers. The other tabs: Home speaker, Saved things, Report email, This device,
 // Family.
 export const Route = createFileRoute("/settings")({
 	component: () => (
