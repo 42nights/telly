@@ -15,16 +15,20 @@ import { useMeal } from "@/components/meal/use-meal";
 import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/meal")({
-	component: MealsComponent,
+	component: MealRoute,
 });
+
+/** Keyed by the selected person, so one person's photo, estimate, or report never shows for another. */
+function MealRoute() {
+	const familyId = useFamily().family?.id ?? null;
+	return <MealScreen familyId={familyId} key={familyId ?? "none"} />;
+}
 
 /**
  * A meal: a photo or a description gives an estimate of the food served, which the wearer can
  * correct. How much was eaten is a separate answer; the photo and the estimate never decide it.
  */
-function MealsComponent() {
-	const { family } = useFamily();
-	const familyId = family?.id ?? null;
+function MealScreen({ familyId }: { familyId: string | null }) {
 	const camera = useCamera(false);
 	const video = useRef<HTMLVideoElement | null>(null);
 	const meal = useMeal(familyId);
