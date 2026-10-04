@@ -12,7 +12,7 @@ const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 const DETECT = "POST /api/families/fam-1/vision/object-detections";
 
 // A fake camera: one stream, frames painted at once, and a canvas that encodes a tiny JPEG.
-// The motion sampler asks for a readable context; none is given, so markers clear only by age.
+// The tracker asks for a readable context; none is given, so the lock-on waits at "Locking on…".
 function installCamera() {
 	Object.defineProperty(navigator, "mediaDevices", {
 		configurable: true,
@@ -118,7 +118,10 @@ test("names the asked thing first, Not this moves on, and Save keeps it at the n
 	expect((await screen.findByText(/Looks like:/)).textContent).toBe(
 		"Looks like: your keys",
 	);
-	expect(screen.getByAltText("Camera frame that was checked")).toBeTruthy();
+	// Found, the live video stays and the box locks on to it; no still picture covers it.
+	expect(screen.getByText("Locking on…")).toBeTruthy();
+	expect(screen.queryByAltText("Camera frame that was checked")).toBeNull();
+	expect(screen.getByLabelText("Live camera preview")).toBeTruthy();
 	const sent = calls.filter((c) => `${c.method} ${c.path}` === DETECT);
 	expect(sent).toHaveLength(1);
 	expect(sent[0]?.body).toMatchObject({

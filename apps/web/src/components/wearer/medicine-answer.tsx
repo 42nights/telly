@@ -37,6 +37,7 @@ const looksLike = (best: ObjectDetection) =>
 function Found({
 	check,
 	best,
+	way: liveWay,
 	familyId,
 	live,
 	look,
@@ -44,6 +45,7 @@ function Found({
 }: {
 	check: PictureCheck;
 	best: ObjectDetection;
+	way: string | null;
 	familyId: string | null;
 	live: boolean;
 	look: Look;
@@ -51,7 +53,7 @@ function Found({
 }) {
 	const { speech, say } = useSpeech(familyId);
 	const medicine = best.category === "medicine";
-	const way = direction(best.box, check.frame);
+	const way = liveWay ?? direction(best.box, check.frame);
 	const unsure = best.needsVerification
 		? medicine
 			? "I'm not sure about this one. Look closely at the label."
@@ -143,6 +145,7 @@ function CheckFailed({
 function PictureAnswer({
 	check,
 	best,
+	way,
 	name,
 	familyId,
 	live,
@@ -152,6 +155,7 @@ function PictureAnswer({
 }: {
 	check: PictureCheck;
 	best: ObjectDetection | null;
+	way: string | null;
 	name: ReactNode;
 	familyId: string | null;
 	live: boolean;
@@ -170,25 +174,6 @@ function PictureAnswer({
 				</Button>
 			</>
 		);
-	if (result.kind === "cleared")
-		return (
-			<>
-				<p className="win95-raised flex items-start gap-3 p-4 text-[20px]">
-					<Info aria-hidden className="mt-0.5 size-6 shrink-0" />
-					{result.reason === "moved"
-						? "The camera moved, so I took the marker away."
-						: "That picture is more than a minute old, so I took the marker away."}
-				</p>
-				<Button
-					className={`win95-primary ${xl}`}
-					disabled={!live}
-					onClick={look}
-				>
-					<Camera aria-hidden />
-					Look again
-				</Button>
-			</>
-		);
 	if (result.kind !== "done")
 		return <CheckFailed failure={result} live={live} look={look} />;
 	if (best !== null)
@@ -200,6 +185,7 @@ function PictureAnswer({
 				familyId={familyId}
 				live={live}
 				look={look}
+				way={way}
 			/>
 		);
 	return (
@@ -222,10 +208,14 @@ function PictureAnswer({
 	);
 }
 
-/** The answer column: what the wearer can do for the camera and the current picture check. */
+/**
+ * The answer column: what the wearer can do for the camera and the current picture check. `way`
+ * is the lock-on's live direction to the found object; null uses the checked picture's.
+ */
 export function ObjectAnswer({
 	check,
 	best,
+	way = null,
 	name,
 	familyId,
 	live,
@@ -236,6 +226,7 @@ export function ObjectAnswer({
 }: {
 	check: PictureCheck | null;
 	best: ObjectDetection | null;
+	way?: string | null;
 	name: ReactNode;
 	familyId: string | null;
 	live: boolean;
@@ -278,6 +269,7 @@ export function ObjectAnswer({
 				look={look}
 				name={name}
 				stop={stop}
+				way={way}
 			/>
 			{!live && (
 				<div className="grid gap-2">

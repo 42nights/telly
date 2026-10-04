@@ -1,7 +1,8 @@
+import type { ObjectDetection } from "@health/contracts/vision";
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ScanSearch } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Window } from "@/components/hud/window";
@@ -11,9 +12,14 @@ import {
 	useArSupported,
 } from "@/components/wearer/last-seen";
 import { LinkedFinder } from "@/components/wearer/linked-finder";
+import { LockOn } from "@/components/wearer/lock-on";
 import { categoryOfRequest, itemFromRequest } from "@/components/wearer/logic";
 import { ObjectAnswer } from "@/components/wearer/medicine-answer";
-import { useArrow, usePictureCheck } from "@/components/wearer/medicine-check";
+import {
+	type PictureCheck,
+	useArrow,
+	usePictureCheck,
+} from "@/components/wearer/medicine-check";
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
 import { Tip } from "@/components/win95";
 import { useFamily } from "@/lib/family";
@@ -87,6 +93,10 @@ function FindThingsPage({
 
 	const category = categoryOfRequest(q);
 	const { best, choice, saving } = useArrow(check, category, mode === "add");
+	const live = camera.state.kind === "live";
+	// The lock-on follows one object of one check; its live direction belongs to that pair.
+	const lockKey = `${check?.id}:${choice.skipped}`;
+	const way = useLiveWay(lockKey);
 
 	return (
 		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
@@ -123,7 +133,17 @@ function FindThingsPage({
 								showVideo();
 							}}
 						/>
-						{check !== null && <CheckedPicture best={best} check={check} />}
+						{check !== null && (
+							<OverCamera
+								best={best}
+								check={check}
+								familyId={familyId}
+								key={lockKey}
+								live={live}
+								onWay={way.set}
+								video={video}
+							/>
+						)}
 					</div>
 
 					<div
@@ -135,10 +155,11 @@ function FindThingsPage({
 							check={check}
 							choice={choice}
 							familyId={familyId}
-							live={camera.state.kind === "live"}
+							live={live}
 							look={lookNow}
 							name={<AskedItem q={q} />}
 							startCamera={camera.start}
+							way={way.text}
 							stop={stop}
 						/>
 						{best !== null && saving && check !== null && (
@@ -163,6 +184,39 @@ function FindThingsPage({
 				</div>
 			</Window>
 		</main>
+	);
+}
+
+/** The lock-on's live direction words for `key` (one check and object); null for any other. */
+function useLiveWay(key: string) {
+	const [way, setWay] = useState({ key: "", text: "" });
+	return {
+		text: way.key === key ? way.text : null,
+		set: (text: string) => setWay({ key, text }),
+	};
+}
+
+/**
+ * Over the camera: the checked picture while it is checked or nothing was found, and the live
+ * lock-on once an object was found (#348). With the camera off, the checked picture stays.
+ */
+function OverCamera({
+	check,
+	best,
+	live,
+	...lock
+}: {
+	check: PictureCheck;
+	best: ObjectDetection | null;
+	live: boolean;
+	familyId: string | null;
+	video: RefObject<HTMLVideoElement | null>;
+	onWay: (way: string) => void;
+}) {
+	return live && check.result.kind === "done" && best !== null ? (
+		<LockOn best={best} check={check} {...lock} />
+	) : (
+		<CheckedPicture best={best} check={check} />
 	);
 }
 
