@@ -192,7 +192,7 @@ Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and 
 | --- | --- |
 | Web app | Merged and deployed at <https://telly.jerry-2c0.workers.dev>. Sign-in uses Google; only listed test users can sign in |
 | Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud |
-| Phone app | Expo app with sign-in. An iOS WebView shell ([#95](https://github.com/ayaangazali/telly/pull/95)) is waiting for a decision. No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
+| Phone app | iOS shell: the web app <https://app.saintess.tech> full screen in a WebView, with native Google sign-in. CI builds an unsigned `.ipa` for SideStore (`.github/workflows/health-ios.yml`). No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
 | Providers | See [Providers](#providers): each one lists its live proof and limits |
 | Hospital report delivery | Not available: Finchnode only reads records. An email option is in progress ([#8](https://github.com/ayaangazali/telly/issues/8)) |
 | Meta glasses | Optional; needs hardware ([#18](https://github.com/ayaangazali/telly/issues/18), [#19](https://github.com/ayaangazali/telly/issues/19)) |
@@ -208,7 +208,7 @@ bun install
 bun run dev        # web on http://localhost:3001, server on http://localhost:3000
 ```
 
-Use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native` to start one app. Open the phone app in Expo Go. On a physical phone, set `EXPO_PUBLIC_SERVER_URL` to your computer's LAN address and start the server with `HOST=0.0.0.0`.
+Use `bun run dev:web`, `bun run dev:server`, or `bun run dev:native` to start one app. Open the phone app in Expo Go. The phone app uses <https://app.saintess.tech> and <https://api.saintess.tech> by default. To use your computer, set `EXPO_PUBLIC_WEB_URL` and `EXPO_PUBLIC_SERVER_URL` to its LAN address in `apps/native/.env.local`, and start the server with `HOST=0.0.0.0`.
 
 Each app keeps its environment variables in `.env.schema` (Varlock). Copy the values you need into an ignored `.env` file; without a provider's key, its routes answer `503 unavailable` and the screens say so. After you change a schema, run `bun run env:generate`.
 

@@ -39,7 +39,6 @@ export default function RootLayout() {
 			<GestureHandlerRootView style={styles.container}>
 				<Stack>
 					<Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-					<Stack.Screen name="signin" options={{ headerShown: false }} />
 				</Stack>
 			</GestureHandlerRootView>
 		</ThemeProvider>

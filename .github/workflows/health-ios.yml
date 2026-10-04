@@ -21,6 +21,13 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
+      # The app's server and web app default to production (apps/native/.env.schema). Sign-in uses
+      # the public Google settings of the deployment.
+      - name: Use the production sign-in settings
+        run: |
+          . deploy/cloudflare/settings.env
+          echo "EXPO_PUBLIC_OIDC_ISSUER=$OIDC_ISSUER" >> "$GITHUB_ENV"
+          echo "EXPO_PUBLIC_OIDC_CLIENT_ID=$OIDC_AUDIENCE" >> "$GITHUB_ENV"
       - working-directory: apps/native
         run: bunx expo prebuild --platform ios
       - working-directory: apps/native/ios
@@ -35,7 +42,7 @@ jobs:
           test -n "$APP"
           mkdir Payload && cp -R "$APP" Payload/
           zip -qr health-ios.ipa Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: health-ios
           path: apps/native/ios/health-ios.ipa
