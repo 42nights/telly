@@ -11,6 +11,7 @@ import AddCareInstructionReducer from "../add_care_instruction_reducer";
 import AddFamilyMemberReducer from "../add_family_member_reducer";
 import AnswerReminderReducer from "../answer_reminder_reducer";
 import ApproveClinicianShareReducer from "../approve_clinician_share_reducer";
+import BackfillFounderCareGrantsReducer from "../backfill_founder_care_grants_reducer";
 import CancelAppointmentReducer from "../cancel_appointment_reducer";
 import ClaimAlertDeliveryReducer from "../claim_alert_delivery_reducer";
 import ConfirmAppointmentReducer from "../confirm_appointment_reducer";
@@ -67,6 +68,7 @@ export type AddCareInstructionParams = __Infer<typeof AddCareInstructionReducer>
 export type AddFamilyMemberParams = __Infer<typeof AddFamilyMemberReducer>;
 export type AnswerReminderParams = __Infer<typeof AnswerReminderReducer>;
 export type ApproveClinicianShareParams = __Infer<typeof ApproveClinicianShareReducer>;
+export type BackfillFounderCareGrantsParams = __Infer<typeof BackfillFounderCareGrantsReducer>;
 export type CancelAppointmentParams = __Infer<typeof CancelAppointmentReducer>;
 export type ClaimAlertDeliveryParams = __Infer<typeof ClaimAlertDeliveryReducer>;
 export type ConfirmAppointmentParams = __Infer<typeof ConfirmAppointmentReducer>;

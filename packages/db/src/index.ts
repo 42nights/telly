@@ -39,6 +39,7 @@ import AddCareInstructionReducer from "./add_care_instruction_reducer";
 import AddFamilyMemberReducer from "./add_family_member_reducer";
 import AnswerReminderReducer from "./answer_reminder_reducer";
 import ApproveClinicianShareReducer from "./approve_clinician_share_reducer";
+import BackfillFounderCareGrantsReducer from "./backfill_founder_care_grants_reducer";
 import CancelAppointmentReducer from "./cancel_appointment_reducer";
 import ClaimAlertDeliveryReducer from "./claim_alert_delivery_reducer";
 import ConfirmAppointmentReducer from "./confirm_appointment_reducer";
@@ -387,6 +388,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_family_member", AddFamilyMemberReducer),
   __reducerSchema("answer_reminder", AnswerReminderReducer),
   __reducerSchema("approve_clinician_share", ApproveClinicianShareReducer),
+  __reducerSchema("backfill_founder_care_grants", BackfillFounderCareGrantsReducer),
   __reducerSchema("cancel_appointment", CancelAppointmentReducer),
   __reducerSchema("claim_alert_delivery", ClaimAlertDeliveryReducer),
   __reducerSchema("confirm_appointment", ConfirmAppointmentReducer),

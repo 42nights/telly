@@ -1241,6 +1241,28 @@ const raiseThresholdAlerts = (ctx: Ctx, sample: StoredSample) => {
 	}
 };
 
+/** The family's first member. */
+const founderOf = (ctx: Ctx, familyId: bigint) => {
+	let founder: { id: bigint; member: Identity } | undefined;
+	for (const m of ctx.db.familyMember.familyId.filter(familyId))
+		if (founder === undefined || m.id < founder.id) founder = m;
+	return founder?.member;
+};
+
+// The founder holds every care scope, so a new family works without a sharing step (#188).
+const grantEveryCareScope = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	for (const scope of Object.keys(careScopes))
+		ctx.db.careGrantEvent.insert({
+			id: 0n,
+			familyId,
+			member,
+			scope,
+			granted: true,
+			changedBy: ctx.sender,
+			changedAt: ctx.timestamp,
+		});
+};
+
 export const createFamily = spacetimedb.reducer(
 	{ name: t.string() },
 	(ctx, { name }) => {
@@ -1256,8 +1278,22 @@ export const createFamily = spacetimedb.reducer(
 			member: ctx.sender,
 			addedAt: ctx.timestamp,
 		});
+		grantEveryCareScope(ctx, id, ctx.sender);
 	},
 );
+
+// One-time repair for families created before #188: a family with no grant event at all gives its
+// founder every scope, as `createFamily` now does. The founder could already grant these through
+// `maySetUpSharing`. Only the operator calls it; a second call changes nothing. Deletes nothing.
+export const backfillFounderCareGrants = spacetimedb.reducer((ctx) => {
+	if (ctx.db.operator.identity.find(ctx.sender) === null)
+		throw new SenderError("not the delivery operator");
+	for (const family of ctx.db.family.iter()) {
+		if (!ctx.db.careGrantEvent.familyId.filter(family.id).next().done) continue;
+		const founder = founderOf(ctx, family.id);
+		if (founder !== undefined) grantEveryCareScope(ctx, family.id, founder);
+	}
+});
 
 export const addFamilyMember = spacetimedb.reducer(
 	{ familyId: t.u64(), member: t.identity() },
@@ -2707,17 +2743,14 @@ export const verifyCareInstruction = spacetimedb.reducer(
 );
 
 // Until anyone has ever held `family_access`, the family's founder (its first member) may change
-// grants, so a new family can set up sharing.
+// grants. Families from before #188 start this way; `createFamily` now grants `family_access`.
 const maySetUpSharing = (ctx: Ctx, familyId: bigint) => {
 	for (const event of ctx.db.careGrantEvent.familyId.filter(familyId))
 		if (event.scope === "family_access" && event.granted) return false;
-	let founder: { id: bigint; member: Identity } | undefined;
-	for (const m of ctx.db.familyMember.familyId.filter(familyId))
-		if (founder === undefined || m.id < founder.id) founder = m;
-	return founder?.member.isEqual(ctx.sender) === true;
+	return founderOf(ctx, familyId)?.isEqual(ctx.sender) === true;
 };
 
-// A `family_access` holder changes grants (see `maySetUpSharing` for a new family).
+// A `family_access` holder changes grants (see `maySetUpSharing` for an older family).
 export const setCareGrant = spacetimedb.reducer(
 	{
 		familyId: t.u64(),
