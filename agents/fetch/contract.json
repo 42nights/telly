@@ -233,6 +233,7 @@
 					"unauthorized",
 					"forbidden",
 					"invalid_request",
+					"conflict",
 					"unavailable",
 					"upstream_error"
 				]
