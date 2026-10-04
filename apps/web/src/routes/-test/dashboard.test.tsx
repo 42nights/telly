@@ -134,7 +134,6 @@ test("shows empty states for a family with no data", async () => {
 	).toEqual([
 		"Overview",
 		"Daily",
-		"Reminders",
 		"Exercise",
 		"Cooking",
 		"Alerts",

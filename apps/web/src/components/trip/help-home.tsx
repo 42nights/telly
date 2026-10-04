@@ -104,9 +104,7 @@ export function HelpHome({
 			{speech.key === "help" && <SpeechLine speech={speech} />}
 			<div className="grid grid-cols-2 gap-2">
 				{contacts.momPhone === null ? (
-					<p
-						className={`text-[16px] ${homeTarget === null ? "col-span-2" : ""}`}
-					>
+					<p className="col-span-2 text-[16px]">
 						Add Mom's number in Settings to call her here.
 					</p>
 				) : (

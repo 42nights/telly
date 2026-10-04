@@ -46,6 +46,12 @@ function EventLine({ event, me }: { event: ReminderEvent; me: string | null }) {
 	);
 }
 
+/** The newest occurrences already due; the rest are still ahead. */
+const dueNow = (occurrences: ReminderHistory["occurrences"]) =>
+	occurrences
+		.filter((d) => Date.parse(d.occurrence.scheduledFor) <= Date.now())
+		.slice(0, SHOWN);
+
 export function ReminderHistorySection({
 	familyId,
 	me,
@@ -58,13 +64,7 @@ export function ReminderHistorySection({
 		familyPath(familyId, "/reminder-occurrences"),
 		{ pollMs: 15_000 },
 	);
-	const now = Date.now();
-	const due =
-		state.kind === "ready"
-			? state.value.occurrences
-					.filter((d) => Date.parse(d.occurrence.scheduledFor) <= now)
-					.slice(0, SHOWN)
-			: [];
+	const due = state.kind === "ready" ? dueNow(state.value.occurrences) : [];
 	if (state.kind === "ready" && due.length === 0) return null;
 	return (
 		<section aria-labelledby="reminders" className="grid gap-2">

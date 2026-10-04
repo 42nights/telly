@@ -23,6 +23,16 @@ tar -xzf "$artifact" -C "$tmp"
 cp "$here/entrypoint.sh" "$tmp/server/"
 cp "$here/worker.js" "$tmp/"
 cp -R "$here/landing" "$tmp/web/landing"
+# A page that stays open across a deploy still loads the lazy chunks of its own build: assets.txt
+# lists this build's hashed files, and the next deploy copies the files that the live list names.
+# Only one previous build is kept, because a copied file is not in the new list.
+(cd "$tmp/web" && find assets -type f | sort >assets.txt)
+live="https://app.$LANDING_HOST"
+curl -fsS -m 30 "$live/assets.txt" 2>/dev/null | grep -E '^assets/[A-Za-z0-9._-]+$' |
+	while read -r file; do
+		[ -e "$tmp/web/$file" ] || curl -fsS -m 30 -o "$tmp/web/$file" "$live/$file" ||
+			rm -f "$tmp/web/$file"
+	done || true
 
 $wrangler containers registries credentials registry.cloudflare.com --push --pull --json >"$tmp/registry.json"
 jq -j .password "$tmp/registry.json" |
@@ -64,8 +74,7 @@ ship() {
 		workers_dev: true,
 		preview_urls: false,
 		observability: { enabled: true },
-		assets: { directory: $web, binding: "ASSETS", not_found_handling: "single-page-application",
-			run_worker_first: true },
+		assets: { directory: $web, binding: "ASSETS", run_worker_first: true },
 		containers: [{ class_name: "Api", image: $image, max_instances: 2, instance_type: "basic" }],
 		durable_objects: { bindings: [{ name: "API", class_name: "Api" }] },
 		migrations: [{ tag: "v1", new_sqlite_classes: ["Api"] }],

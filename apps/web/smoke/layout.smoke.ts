@@ -1,7 +1,9 @@
 // Layout smoke test (captain: "it should fill the box its in ... if its too big then thats probably
 // a sign to compact or break it apart"; "nested windows + elements are all over the place"): no
-// page scrolls as a whole at two desktop sizes and on a phone, and no page shows a window inside the
-// app frame's window. Only long lists scroll, inside their own box. Wearer Home is out of scope.
+// page scrolls as a whole at two desktop sizes, and no page at any size shows a window inside the
+// app frame's window. Only long lists scroll, inside their own box. On a phone a taller screen
+// scrolls instead of squeezing its content (captain: "i cannot see today at a glance ... it just
+// doesnt scroll down on mobile"). Wearer Home is out of scope.
 import { expect, test } from "@playwright/test";
 
 import { family, replies, signIn, watch } from "./fake-api";
@@ -58,7 +60,6 @@ const routes: Record<string, unknown> = {
 const paths = [
 	"/family",
 	"/family/daily",
-	"/family/reminders",
 	"/family/exercise",
 	"/family/cooking",
 	"/family/alerts",
@@ -95,7 +96,7 @@ for (const [width, height] of [
 	[390, 844],
 ] as const)
 	for (const view of ["family", "wearer"] as const)
-		test(`each page is one window that fits ${width}x${height} in the ${view} view`, async ({
+		test(`each page is one window at ${width}x${height} in the ${view} view`, async ({
 			page,
 			baseURL,
 		}) => {
@@ -135,7 +136,9 @@ for (const [width, height] of [
 							).length,
 					);
 				if (bars > 0) nested.push(`${path} has ${bars} inner title bars`);
-				if (extra > 1) overflow.push(`${path} scrolls by ${extra} px`);
+				// A phone scrolls a taller screen (#366); a desktop must fit.
+				if (width > 899 && extra > 1)
+					overflow.push(`${path} scrolls by ${extra} px`);
 			}
 			expect(overflow).toEqual([]);
 			expect(nested).toEqual([]);

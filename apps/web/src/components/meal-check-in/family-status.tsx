@@ -1,6 +1,6 @@
-// Meal and drink check-ins for the family (#32): the reminder times a family member sets (Family ›
-// Reminders), and for each due check-in whether a device showed it, whether the wearer said they ate
-// or drank, and whether it is unresolved, as three separate facts (Family › Daily).
+// Meal and drink check-ins for the family (#32): the reminder times a family member sets, and for
+// each check-in whether a device showed it, whether the wearer said they ate or drank, and whether
+// it is unresolved, as three separate facts.
 import {
 	Reminder,
 	ReminderHistory,
@@ -8,11 +8,11 @@ import {
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
 import { Button } from "@health/ui/components/button";
-import { Plus, Trash2, Utensils } from "lucide-react";
-import { useRef, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 import { failureText } from "@/components/chat/logic";
-import { ApiNotice, Tip } from "@/components/win95";
+import { ApiNotice } from "@/components/win95";
 import {
 	type ApiState,
 	apiRequest,
@@ -52,7 +52,7 @@ const MAX_TIMES = 12;
 type Time = { readonly id: string; readonly value: string };
 const newTime = (): Time => ({ id: crypto.randomUUID(), value: "" });
 
-/** One `<input type="time">` per reminder time, and a "+" that adds one, up to `MAX_TIMES`. */
+/** One `<input type="time">` per reminder time, and "Add another time" up to `MAX_TIMES`. */
 function TimeFields({
 	times,
 	onChange,
@@ -61,7 +61,8 @@ function TimeFields({
 	onChange: (times: readonly Time[]) => void;
 }) {
 	return (
-		<div className="flex flex-wrap gap-1">
+		<fieldset className="flex flex-wrap items-end gap-1">
+			<legend className="mb-1">Times</legend>
 			{times.map((time, index) => (
 				<input
 					aria-label={`Time ${index + 1}`}
@@ -81,15 +82,15 @@ function TimeFields({
 			))}
 			{times.length < MAX_TIMES && (
 				<Button
-					aria-label="Add another time"
 					className="h-11"
 					onClick={() => onChange([...times, newTime()])}
 					type="button"
 				>
 					<Plus aria-hidden />
+					Add another time
 				</Button>
 			)}
-		</div>
+		</fieldset>
 	);
 }
 
@@ -104,9 +105,12 @@ function ReminderList({
 	if (reminders.kind !== "ready")
 		return <ApiNotice state={reminders} what="reminders" />;
 	const meals = reminders.value.reminders.filter((r) => isMealKind(r.kind));
-	if (meals.length === 0) return <p>No meal or drink reminder yet.</p>;
+	if (meals.length === 0)
+		return (
+			<p className="text-muted-foreground">No meal or drink reminder is set.</p>
+		);
 	return (
-		<ul className="win95-inset grid gap-1 bg-card p-2">
+		<ul className="grid gap-1">
 			{meals.map((reminder) => (
 				<li className="flex items-center gap-2" key={reminder.id}>
 					<span className="min-w-0 flex-1 break-words">
@@ -126,16 +130,12 @@ function ReminderList({
 	);
 }
 
-/**
- * Family › Reminders: the family's meal and drink reminders as a short list with Delete, and Add,
- * which opens a small dialog with aligned fields.
- */
-export function MealReminders({ familyId }: { familyId: string }) {
+/** The family's meal and drink reminders: the list with Delete, and a form to add one. */
+function MealReminders({ familyId }: { familyId: string }) {
 	const remindersPath = familyPath(familyId, "/reminders");
 	const settingsPath = familyPath(familyId, "/reminder-settings");
 	const reminders = useApi(Reminders, remindersPath);
 	const settings = useApi(SavedReminderSettings, settingsPath);
-	const dialog = useRef<HTMLDialogElement>(null);
 	const refresh = () => {
 		void reread(remindersPath);
 		void reread(settingsPath);
@@ -144,14 +144,11 @@ export function MealReminders({ familyId }: { familyId: string }) {
 	const [kind, setKind] = useState<"meal" | "hydration">("meal");
 	const [times, setTimes] = useState<readonly Time[]>(() => [newTime()]);
 	const [status, setStatus] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
 	const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	const noSettings =
 		settings.kind === "ready" && settings.value.settings === null;
-	const saving = status === "Saving…";
 
 	const save = async () => {
-		setError(null);
 		setStatus("Saving…");
 		if (noSettings) {
 			const saved = await apiRequest(null, settingsPath, {
@@ -164,10 +161,7 @@ export function MealReminders({ familyId }: { familyId: string }) {
 					snoozeMinutes: 15,
 				},
 			});
-			if (saved.kind !== "ready") {
-				setStatus(null);
-				return setError(failureText(saved));
-			}
+			if (saved.kind !== "ready") return setStatus(failureText(saved));
 		}
 		const added = await apiRequest(Reminder, remindersPath, {
 			method: "POST",
@@ -180,14 +174,10 @@ export function MealReminders({ familyId }: { familyId: string }) {
 				].toSorted(),
 			},
 		});
-		if (added.kind !== "ready") {
-			setStatus(null);
-			return setError(failureText(added));
-		}
+		if (added.kind !== "ready") return setStatus(failureText(added));
 		setTitle("");
 		setTimes([newTime()]);
 		setStatus(`Saved: ${added.value.title}.`);
-		dialog.current?.close();
 		refresh();
 	};
 
@@ -207,62 +197,34 @@ export function MealReminders({ familyId }: { familyId: string }) {
 	};
 
 	return (
-		<section aria-labelledby="meal-reminders" className="grid gap-2">
-			<div className="flex items-center gap-1">
-				<h3 id="meal-reminders" className="font-bold">
-					Meals and drinks
-				</h3>
-				<Tip text="Telly texts each reminder to the person's phone. They can reply DONE." />
-				<Button
-					className="ml-auto h-11"
-					disabled={settings.kind !== "ready"}
-					onClick={() => {
-						setError(null);
-						dialog.current?.showModal();
-					}}
-				>
-					<Plus aria-hidden />
-					Add
-				</Button>
-			</div>
+		<form
+			aria-label="Meal and drink reminders"
+			className="win95-inset grid gap-2 bg-card p-2"
+			onSubmit={(event) => {
+				event.preventDefault();
+				void save();
+			}}
+		>
+			<p>
+				Telly texts each reminder to the person's phone. They can reply DONE.
+			</p>
 			<ReminderList onDelete={remove} reminders={reminders} />
-			{settings.kind !== "ready" && settings.kind !== "loading" && (
-				<ApiNotice state={settings} what="reminder settings" />
-			)}
-			{status !== null && <p role="status">{status}</p>}
-			<dialog
-				ref={dialog}
-				aria-labelledby="add-reminder"
-				className="win95-raised win95-window m-auto w-[min(24rem,calc(100vw-1rem))] border-0 p-1.5 text-foreground backdrop:bg-black/30"
-			>
-				<h2
-					id="add-reminder"
-					className="win95-titlebar flex items-center gap-1.5 px-1.5 py-1 text-sm"
-				>
-					<Utensils aria-hidden className="size-4" /> Add a reminder
-				</h2>
-				<form
-					aria-label="Add a meal or drink reminder"
-					className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 p-2 text-sm"
-					onSubmit={(event) => {
-						event.preventDefault();
-						void save();
-					}}
-				>
-					<label htmlFor="reminder-what">What</label>
+			<div className="flex flex-wrap items-end gap-2">
+				<label className="grid min-w-40 flex-1 gap-1">
+					What
 					<input
 						className={field}
-						id="reminder-what"
 						maxLength={200}
 						onChange={(e) => setTitle(e.target.value)}
 						placeholder="Lunch, Drink water"
 						required
 						value={title}
 					/>
-					<label htmlFor="reminder-kind">Kind</label>
+				</label>
+				<label className="grid gap-1">
+					Kind
 					<select
 						className={field}
-						id="reminder-kind"
 						onChange={(e) =>
 							setKind(e.target.value === "hydration" ? "hydration" : "meal")
 						}
@@ -271,41 +233,29 @@ export function MealReminders({ familyId }: { familyId: string }) {
 						<option value="meal">Meal</option>
 						<option value="hydration">Drink</option>
 					</select>
-					<span className="flex items-center gap-1 self-start pt-3">
-						Times
-						{noSettings && (
-							<Tip text={`Uses this browser's time zone, ${zone}.`} />
-						)}
-					</span>
-					<TimeFields onChange={setTimes} times={times} />
-					{error !== null && (
-						<p className="col-span-2 font-bold text-destructive" role="alert">
-							Not saved: {error}
-						</p>
-					)}
-					<div className="col-span-2 grid grid-cols-2 gap-2">
-						<Button
-							className="win95-primary h-11"
-							disabled={saving}
-							type="submit"
-						>
-							Save
-						</Button>
-						<Button
-							className="h-11"
-							onClick={() => dialog.current?.close()}
-							type="button"
-						>
-							Cancel
-						</Button>
-					</div>
-				</form>
-			</dialog>
-		</section>
+				</label>
+				<TimeFields onChange={setTimes} times={times} />
+				<Button
+					className="win95-primary h-11"
+					disabled={settings.kind !== "ready" || status === "Saving…"}
+					type="submit"
+				>
+					Save reminder
+				</Button>
+			</div>
+			{noSettings && (
+				<p className="text-muted-foreground">
+					Uses this browser's time zone, {zone}.
+				</p>
+			)}
+			{settings.kind !== "ready" && settings.kind !== "loading" && (
+				<ApiNotice state={settings} what="reminder settings" />
+			)}
+			{status !== null && <p role="status">{status}</p>}
+		</form>
 	);
 }
 
-/** Family › Daily: the meal and drink check-ins that came due. Nothing shows while none has. */
 export function MealStatusSection({ familyId }: { familyId: string }) {
 	const state = useApi(
 		ReminderHistory,
@@ -322,20 +272,23 @@ export function MealStatusSection({ familyId }: { familyId: string }) {
 					)
 					.slice(0, SHOWN)
 			: [];
-	if (state.kind === "ready" && due.length === 0) return null;
 	return (
 		<section aria-labelledby="meals" className="grid gap-2">
-			<div className="flex items-center gap-1">
-				<h3 id="meals" className="font-bold">
-					Meals and drinks
-				</h3>
-				<Tip text="“Says they did” is the person's own report. It does not show how much they ate or drank, or that they are well." />
-			</div>
+			<h3 id="meals" className="font-bold">
+				Meals and drinks
+			</h3>
+			<MealReminders familyId={familyId} />
 			<div className="win95-inset grid gap-3 bg-card p-2">
 				{state.kind !== "ready" ? (
 					<ApiNotice state={state} what="meal check-ins" />
+				) : due.length === 0 ? (
+					<p>No meal or drink check-in has come due yet.</p>
 				) : (
 					<>
+						<p className="text-muted-foreground">
+							“Says they did” is the person's own report. It does not show how
+							much they ate or drank, or that they are well.
+						</p>
 						{due.map(({ occurrence, events }) => {
 							const s = familyStatus(events);
 							return (

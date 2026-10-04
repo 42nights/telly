@@ -34,7 +34,6 @@ export const familyScreens = [
 		tabs: [
 			{ to: "/family", label: "Overview" },
 			{ to: "/family/daily", label: "Daily" },
-			{ to: "/family/reminders", label: "Reminders" },
 			{ to: "/family/exercise", label: "Exercise" },
 			{ to: "/family/cooking", label: "Cooking" },
 			{ to: "/family/alerts", label: "Alerts" },

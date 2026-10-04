@@ -30,16 +30,21 @@ function FamilyOverview() {
 			<PersonPicker className="p-2 [&_select]:min-w-0 [&_select]:flex-1" />
 			<FamilyGate data={data} emptyClassName="p-3 text-sm">
 				{(family) => (
+					// On a phone, Today at a glance comes first, then the alert, then the members (captain).
 					<div className="flex min-h-0 flex-1 flex-col gap-2 p-2 text-sm">
-						<FamilyPeople
-							familyId={family.id}
-							familyName={family.name}
-							me={data.me}
-						/>
-						<AlertSection data={data} now={Date.now()} />
+						<div className="max-[899px]:order-3">
+							<FamilyPeople
+								familyId={family.id}
+								familyName={family.name}
+								me={data.me}
+							/>
+						</div>
+						<div className="max-[899px]:order-2">
+							<AlertSection data={data} now={Date.now()} />
+						</div>
 						<section
 							aria-labelledby="glance"
-							className="flex min-h-0 flex-1 flex-col gap-1"
+							className="flex min-h-0 flex-1 flex-col gap-1 max-[899px]:order-1 max-[899px]:flex-none"
 						>
 							<h3 id="glance" className="font-bold">
 								Today at a glance
