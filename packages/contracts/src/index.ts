@@ -61,9 +61,10 @@ const getDecoded = async <T>(
 	schema: Schema.Decoder<T>,
 	url: string,
 	signal: AbortSignal,
+	headers?: Record<string, string>,
 ): Promise<Loaded<T>> => {
 	try {
-		const response = await fetch(url, { signal });
+		const response = await fetch(url, { signal, headers: headers ?? {} });
 		if (!response.ok)
 			return {
 				kind: "error",
@@ -80,15 +81,17 @@ const getDecoded = async <T>(
 
 /**
  * Starts a decoded GET and reports the result unless cancelled first. Returns the cancel function,
- * so a React effect can be `useEffect(() => loadDecoded(schema, url, setState), [])`.
+ * so a React effect can be `useEffect(() => loadDecoded(schema, url, setState), [])`. Signed-in
+ * reads pass the `Authorization` header in `headers`.
  */
 export const loadDecoded = <T>(
 	schema: Schema.Decoder<T>,
 	url: string,
 	onLoaded: (result: Loaded<T>) => void,
+	headers?: Record<string, string>,
 ): (() => void) => {
 	const controller = new AbortController();
-	void getDecoded(schema, url, controller.signal).then((result) => {
+	void getDecoded(schema, url, controller.signal, headers).then((result) => {
 		if (!controller.signal.aborted) onLoaded(result);
 	});
 	return () => controller.abort();
