@@ -7,7 +7,7 @@ import type {
 
 import { demoSampleSummary } from "@/lib/demo";
 
-import { deliveryText, monitoringLevel, newestPerMetric } from "./logic";
+import { ago, deliveryText, monitoringLevel, newestPerMetric } from "./logic";
 
 const threshold: AlertThreshold = {
 	id: "1",
@@ -126,4 +126,14 @@ describe("deliveryText", () => {
 		expect(delivery("queued", 1)).toBe("Queued, 1 try so far");
 		expect(deliveryText(null)).toBe("No delivery record");
 	});
+});
+
+test("a reading's age counts seconds under a minute", () => {
+	const now = Date.parse("2026-01-01T12:00:00Z");
+	const at = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+	expect(ago(at(2), now)).toBe("just now");
+	expect(ago(at(12), now)).toBe("12 s ago");
+	expect(ago(at(59), now)).toBe("59 s ago");
+	expect(ago(at(90), now)).toBe("2 min ago");
+	expect(ago(at(3 * 3600), now)).toBe("3 h ago");
 });
