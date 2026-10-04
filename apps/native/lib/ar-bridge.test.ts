@@ -13,8 +13,10 @@ const fake = (overrides: Partial<TellyArModule>): TellyArModule => ({
 		anchorId: "A",
 		worldMap: "bWFw",
 		mapBytes: 3,
+		anchors: [{ objectId: "c1", anchorId: "A" }],
 	}),
 	findPin: async () => ({ type: "ar.pinFound" }),
+	watch: async () => ({ type: "ar.closed" }),
 	...overrides,
 });
 
@@ -53,6 +55,7 @@ test("save and find answers carry the requestId and objectId", async () => {
 		anchorId: "A",
 		worldMap: "bWFw",
 		mapBytes: 3,
+		anchors: [{ objectId: "c1", anchorId: "A" }],
 	});
 	const find = {
 		type: "ar.findPin",
@@ -67,6 +70,50 @@ test("save and find answers carry the requestId and objectId", async () => {
 		requestId: "r2",
 		objectId: "c1",
 	});
+});
+
+test("a web app from before #351 opens AR without a session, other pins, or a room map", async () => {
+	const calls: unknown[][] = [];
+	const native = fake({
+		savePin: async (...args) => {
+			calls.push(args);
+			return { type: "ar.error", code: "cancelled", message: "closed" };
+		},
+	});
+	await answerArRequest(save, native, "ios");
+	expect(calls).toEqual([["c1", "Aspirin", null, [], null]]);
+});
+
+test("watch passes the session and the check answer, and returns the screen's message", async () => {
+	const calls: unknown[][] = [];
+	const native = fake({
+		watch: async (...args) => {
+			calls.push(args);
+			return { type: "ar.moved", checkId: "c", objectIds: ["k"] };
+		},
+	});
+	const answer = { checkId: "c", found: [{ objectId: "k", x: 1, y: 2 }] };
+	expect(
+		await answerArRequest(
+			{ type: "ar.watch", requestId: "r3", session: "s", answer },
+			native,
+			"ios",
+		),
+	).toEqual({
+		type: "ar.moved",
+		requestId: "r3",
+		checkId: "c",
+		objectIds: ["k"],
+	});
+	await answerArRequest(
+		{ type: "ar.watch", requestId: "r4", session: "s" },
+		native,
+		"ios",
+	);
+	expect(calls).toEqual([
+		["s", answer],
+		["s", null],
+	]);
 });
 
 test("native errors keep their code, and a throw becomes failed", async () => {

@@ -44,7 +44,7 @@ export type PictureCheck = {
 	readonly result: CheckResult;
 };
 
-type Frame = {
+export type Frame = {
 	readonly picture: string;
 	readonly data: string;
 	readonly width: number;
@@ -81,7 +81,11 @@ const withoutFamily = (families: ApiState<FamilyList>): CheckResult => {
 };
 
 /** The full frame, unrotated: the server maps boxes back into these pixels. */
-const detectionRequest = (id: string, capturedAt: number, frame: Frame) => ({
+export const detectionRequest = (
+	id: string,
+	capturedAt: number,
+	frame: Frame,
+) => ({
 	frame: {
 		id,
 		capturedAt: new Date(capturedAt).toISOString(),
