@@ -1,18 +1,18 @@
 // The wearer's meal or drink check-in on the home screen (#32). Every answer goes through the shared
-// reminder lifecycle (#28); a request for a person also opens a care need for the family ladder (#30).
-import { CareNeed, type NewCareNeed } from "@health/contracts/care";
+// reminder lifecycle (#28). `help` ends the check-in `unresolved`, and the database then asks the
+// family contact ladder (#30). The home screen's due-reminder list (#46) records each delivery.
 import { CareProfileRecord } from "@health/contracts/care-profile";
 import {
 	type ReminderAnswerInput,
-	type ReminderDeliveryInput,
 	ReminderHistory,
 	type ReminderOccurrence,
 	ReminderOccurrenceDetail,
 	type ReminderResponse,
 } from "@health/contracts/reminders";
 import { Button } from "@health/ui/components/button";
+import { useNavigate } from "@tanstack/react-router";
 import { Check, Clock, CupSoda, Send, Utensils, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
@@ -48,24 +48,6 @@ export function MealCheckIn({
 		{ pollMs: 15_000, refreshKey: refresh },
 	);
 	const due = history.kind === "ready" ? dueCheckIn(history.value, now) : null;
-	const delivery = due === null ? null : `${due.id}-${due.prompts}`;
-
-	// Records once per prompt that this screen showed it; the id makes a resend record nothing new.
-	useEffect(() => {
-		if (due === null || !due.promptDue || delivery === null) return;
-		void apiRequest(
-			ReminderOccurrenceDetail,
-			familyPath(familyId, `/reminder-occurrences/${due.id}/deliveries`),
-			{
-				method: "POST",
-				body: {
-					clientId: `web-${delivery}`,
-					source: "web",
-				} satisfies ReminderDeliveryInput,
-			},
-		).then((result) => result.kind === "ready" && setRefresh((n) => n + 1));
-	}, [familyId, due, delivery]);
-
 	if (history.kind !== "ready" && history.kind !== "loading")
 		return (
 			<p className="win95-inset bg-card p-3 text-[18px]" role="status">
@@ -110,9 +92,11 @@ function Prompt({
 	// One id per answer, kept across resends, so a retry after a lost reply records one event.
 	const clientId = useRef(crypto.randomUUID());
 	const meal = kind === "meal";
+	const navigate = useNavigate();
 	const path = familyPath(familyId, `/reminder-occurrences/${occurrence.id}`);
 
-	const answer = async (response: ReminderResponse, wording: string) => {
+	const send = async (response: ReminderResponse, wording: string) => {
+		setStatus({ kind: "sending" });
 		const result = await apiRequest(
 			ReminderOccurrenceDetail,
 			`${path}/answers`,
@@ -127,54 +111,22 @@ function Prompt({
 			},
 		);
 		if (result.kind !== "ready")
-			return result.kind === "signed_out"
-				? "Sign in to answer."
-				: result.message;
+			return setStatus({
+				kind: "failed",
+				message:
+					result.kind === "signed_out" ? "Sign in to answer." : result.message,
+			});
 		clientId.current = crypto.randomUUID();
-		return null;
-	};
-
-	const send = async (
-		response: ReminderResponse,
-		wording: string,
-		person: boolean,
-	) => {
-		setStatus({ kind: "sending" });
-		let failed = await answer(response, wording);
-		// One care need per check-in: its id is the occurrence, so a resend stores it once.
-		if (failed === null && person) {
-			const need = await apiRequest(
-				CareNeed,
-				familyPath(familyId, "/care/needs"),
-				{
-					method: "POST",
-					body: {
-						clientId: `reminder-${occurrence.id}`,
-						kind: "help",
-						summary:
-							`${occurrence.title}: ${wording || "asked for help"}`.slice(
-								0,
-								500,
-							),
-						sampleIds: [],
-						dueAt: null,
-					} satisfies NewCareNeed,
-				},
-			);
-			if (need.kind !== "ready")
-				failed = `Your family was not asked: ${need.kind === "signed_out" ? "sign in first" : need.message}`;
-		}
-		if (failed !== null) return setStatus({ kind: "failed", message: failed });
 		setStatus({ kind: "idle" });
 		onAnswered();
 	};
 
 	const take = (step: Step, wording: string) => {
 		if (step.action === "now") return setBarrier(null);
+		if (step.action === "guide") return void navigate({ to: "/cooking" });
 		if (step.action === "help_path") onUrgent(wording);
 		const response = stepResponse[step.action];
-		if (response !== null)
-			void send(response, wording, step.action === "caregiver");
+		if (response !== null) void send(response, wording);
 	};
 
 	const said = words.trim();
@@ -198,7 +150,7 @@ function Prompt({
 					<Button
 						className={`win95-primary ${lg}`}
 						disabled={sending}
-						onClick={() => void send("done", said, false)}
+						onClick={() => void send("done", said)}
 					>
 						<Check aria-hidden />
 						{meal ? "I ate" : "I had a drink"}
@@ -206,7 +158,7 @@ function Prompt({
 					<Button
 						className={lg}
 						disabled={sending}
-						onClick={() => void send("later", said, false)}
+						onClick={() => void send("later", said)}
 						variant="outline"
 					>
 						<Clock aria-hidden />
@@ -223,7 +175,7 @@ function Prompt({
 					<Button
 						className={lg}
 						disabled={sending}
-						onClick={() => void send("stop", said, false)}
+						onClick={() => void send("stop", said)}
 						variant="outline"
 					>
 						<X aria-hidden />
@@ -292,7 +244,7 @@ function Prompt({
 					if (said === "") return;
 					if (reportsUrgentSymptom(said)) {
 						onUrgent(said);
-						void send("help", said, false);
+						void send("help", said);
 					} else setBarrier("choose");
 				}}
 			>

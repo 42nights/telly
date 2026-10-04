@@ -2223,6 +2223,28 @@ const recordReminderEvent = (
 		wording: answer.wording,
 	});
 
+// A meal or drink check-in that ends unresolved asks the family contact ladder for help (#32), the
+// same way an alert does: only when the family has a ladder. An occurrence ends unresolved at most
+// once, so this opens at most one need per check-in.
+const mealCheckInNeed = (
+	ctx: Ctx,
+	occurrence: OccurrenceRow,
+	wording: string | undefined,
+) => {
+	if (occurrence.kind !== "meal" && occurrence.kind !== "hydration") return;
+	if (ctx.db.contactLadder.familyId.find(occurrence.familyId) === null) return;
+	const why = wording ?? `no answer after ${occurrence.prompts} prompts`;
+	openNeed(ctx, {
+		familyId: occurrence.familyId,
+		kind: { tag: "Help" },
+		summary: `${occurrence.title}: ${why}`.slice(0, 500),
+		facts: [],
+		alertId: undefined,
+		dueAt: ctx.timestamp,
+		clientId: `reminder-${occurrence.id}`,
+	});
+};
+
 /** Schedules the reminder's next occurrence at local `minute` after `afterMs`, once per slot. */
 const scheduleOccurrence = (
 	ctx: Ctx,
@@ -2476,7 +2498,9 @@ export const answerReminder = spacetimedb.reducer(
 				return answer(occurrence.state, { promptDue: true });
 			default:
 				// `help` and `unsure`: a person takes over; prompting again could cause a second dose.
-				return answer("unresolved", end);
+				answer("unresolved", end);
+				mealCheckInNeed(ctx, occurrence, wording);
+				return;
 		}
 	},
 );
@@ -2535,7 +2559,8 @@ export const runReminderTimer = spacetimedb.reducer(
 			);
 		const settings = requireReminderSettings(ctx, occurrence.familyId);
 		if (occurrence.prompts >= settings.maxPrompts) {
-			// Silence settles nothing and contacts nobody: the occurrence stays visibly open.
+			// Silence settles nothing and never dispatches help. Only a meal or drink check-in asks
+			// the family ladder (#32); every other kind stays visibly open and contacts nobody.
 			recordReminderEvent(ctx, occurrence, "unresolved", {
 				source: "scheduler",
 			});
@@ -2545,6 +2570,7 @@ export const runReminderTimer = spacetimedb.reducer(
 				promptDue: false,
 				nextPromptAt: undefined,
 			});
+			mealCheckInNeed(ctx, occurrence, undefined);
 			return;
 		}
 		const next = promptAfter(ctx, settings, settings.repeatEveryMinutes);

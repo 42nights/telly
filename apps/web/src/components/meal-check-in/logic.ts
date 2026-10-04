@@ -46,11 +46,18 @@ export const barrierWords = (barrier: Barrier, kind: MealKind) =>
 	BARRIER_WORDS[barrier][kind === "meal" ? 0 : 1];
 
 /**
- * What a step does. `now`: nothing is recorded; the wearer answers Done when finished. `later`,
- * `skip`: the lifecycle's `later` and `stop`. `caregiver`: `help`, then a care need for the family
- * ladder (#30). `help_path`: the separate urgent help path (#34).
+ * What a step does. `now`: nothing is recorded; the wearer answers Done when finished. `guide`:
+ * opens one-step-at-a-time preparation (#42); nothing is recorded. `later`, `skip`: the lifecycle's
+ * `later` and `stop`. `caregiver`: `help`, which ends the check-in `unresolved` so the database asks
+ * the family ladder (#30). `help_path`: the separate urgent help path (#34), and `help`.
  */
-export type StepAction = "now" | "later" | "skip" | "caregiver" | "help_path";
+export type StepAction =
+	| "now"
+	| "guide"
+	| "later"
+	| "skip"
+	| "caregiver"
+	| "help_path";
 export type Step = { readonly action: StepAction; readonly label: string };
 
 const later: Step = { action: "later", label: "Remind me later" };
@@ -79,7 +86,12 @@ export const nextSteps = (
 				later,
 			];
 		case "cannot_prepare":
-			return [family(meal ? "help me make it" : "help me get a drink"), later];
+			return meal
+				? [
+						{ action: "guide", label: "Guide me one step at a time" },
+						family("help me make it"),
+					]
+				: [family("help me get a drink"), later];
 		case "cannot_reach":
 			return [family("help me reach it")];
 		case "cannot_open":
@@ -97,6 +109,7 @@ export const nextSteps = (
 /** The lifecycle answer a step records, or null when it records none. */
 export const stepResponse: Record<StepAction, ReminderResponse | null> = {
 	now: null,
+	guide: null,
 	later: "later",
 	skip: "stop",
 	caregiver: "help",
