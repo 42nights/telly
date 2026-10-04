@@ -32,11 +32,16 @@ const Discovery = Schema.Struct({
 const Jwks = Schema.Struct({
 	keys: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
 });
-// `exp` is required here; the JWT check only rejects an expired `exp` that is present.
+// `exp` is required here; the JWT check only rejects an expired `exp` that is present. The profile
+// claims come with Google's `email profile` scopes; they are shown to the caller, never stored.
 const Claims = Schema.Struct({
 	iss: Schema.String,
 	sub: Schema.NonEmptyString,
 	exp: Schema.Finite,
+	name: Schema.optional(Schema.String),
+	given_name: Schema.optional(Schema.String),
+	email: Schema.optional(Schema.String),
+	picture: Schema.optional(Schema.String),
 });
 
 const fetchTimeoutMs = 5_000;
@@ -111,7 +116,14 @@ const oidcVerifier = (issuer: string, audience: string) => {
 				verification: { iss: issuer, aud: audience },
 			});
 			const claims = Schema.decodeUnknownSync(Claims)(payload);
-			return { issuer: claims.iss, subject: claims.sub };
+			return {
+				issuer: claims.iss,
+				subject: claims.sub,
+				name: claims.name ?? null,
+				givenName: claims.given_name ?? null,
+				email: claims.email ?? null,
+				picture: claims.picture ?? null,
+			};
 		} catch {
 			throw invalid;
 		}

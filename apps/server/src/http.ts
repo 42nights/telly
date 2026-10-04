@@ -1,6 +1,7 @@
 // The common contract of every signed-in route. Domain modules export Hono route factories from
 // `routes/<domain>.ts` typed with `FamilyEnv`; `app.ts` mounts them under `/api/families/:familyId`,
 // behind sign-in and the family membership check, so a handler only ever sees a verified caller.
+import { createHash, randomBytes } from "node:crypto";
 import type { ApiErrorCode } from "@health/contracts";
 import type { DbConnection } from "@health/db";
 import { Effect, Exit, Schema } from "effect";
@@ -12,6 +13,11 @@ import { callDb, DbRejected, type FamilyDb } from "./db";
 export type CallerIdentity = {
 	readonly issuer: string;
 	readonly subject: string;
+	/** The token's own profile claims; null when the token does not carry them. */
+	readonly name: string | null;
+	readonly givenName: string | null;
+	readonly email: string | null;
+	readonly picture: string | null;
 };
 
 /** Every signed-in route: the verified caller and a database connection that acts as them. */
@@ -99,4 +105,14 @@ export const callReducer = async (
 			);
 		throw error;
 	}
+};
+
+/** The SHA-256 of a code or token as lowercase hex: the only form the database keeps. */
+export const sha256Hex = (value: string) =>
+	createHash("sha256").update(value).digest("hex");
+
+/** A new 32-byte random secret (base64url), shown once, and the hash to store. */
+export const newSecret = () => {
+	const secret = randomBytes(32).toString("base64url");
+	return { secret, hash: sha256Hex(secret) };
 };

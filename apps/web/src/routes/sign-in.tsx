@@ -4,6 +4,7 @@ import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
+import { useOnboardingRedirect } from "@/components/onboarding/redirect";
 import { getSessionToken } from "@/lib/session";
 import { finishSignIn, signInConfig, startSignIn } from "@/lib/sign-in";
 
@@ -47,7 +48,8 @@ function SignIn() {
 	const [step, setStep] = useState<Step>(() =>
 		getSessionToken() === null ? { kind: "ready" } : { kind: "signed_in" },
 	);
-
+	// Once signed in, a person with no family goes to onboarding or to their pending invite.
+	useOnboardingRedirect(step.kind === "signed_in" ? "/" : null);
 	useEffect(() => {
 		if (config === null) return;
 		if (search.error !== undefined) {

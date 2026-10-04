@@ -21,7 +21,8 @@ export const createApp = (config: ServerConfig, ingest?: NoopIngest) => {
 	// Domain route factories are mounted in `routes/index.ts`, relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyDomainRoutes(config));
+		.route("/", familyDomainRoutes(config))
+		.post("/whoop-token", noop.pushToken);
 
 	const app = new Hono()
 		// Redact the NOOP ingest key from logged URLs.

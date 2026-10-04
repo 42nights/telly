@@ -65,7 +65,7 @@ export const authorizationUrl = (
 		response_type: "code",
 		client_id: request.clientId,
 		redirect_uri: request.redirectUri,
-		scope: "openid",
+		scope: "openid email profile",
 		state: request.state,
 		nonce: request.nonce,
 		code_challenge: request.challenge,
@@ -90,20 +90,39 @@ export const tokenMatches = (
 	);
 };
 
+/** How long the code exchange may take before the client gives up. */
+const SIGN_IN_TIMEOUT_MS = 20_000;
+
 /**
  * Exchanges the issuer's code through `serverUrl`'s `POST /api/sign-in/token` and returns the ID
- * token. Rejects with the server's message when the exchange fails.
+ * token. Rejects with the server's message when the exchange fails, and with "Telly is not
+ * answering" when no full reply comes within `SIGN_IN_TIMEOUT_MS`.
  */
 export const exchangeSignInCode = async (
 	serverUrl: string,
 	request: SignInCode,
 ): Promise<string> => {
-	const response = await fetch(`${serverUrl}/api/sign-in/token`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(request),
-	});
-	const body: unknown = await response.json().catch(() => null);
+	// A timer, not `AbortSignal.timeout`, so the phone's JavaScript engine needs nothing newer.
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), SIGN_IN_TIMEOUT_MS);
+	const { signal } = controller;
+	const notAnswering = new Error("Telly is not answering. Try again.");
+	let response: Response;
+	let body: unknown;
+	try {
+		response = await fetch(`${serverUrl}/api/sign-in/token`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(request),
+			signal,
+		});
+		body = await response.json().catch(() => null);
+	} catch (error) {
+		throw signal.aborted ? notAnswering : error;
+	} finally {
+		clearTimeout(timer);
+	}
+	if (signal.aborted) throw notAnswering;
 	if (response.ok) return Schema.decodeUnknownSync(SignInToken)(body).idToken;
 	const failure = Schema.decodeUnknownOption(ApiError)(body);
 	throw new Error(

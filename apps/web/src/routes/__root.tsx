@@ -7,6 +7,7 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "@/components/header";
+import { OnboardingRedirect } from "@/components/onboarding/redirect";
 import { ThemeProvider } from "@/components/theme-provider";
 import { FamilyProvider } from "@/lib/family";
 
@@ -46,6 +47,7 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				<FamilyProvider>
+					<OnboardingRedirect />
 					<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
 						<Header />
 						<div className="min-h-0 overflow-y-auto">

@@ -5,6 +5,7 @@ import { Loader2, Mic, Send, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
+import { signInConfig } from "@/lib/sign-in";
 
 import { AnswerFailed, AnswerPanel, type Reply, xl } from "./answer";
 import { HelpPanel, SupportActions } from "./help";
@@ -367,9 +368,11 @@ export function Request({
 				<AnswerFailed
 					asked={step.asked}
 					detail={
-						step.failure.kind === "signed_out"
-							? "Sign-in is not set up in this app yet (issue #4)."
-							: step.failure.message
+						step.failure.kind !== "signed_out"
+							? step.failure.message
+							: signInConfig() === null
+								? "Sign-in is not set up on this server."
+								: "Sign in to ask."
 					}
 					onDone={done}
 					onRetry={() =>

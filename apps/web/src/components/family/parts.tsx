@@ -42,7 +42,8 @@ export function FamilyGate({
 	if (data.family === null)
 		return (
 			<p className={emptyClassName}>
-				No person is paired with this account yet. People are paired manually.
+				No person is set up with this account yet.{" "}
+				<Link to="/welcome">Set up a person</Link>
 			</p>
 		);
 	return children(data.family);

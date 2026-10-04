@@ -9,10 +9,12 @@ import {
 	type DbConfig,
 	DbRejected,
 	DbUnavailable,
+	type FamilyDb,
 	openFamilyDb,
 	readFamilyRecords,
 } from "./db";
 import { closed, dbProxy } from "./db-proxy";
+import { sha256Hex } from "./http";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -215,6 +217,117 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 				);
 				link.close();
 			}),
+		));
+
+	test("invites: members make them for at most 7 days, and an expired code admits no one", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const owner = yield* openFamilyDb(config);
+					const outsider = yield* openFamilyDb(config);
+					yield* callDb(owner, (c) =>
+						c.reducers.createFamily({ name: "Sato" }),
+					);
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					const inMs = (ms: number) =>
+						Timestamp.fromDate(new Date(Date.now() + ms));
+					const create = (db: FamilyDb, codeHash: string, ms: number) =>
+						callDb(db, (c) =>
+							c.reducers.createFamilyInvite({
+								familyId,
+								codeHash,
+								expiresAt: inMs(ms),
+							}),
+						);
+					const refused = (reason: string) => new DbRejected({ reason });
+					const code = () => sha256Hex(crypto.randomUUID());
+
+					expect(yield* Effect.flip(create(outsider, code(), 60_000))).toEqual(
+						refused("not a member of this family"),
+					);
+					expect(yield* Effect.flip(create(owner, "ABC", 60_000))).toEqual(
+						refused("codeHash must be 64 lowercase hex characters"),
+					);
+					for (const ms of [-1_000, 8 * 86_400_000])
+						expect(yield* Effect.flip(create(owner, code(), ms))).toEqual(
+							refused("expiresAt must be within the next 7 days"),
+						);
+
+					const expiring = code();
+					yield* create(owner, expiring, 1_000);
+					yield* Effect.sleep("1500 millis");
+					expect(
+						yield* Effect.flip(
+							callDb(outsider, (c) =>
+								c.reducers.joinFamilyByInvite({ codeHash: expiring }),
+							),
+						),
+					).toEqual(refused("this invite is unknown, used, or expired"));
+					expect(readFamilyRecords(outsider).families).toEqual([]);
+				}),
+			),
+		));
+
+	test("push tokens: only sharing setup sets one, a new one replaces it, and the ingest identity joins without grants", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const owner = yield* openFamilyDb(config);
+					const relative = yield* openFamilyDb(config);
+					const ingest = yield* openFamilyDb(config);
+					yield* callDb(owner, (c) =>
+						c.reducers.createFamily({ name: "Kowalski" }),
+					);
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					yield* callDb(owner, (c) =>
+						c.reducers.addFamilyMember({
+							familyId,
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const set = (db: FamilyDb, tokenHash: string) =>
+						callDb(db, (c) =>
+							c.reducers.setFamilyPushToken({
+								familyId,
+								tokenHash,
+								ingest: Identity.fromString(ingest.identity),
+							}),
+						);
+					const tokens = () =>
+						[...ingest.connection.db.myPushTokens.iter()].map(
+							({ familyId, tokenHash }) => ({ familyId, tokenHash }),
+						);
+					// Another identity's views update asynchronously.
+					const until = (done: () => boolean) =>
+						Effect.gen(function* () {
+							for (let tries = 0; !done() && tries < 100; tries++)
+								yield* Effect.sleep("20 millis");
+						});
+					const first = sha256Hex(crypto.randomUUID());
+					const second = sha256Hex(crypto.randomUUID());
+
+					expect(yield* Effect.flip(set(relative, first))).toEqual(
+						new DbRejected({ reason: "no care access: family_access" }),
+					);
+					yield* set(owner, first);
+					yield* until(() => tokens().length === 1);
+					expect(tokens()).toEqual([{ familyId, tokenHash: first }]);
+					expect(readFamilyRecords(ingest).families.map((f) => f.id)).toEqual([
+						home.id,
+					]);
+
+					yield* set(owner, second);
+					yield* until(() => tokens()[0]?.tokenHash === second);
+					expect(tokens()).toEqual([{ familyId, tokenHash: second }]);
+					// Family members never see the token hash; the ingest identity holds no grant.
+					expect([...owner.connection.db.myPushTokens.iter()]).toEqual([]);
+					expect([...owner.connection.db.myCareGrants.iter()]).toEqual([]);
+				}),
+			),
 		));
 
 	// Without a token the first socket is the WebSocket; with one, it is the SDK's token fetch.

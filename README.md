@@ -310,7 +310,7 @@ flowchart LR
 ```
 
 - **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. Unvalidated samples never raise an alert. Screens and answers label them "WHOOP (via NOOP) · unvalidated".
-- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_INGEST_KEY`, `NOOP_FAMILY_ID`, `NOOP_SPACETIMEDB_TOKEN`.
+- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family push tokens: `POST /api/families/:familyId/whoop-token` makes one, and NOOP pushes to `/api/noop/ingest?k=<token>`. `NOOP_INGEST_KEY` with `NOOP_FAMILY_ID` keeps the single-family key. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
 - **Proof:** on a team Mac mini, a family question answered "Your most recent heart rate reading is 58 bpm · WHOOP (via NOOP) · unvalidated" ([#174](https://github.com/ayaangazali/telly/pull/174), with [#80](https://github.com/ayaangazali/telly/pull/80), [#81](https://github.com/ayaangazali/telly/pull/81), [#97](https://github.com/ayaangazali/telly/pull/97)).
 - **Limits:** the deployed API does not have NOOP ingest set up, so its `/api/sources` reports `not_connected`.
 
@@ -387,7 +387,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 
 | Area | Routes (relative to `/api/families/:familyId`) |
 | --- | --- |
-| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `GET /`, `POST /members`, `POST /samples` |
+| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `POST /api/invites/:code/join`, `GET /`, `POST /members`, `POST /invites`, `POST /whoop-token`, `POST /samples` |
 | Alerts | `/alerts`, `/alerts/:id/acknowledgements`, `/alert-thresholds`, `/monitoring` |
 | Questions, voice, chat | `/ask`, `/ask/voice`, `/voice/transcriptions`, `/voice/speech`, `/messages`, `/tools` ([docs/ask.md](docs/ask.md), [docs/chat.md](docs/chat.md)) |
 | Medicine and meals | `/vision/medicine-detections`, `/medicine-memory`, `/meals`, `/cooking/…`, `/delivery/…` |
@@ -397,7 +397,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 | Reports and appointments | `/reports/…`, `/report-pdfs/…`, `/appointments/…` |
 | Location and trips | `/location`, `/location/shares/:identity`, `/trips/…` |
 
-Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
+Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key or family push token), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
 
 </details>
 

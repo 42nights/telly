@@ -7,6 +7,7 @@ import { Alerts } from "@/components/hud/alerts";
 import { StatusFooter } from "@/components/hud/status-footer";
 import { Window } from "@/components/hud/window";
 import { MealCheckIn } from "@/components/meal-check-in/check-in";
+import { SetupChecklist } from "@/components/onboarding/checklist";
 import { DueReminders } from "@/components/reminders/due-reminders";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
@@ -16,6 +17,7 @@ import { Request } from "@/components/wearer/request";
 import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
 import { useWearerRecords } from "@/components/wearer/use-wearer-records";
+import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/hud")({
 	component: HudComponent,
@@ -68,6 +70,7 @@ const talkNote = {
 function HudComponent() {
 	const now = useNow();
 	const { familyId, familiesKind, records, retry } = useWearerRecords();
+	const { family } = useFamily();
 	const emergency = useEmergency(familyId);
 	const clock = new Date(now).toLocaleTimeString([], {
 		hour: "numeric",
@@ -75,7 +78,8 @@ function HudComponent() {
 	});
 
 	return (
-		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
+		<main className="mx-auto grid w-full max-w-6xl gap-2 p-2 md:p-4">
+			{family !== null && <SetupChecklist family={family} key={family.id} />}
 			<Window icon={Home} title={`Home · ${clock}`}>
 				<div className="grid gap-5 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
 					<div className="flex items-end justify-between gap-2 md:col-span-2">

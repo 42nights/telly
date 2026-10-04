@@ -7,10 +7,10 @@ import type { GeminiConfig } from "./integrations/gemini";
 import { type QwenConfig, qwenConfigFrom } from "./integrations/qwen";
 import type { R2Config } from "./integrations/r2";
 
+/** The NOOP ingest connection; `legacy` is the single family of `NOOP_INGEST_KEY`, when set. */
 export type NoopConfig = {
-	readonly key: string;
-	readonly familyId: bigint;
 	readonly db: DbConfig;
+	readonly legacy?: { readonly key: string; readonly familyId: bigint };
 };
 
 export type ServerConfig = {
@@ -158,6 +158,10 @@ const signIn = (
 ) =>
 	issuer && audience && db ? { issuer, audience, clientSecret, db } : undefined;
 
+/**
+ * `NOOP_SPACETIMEDB_TOKEN` and the database enable per-family WHOOP push tokens. `NOOP_INGEST_KEY`
+ * and `NOOP_FAMILY_ID` are a pair for the single legacy family and need the token too.
+ */
 const noopIngest = (
 	{
 		NOOP_INGEST_KEY: key,
@@ -165,10 +169,19 @@ const noopIngest = (
 		NOOP_SPACETIMEDB_TOKEN: token,
 	}: Env,
 	db: DbConfig | undefined,
-) =>
-	key && familyId && token && db
-		? { key, familyId: BigInt(familyId), db: { ...db, token } }
-		: undefined;
+): NoopConfig | undefined => {
+	if (!key !== !familyId)
+		throw new Error("Set both NOOP_INGEST_KEY and NOOP_FAMILY_ID, or neither");
+	if (!(key || token)) return undefined;
+	if (!(token && db))
+		throw new Error(
+			"NOOP ingest needs NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
+		);
+	return {
+		db: { ...db, token },
+		...(key && familyId ? { legacy: { key, familyId: BigInt(familyId) } } : {}),
+	};
+};
 
 const SIGN_IN =
 	"OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE";
@@ -186,11 +199,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		[env.OIDC_ISSUER, env.OIDC_AUDIENCE, env.OIDC_CLIENT_SECRET],
 		SIGN_IN,
 	);
-	const noop = allOrNone(
-		noopIngest(env, db),
-		[env.NOOP_INGEST_KEY, env.NOOP_FAMILY_ID, env.NOOP_SPACETIMEDB_TOKEN],
-		"NOOP_INGEST_KEY, NOOP_FAMILY_ID, NOOP_SPACETIMEDB_TOKEN, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE",
-	);
+	const noop = noopIngest(env, db);
 	if ((uri || database) && !auth && !noop)
 		throw new Error(`Set all of ${SIGN_IN}, or none`);
 	const finchnode = finchnodeFromEnv(

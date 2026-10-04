@@ -7,18 +7,15 @@ import { type NoopConfig, serverConfig } from "./config";
 import { openFamilyDb } from "./db";
 import { ENV } from "./env.server";
 import { startCloudIMessage } from "./imessage/cloud";
-import { type NoopIngest, recordNoopSamples } from "./integrations/noop-ingest";
+import { type NoopIngest, noopIngest } from "./integrations/noop-ingest";
 import { familyAnswer } from "./routes/ask";
 
 const config = serverConfig(ENV);
 
-const noopIngest = (noop: NoopConfig | undefined) =>
+const openNoopIngest = (noop: NoopConfig | undefined) =>
 	noop === undefined
 		? Effect.succeed(undefined)
-		: Effect.map(openFamilyDb(noop.db), (db) => ({
-				key: noop.key,
-				record: recordNoopSamples(db, noop.familyId),
-			}));
+		: Effect.map(openFamilyDb(noop.db), (db) => noopIngest(db, noop.legacy));
 
 const listen = (port: number, ingest: NoopIngest | undefined) =>
 	Effect.callback<ServerType, Error>((resume) => {
@@ -49,7 +46,7 @@ const close = (server: ServerType) =>
 // The server is a scoped resource: SIGINT/SIGTERM interrupt the layer, which closes the listener.
 const HttpServer = Layer.effectDiscard(
 	Effect.gen(function* () {
-		const ingest = yield* noopIngest(config.noop);
+		const ingest = yield* openNoopIngest(config.noop);
 		yield* Effect.acquireRelease(listen(ENV.PORT, ingest), close);
 		yield* Effect.log(`server listening on http://${ENV.HOST}:${ENV.PORT}`);
 	}),

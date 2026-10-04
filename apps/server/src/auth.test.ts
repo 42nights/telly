@@ -2,16 +2,25 @@
 // below is a test-only server on 127.0.0.1 with a key made for this run; SpacetimeDB fetches its keys
 // to verify the same tokens. Passing here is not proof of sign-in with the production provider.
 import { afterAll, describe, expect, test } from "bun:test";
+import { deflateRawSync } from "node:zlib";
 import {
 	ApiError,
 	Family,
 	FamilyRecords,
 	HealthSample,
 } from "@health/contracts";
-import { Me } from "@health/contracts/families";
-import { Schema } from "effect";
+import {
+	FamilyInvite,
+	JoinedFamily,
+	Me,
+	WhoopPushToken,
+} from "@health/contracts/families";
+import { Effect, Schema } from "effect";
 import { sign } from "hono/jwt";
 import { createApp } from "./app";
+import { openFamilyDb, pushTokenFamily } from "./db";
+import { sha256Hex } from "./http";
+import { noopIngest } from "./integrations/noop-ingest";
 
 const uri = process.env.SPACETIMEDB_URI;
 const database = process.env.SPACETIMEDB_DATABASE;
@@ -99,10 +108,11 @@ const call = async (
 	method: string,
 	path: string,
 	body?: unknown,
+	target = app,
 ) => {
-	if (app === undefined)
+	if (target === undefined)
 		throw new Error("SPACETIMEDB_URI and SPACETIMEDB_DATABASE are unset");
-	return app.request(path, {
+	return target.request(path, {
 		method,
 		headers: {
 			Authorization: `Bearer ${await token(subject)}`,
@@ -246,4 +256,197 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 			),
 		).toEqual([400, "invalid_request"]);
 	});
+
+	test("/api/me shows the token's profile claims, and null for each one it lacks", async () => {
+		const me = async (claims: Record<string, unknown>) => {
+			const bearer = await token(`me-${crypto.randomUUID()}`, claims);
+			const response = await app?.request("/api/me", {
+				headers: { Authorization: `Bearer ${bearer}` },
+			});
+			return Schema.decodeUnknownSync(Me)(await response?.json());
+		};
+		expect(
+			await me({
+				name: "Synthetic Ana Rivera",
+				given_name: "Synthetic Ana",
+				email: "ana@example.test",
+				picture: "https://example.test/ana.png",
+			}),
+		).toMatchObject({
+			name: "Synthetic Ana Rivera",
+			givenName: "Synthetic Ana",
+			email: "ana@example.test",
+			picture: "https://example.test/ana.png",
+		});
+		expect(await me({})).toMatchObject({
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		});
+	});
+
+	test("an invite admits one person once; members may reuse the link", async () => {
+		const [alice, bob, carol] = ["alice", "bob", "carol"].map(
+			(name) => `${name}-${crypto.randomUUID()}`,
+		) as [string, string, string];
+		const family = Schema.decodeUnknownSync(Family)(
+			await (
+				await call(alice, "POST", "/api/families", { name: "Ito" })
+			).json(),
+		);
+		const path = `/api/families/${family.id}`;
+		expect(await errorOf(await call(bob, "POST", `${path}/invites`))).toEqual([
+			403,
+			"forbidden",
+		]);
+
+		const created = await call(alice, "POST", `${path}/invites`);
+		expect(created.status).toBe(201);
+		const invite = Schema.decodeUnknownSync(FamilyInvite)(await created.json());
+		expect(invite.code).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		const days = (Date.parse(invite.expiresAt) - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(6.99);
+		expect(days).toBeLessThanOrEqual(7);
+
+		const join = (subject: string, code: string) =>
+			call(subject, "POST", `/api/invites/${encodeURIComponent(code)}/join`);
+		const joined = async (subject: string, code: string) => {
+			const response = await join(subject, code);
+			expect(response.status).toBe(200);
+			return Schema.decodeUnknownSync(JoinedFamily)(await response.json())
+				.family;
+		};
+		// A member's join does not use the invite up.
+		expect(await joined(alice, invite.code)).toEqual(family);
+		expect(await joined(bob, invite.code)).toEqual(family);
+		expect(await joined(bob, invite.code)).toEqual(family);
+		expect(await errorOf(await join(carol, invite.code))).toEqual([
+			400,
+			"invalid_request",
+		]);
+		expect(await errorOf(await join(carol, "not-a-code"))).toEqual([
+			400,
+			"invalid_request",
+		]);
+		expect((await call(bob, "GET", path)).status).toBe(200);
+		expect((await call(carol, "GET", path)).status).toBe(403);
+	});
+
+	test("a family's WHOOP push token records NOOP batches into that family only", () =>
+		Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					if (!(uri && database)) throw new Error("no database");
+					const auth = { issuer, audience, db: { uri, database } };
+					const ingest = yield* openFamilyDb({ uri, database });
+					const pushApp = createApp(
+						{ corsOrigin: "http://localhost:3001", auth, voice: noVoice },
+						noopIngest(ingest),
+					);
+					const as = (subject: string, method: string, path: string) =>
+						Effect.promise(() =>
+							call(subject, method, path, undefined, pushApp),
+						);
+					const alice = `alice-${crypto.randomUUID()}`;
+					const bob = `bob-${crypto.randomUUID()}`;
+					const family = Schema.decodeUnknownSync(Family)(
+						yield* Effect.promise(async () =>
+							(
+								await call(alice, "POST", "/api/families", { name: "Moreau" })
+							).json(),
+						),
+					);
+					const path = `/api/families/${family.id}`;
+					const bobMe = Schema.decodeUnknownSync(Me)(
+						yield* Effect.promise(async () =>
+							(await call(bob, "GET", "/api/me")).json(),
+						),
+					);
+					yield* Effect.promise(() =>
+						call(alice, "POST", `${path}/members`, {
+							identity: bobMe.identity,
+						}),
+					);
+
+					// Without NOOP ingest the route is unavailable; a member without sharing rights is refused.
+					const noIngest = yield* Effect.promise(() =>
+						call(alice, "POST", `${path}/whoop-token`),
+					);
+					expect(yield* Effect.promise(() => errorOf(noIngest))).toEqual([
+						503,
+						"unavailable",
+					]);
+					const refused = yield* as(bob, "POST", `${path}/whoop-token`);
+					expect(yield* Effect.promise(() => errorOf(refused))).toEqual([
+						403,
+						"forbidden",
+					]);
+
+					const newToken = Effect.gen(function* () {
+						const response = yield* as(alice, "POST", `${path}/whoop-token`);
+						expect(response.status).toBe(201);
+						const { token } = Schema.decodeUnknownSync(WhoopPushToken)(
+							yield* Effect.promise(() => response.json()),
+						);
+						// The ingest identity's view updates asynchronously.
+						for (let tries = 0; tries < 100; tries++) {
+							if (pushTokenFamily(ingest, sha256Hex(token)) !== undefined)
+								break;
+							yield* Effect.sleep("20 millis");
+						}
+						return token;
+					});
+					const push = (key: string) =>
+						Effect.promise(async () =>
+							pushApp.request(`/api/noop/ingest?k=${encodeURIComponent(key)}`, {
+								method: "POST",
+								body: deflateRawSync(
+									JSON.stringify({
+										tables: {
+											hrSample: [
+												{
+													deviceId: "test-whoop",
+													ts: Math.floor(Date.now() / 1000) - 60,
+													bpm: 61,
+												},
+											],
+										},
+									}),
+								),
+							}),
+						);
+
+					const first = yield* newToken;
+					expect(pushTokenFamily(ingest, sha256Hex(first))).toBe(
+						BigInt(family.id),
+					);
+					expect((yield* push(first)).status).toBe(200);
+					expect((yield* push("unknown-token")).status).toBe(401);
+					let samples: readonly HealthSample[] = [];
+					for (let tries = 0; samples.length === 0 && tries < 100; tries++) {
+						const read = yield* as(alice, "GET", path);
+						samples = Schema.decodeUnknownSync(FamilyRecords)(
+							yield* Effect.promise(() => read.json()),
+						).samples;
+						if (samples.length === 0) yield* Effect.sleep("20 millis");
+					}
+					expect(samples).toMatchObject([
+						{
+							familyId: family.id,
+							metric: "heart_rate",
+							source: "noop:test-whoop",
+							synthetic: false,
+							quality: "unvalidated",
+						},
+					]);
+
+					// A new token revokes the old one.
+					const second = yield* newToken;
+					expect(pushTokenFamily(ingest, sha256Hex(first))).toBeUndefined();
+					expect((yield* push(first)).status).toBe(401);
+					expect((yield* push(second)).status).toBe(200);
+				}),
+			),
+		));
 });

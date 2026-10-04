@@ -300,6 +300,17 @@ export const Family = __t.object("Family", {
 });
 export type Family = __Infer<typeof Family>;
 
+export const FamilyInvite = __t.object("FamilyInvite", {
+  codeHash: __t.string(),
+  familyId: __t.u64(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  expiresAt: __t.timestamp(),
+  usedBy: __t.option(__t.identity()),
+  usedAt: __t.option(__t.timestamp()),
+});
+export type FamilyInvite = __Infer<typeof FamilyInvite>;
+
 export const FamilyMember = __t.object("FamilyMember", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -307,6 +318,15 @@ export const FamilyMember = __t.object("FamilyMember", {
   addedAt: __t.timestamp(),
 });
 export type FamilyMember = __Infer<typeof FamilyMember>;
+
+export const FamilyPushToken = __t.object("FamilyPushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+  ingest: __t.identity(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+});
+export type FamilyPushToken = __Infer<typeof FamilyPushToken>;
 
 export const FinchnodeLink = __t.object("FinchnodeLink", {
   id: __t.u64(),
@@ -486,6 +506,9 @@ export type MyExercisePlans = __Infer<typeof MyExercisePlans>;
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
+export const MyFamilyInvites = __t.object("MyFamilyInvites", {});
+export type MyFamilyInvites = __Infer<typeof MyFamilyInvites>;
+
 export const MyFinchnodeLinks = __t.object("MyFinchnodeLinks", {});
 export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
@@ -509,6 +532,9 @@ export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;
+
+export const MyPushTokens = __t.object("MyPushTokens", {});
+export type MyPushTokens = __Infer<typeof MyPushTokens>;
 
 export const MyReminderEvents = __t.object("MyReminderEvents", {});
 export type MyReminderEvents = __Infer<typeof MyReminderEvents>;
@@ -599,6 +625,12 @@ export const PendingDelivery = __t.object("PendingDelivery", {
   updatedAt: __t.timestamp(),
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
+
+export const PushToken = __t.object("PushToken", {
+  familyId: __t.u64(),
+  tokenHash: __t.string(),
+});
+export type PushToken = __Infer<typeof PushToken>;
 
 export const Reminder = __t.object("Reminder", {
   id: __t.u64(),
