@@ -16,4 +16,5 @@ export default __t.row({
   sender: __t.identity(),
   body: __t.string(),
   sentAt: __t.timestamp().name("sent_at"),
+  clientId: __t.string().name("client_id"),
 });

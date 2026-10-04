@@ -67,6 +67,7 @@ export const Message = __t.object("Message", {
   sender: __t.identity(),
   body: __t.string(),
   sentAt: __t.timestamp(),
+  clientId: __t.string(),
 });
 export type Message = __Infer<typeof Message>;
 
