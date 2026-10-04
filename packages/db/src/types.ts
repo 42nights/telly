@@ -209,6 +209,29 @@ export const DeliveryStatus = __t.enum("DeliveryStatus", {
 });
 export type DeliveryStatus = __Infer<typeof DeliveryStatus>;
 
+export const ExerciseEvent = __t.object("ExerciseEvent", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  planId: __t.string(),
+  sessionId: __t.string(),
+  kind: __t.string(),
+  reason: __t.option(__t.string()),
+  actor: __t.identity(),
+  at: __t.timestamp(),
+});
+export type ExerciseEvent = __Infer<typeof ExerciseEvent>;
+
+export const ExercisePlan = __t.object("ExercisePlan", {
+  id: __t.string(),
+  familyId: __t.u64(),
+  plan: __t.string(),
+  createdBy: __t.identity(),
+  createdAt: __t.timestamp(),
+  verifiedBy: __t.option(__t.identity()),
+  verifiedAt: __t.option(__t.timestamp()),
+});
+export type ExercisePlan = __Infer<typeof ExercisePlan>;
+
 export const Family = __t.object("Family", {
   id: __t.u64(),
   name: __t.string(),
@@ -309,6 +332,16 @@ export const LocationStatus = __t.enum("LocationStatus", {
 });
 export type LocationStatus = __Infer<typeof LocationStatus>;
 
+export const MealFact = __t.object("MealFact", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  mealId: __t.string(),
+  fact: __t.string(),
+  recordedBy: __t.identity(),
+  recordedAt: __t.timestamp(),
+});
+export type MealFact = __Infer<typeof MealFact>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -349,6 +382,12 @@ export type MyContactAttempts = __Infer<typeof MyContactAttempts>;
 export const MyContactLadders = __t.object("MyContactLadders", {});
 export type MyContactLadders = __Infer<typeof MyContactLadders>;
 
+export const MyExerciseEvents = __t.object("MyExerciseEvents", {});
+export type MyExerciseEvents = __Infer<typeof MyExerciseEvents>;
+
+export const MyExercisePlans = __t.object("MyExercisePlans", {});
+export type MyExercisePlans = __Infer<typeof MyExercisePlans>;
+
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
@@ -363,6 +402,9 @@ export type MyLocationShares = __Infer<typeof MyLocationShares>;
 
 export const MyLocations = __t.object("MyLocations", {});
 export type MyLocations = __Infer<typeof MyLocations>;
+
+export const MyMealFacts = __t.object("MyMealFacts", {});
+export type MyMealFacts = __Infer<typeof MyMealFacts>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;

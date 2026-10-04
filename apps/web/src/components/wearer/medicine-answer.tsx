@@ -170,6 +170,25 @@ function PictureAnswer({
 				</Button>
 			</>
 		);
+	if (result.kind === "cleared")
+		return (
+			<>
+				<p className="win95-raised flex items-start gap-3 p-4 text-[20px]">
+					<Info aria-hidden className="mt-0.5 size-6 shrink-0" />
+					{result.reason === "moved"
+						? "The camera moved, so I took the marker away."
+						: "That picture is more than a minute old, so I took the marker away."}
+				</p>
+				<Button
+					className={`win95-primary ${xl}`}
+					disabled={!live}
+					onClick={look}
+				>
+					<Camera aria-hidden />
+					Look again
+				</Button>
+			</>
+		);
 	if (result.kind !== "done")
 		return <CheckFailed failure={result} live={live} look={look} />;
 	if (best !== null)
