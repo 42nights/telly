@@ -7,7 +7,6 @@ import {
 	formatSize,
 	mergeMessages,
 	nextGeminiStatus,
-	queueSend,
 	timeline,
 } from "./logic";
 
@@ -27,22 +26,6 @@ test("mergeMessages dedupes by id and orders numerically", () => {
 	);
 	expect(merged.map((m) => m.id)).toEqual(["2", "9", "10", "11"]);
 	expect(merged.filter((m) => m.id === "10")).toHaveLength(1);
-});
-
-test("queueSend reuses a failed message's clientId only for the same body", () => {
-	let n = 0;
-	const make = () => `id${++n}`;
-	const first = queueSend([], "hi", make);
-	expect(first.clientId).toBe("id1");
-	const failed = first.outbox.map((e) => ({ ...e, status: "failed" as const }));
-	const retry = queueSend(failed, "hi", make);
-	expect(retry.clientId).toBe("id1");
-	expect(retry.outbox).toEqual([
-		{ clientId: "id1", body: "hi", status: "sending" },
-	]);
-	const other = queueSend(failed, "hello", make);
-	expect(other.clientId).toBe("id2");
-	expect(other.outbox).toHaveLength(2);
 });
 
 test("acceptFiles keeps only files with data", () => {

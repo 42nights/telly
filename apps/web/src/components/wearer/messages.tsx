@@ -48,7 +48,7 @@ export function Messages({
 				to="/chat"
 			>
 				<MessageSquare aria-hidden />
-				Open chat to reply
+				Open family chat
 			</Link>
 			<ul className="win95-inset grid max-h-[28rem] content-start gap-2 overflow-y-auto bg-card p-2">
 				{messages.length === 0 && (

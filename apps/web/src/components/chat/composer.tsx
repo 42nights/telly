@@ -1,6 +1,6 @@
 import { Button } from "@health/ui/components/button";
 import { Paperclip, Send } from "lucide-react";
-import { type Dispatch, type SetStateAction, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { acceptFiles } from "./logic";
 import { type Attached, FileTray } from "./tray";
@@ -8,38 +8,25 @@ import { VoiceButton } from "./voice";
 
 const NO_UPLOAD = "Files can't be sent yet: there is no upload route.";
 
-export type ChatMode = "family" | "gemini";
-
 /**
- * One recessed box: a To control (Family or Gemini), message text, the attachment tray, and
- * exactly three buttons (attach, voice, send). `onSend` sends in the current mode and the parent
- * clears the draft once it is stored or answered. There is no upload route, so files are never
- * sent and stay in the tray.
+ * One recessed box: the question text, the attachment tray, and exactly three buttons (attach,
+ * voice, send). `onSend` asks the family agent; the draft clears once it answered.
+ * There is no upload route, so files are never sent and stay in the tray.
  */
 export function Composer({
-	familyId,
 	placeholder,
 	offline,
 	onSend,
-	text,
-	setText,
-	mode,
-	setMode,
 	askVoice,
 }: {
-	familyId: string;
 	placeholder: string;
 	/** The server is down: Send is disabled so the outage banner holds the one primary action. */
 	offline: boolean;
-	/** Resolves true once the server stored the message or Gemini answered. */
+	/** Resolves true once the family agent answered. */
 	onSend: (body: string) => Promise<boolean>;
-	/** The draft. The parent owns it so a retry from the list can clear it too. */
-	text: string;
-	setText: Dispatch<SetStateAction<string>>;
-	mode: ChatMode;
-	setMode: (mode: ChatMode) => void;
 	askVoice: (audio: Blob) => Promise<string | null>;
 }) {
+	const [text, setText] = useState("");
 	const [sending, setSending] = useState(false);
 	const [files, setFiles] = useState<Attached[]>([]);
 	const [status, setStatus] = useState<string | null>(null);
@@ -58,14 +45,16 @@ export function Composer({
 	const submit = async () => {
 		const body = text.trim();
 		if (body === "") {
-			setStatus(files.length > 0 ? NO_UPLOAD : "Write a message first.");
+			setStatus(files.length > 0 ? NO_UPLOAD : "Write a question first.");
 			return;
 		}
 		setSending(true);
-		const stored = await onSend(body);
+		const answered = await onSend(body);
 		setSending(false);
+		if (answered)
+			setText((current) => (current.trim() === body ? "" : current));
 		setStatus(
-			stored && files.length > 0
+			answered && files.length > 0
 				? "Files can't be sent yet; only the text was sent."
 				: null,
 		);
@@ -95,27 +84,6 @@ export function Composer({
 					event.currentTarget.value = "";
 				}}
 			/>
-			<fieldset className="flex items-center gap-1 text-[13px]">
-				<legend className="sr-only">Send to</legend>
-				<span aria-hidden className="px-1 font-bold">
-					To:
-				</span>
-				{(["family", "gemini"] as const).map((option) => (
-					<label
-						key={option}
-						className="flex h-11 cursor-pointer items-center gap-1.5 px-2 has-[:checked]:font-bold has-[:focus-visible]:outline-dotted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-black"
-					>
-						<input
-							type="radio"
-							className="size-4 accent-[#000080] [color-scheme:light]"
-							name="chat-mode"
-							checked={mode === option}
-							onChange={() => setMode(option)}
-						/>
-						{option === "family" ? "Family" : "Gemini"}
-					</label>
-				))}
-			</fieldset>
 			<label htmlFor="chat-message" className="sr-only">
 				Message
 			</label>
@@ -142,19 +110,14 @@ export function Composer({
 				>
 					<Paperclip aria-hidden />
 				</Button>
-				<VoiceButton
-					familyId={familyId}
-					setText={setText}
-					setStatus={setStatus}
-					askVoice={mode === "gemini" ? askVoice : null}
-				/>
+				<VoiceButton setStatus={setStatus} askVoice={askVoice} />
 				<Button
 					type="submit"
 					disabled={offline || sending}
 					className={offline ? "h-11 px-4" : "win95-primary h-11 px-4"}
 				>
 					<Send aria-hidden />
-					{mode === "gemini" ? "Ask" : "Send"}
+					Send
 				</Button>
 			</div>
 		</form>

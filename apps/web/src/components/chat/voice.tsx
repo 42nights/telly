@@ -1,9 +1,6 @@
-import { VoiceTranscript } from "@health/contracts/voice";
 import { Button } from "@health/ui/components/button";
 import { Mic, Square } from "lucide-react";
-import { type Dispatch, type SetStateAction, useRef, useState } from "react";
-
-import { apiRequest, familyPath } from "@/lib/api";
+import { useRef, useState } from "react";
 
 const VOICE_LABEL = {
 	idle: "",
@@ -11,53 +8,22 @@ const VOICE_LABEL = {
 	transcribing: "Working…",
 } as const;
 
-/**
- * The mic button and its live label. In Family mode it transcribes into the draft; with `askVoice`
- * (Gemini mode) the recording goes to Gemini as the question.
- */
+/** The mic button and its live label. The recording goes to the family agent as the question. */
 export function VoiceButton({
-	familyId,
-	setText,
 	setStatus,
 	askVoice,
 }: {
-	familyId: string;
-	setText: Dispatch<SetStateAction<string>>;
 	setStatus: (status: string | null) => void;
-	/** Gemini mode: sends the recording and returns a message to show, or null. */
-	askVoice: ((audio: Blob) => Promise<string | null>) | null;
+	/** Sends the recording and returns a message to show, or null. */
+	askVoice: (audio: Blob) => Promise<string | null>;
 }) {
 	const [voice, setVoice] = useState<keyof typeof VOICE_LABEL>("idle");
 	const recorder = useRef<MediaRecorder | null>(null);
 
 	const transcribe = async (audio: Blob) => {
 		setVoice("transcribing");
-		if (askVoice !== null) {
-			setStatus(await askVoice(audio));
-			setVoice("idle");
-			return;
-		}
-		const result = await apiRequest(
-			VoiceTranscript,
-			familyPath(familyId, "/voice/transcriptions"),
-			{ method: "POST", rawBody: { data: audio, type: audio.type } },
-		);
+		setStatus(await askVoice(audio));
 		setVoice("idle");
-		if (result.kind === "ready") {
-			setText((current) =>
-				current.trim() === ""
-					? result.value.text
-					: `${current} ${result.value.text}`,
-			);
-			setStatus(null);
-			return;
-		}
-		console.error("Voice transcription failed:", result);
-		setStatus(
-			result.kind === "signed_out"
-				? "Voice not available: sign in first."
-				: `Voice not available: ${result.message}`,
-		);
 	};
 
 	const toggleVoice = async () => {

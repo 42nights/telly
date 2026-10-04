@@ -1,13 +1,10 @@
-import {
-	type FamilyMessage,
-	FamilyMessage as FamilyMessageSchema,
-} from "@health/contracts";
+import type { FamilyMessage } from "@health/contracts";
 import { FamilyMessages } from "@health/contracts/chat";
 import { useEffect, useRef, useState } from "react";
 
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
-import { mergeMessages, type Outgoing, queueSend } from "./logic";
+import { mergeMessages } from "./logic";
 
 const POLL_MS = 5_000;
 /** The server returns at most this many messages after a cursor. */
@@ -16,17 +13,14 @@ const PAGE = 200;
 type ReadState = { readonly kind: "loading" | "ready" } | ApiFailure;
 
 /**
- * The family's messages, caught up with `GET /messages?after=<last id>` every `POLL_MS`, and sends
- * with `POST /messages`. Mount one per family (key by family id): the cursor belongs to one family.
+ * The family's person-to-person messages, read-only, caught up with `GET /messages?after=<last id>`
+ * every `POLL_MS`. Mount one per family (key by family id): the cursor belongs to one family.
  */
 export function useChat(familyId: string) {
 	const [messages, setMessages] = useState<FamilyMessage[]>([]);
 	const [read, setRead] = useState<ReadState>({ kind: "loading" });
-	const [outbox, setOutbox] = useState<Outgoing[]>([]);
 	const [refreshKey, setRefreshKey] = useState(0);
 	const last = useRef<string | null>(null);
-	const outboxRef = useRef(outbox);
-	outboxRef.current = outbox;
 
 	useEffect(() => {
 		void refreshKey;
@@ -68,38 +62,9 @@ export function useChat(familyId: string) {
 		};
 	}, [familyId, refreshKey]);
 
-	/** Sends `body`; resolves true once the server stored it. */
-	const send = async (body: string): Promise<boolean> => {
-		const queued = queueSend(outboxRef.current, body, () =>
-			crypto.randomUUID(),
-		);
-		outboxRef.current = queued.outbox;
-		setOutbox(queued.outbox);
-		const { clientId } = queued;
-		const result = await apiRequest(
-			FamilyMessageSchema,
-			familyPath(familyId, "/messages"),
-			{ method: "POST", body: { clientId, body } },
-		);
-		const others = outboxRef.current.filter((e) => e.clientId !== clientId);
-		if (result.kind === "ready") {
-			setMessages((current) => mergeMessages(current, [result.value]));
-			outboxRef.current = others;
-			setOutbox(others);
-			return true;
-		}
-		console.error("Family message not sent:", result);
-		const failed = [...others, { clientId, body, status: "failed" as const }];
-		outboxRef.current = failed;
-		setOutbox(failed);
-		return false;
-	};
-
 	return {
 		messages,
 		read,
-		outbox,
-		send,
 		retryRead: () => setRefreshKey((key) => key + 1),
 	};
 }

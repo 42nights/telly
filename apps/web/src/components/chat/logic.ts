@@ -117,32 +117,3 @@ export function mergeMessages(
 		return d < 0n ? -1 : d > 0n ? 1 : 0;
 	});
 }
-
-/** A message this device sent that the server has not stored yet. */
-export type Outgoing = {
-	readonly clientId: string;
-	readonly body: string;
-	readonly status: "sending" | "failed";
-};
-
-/**
- * Starts a send. A failed message with the same body is retried with its own `clientId`, so the
- * server stores it once; any other body gets a new id from `makeId`.
- */
-export function queueSend(
-	outbox: readonly Outgoing[],
-	body: string,
-	makeId: () => string,
-): { outbox: Outgoing[]; clientId: string } {
-	const failed = outbox.find(
-		(entry) => entry.status === "failed" && entry.body === body,
-	);
-	const clientId = failed?.clientId ?? makeId();
-	const entry: Outgoing = { clientId, body, status: "sending" };
-	return {
-		outbox: failed
-			? outbox.map((e) => (e.clientId === clientId ? entry : e))
-			: [...outbox, entry],
-		clientId,
-	};
-}

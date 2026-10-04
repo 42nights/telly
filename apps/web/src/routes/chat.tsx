@@ -2,9 +2,9 @@ import { Me } from "@health/contracts/families";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, CloudOff, MessagesSquare, RotateCw } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 
-import { type ChatMode, Composer } from "@/components/chat/composer";
+import { Composer } from "@/components/chat/composer";
 import { ChatLog } from "@/components/chat/entries";
 import {
 	GEMINI_CHIP,
@@ -94,11 +94,11 @@ function ChatHeader({
 				text={
 					gemini.kind === "unavailable"
 						? `Gemini is unavailable: ${gemini.message}`
-						: "Gemini answers questions from the family's records and cites them. Its answers stay on this device for this session only; there is no answer history yet."
+						: "The family agent (Gemini) answers from the family's records and cites them. Its answers stay on this device for this session only; there is no answer history yet."
 				}
 			/>
 			<Tip
-				text={`In this chat: the members of ${familyName ?? "your family"}. Choose To: Gemini to ask about the records.`}
+				text={`In this chat: the members of ${familyName ?? "your family"} and the family agent. The agent answers only from the available health records. It does not give medical advice.`}
 			/>
 		</div>
 	);
@@ -113,16 +113,8 @@ function ChatBody({
 	familyName: string;
 	identity: string | null;
 }) {
-	const { messages, read, outbox, send, retryRead } = useChat(familyId);
+	const { messages, read, retryRead } = useChat(familyId);
 	const { asks, status, ask, askVoice } = useAsk(familyId);
-	const [text, setText] = useState("");
-	const [mode, setMode] = useState<ChatMode>("family");
-	/** Sends `body` in `via`, and clears the draft when it still holds that text. */
-	const submit = async (body: string, via: ChatMode = mode) => {
-		const done = await (via === "gemini" ? ask(body) : send(body));
-		if (done) setText((current) => (current.trim() === body ? "" : current));
-		return done;
-	};
 	const header = <ChatHeader familyName={familyName} gemini={status} />;
 	if (read.kind === "signed_out" || read.kind === "forbidden")
 		return (
@@ -143,25 +135,14 @@ function ChatBody({
 			{header}
 			<ChatLog
 				items={timeline(messages, asks)}
-				outbox={outbox}
 				identity={identity}
 				emptyText={emptyText}
-				onRetry={(body) => void submit(body, "family")}
 			/>
 			{down && <Outage failure={read} onRetry={retryRead} />}
 			<Composer
-				familyId={familyId}
-				placeholder={
-					mode === "gemini"
-						? `Ask Gemini about ${familyName}'s records…`
-						: `Message ${familyName}'s family…`
-				}
+				placeholder={`Ask about ${familyName}'s health records…`}
 				offline={down}
-				onSend={submit}
-				text={text}
-				setText={setText}
-				mode={mode}
-				setMode={setMode}
+				onSend={ask}
 				askVoice={askVoice}
 			/>
 		</div>

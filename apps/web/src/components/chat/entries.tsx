@@ -1,16 +1,10 @@
 import type { FamilyMessage } from "@health/contracts";
-import { Button } from "@health/ui/components/button";
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { memberLabel } from "@/lib/members";
 
-import {
-	type Ask,
-	evidenceLine,
-	type Outgoing,
-	type TimelineItem,
-} from "./logic";
+import { type Ask, evidenceLine, type TimelineItem } from "./logic";
 
 const formatTime = (iso: string) =>
 	new Date(iso).toLocaleString([], {
@@ -69,46 +63,13 @@ function MessageItem({
 	);
 }
 
-function OutgoingItem({
-	entry,
-	onRetry,
-}: {
-	entry: Outgoing;
-	onRetry: () => void;
-}) {
-	return (
-		<Entry
-			who={<span>You</span>}
-			meta={
-				entry.status === "sending" ? (
-					<span className="font-normal">Sending…</span>
-				) : (
-					<span className="flex items-center gap-1 text-destructive">
-						Not sent ·
-						<Button
-							type="button"
-							variant="outline"
-							className="h-11"
-							onClick={onRetry}
-						>
-							Try again
-						</Button>
-					</span>
-				)
-			}
-		>
-			<p className={`${BODY} text-muted-foreground`}>{entry.body}</p>
-		</Entry>
-	);
-}
-
-/** Your question to Gemini, then Gemini's answer with its cited records (or why there is none). */
+/** Your question to the family agent, then its answer with the cited records (or why there is none). */
 function AskItem({ ask }: { ask: Ask }) {
 	const { state } = ask;
 	return (
 		<>
 			<Entry
-				who={<span>You → Gemini</span>}
+				who={<span>You → family agent</span>}
 				meta={
 					<time dateTime={ask.askedAt} className="font-normal">
 						{formatTime(ask.askedAt)}
@@ -120,11 +81,12 @@ function AskItem({ ask }: { ask: Ask }) {
 			<Entry
 				className="win95-inset bg-[#ffffe1] p-2"
 				who={
-					<span className="flex items-center gap-1">
+					<span className="flex flex-wrap items-center gap-x-1">
 						<Sparkles aria-hidden className="size-4" />
-						{state.kind === "answered"
-							? `Gemini · ${state.answer.model}`
-							: "Gemini"}
+						Family agent · Gemini
+						{state.kind === "answered" && (
+							<small className="font-normal">({state.answer.model})</small>
+						)}
 					</span>
 				}
 				meta={
@@ -180,16 +142,12 @@ function Sources({
 /** The fixed-height message log; column-reverse keeps the scroll at the newest entry. */
 export function ChatLog({
 	items,
-	outbox,
 	identity,
 	emptyText,
-	onRetry,
 }: {
 	items: readonly TimelineItem[];
-	outbox: readonly Outgoing[];
 	identity: string | null;
 	emptyText: string;
-	onRetry: (body: string) => void;
 }) {
 	return (
 		<div
@@ -197,7 +155,7 @@ export function ChatLog({
 			aria-label="Messages"
 			className="win95-inset flex h-[340px] flex-col-reverse overflow-y-auto bg-white p-2"
 		>
-			{items.length === 0 && outbox.length === 0 ? (
+			{items.length === 0 ? (
 				<p className="text-[13px]">{emptyText}</p>
 			) : (
 				<ol className="grid gap-3.5">
@@ -212,13 +170,6 @@ export function ChatLog({
 							<AskItem key={item.ask.id} ask={item.ask} />
 						),
 					)}
-					{outbox.map((entry) => (
-						<OutgoingItem
-							key={entry.clientId}
-							entry={entry}
-							onRetry={() => onRetry(entry.body)}
-						/>
-					))}
 				</ol>
 			)}
 		</div>
