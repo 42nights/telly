@@ -14,6 +14,8 @@
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
+		"./care": "./src/care.ts",
+		"./trends": "./src/trends.ts",
 		"./location": "./src/location.ts"
 	},
 	"scripts": {

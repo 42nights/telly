@@ -70,7 +70,7 @@ __pycache__/
 *.pyc
 .venv/
 
-# Gemma training: datasets, run manifests, and model weights stay outside Git
+# Gemma training: datasets, run manifests, recordings, and model weights stay outside Git
 training/gemma/data/
 training/gemma/runs/
 *.safetensors
@@ -78,3 +78,13 @@ training/gemma/runs/
 *.ckpt
 *.pt
 *.bin
+training/**/*.wav
+training/**/*.mp3
+training/**/*.m4a
+training/**/*.aac
+training/**/*.flac
+training/**/*.ogg
+training/**/*.opus
+training/**/*.webm
+training/**/*.mp4
+training/**/*.mov

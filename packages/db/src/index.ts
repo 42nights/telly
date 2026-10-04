@@ -43,13 +43,16 @@ import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
 import MarkAlertDeliverySentReducer from "./mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailable_reducer";
+import OpenCareNeedReducer from "./open_care_need_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import ReportLocationReducer from "./report_location_reducer";
+import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
 import RevokeLocationShareReducer from "./revoke_location_share_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
+import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import ShareLocationReducer from "./share_location_reducer";
 import UpdateReportReducer from "./update_report_reducer";
 
@@ -60,6 +63,9 @@ import MyAcknowledgementsRow from "./my_acknowledgements_table";
 import MyAlertDeliveriesRow from "./my_alert_deliveries_table";
 import MyAlertThresholdsRow from "./my_alert_thresholds_table";
 import MyAlertsRow from "./my_alerts_table";
+import MyCareNeedsRow from "./my_care_needs_table";
+import MyContactAttemptsRow from "./my_contact_attempts_table";
+import MyContactLaddersRow from "./my_contact_ladders_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
@@ -101,6 +107,27 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAlertsRow),
+  myCareNeeds: __table({
+    name: 'my_care_needs',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCareNeedsRow),
+  myContactAttempts: __table({
+    name: 'my_contact_attempts',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyContactAttemptsRow),
+  myContactLadders: __table({
+    name: 'my_contact_ladders',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyContactLaddersRow),
   myFamilies: __table({
     name: 'my_families',
     indexes: [
@@ -170,13 +197,16 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),
   __reducerSchema("mark_alert_delivery_sent", MarkAlertDeliverySentReducer),
   __reducerSchema("mark_alert_delivery_unavailable", MarkAlertDeliveryUnavailableReducer),
+  __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("report_location", ReportLocationReducer),
+  __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
   __reducerSchema("revoke_location_share", RevokeLocationShareReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
+  __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("share_location", ShareLocationReducer),
   __reducerSchema("update_report", UpdateReportReducer),
 );

@@ -10,7 +10,7 @@ import { Tip } from "@/components/win95";
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
 import { DataTable } from "./data-table";
-import { formatTime, labRange, labValue } from "./logic";
+import { demoText, formatTime, labRange, labValue } from "./logic";
 
 type Fetch =
 	| { readonly kind: "idle" }
@@ -44,11 +44,16 @@ export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 			FinchnodeLabs,
 			familyPath(familyId, "/finchnode/labs"),
 		);
-		setFetch(
-			labs.kind === "ready"
-				? { kind: "done", labs: labs.value, at: Date.now() }
-				: labs,
-		);
+		if (labs.kind !== "ready") {
+			setFetch(labs);
+			return;
+		}
+		const demo = labs.value.subjects.filter((s) => s.synthetic).length;
+		if (demo > 0)
+			console.error(
+				`FinchNode sent demo records for ${demo} subject(s). They are not real patient data.`,
+			);
+		setFetch({ kind: "done", labs: labs.value, at: Date.now() });
 	};
 
 	const start = async () => {
@@ -149,6 +154,7 @@ export function FinchnodeLabsPanel({ familyId }: { familyId: string }) {
 }
 
 function SubjectLabs({ subject }: { subject: FinchnodeSubjectLabs }) {
+	const say = (text: string) => (subject.synthetic ? demoText(text) : text);
 	return (
 		<fieldset className="grid gap-1.5 border border-border p-2 text-sm">
 			<legend className="px-1">
@@ -160,14 +166,16 @@ function SubjectLabs({ subject }: { subject: FinchnodeSubjectLabs }) {
 				)}
 			</legend>
 			<p>
-				{subject.syncStatus !== null && `Sync: ${subject.syncStatus}. `}
+				{subject.syncStatus !== null && `Sync: ${say(subject.syncStatus)}. `}
 				{subject.dataAsOf !== null &&
 					`Data as of ${formatTime(subject.dataAsOf)}. `}
 				{subject.sources.length > 0 &&
-					`From ${subject.sources.map((source) => source.organization ?? source.system).join(", ")}.`}
+					`From ${subject.sources.map((source) => say(source.organization ?? source.system)).join(", ")}.`}
 			</p>
 			{subject.warnings.length > 0 && (
-				<p role="alert">FinchNode warnings: {subject.warnings.join(", ")}</p>
+				<p role="alert">
+					FinchNode warnings: {subject.warnings.map(say).join(", ")}
+				</p>
 			)}
 			{subject.access !== "granted" ? (
 				<p className="win95-inset bg-card p-2">{ACCESS_TEXT[subject.access]}</p>
@@ -182,10 +190,10 @@ function SubjectLabs({ subject }: { subject: FinchnodeSubjectLabs }) {
 					{subject.labs.map((lab) => (
 						<tr key={lab.id} className="border-border border-t align-top">
 							<td className="p-1.5">
-								{lab.name}
+								{say(lab.name)}
 								{lab.interpretation !== null && (
 									<small className="block text-sm">
-										Source says: {lab.interpretation}
+										Source says: {say(lab.interpretation)}
 									</small>
 								)}
 							</td>
@@ -193,9 +201,9 @@ function SubjectLabs({ subject }: { subject: FinchnodeSubjectLabs }) {
 							<td className="p-1.5">
 								{lab.date === null ? "Not dated" : formatTime(lab.date)}
 							</td>
-							<td className="p-1.5">{labRange(lab) ?? "—"}</td>
+							<td className="p-1.5">{say(labRange(lab) ?? "—")}</td>
 							<td className="p-1.5">
-								{lab.sourceName ?? lab.source ?? "Not named"}
+								{say(lab.sourceName ?? lab.source ?? "Not named")}
 							</td>
 						</tr>
 					))}
