@@ -176,9 +176,9 @@ test("says nothing was found when the picture has no thing in it", async () => {
 	renderRoute("/find");
 
 	await showVideo();
-	expect((await screen.findByText(/^I can't see/)).textContent).toBe(
-		"I can't see your things in this picture.",
-	);
+	expect(
+		await screen.findByText("I could not see anything to save. Try again."),
+	).toBeTruthy();
 	expect(screen.queryByText("You asked")).toBeNull();
 	expect(screen.queryByRole("form", { name: "Save where it is" })).toBeNull();
 });

@@ -220,7 +220,11 @@ export function usePictureCheck(
 		readonly video: HTMLVideoElement | null;
 	} | null>(null);
 
-	const doneId = check?.result.kind === "done" ? check.id : null;
+	// Only markers are taken away: a check that found nothing keeps its answer (#342).
+	const doneId =
+		check?.result.kind === "done" && check.result.detections.length > 0
+			? check.id
+			: null;
 	useEffect(() => {
 		const shown = sent.current;
 		if (doneId === null || shown?.id !== doneId) return;
