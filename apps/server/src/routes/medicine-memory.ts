@@ -1,6 +1,7 @@
 // Medicine last-seen memory (issue #29; docs/board.html#hud-marker), relative to
 // `/api/families/:familyId`. The module's reducers check membership, the permission, and sighting
 // freshness again, so these handlers add no access rule. Nothing here records or changes a dose.
+// Turning the memory off also deletes the family's AR pins (`./medicine-ar-pin`) and their maps.
 import {
 	type MedicineMemory,
 	RememberMedicine,
@@ -17,6 +18,8 @@ import {
 	type FamilyEnv,
 	type FamilyRoutes,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
+import { deleteFamilyArPins, medicineArPinRoutes } from "./medicine-ar-pin";
 
 const readMemory = (c: Context<FamilyEnv>): MedicineMemory => {
 	const { connection } = c.var.db;
@@ -55,8 +58,9 @@ const readMemory = (c: Context<FamilyEnv>): MedicineMemory => {
 	};
 };
 
-export const medicineMemoryRoutes = (): FamilyRoutes =>
+export const medicineMemoryRoutes = (storage?: R2Bucket): FamilyRoutes =>
 	new Hono<FamilyEnv>()
+		.route("/", medicineArPinRoutes(storage))
 		.get("/medicine-memory", (c) => c.json(readMemory(c)))
 		.put("/medicine-memory", async (c) => {
 			const { enabled, places } = await decodeBody(c, SetMedicineMemory);
@@ -68,6 +72,8 @@ export const medicineMemoryRoutes = (): FamilyRoutes =>
 					places: places.map((place) => place.trim()),
 				}),
 			);
+			// After the module's membership check; the module has deleted the pin rows.
+			if (!enabled) await deleteFamilyArPins(storage, familyId);
 			return c.json(readMemory(c));
 		})
 		.post("/medicine-memory/sightings", async (c) => {

@@ -22,6 +22,8 @@ export type StoredObject = {
 export type R2Bucket = {
 	readonly put: (key: string, body: Uint8Array, type: string) => Promise<void>;
 	readonly exists: (key: string) => Promise<boolean>;
+	/** The object's bytes through a signed GET, or `undefined` when there is no such object. */
+	readonly get: (key: string) => Promise<Uint8Array | undefined>;
 	/** A GET link for one object that expires after `seconds`; the browser saves it as `filename`. */
 	readonly presign: (
 		key: string,
@@ -37,7 +39,7 @@ export type R2Bucket = {
 const failed = (action: string, status: number) =>
 	new ApiFailure(
 		status === 429 || status >= 500 ? "unavailable" : "upstream_error",
-		`PDF storage could not ${action}: HTTP ${status}`,
+		`File storage could not ${action}: HTTP ${status}`,
 	);
 
 const tag = (xml: string, name: string) =>
@@ -59,7 +61,7 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 		try {
 			return await client.fetch(input, init);
 		} catch {
-			throw new ApiFailure("unavailable", "PDF storage is not reachable");
+			throw new ApiFailure("unavailable", "File storage is not reachable");
 		}
 	};
 
@@ -71,19 +73,26 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 				headers: { "Content-Type": type },
 			});
 			await response.body?.cancel();
-			if (!response.ok) throw failed("save the PDF", response.status);
+			if (!response.ok) throw failed("save the file", response.status);
 		},
 		exists: async (key) => {
 			const response = await send(url(key), { method: "HEAD" });
 			if (response.status === 404) return false;
-			if (!response.ok) throw failed("read the PDF", response.status);
+			if (!response.ok) throw failed("read the file", response.status);
 			return true;
+		},
+		get: async (key) => {
+			const response = await send(url(key));
+			if (response.ok) return await response.bytes();
+			await response.body?.cancel();
+			if (response.status === 404) return undefined;
+			throw failed("read the file", response.status);
 		},
 		remove: async (key) => {
 			const response = await send(url(key), { method: "DELETE" });
 			await response.body?.cancel();
 			if (!response.ok && response.status !== 404)
-				throw failed("delete the PDF", response.status);
+				throw failed("delete the file", response.status);
 		},
 		presign: async (key, filename, seconds) => {
 			const link = new URL(url(key));
@@ -106,7 +115,7 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 				if (token !== undefined) query.set("continuation-token", token);
 				const response = await send(`${base}?${query}`);
 				const xml = await response.text();
-				if (!response.ok) throw failed("list the PDFs", response.status);
+				if (!response.ok) throw failed("list the files", response.status);
 				for (const [, entry = ""] of xml.matchAll(
 					/<Contents>([\s\S]*?)<\/Contents>/g,
 				)) {
@@ -120,7 +129,7 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 					)
 						throw new ApiFailure(
 							"upstream_error",
-							"PDF storage sent an unreadable listing",
+							"File storage sent an unreadable listing",
 						);
 					objects.push({ key, size, lastModified });
 				}

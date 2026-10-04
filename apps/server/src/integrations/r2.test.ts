@@ -73,7 +73,7 @@ describe("put", () => {
 		expect(await failure(bucket.put("k", new Uint8Array(), "x"))).toEqual([
 			"ApiFailure",
 			"upstream_error",
-			"PDF storage could not save the PDF: HTTP 403",
+			"File storage could not save the file: HTTP 403",
 		]);
 		expect(seen).toHaveLength(1);
 
@@ -82,7 +82,7 @@ describe("put", () => {
 		expect(await failure(bucket.put("k", new Uint8Array(), "x"))).toEqual([
 			"ApiFailure",
 			"unavailable",
-			"PDF storage could not save the PDF: HTTP 503",
+			"File storage could not save the file: HTTP 503",
 		]);
 		expect(seen).toHaveLength(3);
 	});
@@ -122,7 +122,28 @@ describe("exists", () => {
 		expect(await failure(bucket.exists("k"))).toEqual([
 			"ApiFailure",
 			"upstream_error",
-			"PDF storage could not read the PDF: HTTP 401",
+			"File storage could not read the file: HTTP 401",
+		]);
+	});
+
+	test("get returns the bytes of a signed GET, undefined for 404, and fails otherwise", async () => {
+		reply = () => new Response(new Uint8Array([1, 2, 3]));
+		expect([...((await bucket.get("ar-pins/7/9.worldmap")) ?? [])]).toEqual([
+			1, 2, 3,
+		]);
+		expect(seen.map((request) => [request.method, request.path])).toEqual([
+			["GET", "/reports/ar-pins/7/9.worldmap"],
+		]);
+		expect(seen[0]?.headers.get("authorization")).toStartWith(
+			"AWS4-HMAC-SHA256",
+		);
+		reply = () => new Response(null, { status: 404 });
+		expect(await bucket.get("k")).toBeUndefined();
+		reply = () => new Response(null, { status: 403 });
+		expect(await failure(bucket.get("k"))).toEqual([
+			"ApiFailure",
+			"upstream_error",
+			"File storage could not read the file: HTTP 403",
 		]);
 	});
 
@@ -130,7 +151,7 @@ describe("exists", () => {
 		const endpoint = "http://127.0.0.1:1"; // nothing listens on port 1
 		expect(
 			await failure(r2Bucket({ ...config, endpoint }).exists("k")),
-		).toEqual(["ApiFailure", "unavailable", "PDF storage is not reachable"]);
+		).toEqual(["ApiFailure", "unavailable", "File storage is not reachable"]);
 	});
 });
 
@@ -216,7 +237,7 @@ describe("list", () => {
 		expect(await failure(bucket.list("7/"))).toEqual([
 			"ApiFailure",
 			"upstream_error",
-			"PDF storage could not list the PDFs: HTTP 403",
+			"File storage could not list the files: HTTP 403",
 		]);
 	});
 
@@ -230,7 +251,7 @@ describe("list", () => {
 			expect(await failure(bucket.list("7/"))).toEqual([
 				"ApiFailure",
 				"upstream_error",
-				"PDF storage sent an unreadable listing",
+				"File storage sent an unreadable listing",
 			]);
 		}
 	});
