@@ -123,12 +123,7 @@ test("tells a caller who is not a member of the family that the messages are for
 	});
 	renderRoute("/family");
 	const region = await chat();
-	expect(
-		await within(region).findByText("Not a member of this family"),
-	).toBeTruthy();
-	expect(
-		within(region).getByText("You are not a member of this family."),
-	).toBeTruthy();
+	expect(await within(region).findByText("Not shared with you")).toBeTruthy();
 });
 
 // #245: an account with no family goes to onboarding instead of an empty Family screen.

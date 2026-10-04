@@ -133,4 +133,14 @@ export default {
 			);
 		return env.ASSETS.fetch(request);
 	},
+	// The cron in deploy.sh (`telly` only) asks the API for /health every 5 minutes. Each request
+	// restarts the 10-minute inactivity timer, so the container never sleeps and a reply never
+	// waits for a cold start. It also starts the container again after a crash.
+	async scheduled(_controller, env) {
+		const response = await env.API.get(
+			env.API.idFromName(env.TELLY_DEPLOY_ID),
+		).fetch("http://api/health");
+		await response.body?.cancel();
+		if (!response.ok) console.log(`keep-warm /health: HTTP ${response.status}`);
+	},
 };

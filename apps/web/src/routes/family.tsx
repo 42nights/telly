@@ -13,6 +13,7 @@ import {
 	familyReads,
 	useFamilyData,
 } from "@/components/family/data";
+import { FamilyPeople } from "@/components/family/invite";
 import {
 	KeyNumbers,
 	RecentMessages,
@@ -70,6 +71,11 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h2>
 				<MonitoringBadge state={data.monitoring} />
 			</header>
+			<FamilyPeople
+				familyId={family.id}
+				familyName={family.name}
+				me={data.me}
+			/>
 
 			<AlertSection data={data} now={now} />
 
@@ -91,7 +97,7 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<MonitoringList
 					state={data.monitoring}
-					records={data.records}
+					records={data.readings}
 					familyId={family.id}
 					now={now}
 				/>

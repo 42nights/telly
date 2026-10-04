@@ -20,7 +20,7 @@ import { freshSessionToken, getSessionToken, setSessionToken } from "./session";
 export type ApiFailure =
 	/** No sign-in token, or the server rejected it (401). */
 	| { readonly kind: "signed_out" }
-	/** Signed in, but not a member of this family (403). */
+	/** Signed in, but not a member of this family or without the care scope it needs (403). */
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
