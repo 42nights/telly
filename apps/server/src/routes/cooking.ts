@@ -10,9 +10,9 @@ import {
 import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
-import { type CareFacts, suggestMeals } from "../cooking/suggest";
-import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
-import { readInstructions, readProfile, requireScope } from "./care-profile";
+import { suggestMeals } from "../cooking/suggest";
+import { callReducer, decodeBody, type FamilyEnv } from "../http";
+import { readCareFacts, requireScope } from "./care-profile";
 
 type Ctx = Context<FamilyEnv>;
 
@@ -30,17 +30,6 @@ const readCooking = (c: Ctx): CookingProfileRecord => {
 		editedBy: latest?.editedBy.toHexString() ?? null,
 		editedAt: latest?.editedAt.toISOString() ?? null,
 	};
-};
-
-/** The care facts the caller may read, or `null` without `health_records`. */
-const readCare = (c: Ctx): CareFacts | null => {
-	try {
-		const { profile } = readProfile(c);
-		return { profile, instructions: readInstructions(c, profile.timeZone) };
-	} catch (error) {
-		if (error instanceof ApiFailure && error.code === "forbidden") return null;
-		throw error;
-	}
 };
 
 export const cookingRoutes = () =>
@@ -61,7 +50,7 @@ export const cookingRoutes = () =>
 		})
 		.post("/cooking/suggestions", async (c) => {
 			const request = await decodeBody(c, CookingRequest);
-			const care = readCare(c);
+			const care = readCareFacts(c);
 			// Without care access the cooking profile is unreadable too: abilities stay unknown.
 			const cooking = care === null ? null : readCooking(c).profile;
 			return c.json(
