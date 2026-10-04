@@ -208,6 +208,7 @@ export function FamilyLocationSection({
 	const state = useApi(FamilyLocations, familyPath(familyId, "/location"), {
 		pollMs: 30_000,
 	});
+	const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
 	const shared =
 		state.kind === "ready"
 			? state.value.locations.filter((l) => l.sharer !== me)
@@ -237,8 +238,26 @@ export function FamilyLocationSection({
 				))
 			)}
 			{me !== null && (
-				<p className="break-all">
-					Your sharing ID: <span className="select-all font-mono">{me}</span>
+				<p className="flex flex-wrap items-center gap-2">
+					<Button
+						className="h-11"
+						onClick={() =>
+							navigator.clipboard.writeText(me).then(
+								() => setCopy("copied"),
+								() => setCopy("failed"),
+							)
+						}
+						variant="outline"
+					>
+						Copy my sharing ID
+					</Button>
+					<span aria-live="polite" className="min-w-0 flex-1 text-xs">
+						{copy === "copied"
+							? "Copied. Send it to the family member who will share their location with you."
+							: copy === "failed"
+								? "This browser did not allow copying. Try again."
+								: "A family member pastes it in Going out to share their location with you."}
+					</span>
 				</p>
 			)}
 		</section>
