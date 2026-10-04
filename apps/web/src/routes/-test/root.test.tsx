@@ -70,7 +70,4 @@ test("/ redirects to Family inside the app layout with its head tags", async () 
 	expect(
 		document.querySelector('meta[name="description"]')?.getAttribute("content"),
 	).toBe("Health HUD and family dashboard");
-	expect(document.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe(
-		"/favicon.ico",
-	);
 });

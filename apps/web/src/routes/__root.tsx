@@ -48,12 +48,6 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 				content: "Health HUD and family dashboard",
 			},
 		],
-		links: [
-			{
-				rel: "icon",
-				href: "/favicon.ico",
-			},
-		],
 	}),
 });
 
