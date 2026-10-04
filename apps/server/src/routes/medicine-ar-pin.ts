@@ -81,13 +81,16 @@ const readPin = (c: Ctx, objectId: bigint) => {
 	);
 };
 
+// Standard base64 with padding, as iOS `base64EncodedString()` writes it. One character class, not
+// groups: a grouped pattern overflows V8's stack on a 21 MB map.
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+// Buffer, not `Uint8Array.fromBase64`: the production container runs Node 24, which lacks it, so
+// every pin failed as "not base64" (Bun, which runs the tests, has it).
 const decodeMap = (base64: string) => {
-	let map: Uint8Array;
-	try {
-		map = Uint8Array.fromBase64(base64);
-	} catch {
+	if (base64.length % 4 !== 0 || !BASE64.test(base64))
 		throw new ApiFailure("invalid_request", "The world map is not base64");
-	}
+	const map = Buffer.from(base64, "base64");
 	if (map.length === 0)
 		throw new ApiFailure("invalid_request", "The world map is empty");
 	if (map.length > MAX_WORLD_MAP_BYTES)
@@ -113,7 +116,7 @@ const routes = (storage: R2Bucket | undefined, path: string) =>
 				throw new ApiFailure("not_found", "This object has no AR pin");
 			return c.json({
 				...found.pin,
-				worldMap: map.toBase64(),
+				worldMap: Buffer.from(map).toString("base64"),
 			} satisfies StoredMedicineArPin);
 		})
 		.put(
