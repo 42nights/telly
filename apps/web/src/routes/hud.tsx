@@ -17,6 +17,7 @@ import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
+import { MedicationReminders } from "@/components/wearer/medication-reminder";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
 import { useNow } from "@/components/wearer/use-now";
@@ -241,6 +242,7 @@ function HudComponent() {
 					</div>
 
 					<div className="grid min-w-0 content-start gap-3">
+						{familyId !== null && <MedicationReminders familyId={familyId} />}
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
