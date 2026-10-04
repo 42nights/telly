@@ -11,6 +11,7 @@ import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
+import { speakerRoutes } from "./speaker";
 import { toolRoutes } from "./tools";
 import { trendRoutes } from "./trends";
 import { visionRoutes } from "./vision";
@@ -37,6 +38,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/vision", visionRoutes(config.gemini))
 		.route("/", reportRoutes())
 		.route("/", reminderRoutes())
+		.route("/", speakerRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
