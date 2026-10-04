@@ -110,3 +110,8 @@ hr {
 		background-color: var(--win95-desktop);
 	}
 }
+
+@page {
+	size: letter;
+	margin: 0.5in;
+}

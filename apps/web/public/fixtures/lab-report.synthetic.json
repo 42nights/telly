@@ -1,0 +1,538 @@
+{
+	"layoutVersion": 1,
+	"synthetic": true,
+	"source": {
+		"name": "FinchNode demo API, scenario polypharmacy-senior (Northstar Health System (Synthetic))",
+		"url": "https://api.finchnode.com/demo/v1/fhir/Bundle/finchnode-scenario-polypharmacy-senior",
+		"fetchedAt": "2026-10-04T01:09:09Z",
+		"sha256": "e30925b5385d61c6e7f403624e82e966eee7717191dbb00eef8bdf5daa259a64"
+	},
+	"patient": {
+		"name": "Harriet Lindqvist (synthetic)",
+		"sex": "female",
+		"birthDate": "1948-03-02",
+		"recordId": "SYN-20781"
+	},
+	"results": [
+		{
+			"id": "polypharmacy-senior-demo-lab-1",
+			"loinc": "2160-0",
+			"name": "Creatinine [Mass/volume] in Serum or Plasma",
+			"value": 1.4,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 0.6,
+				"high": 1.2,
+				"text": "0.6 - 1.2 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-2",
+			"loinc": "98979-8",
+			"name": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (CKD-EPI 2021)/1.73 sq M",
+			"value": 39,
+			"unit": "mL/min/{1.73_m2}",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 60,
+				"high": null,
+				"text": ">= 60 mL/min/{1.73_m2}"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-3",
+			"loinc": "2823-3",
+			"name": "Potassium [Moles/volume] in Serum or Plasma",
+			"value": 4.3,
+			"unit": "mmol/L",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 3.5,
+				"high": 5.1,
+				"text": "3.5 - 5.1 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-4",
+			"loinc": "2951-2",
+			"name": "Sodium [Moles/volume] in Serum or Plasma",
+			"value": 139,
+			"unit": "mmol/L",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 135,
+				"high": 145,
+				"text": "135 - 145 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-5",
+			"loinc": "3094-0",
+			"name": "Urea nitrogen [Mass/volume] in Serum or Plasma",
+			"value": 24,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 7,
+				"high": 20,
+				"text": "7 - 20 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-6",
+			"loinc": "2160-0",
+			"name": "Creatinine [Mass/volume] in Serum or Plasma",
+			"value": 1.5,
+			"unit": "mg/dL",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 0.6,
+				"high": 1.2,
+				"text": "0.6 - 1.2 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-7",
+			"loinc": "98979-8",
+			"name": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (CKD-EPI 2021)/1.73 sq M",
+			"value": 36,
+			"unit": "mL/min/{1.73_m2}",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 60,
+				"high": null,
+				"text": ">= 60 mL/min/{1.73_m2}"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-8",
+			"loinc": "2823-3",
+			"name": "Potassium [Moles/volume] in Serum or Plasma",
+			"value": 4.6,
+			"unit": "mmol/L",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 3.5,
+				"high": 5.1,
+				"text": "3.5 - 5.1 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-9",
+			"loinc": "2951-2",
+			"name": "Sodium [Moles/volume] in Serum or Plasma",
+			"value": 138,
+			"unit": "mmol/L",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 135,
+				"high": 145,
+				"text": "135 - 145 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-10",
+			"loinc": "3094-0",
+			"name": "Urea nitrogen [Mass/volume] in Serum or Plasma",
+			"value": 27,
+			"unit": "mg/dL",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 7,
+				"high": 20,
+				"text": "7 - 20 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-11",
+			"loinc": "2160-0",
+			"name": "Creatinine [Mass/volume] in Serum or Plasma",
+			"value": 1.6,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 0.6,
+				"high": 1.2,
+				"text": "0.6 - 1.2 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-12",
+			"loinc": "98979-8",
+			"name": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (CKD-EPI 2021)/1.73 sq M",
+			"value": 33,
+			"unit": "mL/min/{1.73_m2}",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 60,
+				"high": null,
+				"text": ">= 60 mL/min/{1.73_m2}"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-13",
+			"loinc": "2823-3",
+			"name": "Potassium [Moles/volume] in Serum or Plasma",
+			"value": 4.1,
+			"unit": "mmol/L",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 3.5,
+				"high": 5.1,
+				"text": "3.5 - 5.1 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-14",
+			"loinc": "2951-2",
+			"name": "Sodium [Moles/volume] in Serum or Plasma",
+			"value": 141,
+			"unit": "mmol/L",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 135,
+				"high": 145,
+				"text": "135 - 145 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-15",
+			"loinc": "3094-0",
+			"name": "Urea nitrogen [Mass/volume] in Serum or Plasma",
+			"value": 26,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 7,
+				"high": 20,
+				"text": "7 - 20 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-16",
+			"loinc": "2160-0",
+			"name": "Creatinine [Mass/volume] in Serum or Plasma",
+			"value": 1.7,
+			"unit": "mg/dL",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 0.6,
+				"high": 1.2,
+				"text": "0.6 - 1.2 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-17",
+			"loinc": "98979-8",
+			"name": "Glomerular filtration rate [Volume Rate/Area] in Serum, Plasma or Blood by Creatinine-based formula (CKD-EPI 2021)/1.73 sq M",
+			"value": 31,
+			"unit": "mL/min/{1.73_m2}",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 60,
+				"high": null,
+				"text": ">= 60 mL/min/{1.73_m2}"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-18",
+			"loinc": "2823-3",
+			"name": "Potassium [Moles/volume] in Serum or Plasma",
+			"value": 4.9,
+			"unit": "mmol/L",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 3.5,
+				"high": 5.1,
+				"text": "3.5 - 5.1 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-19",
+			"loinc": "2951-2",
+			"name": "Sodium [Moles/volume] in Serum or Plasma",
+			"value": 136,
+			"unit": "mmol/L",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 135,
+				"high": 145,
+				"text": "135 - 145 mmol/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-20",
+			"loinc": "3094-0",
+			"name": "Urea nitrogen [Mass/volume] in Serum or Plasma",
+			"value": 31,
+			"unit": "mg/dL",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 7,
+				"high": 20,
+				"text": "7 - 20 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-21",
+			"loinc": "4548-4",
+			"name": "Hemoglobin A1c/Hemoglobin.total in Blood",
+			"value": 7.1,
+			"unit": "%",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 5.6,
+				"text": "<= 5.6 %"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-22",
+			"loinc": "4548-4",
+			"name": "Hemoglobin A1c/Hemoglobin.total in Blood",
+			"value": 7.4,
+			"unit": "%",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 5.6,
+				"text": "<= 5.6 %"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-23",
+			"loinc": "4548-4",
+			"name": "Hemoglobin A1c/Hemoglobin.total in Blood",
+			"value": 6.9,
+			"unit": "%",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 5.6,
+				"text": "<= 5.6 %"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-24",
+			"loinc": "4548-4",
+			"name": "Hemoglobin A1c/Hemoglobin.total in Blood",
+			"value": 6.8,
+			"unit": "%",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 5.6,
+				"text": "<= 5.6 %"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-25",
+			"loinc": "13457-7",
+			"name": "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation",
+			"value": 98,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 100,
+				"text": "<= 100 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-26",
+			"loinc": "2085-9",
+			"name": "Cholesterol in HDL [Mass/volume] in Serum or Plasma",
+			"value": 48,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 40,
+				"high": null,
+				"text": ">= 40 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-27",
+			"loinc": "2093-3",
+			"name": "Cholesterol [Mass/volume] in Serum or Plasma",
+			"value": 178,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 200,
+				"text": "<= 200 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-28",
+			"loinc": "2571-8",
+			"name": "Triglyceride [Mass/volume] in Serum or Plasma",
+			"value": 160,
+			"unit": "mg/dL",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 150,
+				"text": "<= 150 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-29",
+			"loinc": "13457-7",
+			"name": "Cholesterol in LDL [Mass/volume] in Serum or Plasma by calculation",
+			"value": 85,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 100,
+				"text": "<= 100 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-30",
+			"loinc": "2085-9",
+			"name": "Cholesterol in HDL [Mass/volume] in Serum or Plasma",
+			"value": 51,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 40,
+				"high": null,
+				"text": ">= 40 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-31",
+			"loinc": "2093-3",
+			"name": "Cholesterol [Mass/volume] in Serum or Plasma",
+			"value": 165,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 200,
+				"text": "<= 200 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-32",
+			"loinc": "2571-8",
+			"name": "Triglyceride [Mass/volume] in Serum or Plasma",
+			"value": 145,
+			"unit": "mg/dL",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": null,
+				"high": 150,
+				"text": "<= 150 mg/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-33",
+			"loinc": "3016-3",
+			"name": "Thyrotropin [Units/volume] in Serum or Plasma",
+			"value": 2.2,
+			"unit": "m[IU]/L",
+			"collectedAt": "2025-01-14T08:30:00Z",
+			"referenceRange": {
+				"low": 0.4,
+				"high": 4,
+				"text": "0.4 - 4 m[IU]/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-34",
+			"loinc": "3016-3",
+			"name": "Thyrotropin [Units/volume] in Serum or Plasma",
+			"value": 3.9,
+			"unit": "m[IU]/L",
+			"collectedAt": "2026-01-20T08:30:00Z",
+			"referenceRange": {
+				"low": 0.4,
+				"high": 4,
+				"text": "0.4 - 4 m[IU]/L"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-35",
+			"loinc": "718-7",
+			"name": "Hemoglobin [Mass/volume] in Blood",
+			"value": 11.8,
+			"unit": "g/dL",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 12,
+				"high": 15.5,
+				"text": "12 - 15.5 g/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-36",
+			"loinc": "6690-2",
+			"name": "Leukocytes [#/volume] in Blood by Automated count",
+			"value": 6.8,
+			"unit": "10*3/uL",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 4,
+				"high": 11,
+				"text": "4 - 11 10*3/uL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-37",
+			"loinc": "777-3",
+			"name": "Platelets [#/volume] in Blood by Automated count",
+			"value": 212,
+			"unit": "10*3/uL",
+			"collectedAt": "2025-07-15T08:30:00Z",
+			"referenceRange": {
+				"low": 150,
+				"high": 400,
+				"text": "150 - 400 10*3/uL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-38",
+			"loinc": "718-7",
+			"name": "Hemoglobin [Mass/volume] in Blood",
+			"value": 11.4,
+			"unit": "g/dL",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 12,
+				"high": 15.5,
+				"text": "12 - 15.5 g/dL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-39",
+			"loinc": "6690-2",
+			"name": "Leukocytes [#/volume] in Blood by Automated count",
+			"value": 7.1,
+			"unit": "10*3/uL",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 4,
+				"high": 11,
+				"text": "4 - 11 10*3/uL"
+			}
+		},
+		{
+			"id": "polypharmacy-senior-demo-lab-40",
+			"loinc": "777-3",
+			"name": "Platelets [#/volume] in Blood by Automated count",
+			"value": 198,
+			"unit": "10*3/uL",
+			"collectedAt": "2026-07-14T08:30:00Z",
+			"referenceRange": {
+				"low": 150,
+				"high": 400,
+				"text": "150 - 400 10*3/uL"
+			}
+		}
+	]
+}

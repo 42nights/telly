@@ -6,10 +6,11 @@ export default function Header() {
 	const links = [
 		{ to: "/", label: "Home" },
 		{ to: "/hud", label: "HUD" },
+		{ to: "/reports", label: "Lab report" },
 	] as const;
 
 	return (
-		<div>
+		<div className="print:hidden">
 			<div className="flex flex-row items-center justify-between px-2 py-1">
 				<nav className="flex gap-4 text-lg">
 					{links.map(({ to, label }) => {
