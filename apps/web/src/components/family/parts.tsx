@@ -1,4 +1,4 @@
-// Pieces both family screens use: the alert card with its three actions, the monitoring badge and
+// Pieces of the family screen: the alert card with its three actions, the monitoring badge and
 // list, and today's newest readings. Each shows only what the server returned.
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import type { FamilyAlert, Monitoring } from "@health/contracts/alerts";
