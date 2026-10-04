@@ -14,10 +14,12 @@
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
+		"./session": "./src/session.ts",
 		"./care": "./src/care.ts",
+		"./care-profile": "./src/care-profile.ts",
+		"./trends": "./src/trends.ts",
 		"./reminders": "./src/reminders.ts",
-		"./speaker": "./src/speaker.ts",
-		"./trends": "./src/trends.ts"
+		"./speaker": "./src/speaker.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
