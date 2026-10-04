@@ -202,10 +202,21 @@ function Explanation({ trend }: { trend: TrendExplanation }) {
 				items={trend.unknown}
 				empty="Nothing listed."
 			/>
-			<section aria-label="Care plan" className="grid gap-1">
-				<h3 className="font-bold">Care plan</h3>
-				<p className="win95-inset bg-card p-2">{trend.carePlan.message}</p>
-			</section>
+			<List
+				title="Agreed in the care plan"
+				items={[
+					...trend.carePlan.routines.map(
+						(r) =>
+							`Routine: ${r.name}${r.time === null ? "" : ` at ${r.time}`}${r.timeZone === null ? "" : ` (${r.timeZone})`}`,
+					),
+					...trend.carePlan.instructions.map(
+						(i) =>
+							`${i.name}: ${i.instruction}${i.times.length === 0 ? "" : ` at ${i.times.join(", ")}`}${i.timeZone === null ? "" : ` (${i.timeZone})`}. Source: ${i.source}, from ${i.effectiveDate}.`,
+					),
+					...trend.carePlan.notes,
+				]}
+				empty="Nothing agreed."
+			/>
 			<List
 				title="Next steps"
 				items={trend.nextSteps.map((step) => step.text)}

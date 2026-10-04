@@ -3,14 +3,26 @@ import { type ServerType, serve } from "@hono/node-server";
 import { Effect, Layer } from "effect";
 import { alertOutboxWorker } from "./alerts/outbox";
 import { createApp } from "./app";
-import { serverConfig } from "./config";
+import { type NoopConfig, serverConfig } from "./config";
+import { openFamilyDb } from "./db";
 import { ENV } from "./env.server";
+import { startCloudIMessage } from "./imessage/cloud";
+import { type NoopIngest, recordNoopSamples } from "./integrations/noop-ingest";
+import { familyAnswer } from "./routes/ask";
 
 const config = serverConfig(ENV);
 
-const listen = (port: number) =>
+const noopIngest = (noop: NoopConfig | undefined) =>
+	noop === undefined
+		? Effect.succeed(undefined)
+		: Effect.map(openFamilyDb(noop.db), (db) => ({
+				key: noop.key,
+				record: recordNoopSamples(db, noop.familyId),
+			}));
+
+const listen = (port: number, ingest: NoopIngest | undefined) =>
 	Effect.callback<ServerType, Error>((resume) => {
-		const app = createApp(config);
+		const app = createApp(config, ingest);
 		const server = serve({ fetch: app.fetch, hostname: ENV.HOST, port }, () =>
 			resume(Effect.succeed(server)),
 		);
@@ -37,7 +49,8 @@ const close = (server: ServerType) =>
 // The server is a scoped resource: SIGINT/SIGTERM interrupt the layer, which closes the listener.
 const HttpServer = Layer.effectDiscard(
 	Effect.gen(function* () {
-		yield* Effect.acquireRelease(listen(ENV.PORT), close);
+		const ingest = yield* noopIngest(config.noop);
+		yield* Effect.acquireRelease(listen(ENV.PORT, ingest), close);
 		yield* Effect.log(`server listening on http://${ENV.HOST}:${ENV.PORT}`);
 	}),
 );
@@ -54,4 +67,28 @@ const AlertOutbox = Layer.effectDiscard(
 	),
 );
 
-NodeRuntime.runMain(Layer.launch(Layer.mergeAll(HttpServer, AlertOutbox)));
+// Answers allowlisted iMessage senders through Photon Spectrum Cloud; off without its configuration.
+const { imessage } = config;
+const ask = familyAnswer({
+	gemini: config.gemini,
+	fetchAgent: config.fetchAgent,
+});
+const IMessageAgent = Layer.effectDiscard(
+	imessage === undefined
+		? Effect.void
+		: Effect.gen(function* () {
+				yield* Effect.acquireRelease(
+					Effect.promise(() =>
+						startCloudIMessage(imessage, (familyId, question) =>
+							Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
+						),
+					),
+					(app) => Effect.promise(() => app.stop()),
+				);
+				yield* Effect.log("imessage agent listening");
+			}),
+);
+
+NodeRuntime.runMain(
+	Layer.launch(Layer.mergeAll(HttpServer, AlertOutbox, IMessageAgent)),
+);

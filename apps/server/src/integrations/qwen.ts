@@ -3,11 +3,11 @@ import { CueOutput, cueFormat } from "@health/contracts/cues";
 import { Data, Duration, Effect, Schema } from "effect";
 
 /**
- * A River dedicated deployment of the trained Gemma checkpoint. River serves it through an
+ * A River dedicated deployment of the trained Qwen checkpoint. River serves it through an
  * OpenAI-compatible API; `baseUrl` is the deployment's `base_url`, which already ends in the API
- * prefix. See training/README.md for how `train.py deploy` prints these values.
+ * prefix. See training/qwen/README.md for how `train.py deploy` prints these values.
  */
-export type GemmaConfig = {
+export type QwenConfig = {
 	readonly baseUrl: string;
 	readonly deployment: string;
 	readonly checkpoint: string;
@@ -18,32 +18,32 @@ export type GemmaConfig = {
  * The deployment config from all four values, or `undefined` from none (the cue route then answers
  * `unavailable`). A partial set is a deployment mistake, so startup fails, as for sign-in.
  */
-export const gemmaConfigFrom = (env: {
-	readonly GEMMA_BASE_URL?: string | undefined;
-	readonly GEMMA_DEPLOYMENT?: string | undefined;
-	readonly GEMMA_CHECKPOINT?: string | undefined;
+export const qwenConfigFrom = (env: {
+	readonly QWEN_BASE_URL?: string | undefined;
+	readonly QWEN_DEPLOYMENT?: string | undefined;
+	readonly QWEN_CHECKPOINT?: string | undefined;
 	readonly RIVER_API_KEY?: string | undefined;
-}): GemmaConfig | undefined => {
-	const baseUrl = env.GEMMA_BASE_URL;
-	const deployment = env.GEMMA_DEPLOYMENT;
-	const checkpoint = env.GEMMA_CHECKPOINT;
+}): QwenConfig | undefined => {
+	const baseUrl = env.QWEN_BASE_URL;
+	const deployment = env.QWEN_DEPLOYMENT;
+	const checkpoint = env.QWEN_CHECKPOINT;
 	const apiKey = env.RIVER_API_KEY;
 	if (baseUrl && deployment && checkpoint && apiKey)
 		return { baseUrl, deployment, checkpoint, apiKey };
 	if (baseUrl || deployment || checkpoint || apiKey)
 		throw new Error(
-			"Set all of GEMMA_BASE_URL, GEMMA_DEPLOYMENT, GEMMA_CHECKPOINT, and RIVER_API_KEY, or none",
+			"Set all of QWEN_BASE_URL, QWEN_DEPLOYMENT, QWEN_CHECKPOINT, and RIVER_API_KEY, or none",
 		);
 	return undefined;
 };
 
 /** No deployment is configured, or River reports it is not serving. */
-class GemmaUnavailable extends Data.TaggedError("GemmaUnavailable")<{
+class QwenUnavailable extends Data.TaggedError("QwenUnavailable")<{
 	readonly message: string;
 }> {}
 
 /** The deployment failed, timed out, or replied with something other than one valid cue. */
-class GemmaUpstreamError extends Data.TaggedError("GemmaUpstreamError")<{
+class QwenUpstreamError extends Data.TaggedError("QwenUpstreamError")<{
 	readonly message: string;
 }> {}
 
@@ -77,13 +77,13 @@ export const renderCueInput = (
 		})),
 	});
 
-const upstream = (message: string) => new GemmaUpstreamError({ message });
+const upstream = (message: string) => new QwenUpstreamError({ message });
 
 type Reply = { readonly status: number; readonly body: unknown };
 
 /** One bounded chat-completion call. The fetch aborts when the effect is interrupted. */
 const postChat = (
-	config: GemmaConfig,
+	config: QwenConfig,
 	samples: Parameters<typeof renderCueInput>[0],
 ) =>
 	Effect.tryPromise({
@@ -106,6 +106,8 @@ const postChat = (
 						temperature: 0,
 						max_tokens: 128,
 						stream: false,
+						// Qwen3.5 thinks by default; turn it off so the reply is the bare JSON cue.
+						chat_template_kwargs: { enable_thinking: false },
 					}),
 				},
 			);
@@ -114,11 +116,11 @@ const postChat = (
 				body: response.ok ? await response.json() : null,
 			};
 		},
-		catch: () => upstream("Gemma deployment request failed"),
+		catch: () => upstream("Qwen deployment request failed"),
 	}).pipe(
 		Effect.timeoutOrElse({
 			duration: requestTimeout,
-			orElse: () => Effect.fail(upstream("Gemma deployment timed out")),
+			orElse: () => Effect.fail(upstream("Qwen deployment timed out")),
 		}),
 	);
 
@@ -126,20 +128,20 @@ const postChat = (
 const readCue = ({ status, body }: Reply) =>
 	Effect.gen(function* () {
 		if (status === 429 || status === 503)
-			return yield* new GemmaUnavailable({
-				message: "Gemma deployment is not serving",
+			return yield* new QwenUnavailable({
+				message: "Qwen deployment is not serving",
 			});
 		if (body === null)
-			return yield* upstream(`Gemma deployment returned HTTP ${status}`);
+			return yield* upstream(`Qwen deployment returned HTTP ${status}`);
 		const completion = yield* decodeCompletion(body).pipe(
-			Effect.mapError(() => upstream("Gemma deployment reply is malformed")),
+			Effect.mapError(() => upstream("Qwen deployment reply is malformed")),
 		);
 		const [choice] = completion.choices;
 		if (choice.finish_reason === "length")
-			return yield* upstream("Gemma deployment cut the cue short");
+			return yield* upstream("Qwen deployment cut the cue short");
 		return yield* decodeCue(choice.message.content, {
 			onExcessProperty: "error",
-		}).pipe(Effect.mapError(() => upstream("Gemma reply is not a valid cue")));
+		}).pipe(Effect.mapError(() => upstream("Qwen reply is not a valid cue")));
 	});
 
 /**
@@ -148,13 +150,13 @@ const readCue = ({ status, body }: Reply) =>
  * carry the provider body, the key, or health values.
  */
 export const requestCue = (
-	config: GemmaConfig | undefined,
+	config: QwenConfig | undefined,
 	samples: Parameters<typeof renderCueInput>[0],
 ) =>
 	config === undefined
 		? Effect.fail(
-				new GemmaUnavailable({
-					message: "Gemma inference is not configured on this server",
+				new QwenUnavailable({
+					message: "Qwen inference is not configured on this server",
 				}),
 			)
 		: postChat(config, samples).pipe(Effect.flatMap(readCue));

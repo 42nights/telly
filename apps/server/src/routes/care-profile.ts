@@ -148,7 +148,21 @@ export const readInstructions = (c: Ctx, timeZone: string | null) => {
 	});
 };
 
-const listFact = (label: string, items: readonly string[] | null): string =>
+/** The care facts the caller may read, or `null` without `health_records`. */
+export const readCareFacts = (c: Ctx) => {
+	try {
+		const { profile } = readProfile(c);
+		return { profile, instructions: readInstructions(c, profile.timeZone) };
+	} catch (error) {
+		if (error instanceof ApiFailure && error.code === "forbidden") return null;
+		throw error;
+	}
+};
+
+export const listFact = (
+	label: string,
+	items: readonly string[] | null,
+): string =>
 	items === null
 		? `${label}: unknown.`
 		: items.length === 0

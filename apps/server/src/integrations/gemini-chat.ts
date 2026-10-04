@@ -7,7 +7,7 @@ import type { FamilyQuestion, QuestionAttachment } from "@health/contracts/ask";
 import { Data, Effect, Schema } from "effect";
 import type { FamilyTools } from "../family-tools";
 import { ApiFailure } from "../http";
-import type { GeminiConfig } from "./gemini";
+import { type GeminiConfig, postInteraction } from "./gemini";
 
 /** Pinned so a provider alias change cannot silently change answers. */
 const GEMINI_CHAT_MODEL = "gemini-3.8-flash";
@@ -143,23 +143,16 @@ const attachmentContent = ({ name, mimeType, data }: QuestionAttachment) => {
 	return { type: "image", mime_type: mimeType, data };
 };
 
-const interact = (config: GeminiConfig, body: unknown) =>
+const interact = (
+	config: GeminiConfig,
+	body: Readonly<Record<string, unknown>> & { readonly model: string },
+) =>
 	Effect.tryPromise({
 		try: async (signal) => {
-			const response = await fetch(
-				new URL("/v1beta/interactions", config.baseUrl),
-				{
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-						"x-goog-api-key": config.apiKey,
-					},
-					body: JSON.stringify(body),
-					signal: AbortSignal.any([
-						signal,
-						AbortSignal.timeout(requestTimeoutMs),
-					]),
-				},
+			const { response } = await postInteraction(
+				config,
+				body,
+				AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
 			);
 			if (!response.ok) {
 				await response.body?.cancel();

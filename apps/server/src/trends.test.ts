@@ -69,6 +69,7 @@ const explain = (extra: Partial<Parameters<typeof explainTrend>[0]> = {}) =>
 		samples: [],
 		labs: [],
 		asker: "abc",
+		care: null,
 		...extra,
 	});
 
@@ -214,7 +215,7 @@ describe("explainTrend", () => {
 			"check_in",
 			"review",
 		]);
-		expect(reply.carePlan.status).toBe("unavailable");
+		expect(reply.carePlan.status).toBe("not_shared");
 		expect(reply.cautions[0]).toStartWith(
 			"Telly cannot detect or predict a heart attack.",
 		);

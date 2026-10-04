@@ -4,7 +4,7 @@ import { Cause, Effect, Exit } from "effect";
 import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
-import { type GemmaConfig, requestCue } from "../integrations/gemma";
+import { type QwenConfig, requestCue } from "../integrations/qwen";
 
 /** The family's validated samples for the requested ids, in request order. */
 export const pickSamples = (
@@ -32,14 +32,14 @@ export const pickSamples = (
 };
 
 /**
- * Gemma cue routes, relative to `/api/families/:familyId`: `POST /cues`. A cue is advice only; it
+ * Qwen cue routes, relative to `/api/families/:familyId`: `POST /cues`. A cue is advice only; it
  * never touches thresholds or alerts. Without a configured deployment every request gets
  * `unavailable`, never a canned cue.
  */
-export const cueRoutes = (gemma: GemmaConfig | undefined) =>
+export const cueRoutes = (qwen: QwenConfig | undefined) =>
 	new Hono<FamilyEnv>().post("/cues", async (c) => {
-		if (gemma === undefined)
-			throw new ApiFailure("unavailable", "Gemma inference is not configured");
+		if (qwen === undefined)
+			throw new ApiFailure("unavailable", "Qwen inference is not configured");
 		const { sampleIds } = await decodeBody(c, CueRequest);
 		const samples = pickSamples(
 			readFamilyRecords(c.var.db).samples,
@@ -48,7 +48,7 @@ export const cueRoutes = (gemma: GemmaConfig | undefined) =>
 		);
 
 		// The request signal interrupts the provider call when the client disconnects.
-		const result = await Effect.runPromiseExit(requestCue(gemma, samples), {
+		const result = await Effect.runPromiseExit(requestCue(qwen, samples), {
 			signal: c.req.raw.signal,
 		});
 		if (Exit.isSuccess(result))
@@ -57,8 +57,8 @@ export const cueRoutes = (gemma: GemmaConfig | undefined) =>
 				format: "health-cue-v1",
 				model: {
 					provider: "river",
-					deployment: gemma.deployment,
-					checkpoint: gemma.checkpoint,
+					deployment: qwen.deployment,
+					checkpoint: qwen.checkpoint,
 				},
 				input: {
 					sampleIds,
@@ -76,9 +76,9 @@ export const cueRoutes = (gemma: GemmaConfig | undefined) =>
 		const failure = Cause.findErrorOption(result.cause);
 		if (failure._tag === "None") throw Cause.squash(result.cause);
 		const { _tag, message } = failure.value;
-		console.warn("gemma cue failed", { _tag, message });
+		console.warn("qwen cue failed", { _tag, message });
 		throw new ApiFailure(
-			_tag === "GemmaUnavailable" ? "unavailable" : "upstream_error",
+			_tag === "QwenUnavailable" ? "unavailable" : "upstream_error",
 			message,
 		);
 	});

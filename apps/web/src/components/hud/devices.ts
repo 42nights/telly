@@ -36,12 +36,16 @@ export const wearableLine = (
 	samples: readonly HealthSample[] | null,
 	now: number,
 ): string => {
+	const noop = sources?.sources.find((source) => source.source === "noop");
+	const live = noop?.status === "connected";
 	const link =
 		sources === null
 			? "status unknown"
-			: sources.sources.some((source) => source.source === "noop")
-				? "not connected · no new readings · wear unknown"
-				: "no source configured";
+			: noop === undefined
+				? "no source configured"
+				: live
+					? "connected · unvalidated"
+					: "not connected · no new readings · wear unknown";
 	let newest: HealthSample | null = null;
 	for (const sample of samples ?? [])
 		if (
@@ -53,6 +57,6 @@ export const wearableLine = (
 	const contact =
 		newest === null
 			? "last contact unknown"
-			: `last reading ${ago(newest.sourceTime, now)} · saved, not current`;
+			: `last reading ${ago(newest.sourceTime, now)}${live ? "" : " · saved, not current"}`;
 	return `WHOOP · ${link} · ${contact}`;
 };

@@ -1,5 +1,5 @@
 # Pinned River training dependencies. Regenerate with:
-#   echo river-client==0.12.0 | uv pip compile - --python-version 3.12 --no-header -o requirements.txt
+#   printf 'river-client==0.12.0\npillow\n' | uv pip compile - --python-version 3.12 --no-header -o requirements.txt
 annotated-doc==0.0.5
     # via typer
 anyio==4.15.1
@@ -61,6 +61,8 @@ packaging==26.3
     # via
     #   huggingface-hub
     #   transformers
+pillow==12.3.0
+    # via datasets.py
 protobuf==7.36.2
     # via river-client
 pygments==2.21.0

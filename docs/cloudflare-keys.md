@@ -18,7 +18,7 @@ The server keys are the items in `apps/server/.env.schema` without `@public`. Th
 | `ELEVENLABS_API_KEY` | ElevenLabs transcription and speech | Voice routes answer `unavailable` |
 | `TELLY_FETCH_BRIDGE_TOKEN` | Fetch.ai bridge calls | Agent tool calls answer `unavailable` |
 | `FINCHNODE_API_KEY` | FinchNode `api` mode | Only `off` or `demo` mode works |
-| `RIVER_API_KEY` | The Gemma cue model on River | The cue route answers `unavailable` |
+| `RIVER_API_KEY` | The Qwen cue model on River | The cue route answers `unavailable` |
 | `ALERT_OPERATOR_TOKEN` | The alert outbox | Deliveries stay queued |
 
 The teammate who holds the provider account owns its key. Record the owner and key name on the issue, never the value.
@@ -83,7 +83,7 @@ Anyone who can deploy the Worker can make it read the secrets, so give the Worke
 
 On an HTTP status other than `200`, or on any invalid line, the existing file stays unchanged. The pull replaces the whole file, so keep local non-secret settings in `apps/server/.env`.
 
-Give each process only the keys it uses. A key without its other settings stops startup: for example, `RIVER_API_KEY` needs the `GEMMA_*` settings, and `TELLY_FETCH_BRIDGE_TOKEN` needs `TELLY_FETCH_BRIDGE_URL`. The Cloudflare deployment pulls the list in `TELLY_PULL_KEYS` (docs/deploy.md).
+Give each process only the keys it uses. A key without its other settings stops startup: for example, `RIVER_API_KEY` needs the `QWEN_*` settings, and `TELLY_FETCH_BRIDGE_TOKEN` needs `TELLY_FETCH_BRIDGE_URL`. The Cloudflare deployment pulls the list in `TELLY_PULL_KEYS` (docs/deploy.md).
 
 Existing environment variables override the file. Remove a stale injected key before you rotate it; otherwise it hides the pulled value, and an empty one stops startup.
 

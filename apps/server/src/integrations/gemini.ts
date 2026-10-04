@@ -3,6 +3,31 @@ import { Data, Effect, Schema } from "effect";
 
 /** Pinned so a provider alias change cannot silently change detection behavior. */
 export const GEMINI_VISION_MODEL = "gemini-3.8-flash";
+export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
+
+const overloaded = (status: number) => status === 429 || status === 503;
+
+export const postInteraction = async (
+	{ apiKey, baseUrl }: Pick<GeminiConfig, "apiKey" | "baseUrl">,
+	body: Readonly<Record<string, unknown>> & { readonly model: string },
+	signal: AbortSignal,
+): Promise<{ readonly response: Response; readonly model: string }> => {
+	const send = (model: string) =>
+		fetch(new URL("/v1beta/interactions", baseUrl), {
+			method: "POST",
+			headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+			body: JSON.stringify({ ...body, model }),
+			signal,
+		});
+	const response = await send(body.model);
+	if (!overloaded(response.status) || body.model === GEMINI_FALLBACK_MODEL)
+		return { response, model: body.model };
+	await response.body?.cancel();
+	return {
+		response: await send(GEMINI_FALLBACK_MODEL),
+		model: GEMINI_FALLBACK_MODEL,
+	};
+};
 
 export type GeminiConfig = {
 	readonly apiKey: string;
@@ -27,7 +52,10 @@ export type GeminiBox = {
 
 type MedicineDetector = (
 	image: MedicineDetectionRequest["image"],
-) => Effect.Effect<readonly GeminiBox[], VisionUpstreamError>;
+) => Effect.Effect<
+	{ readonly boxes: readonly GeminiBox[]; readonly model: string },
+	VisionUpstreamError
+>;
 
 const Coordinate = Schema.Finite.check(
 	Schema.isBetween({ minimum: 0, maximum: 1000 }),
@@ -143,13 +171,9 @@ export const createGeminiDetector =
 	(image) =>
 		Effect.tryPromise({
 			try: (signal) =>
-				fetch(new URL("/v1beta/interactions", baseUrl), {
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-						"x-goog-api-key": apiKey,
-					},
-					body: JSON.stringify({
+				postInteraction(
+					{ apiKey, baseUrl },
+					{
 						model: GEMINI_VISION_MODEL,
 						store: false,
 						input: [
@@ -165,14 +189,20 @@ export const createGeminiDetector =
 							thinking_level: "low",
 							max_output_tokens: 4096,
 						},
-					}),
+					},
 					signal,
-				}),
+				),
 			catch: () => new VisionUpstreamError({ reason: "network" }),
 		}).pipe(
-			Effect.flatMap((response) =>
+			Effect.flatMap(({ response, model }) =>
 				response.ok
-					? Effect.tryPromise({ try: () => response.json(), catch: invalid })
+					? Effect.tryPromise({
+							try: () => response.json(),
+							catch: invalid,
+						}).pipe(
+							Effect.flatMap(parseDetections),
+							Effect.map((boxes) => ({ boxes, model })),
+						)
 					: Effect.fail(
 							new VisionUpstreamError({
 								reason: "http",
@@ -180,7 +210,6 @@ export const createGeminiDetector =
 							}),
 						),
 			),
-			Effect.flatMap(parseDetections),
 			Effect.timeoutOrElse({
 				duration: timeout,
 				orElse: () =>

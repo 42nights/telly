@@ -6,6 +6,7 @@ import { ExerciseInvite } from "@/components/exercise/session";
 import { Alerts } from "@/components/hud/alerts";
 import { StatusFooter } from "@/components/hud/status-footer";
 import { Window } from "@/components/hud/window";
+import { MealCheckIn } from "@/components/meal-check-in/check-in";
 import { DueReminders } from "@/components/reminders/due-reminders";
 import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
@@ -108,6 +109,13 @@ function HudComponent() {
 							/>
 						)}
 						<TripCheckInCard familyId={familyId} />
+						{familyId !== null && (
+							<MealCheckIn
+								familyId={familyId}
+								now={now}
+								onUrgent={(words) => emergency.start("help", words)}
+							/>
+						)}
 						<Link
 							className={buttonVariants({
 								variant: "outline",
