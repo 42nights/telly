@@ -18,6 +18,7 @@
 		"./care": "./src/care.ts",
 		"./meal-facts": "./src/meal-facts.ts",
 		"./care-profile": "./src/care-profile.ts",
+		"./exercise": "./src/exercise.ts",
 		"./trends": "./src/trends.ts"
 	},
 	"scripts": {
