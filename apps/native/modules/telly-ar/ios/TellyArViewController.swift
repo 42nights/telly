@@ -23,6 +23,8 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   private let closeButton = UIButton(type: .system)
   private let pinButton = UIButton(type: .system)
   private let crosshair = UIView()
+  // Find mode: points from the screen edge to the pin while the pin is off screen.
+  private let arrow = UIImageView(image: UIImage(systemName: "arrow.up.circle.fill"))
   private let marker: SCNNode
   private var saving = false
   private var found = false
@@ -144,6 +146,13 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       ])
       setHint("Move your phone slowly around the room so it can learn the space.")
     } else {
+      arrow.tintColor = .systemRed
+      arrow.backgroundColor = .white
+      arrow.layer.cornerRadius = 28
+      arrow.frame = CGRect(x: 0, y: 0, width: 56, height: 56)
+      arrow.isHidden = true
+      arrow.isAccessibilityElement = false
+      view.addSubview(arrow)
       setHint("Move your phone slowly around the room.")
     }
   }
@@ -253,7 +262,11 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
         ? "Point the dot at the \(label), then tap Pin here."
         : "Move your phone slowly around the room so it can learn the space.")
     case .find:
-      guard !found, case .normal = frame.camera.trackingState, frame.anchors.contains(where: isPin) else { return }
+      guard let pin = frame.anchors.first(where: isPin), case .normal = frame.camera.trackingState else { return }
+      if found {
+        pointArrow(at: pin)
+        return
+      }
       found = true
       timeout?.invalidate()
       marker.isHidden = false
@@ -262,7 +275,32 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       done?.title = "Done"
       closeButton.configuration = done
       send(["type": "ar.pinFound"])
+      pointArrow(at: pin)
     }
+  }
+
+  // Shows the arrow at the screen edge, toward the pin, when the pin is off screen or behind.
+  private func pointArrow(at pin: ARAnchor) {
+    let position = pin.transform.columns.3
+    let point = sceneView.projectPoint(SCNVector3(position.x, position.y, position.z))
+    let bounds = sceneView.bounds
+    let behind = point.z > 1
+    let onScreen = !behind && bounds.insetBy(dx: 24, dy: 24).contains(CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+    let wasHidden = arrow.isHidden
+    arrow.isHidden = onScreen
+    if onScreen {
+      if !wasHidden { setHint("Your \(label) is at the red dot.") }
+      return
+    }
+    // Behind the camera the projection mirrors, so the direction flips.
+    var dx = CGFloat(point.x) - bounds.midX
+    var dy = CGFloat(point.y) - bounds.midY
+    if behind { dx = -dx; dy = -dy }
+    let length = max(hypot(dx, dy), 1)
+    let radius = min(bounds.width, bounds.height) / 2 - 48
+    arrow.center = CGPoint(x: bounds.midX + dx / length * radius, y: bounds.midY + dy / length * radius)
+    arrow.transform = CGAffineTransform(rotationAngle: atan2(dx, -dy))
+    if wasHidden { setHint("Turn toward the arrow to see your \(label).") }
   }
 
   func session(_ session: ARSession, didFailWithError error: Error) {
