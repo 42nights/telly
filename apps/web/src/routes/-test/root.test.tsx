@@ -24,6 +24,17 @@ const PATHS = [
 	"/appointments",
 	"/settings",
 	"/trends",
+	"/family/trends",
+	"/family/alerts",
+	"/family/thresholds",
+	"/care/contacts",
+	"/care/plan",
+	"/care/sharing",
+	"/settings/device",
+	"/settings/places",
+	"/settings/reports",
+	"/settings/speaker",
+	"/welcome",
 	"/meal",
 	"/cooking",
 ];
@@ -48,11 +59,12 @@ test("signed out, every app page shows only the sign-in screen and returns there
 	}
 });
 
-test("/ redirects to the HUD inside the app layout with its head tags", async () => {
+// #254: `/` opens this device's view home, Family by default.
+test("/ redirects to Family inside the app layout with its head tags", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [FAMILY] } });
 	const { router } = renderRoute("/");
-	await waitFor(() => expect(router.state.location.pathname).toBe("/hud"));
+	await waitFor(() => expect(router.state.location.pathname).toBe("/family"));
 	expect(screen.getAllByRole("navigation").length).toBeGreaterThan(0);
 	await waitFor(() => expect(document.title).toBe("Health HUD"));
 	expect(

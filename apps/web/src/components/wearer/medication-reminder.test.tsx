@@ -149,7 +149,17 @@ const server = (history: () => ReminderOccurrence[], routes: Routes = {}) =>
 			},
 		}),
 		[PLAN]: { json: { instructions: [instruction] } },
-		"GET /api/me": { json: { issuer: "test", subject: "s", identity: me } },
+		"GET /api/me": {
+			json: {
+				issuer: "test",
+				subject: "s",
+				identity: me,
+				name: null,
+				givenName: null,
+				email: null,
+				picture: null,
+			},
+		},
 		[`GET ${BASE}/medicine-memory`]: {
 			json: { permission: null, sightings: [sighting] },
 		},

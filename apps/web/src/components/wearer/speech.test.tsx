@@ -107,13 +107,15 @@ describe("useSpeech", () => {
 
 	test("stop while the voice loads keeps the key idle and drops the late audio", async () => {
 		const reply = Promise.withResolvers<ServerReply>();
-		serve({ [speechPath]: () => reply.promise });
+		const calls = serve({ [speechPath]: () => reply.promise });
 		const { result } = renderHook(() => useSpeech("f1"));
 		let said: Promise<void> = Promise.resolve();
 		act(() => {
 			said = result.current.say("a", "Hello");
 		});
 		expect(result.current.speech).toEqual({ kind: "loading", key: "a" });
+		// The session token is read before the request goes: wait until it is pending.
+		await waitFor(() => expect(calls).toHaveLength(1));
 		act(() => result.current.stop());
 		expect(result.current.speech).toEqual({ kind: "idle", key: "a" });
 		reply.resolve({ json: "mp3" });
@@ -125,12 +127,13 @@ describe("useSpeech", () => {
 
 	test("a new text replaces one still loading, and the first one's failure is ignored", async () => {
 		const reply = Promise.withResolvers<ServerReply>();
-		serve({ [speechPath]: () => reply.promise });
+		const calls = serve({ [speechPath]: () => reply.promise });
 		const { result } = renderHook(() => useSpeech("f1"));
 		let first: Promise<void> = Promise.resolve();
 		act(() => {
 			first = result.current.say("a", "Hello");
 		});
+		await waitFor(() => expect(calls).toHaveLength(1));
 		await act(() => result.current.say("b", "Bye", { mp3Base64: "SUQz" }));
 		reply.reject(new Error("aborted"));
 		await act(() => first);

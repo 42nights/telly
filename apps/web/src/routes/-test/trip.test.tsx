@@ -15,6 +15,10 @@ const ME_REPLY = {
 	issuer: "https://issuer.test",
 	subject: "user-1",
 	identity: ME,
+	name: null,
+	givenName: null,
+	email: null,
+	picture: null,
 };
 const SHARE = { familyId: "1", sharer: ME, viewer: MOM, sharedAt: NOW };
 const MY_LOCATION = {
@@ -33,7 +37,11 @@ const TRIP = {
 const base = (extra: Record<string, unknown> = {}) => ({
 	"GET /api/families": { families: [FAMILY] },
 	"GET /api/me": ME_REPLY,
-	"GET /api/families/fam-1/location": { locations: [], shares: [] },
+	"GET /api/families/fam-1/location": {
+		locations: [],
+		shares: [],
+		seesShared: true,
+	},
 	...extra,
 });
 
@@ -296,9 +304,17 @@ test("help while the session expires asks to sign in again", async () => {
 	).toBeTruthy();
 });
 
-test("help with no family set up fails without a request", async () => {
+test("help with no family loaded fails without a request", async () => {
 	signIn();
-	const calls = serve(base({ "GET /api/families": { families: [] } }));
+	// An empty list now redirects to /welcome (#245); a failed list leaves no family on /trip.
+	const calls = serve(
+		base({
+			"GET /api/families": json(503, {
+				error: "unavailable",
+				message: "Down.",
+			}),
+		}),
+	);
 	renderRoute("/trip");
 	fireEvent.click(
 		await screen.findByRole("button", { name: "Tell my family I need help" }),
@@ -361,6 +377,7 @@ test("sharing without a trip asks to start one and shows the last report", async
 			"GET /api/families/fam-1/location": {
 				locations: [MY_LOCATION],
 				shares: [SHARE],
+				seesShared: true,
 			},
 		}),
 	);
@@ -380,7 +397,11 @@ test("sharing during a trip sends the position and shows when it was sent", asyn
 	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
 	const calls = serve(
 		base({
-			"GET /api/families/fam-1/location": { locations: [], shares: [SHARE] },
+			"GET /api/families/fam-1/location": {
+				locations: [],
+				shares: [SHARE],
+				seesShared: true,
+			},
 			"POST /api/families/fam-1/location": MY_LOCATION,
 		}),
 	);
@@ -414,7 +435,11 @@ test("a refused position report shows an alert", async () => {
 	localStorage.setItem("telly.trip", JSON.stringify(TRIP));
 	const calls = serve(
 		base({
-			"GET /api/families/fam-1/location": { locations: [], shares: [SHARE] },
+			"GET /api/families/fam-1/location": {
+				locations: [],
+				shares: [SHARE],
+				seesShared: true,
+			},
 			"POST /api/families/fam-1/location": json(403, {
 				error: "forbidden",
 				message: "Share first.",
@@ -442,11 +467,11 @@ test("stopping a share reloads the locations", async () => {
 		base({
 			"GET /api/families/fam-1/location": () =>
 				stopped
-					? { locations: [], shares: [] }
-					: { locations: [], shares: [SHARE] },
+					? { locations: [], shares: [], seesShared: true }
+					: { locations: [], shares: [SHARE], seesShared: true },
 			[`DELETE /api/families/fam-1/location/shares/${MOM}`]: () => {
 				stopped = true;
-				return { locations: [], shares: [] };
+				return { locations: [], shares: [], seesShared: true };
 			},
 		}),
 	);

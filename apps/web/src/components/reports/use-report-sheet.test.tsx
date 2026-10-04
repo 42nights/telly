@@ -33,6 +33,7 @@ const report = (over: Partial<Report> = {}): Report => ({
 	familyId: "1",
 	createdBy: "me",
 	createdAt: "2026-10-01T09:00:00.000Z",
+	email: null,
 	markers: [],
 	meals: null,
 	unresolved: null,

@@ -13,50 +13,27 @@ import { render, type screen as Screen, within } from "@testing-library/react";
 
 import { setSessionToken } from "@/lib/session";
 import { Route as rootRoute } from "@/routes/__root";
-import { Route as appointments } from "@/routes/appointments";
-import { Route as bedtime } from "@/routes/bedtime";
-import { Route as care } from "@/routes/care";
-import { Route as careProfile } from "@/routes/care-profile";
-import { Route as chat } from "@/routes/chat";
-import { Route as cooking } from "@/routes/cooking";
-import { Route as dashboard } from "@/routes/dashboard";
-import { Route as family } from "@/routes/family";
-import { Route as hud } from "@/routes/hud";
-import { Route as index } from "@/routes/index";
-import { Route as meal } from "@/routes/meal";
-import { Route as medicine } from "@/routes/medicine";
-import { Route as reports } from "@/routes/reports";
-import { Route as settings } from "@/routes/settings";
-import { Route as signInRoute } from "@/routes/sign-in";
-import { Route as trends } from "@/routes/trends";
-import { Route as trip } from "@/routes/trip";
 
 // The tree the router plugin writes to the gitignored `routeTree.gen.ts`. `bun test` cannot use that
-// file: only the Vite build generates it.
-const fileRoutes = {
-	"/": index,
-	"/appointments": appointments,
-	"/bedtime": bedtime,
-	"/care": care,
-	"/care-profile": careProfile,
-	"/chat": chat,
-	"/cooking": cooking,
-	"/dashboard": dashboard,
-	"/family": family,
-	"/hud": hud,
-	"/meal": meal,
-	"/medicine": medicine,
-	"/reports": reports,
-	"/settings": settings,
-	"/sign-in": signInRoute,
-	"/trends": trends,
-	"/trip": trip,
-};
+// file: only the Vite build generates it. So this loads every flat route file; the import is dynamic
+// because the file list is read from disk. `family_.trends.tsx` → id `/family_/trends`, path
+// `/family/trends`.
+const routesDir = new URL("../../routes/", import.meta.url).pathname;
+const fileRoutes = await Promise.all(
+	[...new Bun.Glob("*.tsx").scanSync(routesDir)]
+		.filter((file) => file !== "__root.tsx")
+		.map(async (file) => {
+			const name = file.slice(0, -".tsx".length).replaceAll(".", "/");
+			const id = name === "index" ? "/" : `/${name}`;
+			const { Route }: { Route: AnyRoute } = await import(routesDir + file);
+			return { id, path: id.replace(/_(?=\/|$)/g, ""), route: Route };
+		}),
+);
 // `update` types only the options a route file may set; `id`, `path`, and the parent are what the
 // generated tree adds, so the cast mirrors `routeTree.gen.ts`.
 export const routeTree = rootRoute.addChildren(
-	Object.entries<AnyRoute>(fileRoutes).map(([path, route]) =>
-		route.update({ id: path, path, getParentRoute: () => rootRoute } as never),
+	fileRoutes.map(({ id, path, route }) =>
+		route.update({ id, path, getParentRoute: () => rootRoute } as never),
 	),
 );
 

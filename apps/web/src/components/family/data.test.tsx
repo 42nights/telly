@@ -99,7 +99,17 @@ const personRoutes = (
 
 const baseRoutes = (families: Family[]) => ({
 	"GET /api/families": { json: { families } },
-	"GET /api/me": { json: { issuer: "test", subject: "me", identity: ME } },
+	"GET /api/me": {
+		json: {
+			issuer: "test",
+			subject: "me",
+			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		},
+	},
 });
 
 const ACK_PATH = "POST /api/families/f1/alerts/a1/acknowledgements";

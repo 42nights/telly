@@ -58,6 +58,7 @@ const share = (viewer: string): LocationShare => ({
 const locations = (shares: LocationShare[]): FamilyLocations => ({
 	locations: [],
 	shares,
+	seesShared: true,
 });
 
 describe("LocationCard", () => {
@@ -170,6 +171,7 @@ describe("SharingControls", () => {
 				locations={{
 					locations: [],
 					shares: [share(sister), { ...share(me), sharer: brother }],
+					seesShared: true,
 				}}
 				me={me}
 				onChange={onChange}
@@ -325,6 +327,7 @@ describe("FamilyLocationSection", () => {
 				json: {
 					locations: [location({ sharer: me }), location({})],
 					shares: [],
+					seesShared: true,
 				},
 			},
 		});
@@ -342,7 +345,11 @@ describe("FamilyLocationSection", () => {
 	});
 
 	test("says when nobody shares a location, and shows no ID before I am known", async () => {
-		serve({ [path]: { json: { locations: [location({})], shares: [] } } });
+		serve({
+			[path]: {
+				json: { locations: [location({})], shares: [], seesShared: true },
+			},
+		});
 		const view = render(
 			<FamilyLocationSection familyId="1" me={sister} now={now} />,
 		);
@@ -354,6 +361,23 @@ describe("FamilyLocationSection", () => {
 		view.rerender(<FamilyLocationSection familyId="1" me={null} now={now} />);
 		expect(view.container.textContent).not.toContain("Your sharing ID");
 		expect(view.getAllByRole("article")).toHaveLength(1);
+	});
+
+	test("says when location sharing is off for me", async () => {
+		serve({
+			[path]: {
+				json: { locations: [location({})], shares: [], seesShared: false },
+			},
+		});
+		const view = render(
+			<FamilyLocationSection familyId="1" me={sister} now={now} />,
+		);
+		await waitFor(() =>
+			expect(view.getByRole("status").textContent).toStartWith(
+				"Location sharing is off for you.",
+			),
+		);
+		expect(view.queryByRole("article")).toBeNull();
 	});
 
 	test("shows loading, then a failed read as a failure, never as a location", async () => {

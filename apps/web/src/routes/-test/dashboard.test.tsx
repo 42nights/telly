@@ -3,7 +3,7 @@ import { setupDom } from "@/lib/test/dom";
 
 setupDom();
 // Dynamic: `dom` must register `document` and mock `@/env` before react-dom and the app load.
-const { within } = await import("@testing-library/react");
+const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
@@ -87,6 +87,10 @@ const routes = (over: Record<string, unknown> = {}) => ({
 		issuer: "https://issuer.test",
 		subject: "user-1",
 		identity: ME,
+		name: null,
+		givenName: null,
+		email: null,
+		picture: null,
 	},
 	"GET /api/families/fam-1/alerts": { alerts: [] },
 	"GET /api/families/fam-1/monitoring": { checkedAt: T, thresholds: [] },
@@ -99,33 +103,59 @@ const routes = (over: Record<string, unknown> = {}) => ({
 const section = async (name: string) =>
 	within(await screen.findByRole("region", { name }));
 
+// The old dashboard is the Family screen (#254): Overview, then the Alerts and Thresholds tabs.
+const glance = () => section("Today at a glance");
+const tab = (name: string) =>
+	fireEvent.click(
+		within(screen.getByRole("navigation", { name: "Family pages" })).getByRole(
+			"link",
+			{ name },
+		),
+	);
+const alertsTab = async () => {
+	tab("Alerts");
+	return section("Alerts · Grandma Rose");
+};
+const thresholdsTab = async () => {
+	tab("Thresholds");
+	return section("Alert thresholds · Grandma Rose");
+};
+
 test("shows empty states for a family with no data", async () => {
 	signIn();
 	const calls = serve(routes());
-	renderRoute("/dashboard");
+	const { router } = renderRoute("/dashboard");
 
 	expect(
 		await screen.findByRole("heading", { name: "Grandma Rose" }),
 	).toBeTruthy();
-	expect(await screen.findByText("No alerts recorded.")).toBeTruthy();
-	expect(
-		await screen.findByText("No thresholds set: nothing is monitored."),
-	).toBeTruthy();
+	expect(router.state.location.pathname).toBe("/family");
 	expect(await screen.findByText("No messages yet.")).toBeTruthy();
 	expect(await screen.findByText("No health source configured.")).toBeTruthy();
-	const numbers = await section("Key numbers");
+	const numbers = await glance();
 	expect(numbers.getByText("HRV").nextSibling?.textContent).toBe("Unavailable");
 	expect(numbers.getByText("Open alerts").nextSibling?.textContent).toBe("0");
-	const nav = screen.getByRole("navigation", { name: "Dashboard" });
+	const pages = screen.getByRole("navigation", { name: "Family pages" });
 	expect(
-		within(nav).getByRole("link", { name: "Ask" }).getAttribute("href"),
+		within(pages).getByRole("link", { name: "Alerts" }).getAttribute("href"),
+	).toBe("/family/alerts");
+	expect(
+		within(screen.getByRole("navigation", { name: "Screens" }))
+			.getByRole("link", { name: "Chat" })
+			.getAttribute("href"),
 	).toBe("/chat");
-	expect(
-		within(nav).getByRole("link", { name: "Alerts" }).getAttribute("href"),
-	).toBe("#alerts");
 	expect(calls.map((c) => `${c.method} ${c.path}`)).toContain(
 		"GET /api/sources",
 	);
+
+	expect(
+		await (await alertsTab()).findByText("No alerts recorded."),
+	).toBeTruthy();
+	expect(
+		await (await thresholdsTab()).findByText(
+			"No thresholds set: nothing is monitored.",
+		),
+	).toBeTruthy();
 });
 
 test("shows loaded alerts, thresholds, messages, and sources", async () => {
@@ -202,7 +232,7 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 			}),
 		}),
 	);
-	renderRoute("/dashboard");
+	renderRoute("/family");
 
 	const sources = await screen.findByRole("list", { name: "Health sources" });
 	expect(within(sources).getByText("WHOOP via NOOP")).toBeTruthy();
@@ -210,9 +240,33 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 		within(sources).getByText("Connected · readings unvalidated"),
 	).toBeTruthy();
 
-	const alerts = await section("Recent alerts");
-	const rows = await alerts.findAllByRole("row");
-	expect(rows.map((r) => r.textContent)).toHaveLength(4);
+	const numbers = await glance();
+	await waitFor(() =>
+		expect(numbers.getByText("Open alerts").nextSibling?.textContent).toBe("2"),
+	);
+	expect(numbers.queryByText("No real reading stored")).toBeNull();
+
+	const messages = await section("Recent messages");
+	const bodies = (await messages.findAllByText(/^Body /)).map(
+		(b) => b.textContent,
+	);
+	expect(bodies).toEqual([
+		"Body m-6",
+		"Body m-5",
+		"Body m-4",
+		"Body m-3",
+		"Body m-2",
+	]);
+	expect(messages.getByText("Telly alert")).toBeTruthy();
+	expect(await messages.findByText("You")).toBeTruthy();
+	expect(messages.getAllByText("Member bbbbbb")).toHaveLength(3);
+	expect(
+		messages.getByRole("link", { name: "Open chat" }).getAttribute("href"),
+	).toBe("/chat");
+
+	const alerts = within(await (await alertsTab()).findByRole("table"));
+	const rows = alerts.getAllByRole("row");
+	expect(rows).toHaveLength(4);
 	const [, first, second, third] = rows;
 	expect(first?.textContent).toContain("Summary a-1");
 	expect(first?.textContent).toContain("Failed after 2 tries");
@@ -221,13 +275,10 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 	expect(second?.textContent).toContain("Not yet");
 	expect(third?.textContent).toContain("No delivery record");
 
-	const numbers = await section("Key numbers");
-	expect(numbers.queryByText("HRV")).toBeNull();
-	expect(numbers.getByText("Open alerts").nextSibling?.textContent).toBe("2");
-
-	const rules = await section("Alert thresholds");
+	const rules = await thresholdsTab();
 	expect(
-		rules.getByText("Heart rate above 100 bpm").nextSibling?.textContent,
+		(await rules.findByText("Heart rate above 100 bpm")).nextSibling
+			?.textContent,
 	).toBe("In range");
 	expect(
 		rules.getByText("Heart rate below 100 bpm").nextSibling?.textContent,
@@ -241,22 +292,6 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 	expect(rules.getByText("Temp above 100 bpm").nextSibling?.textContent).toBe(
 		"State unknown",
 	);
-
-	const messages = await section("Recent messages");
-	const bodies = messages.getAllByText(/^Body /).map((b) => b.textContent);
-	expect(bodies).toEqual([
-		"Body m-6",
-		"Body m-5",
-		"Body m-4",
-		"Body m-3",
-		"Body m-2",
-	]);
-	expect(messages.getByText("Telly alert")).toBeTruthy();
-	expect(messages.getByText("You")).toBeTruthy();
-	expect(messages.getAllByText("Member bbbbbb")).toHaveLength(3);
-	expect(
-		messages.getByRole("link", { name: "Open chat" }).getAttribute("href"),
-	).toBe("/chat");
 });
 
 test("shows a source that is not connected", async () => {
@@ -270,7 +305,7 @@ test("shows a source that is not connected", async () => {
 			},
 		}),
 	);
-	renderRoute("/dashboard");
+	renderRoute("/family");
 	expect(await screen.findByText("Unavailable: not connected")).toBeTruthy();
 });
 
@@ -286,9 +321,9 @@ test("keeps HRV unavailable when only demo or other readings exist", async () =>
 			}),
 		}),
 	);
-	renderRoute("/dashboard");
+	renderRoute("/family");
 	await screen.findByText("No messages yet.");
-	const numbers = await section("Key numbers");
+	const numbers = await glance();
 	expect(numbers.getByText("HRV").nextSibling?.textContent).toBe("Unavailable");
 });
 
@@ -312,21 +347,25 @@ test("shows each section's failure when the server refuses or fails", async () =
 			},
 		}),
 	);
-	renderRoute("/dashboard");
+	renderRoute("/family");
 
-	const alerts = await section("Recent alerts");
-	expect(await alerts.findByText("Not a member of this family")).toBeTruthy();
-	const numbers = await section("Key numbers");
+	const numbers = await glance();
 	expect(
 		(await numbers.findByText("Open alerts")).nextSibling?.textContent,
 	).toBe("Unavailable");
 	expect(await numbers.findByText("Could not load sources")).toBeTruthy();
-	const rules = await section("Alert thresholds");
-	expect(await rules.findByText("Thresholds unavailable")).toBeTruthy();
-	expect(rules.getByText("Database down")).toBeTruthy();
 	const messages = await section("Recent messages");
 	expect(await messages.findByText("Could not load messages")).toBeTruthy();
 	expect(messages.getByText(/The server is not reachable/)).toBeTruthy();
+
+	// The alert card and the list both say why.
+	const alerts = await alertsTab();
+	expect(
+		await alerts.findAllByText("Not a member of this family"),
+	).toHaveLength(2);
+	const rules = await thresholdsTab();
+	expect(await rules.findByText("Thresholds unavailable")).toBeTruthy();
+	expect(rules.getByText("Database down")).toBeTruthy();
 });
 
 test("shows the loading notices before replies arrive", async () => {
@@ -340,15 +379,15 @@ test("shows the loading notices before replies arrive", async () => {
 			"GET /api/families/fam-1": never,
 		}),
 	);
-	renderRoute("/dashboard");
+	renderRoute("/family");
 	expect(await screen.findByText("Loading sources…")).toBeTruthy();
 	expect(
-		(await section("Recent alerts")).getByText("Loading alerts…"),
-	).toBeTruthy();
-	expect(
-		(await section("Alert thresholds")).getByText("Loading thresholds…"),
-	).toBeTruthy();
-	expect(
 		(await section("Recent messages")).getByText("Loading messages…"),
+	).toBeTruthy();
+	expect(
+		await (await alertsTab()).findAllByText("Loading alerts…"),
+	).toHaveLength(2);
+	expect(
+		await (await thresholdsTab()).findByText("Loading thresholds…"),
 	).toBeTruthy();
 });

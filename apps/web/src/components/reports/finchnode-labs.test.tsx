@@ -71,6 +71,12 @@ const subject: FinchnodeSubjectLabs = {
 
 const labs = (...subjects: FinchnodeSubjectLabs[]) => ({ json: { subjects } });
 
+/** The first lab read finds no subject that shares, so Fetch starts Connect; later reads get `reply`. */
+const afterConnect = (reply: () => ServerReply | Promise<ServerReply>) => {
+	let reads = 0;
+	return () => (reads++ === 0 ? labs() : reply());
+};
+
 let open: Mock<typeof window.open>;
 let consoleError: Mock<typeof console.error>;
 beforeEach(() => {
@@ -92,15 +98,31 @@ const renderPanel = () => {
 };
 
 describe("FinchnodeLabsPanel", () => {
+	test("a linked subject that shares shows its labs without starting Connect", async () => {
+		const calls = serve({ [LABS]: labs(subject) });
+		const { view, fetchButton } = renderPanel();
+		fireEvent.click(fetchButton);
+		await view.findByRole("table");
+		expect(open).not.toHaveBeenCalled();
+		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([LABS]);
+	});
+
 	test("a linked session opens FinchNode, reads the labs, and shows the fetch time", async () => {
 		setSystemTime(new Date("2026-03-05T14:30:00Z"));
-		const calls = serve({ [START]: session(true), [LABS]: labs(subject) });
+		const calls = serve({
+			[START]: session(true),
+			[LABS]: afterConnect(() => labs(subject)),
+		});
 		const { view, fetchButton } = renderPanel();
 		expect(view.getByText(/Last fetch: not yet/)).toBeDefined();
 		fireEvent.click(fetchButton);
 		await view.findByRole("table");
 		expect(open).toHaveBeenCalledWith(CONNECT, "_blank", "noopener");
-		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([START, LABS]);
+		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+			LABS,
+			START,
+			LABS,
+		]);
 		expect(
 			view.getByText(`Last fetch: ${formatTime(Date.now())}`, { exact: false }),
 		).toBeDefined();
@@ -108,20 +130,31 @@ describe("FinchnodeLabsPanel", () => {
 	});
 
 	test("shows each step while it works and blocks a second fetch", async () => {
+		let startReply: (value: ServerReply) => void = () => {};
 		let reply: (value: ServerReply) => void = () => {};
-		serve({
-			[START]: session(true),
-			[LABS]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
+		const calls = serve({
+			[START]: () =>
+				new Promise<ServerReply>((resolve) => (startReply = resolve)),
+			[LABS]: afterConnect(
+				() => new Promise<ServerReply>((resolve) => (reply = resolve)),
+			),
 		});
 		const { view, fetchButton } = renderPanel();
 		fireEvent.click(fetchButton);
-		expect(view.getByRole("status").textContent).toBe(
-			"Starting a FinchNode session…",
+		expect(view.getByRole("status").textContent).toBe("Reading lab results…");
+		expect(fetchButton.hasAttribute("disabled")).toBe(true);
+		await waitFor(() =>
+			expect(view.getByRole("status").textContent).toBe(
+				"Starting a FinchNode session…",
+			),
 		);
 		expect(fetchButton.hasAttribute("disabled")).toBe(true);
+		await waitFor(() => expect(calls).toHaveLength(2));
+		startReply(session(true));
 		await waitFor(() =>
 			expect(view.getByRole("status").textContent).toBe("Reading lab results…"),
 		);
+		await waitFor(() => expect(calls).toHaveLength(3));
 		reply(labs());
 		expect(
 			await view.findByText(
@@ -136,7 +169,7 @@ describe("FinchnodeLabsPanel", () => {
 		const calls = serve({
 			[START]: session(false),
 			[LINK]: () => session(linked, null),
-			[LABS]: labs(subject),
+			[LABS]: afterConnect(() => labs(subject)),
 		});
 		const { view, fetchButton } = renderPanel();
 		fireEvent.click(fetchButton);
@@ -150,13 +183,14 @@ describe("FinchnodeLabsPanel", () => {
 
 		// Not approved yet: still waiting, and the Connect link stays.
 		fireEvent.click(view.getByRole("button", { name: "Check sharing" }));
-		await waitFor(() => expect(calls).toHaveLength(2));
+		await waitFor(() => expect(calls).toHaveLength(3));
 		expect((await view.findByRole("link")).getAttribute("href")).toBe(CONNECT);
 
 		linked = true;
 		fireEvent.click(view.getByRole("button", { name: "Check sharing" }));
 		await view.findByRole("table");
 		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+			LABS,
 			START,
 			LINK,
 			LINK,
@@ -165,7 +199,7 @@ describe("FinchnodeLabsPanel", () => {
 	});
 
 	test("a session without a Connect page opens nothing and offers no link", async () => {
-		serve({ [START]: session(false, null) });
+		serve({ [START]: session(false, null), [LABS]: labs() });
 		const { view, fetchButton } = renderPanel();
 		fireEvent.click(fetchButton);
 		await view.findByRole("button", { name: "Check sharing" });
@@ -190,7 +224,7 @@ describe("FinchnodeLabsPanel", () => {
 	] satisfies [ServerReply, string][])(
 		"a failed start says why (%#)",
 		async (reply, text) => {
-			serve({ [START]: reply });
+			serve({ [START]: reply, [LABS]: labs() });
 			const { view, fetchButton } = renderPanel();
 			fireEvent.click(fetchButton);
 			expect((await view.findByRole("alert")).textContent).toBe(text);
@@ -199,10 +233,7 @@ describe("FinchnodeLabsPanel", () => {
 	);
 
 	test("a failed sharing check or lab read says why", async () => {
-		let labsReply: ServerReply = {
-			status: 503,
-			body: { error: "unavailable", message: "Labs down" },
-		};
+		let labsReply: ServerReply = labs();
 		serve({
 			[START]: session(false),
 			[LINK]: { status: 500, body: { error: "internal", message: "Boom" } },
@@ -215,7 +246,10 @@ describe("FinchnodeLabsPanel", () => {
 			"FinchNode is not reachable: Boom",
 		);
 
-		serve({ [START]: session(true), [LABS]: () => labsReply });
+		labsReply = {
+			status: 503,
+			body: { error: "unavailable", message: "Labs down" },
+		};
 		fireEvent.click(fetchButton);
 		await waitFor(() =>
 			expect(view.getByRole("alert").textContent).toBe(

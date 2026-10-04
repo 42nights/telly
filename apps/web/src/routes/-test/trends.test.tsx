@@ -156,15 +156,14 @@ async function ask(question: string, days?: string) {
 	fireEvent.click(screen.getByRole("button", { name: "Explain the trend" }));
 }
 
-test("with no paired person, says so instead of showing the form", async () => {
+// #245: an account with no person goes to onboarding, so the trend form never shows.
+test("with no paired person, goes to the welcome screen instead of showing the form", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });
-	renderRoute("/trends");
+	const { router } = renderRoute("/family/trends");
 
-	expect(
-		await screen.findByText(/No person is paired with this account yet/),
-	).toBeTruthy();
-	expect(screen.getByRole("heading", { name: "No person" })).toBeTruthy();
+	expect(await screen.findByRole("region", { name: "Welcome" })).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 	expect(
 		screen.queryByLabelText("Your question or what you noticed"),
 	).toBeNull();
@@ -179,14 +178,20 @@ test("asks only once a question has text, and sends the question and period", as
 			issuer: "https://issuer.test",
 			subject: "user-1",
 			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
 		},
 		[TRENDS]: () => reply.promise,
 	});
-	renderRoute("/trends");
+	// The old address opens the Family › Trends tab (#254).
+	const { router } = renderRoute("/trends");
 
 	expect(
 		await screen.findByRole("heading", { name: "Grandma Rose" }),
 	).toBeTruthy();
+	expect(router.state.location.pathname).toBe("/family/trends");
 	const button = await screen.findByRole("button", {
 		name: "Explain the trend",
 	});
@@ -226,10 +231,14 @@ test("shows each kind of evidence apart with its source, period, quality, and sy
 			issuer: "https://issuer.test",
 			subject: "user-1",
 			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
 		},
 		[TRENDS]: full,
 	});
-	renderRoute("/trends");
+	renderRoute("/family/trends");
 	await ask("Is her sleep changing?");
 
 	// The first caution names a heart attack, so it leads as an alert and leaves the list.
@@ -296,7 +305,7 @@ test("says when a period has no evidence and keeps other cautions in the list", 
 		"GET /api/families": { families: [FAMILY] },
 		[TRENDS]: { ...empty, cautions: ["Trends are not a diagnosis."] },
 	});
-	renderRoute("/trends");
+	renderRoute("/family/trends");
 	await ask("Anything new?");
 
 	expect(
@@ -326,7 +335,7 @@ test("shows why the explanation failed", async () => {
 			return next;
 		},
 	});
-	renderRoute("/trends");
+	renderRoute("/family/trends");
 
 	await ask("Is her sleep changing?");
 	expect((await screen.findByRole("alert")).textContent).toContain(
@@ -362,7 +371,7 @@ test("when the people cannot load, says why instead of claiming none is paired",
 			message: "Database is not reachable.",
 		}),
 	});
-	renderRoute("/trends");
+	renderRoute("/family/trends");
 
 	expect((await screen.findByRole("alert")).textContent).toContain(
 		"Database is not reachable.",

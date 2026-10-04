@@ -19,7 +19,17 @@ const ME = "a".repeat(64);
 const BASE = "/api/families/f1";
 
 const reads = {
-	"GET /api/me": { json: { issuer: "test", subject: "s", identity: ME } },
+	"GET /api/me": {
+		json: {
+			issuer: "test",
+			subject: "s",
+			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		},
+	},
 	[`GET ${BASE}/care-access`]: {
 		json: { mine: ["health_records"], grants: [], history: [] },
 	},

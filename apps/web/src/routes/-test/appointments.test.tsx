@@ -4,6 +4,7 @@ import { setupDom } from "@/lib/test/dom";
 setupDom();
 
 // Dynamic: dom.ts must register `document` and mock `@/env` before react-dom and the app load.
+const { waitFor } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
@@ -39,11 +40,12 @@ test("when visits cannot load, says why", async () => {
 	expect(screen.queryByText("No upcoming visits recorded.")).toBeNull();
 });
 
-test("with no paired person, says so and reads no visits", async () => {
+test("with no paired person, goes to onboarding and reads no visits", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [] } });
-	renderRoute("/appointments");
+	// An empty family list goes to /welcome (#245); the screen's own notice is in screen.test.tsx.
+	const { router } = renderRoute("/appointments");
 
-	expect(await screen.findByText("No person is paired yet.")).toBeTruthy();
-	expect(calls.map((call) => call.path)).toEqual(["/api/families"]);
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
+	expect(calls.some((call) => call.path.includes("/appointments"))).toBe(false);
 });

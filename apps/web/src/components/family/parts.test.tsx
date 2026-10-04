@@ -161,10 +161,17 @@ describe("FamilyGate", () => {
 		expect(view.queryByRole("heading")).toBeNull();
 	});
 
-	test("with no person paired, it says people are paired manually", () => {
-		const view = gate(data({ family: null }));
-		const empty = view.getByText(/No person is paired with this account yet/);
+	test("with no person set up, it links to set one up", async () => {
+		const { view } = await renderRouted(
+			<FamilyGate data={data({ family: null })} emptyClassName="empty">
+				{(person) => <h2>Showing {person.name}</h2>}
+			</FamilyGate>,
+		);
+		const empty = view.getByText(/No person is set up with this account yet/);
 		expect(empty.className).toBe("empty");
+		expect(
+			view.getByRole("link", { name: "Set up a person" }).getAttribute("href"),
+		).toBe("/welcome");
 		expect(view.queryByRole("heading")).toBeNull();
 	});
 

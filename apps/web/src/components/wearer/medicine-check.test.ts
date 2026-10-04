@@ -284,6 +284,8 @@ describe("usePictureCheck", () => {
 		act(() => {
 			looked = result.current.look(video(64, 48, 10));
 		});
+		// The session token is read before the request goes: wait until the first one is pending.
+		await waitFor(() => expect(calls.length).toBe(1));
 		await act(() => result.current.look(video(32, 24, 10)));
 		first.reject(new Error("aborted"));
 		await act(() => looked);

@@ -1,7 +1,11 @@
 import "../test/setup";
 
 import { describe, expect, mock, test } from "bun:test";
-import type { Report, ReportMarker } from "@health/contracts/reports";
+import type {
+	Report,
+	ReportEmail,
+	ReportMarker,
+} from "@health/contracts/reports";
 import type { ReactNode } from "react";
 import type { ApiFailure } from "@/lib/api";
 import { fireEvent, installDom, render, serve, waitFor } from "../test/dom";
@@ -50,6 +54,7 @@ const report = (over: Partial<Report> = {}): Report => ({
 	familyId: "1",
 	createdBy: "me",
 	createdAt: "2026-10-01T09:00:00.000Z",
+	email: null,
 	markers: [],
 	meals: null,
 	unresolved: null,
@@ -389,10 +394,13 @@ describe("SendTab", () => {
 			"POST /api/families/1/reports/r1/review": { status: 204 },
 		});
 		const view = renderSend(report());
-		view.getByText("Not sent. Mark the report as reviewed first.");
-		expect(
-			view.getByRole("button", { name: "Send to hospital…" }),
-		).toHaveProperty("disabled", true);
+		view.getByText("Hospital: not sent. Mark the report as reviewed first.");
+		view.getByText("Email: not emailed.");
+		for (const name of ["Send to hospital…", "Send by email"])
+			expect(view.getByRole("button", { name })).toHaveProperty(
+				"disabled",
+				true,
+			);
 		const mark = view.getByRole("button", { name: "Mark as reviewed" });
 		expect(mark).toHaveProperty("disabled", true);
 		fireEvent.click(view.getByRole("checkbox"));
@@ -416,15 +424,53 @@ describe("SendTab", () => {
 	test("a reviewed report can be sent", () => {
 		serve({});
 		const onAsk = mock(() => {});
-		const view = renderSend(report({ review: REVIEW }), {}, onAsk);
+		const email = mock(async () => {});
+		const view = renderSend(report({ review: REVIEW }), { email }, onAsk);
 		view.getByText(
 			`Reviewed ${formatTime(REVIEWED_AT)}. The report is read-only.`,
 		);
-		view.getByText("Not sent.");
+		view.getByText("Hospital: not sent.");
 		expect(view.queryByRole("checkbox")).toBeNull();
 		fireEvent.click(view.getByRole("button", { name: "Send to hospital…" }));
 		expect(onAsk).toHaveBeenCalledTimes(1);
+		fireEvent.click(view.getByRole("button", { name: "Send by email" }));
+		expect(email).toHaveBeenCalledTimes(1);
 	});
+
+	test.each([
+		[
+			{ status: "queued", reason: null, automatic: false },
+			"Email: sending to doc@example.test…",
+		],
+		[
+			{ status: "sent", reason: null, automatic: true },
+			`Email: sent to doc@example.test ${formatTime(REVIEWED_AT)} (automatic).`,
+		],
+		[
+			{ status: "failed", reason: "Mailbox full", automatic: false },
+			`Email: failed to doc@example.test ${formatTime(REVIEWED_AT)}: Mailbox full`,
+		],
+		[
+			{ status: "failed", reason: null, automatic: false },
+			`Email: failed to doc@example.test ${formatTime(REVIEWED_AT)}: no reason given`,
+		],
+	] satisfies [Omit<ReportEmail, "recipient" | "updatedAt">, string][])(
+		"shows the latest email (%#)",
+		(email, text) => {
+			serve({});
+			const view = renderSend(
+				report({
+					review: REVIEW,
+					email: {
+						...email,
+						recipient: "doc@example.test",
+						updatedAt: REVIEWED_AT,
+					},
+				}),
+			);
+			view.getByText(text);
+		},
+	);
 
 	test("an unavailable delivery path shows the server's words", () => {
 		serve({});

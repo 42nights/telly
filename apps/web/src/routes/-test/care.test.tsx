@@ -72,21 +72,24 @@ const family = {
 		issuer: "https://issuer.test",
 		subject: "user-1",
 		identity: ME,
+		name: null,
+		givenName: null,
+		email: null,
+		picture: null,
 	},
 };
 
 const gets = (calls: { method: string; path: string }[], path: string) =>
 	calls.filter((call) => call.method === "GET" && call.path === path).length;
 
-test("says so when no person is paired with the account", async () => {
+test("with no person paired, sends the account to onboarding", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });
 
-	renderRoute("/care");
+	// An empty family list goes to /welcome (#245) before any Care tab shows.
+	const { router } = renderRoute("/care");
 
-	expect(
-		await screen.findByText("No person is paired with this account yet."),
-	).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 	expect(screen.queryByText("Care needs")).toBeNull();
 });
 
@@ -98,12 +101,18 @@ test("shows an empty family with no needs and no ladder yet", async () => {
 		[`GET ${LADDER}`]: { ladder: null },
 	});
 
-	renderRoute("/care");
-
+	const needs = renderRoute("/care");
 	expect(
-		await screen.findByRole("region", { name: "Care · Grandma Rose" }),
+		await screen.findByRole("heading", { level: 2, name: "Care needs" }),
 	).toBeTruthy();
 	expect(await screen.findByText("No care needs.")).toBeTruthy();
+	needs.unmount();
+
+	// The ladder moved to its own Care › Contacts tab (#254).
+	renderRoute("/care/contacts");
+	expect(
+		await screen.findByRole("heading", { level: 2, name: "Contact ladder" }),
+	).toBeTruthy();
 	expect(
 		await screen.findByText("No ladder yet: alerts contact nobody."),
 	).toBeTruthy();
@@ -121,10 +130,13 @@ test("shows why needs and the ladder could not load", async () => {
 		[`GET ${LADDER}`]: { ladder: "not a ladder" },
 	});
 
-	renderRoute("/care");
+	const needs = renderRoute("/care");
 
 	expect(await screen.findByText("Care needs unavailable")).toBeTruthy();
 	expect(screen.getByText("The care store is down.")).toBeTruthy();
+	needs.unmount();
+
+	renderRoute("/care/contacts");
 	expect(
 		await screen.findByText("Could not load the contact ladder"),
 	).toBeTruthy();
@@ -303,7 +315,7 @@ test("saving the ladder reads it again", async () => {
 		},
 	});
 
-	renderRoute("/care");
+	renderRoute("/care/contacts");
 
 	expect(await screen.findByDisplayValue("Ann")).toBeTruthy();
 	fireEvent.click(screen.getByRole("button", { name: "Save ladder" }));

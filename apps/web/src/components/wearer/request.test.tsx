@@ -158,7 +158,7 @@ describe("typed requests", () => {
 		await type(view, "When is my daughter coming?");
 		expect(await view.findByText("Sign in to ask questions.")).toBeDefined();
 		expect(
-			view.getByText("Sign-in is not set up in this app yet (issue #4)."),
+			view.getByText("Sign-in is not set up on this server."),
 		).toBeDefined();
 		expect(view.getByText("“When is my daughter coming?”")).toBeDefined();
 		fireEvent.click(view.getByRole("button", { name: "Try again" }));

@@ -143,7 +143,7 @@ describe("LastSeen", () => {
 		const link = await view.findByRole("link", {
 			name: "Turn this on in Settings",
 		});
-		expect(link.getAttribute("href")).toBe("/settings");
+		expect(link.getAttribute("href")).toBe("/settings/places");
 		view.getByText(/I don't keep notes on where medicine was last seen\./);
 	});
 

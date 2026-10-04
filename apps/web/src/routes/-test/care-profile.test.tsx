@@ -52,6 +52,10 @@ const plan = (mine: string[], base = BASE) => ({
 		issuer: "https://issuer.test",
 		subject: "user-1",
 		identity: ME,
+		name: null,
+		givenName: null,
+		email: null,
+		picture: null,
 	},
 	[`GET ${base}/care-access`]: access(mine),
 	[`GET ${base}/care-profile`]: record(null),
@@ -61,15 +65,14 @@ const plan = (mine: string[], base = BASE) => ({
 	},
 });
 
-test("says so when no person is paired with the account", async () => {
+test("with no person paired, goes to onboarding and reads no care plan", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [] } });
 
-	renderRoute("/care-profile");
+	// An empty family list goes to /welcome (#245) before any Care tab shows.
+	const { router } = renderRoute("/care-profile");
 
-	expect(
-		await screen.findByText("No person is paired with this account yet."),
-	).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 	expect(calls.some((call) => call.path.includes("care"))).toBe(false);
 });
 
@@ -85,7 +88,8 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 		},
 	});
 
-	renderRoute("/care-profile");
+	// `/care-profile` redirects to the Care › Care plan tab (#254).
+	const view = renderRoute("/care-profile");
 
 	const hears = await screen.findByRole("region", {
 		name: "What the wearer hears",
@@ -95,9 +99,6 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 			.getAllByRole("listitem")
 			.map((item) => item.textContent),
 	).toEqual(["Your name is Rose.", "Medicines are unknown."]);
-	expect(
-		await screen.findByText("Your access: Health records, Edit the care plan"),
-	).toBeTruthy();
 	expect(
 		screen.getByText("No instructions saved. Medicines are unknown."),
 	).toBeTruthy();
@@ -132,13 +133,20 @@ test("an editor sees every part, and a saved profile is read again", async () =>
 		"value",
 		"Rose",
 	);
+	view.unmount();
+
+	// Sharing moved to its own Care › Sharing tab (#254).
+	renderRoute("/care/sharing");
+	expect(
+		await screen.findByText("Your access: Health records, Edit the care plan"),
+	).toBeTruthy();
 });
 
 test("a member who may only read sees the plan without edit controls", async () => {
 	signIn();
 	serve(plan(["health_records"]));
 
-	renderRoute("/care-profile");
+	renderRoute("/care/plan");
 
 	expect(
 		await screen.findByText(
@@ -164,16 +172,25 @@ test("each part without a grant says which access is missing", async () => {
 		[`GET ${BASE}/care-profile/prompt`]: refused,
 	});
 
-	renderRoute("/care-profile");
+	const carePlan = renderRoute("/care/plan");
 
 	await waitFor(() =>
 		expect(
 			screen.getAllByRole("alert").map((alert) => alert.textContent),
 		).toEqual([
-			"No access to sharing: No grant. Ask the person who manages sharing.",
 			"No access to the wearer's prompt: No grant. Ask the person who manages sharing.",
 			"No access to care instructions: No grant. Ask the person who manages sharing.",
 			"No access to the care profile: No grant. Ask the person who manages sharing.",
+		]),
+	);
+	carePlan.unmount();
+
+	renderRoute("/care/sharing");
+	await waitFor(() =>
+		expect(
+			screen.getAllByRole("alert").map((alert) => alert.textContent),
+		).toEqual([
+			"No access to sharing: No grant. Ask the person who manages sharing.",
 		]),
 	);
 	expect(screen.queryByRole("region", { name: "Sharing" })).toBeNull();
@@ -195,9 +212,8 @@ test("other failures and slow parts show their own notice", async () => {
 		}),
 	});
 
-	renderRoute("/care-profile");
+	const carePlan = renderRoute("/care/plan");
 
-	expect(await screen.findByText("Could not load sharing")).toBeTruthy();
 	expect(
 		await screen.findByText("The wearer's prompt unavailable"),
 	).toBeTruthy();
@@ -211,6 +227,10 @@ test("other failures and slow parts show their own notice", async () => {
 		),
 	).toBeTruthy();
 	expect(screen.getByText("Loading the care profile…")).toBeTruthy();
+	carePlan.unmount();
+
+	renderRoute("/care/sharing");
+	expect(await screen.findByText("Could not load sharing")).toBeTruthy();
 });
 
 test("choosing another person reads that person's plan", async () => {
@@ -225,7 +245,7 @@ test("choosing another person reads that person's plan", async () => {
 		},
 	});
 
-	renderRoute("/care-profile");
+	renderRoute("/care/plan");
 
 	expect(await screen.findByText("Your name is Rose.")).toBeTruthy();
 	fireEvent.change(screen.getByLabelText("Person"), {

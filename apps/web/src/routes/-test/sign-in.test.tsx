@@ -58,7 +58,8 @@ test("Continue starts the issuer redirect, returning to the ?redirect page", asy
 	expect(saved().returnTo).toBe("/trip");
 });
 
-test("an unsafe ?redirect returns to the HUD after sign-in", async () => {
+// #254: the start screen `/` opens this device's view home.
+test("an unsafe ?redirect returns to the start screen after sign-in", async () => {
 	serve({
 		[DISCOVERY]: { authorization_endpoint: "https://issuer.test/auth" },
 	});
@@ -67,7 +68,7 @@ test("an unsafe ?redirect returns to the HUD after sign-in", async () => {
 		await screen.findByRole("button", { name: "Continue with Google" }),
 	);
 	await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
-	expect(saved().returnTo).toBe("/hud");
+	expect(saved().returnTo).toBe("/");
 });
 
 test("a failed start shows the error and offers Try again", async () => {
@@ -107,7 +108,8 @@ test("a matching callback exchanges the code and opens the saved page", async ()
 	expect(getSessionToken()).toBe(token);
 });
 
-test("a first sign-in with no family opens Family", async () => {
+// #245: a person with no family starts onboarding.
+test("a first sign-in with no family opens onboarding", async () => {
 	pending("/trip");
 	serve({
 		"POST /api/sign-in/token": later({
@@ -116,7 +118,7 @@ test("a first sign-in with no family opens Family", async () => {
 		"GET /api/families": { families: [] },
 	});
 	const { router } = renderRoute("/sign-in?code=c-1&state=s-1");
-	await waitFor(() => expect(router.state.location.pathname).toBe("/family"));
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 });
 
 test("a callback from another tab is refused without calling the server", async () => {
@@ -159,9 +161,9 @@ test("a signed-in visitor goes to the ?redirect page", async () => {
 	await waitFor(() => expect(router.state.location.pathname).toBe("/trip"));
 });
 
-test("a signed-in visitor with an unsafe ?redirect goes to the HUD", async () => {
+test("a signed-in visitor with an unsafe ?redirect goes to the view home (Family)", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [FAMILY] } });
 	const { router } = renderRoute("/sign-in?redirect=https://evil.test");
-	await waitFor(() => expect(router.state.location.pathname).toBe("/hud"));
+	await waitFor(() => expect(router.state.location.pathname).toBe("/family"));
 });

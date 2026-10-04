@@ -74,6 +74,7 @@ function Harness({
 		save: noop,
 		review: noop,
 		submit: noop,
+		email: noop,
 		status: "",
 	};
 	return <CorrectionForm sheet={sheet} markers={list} />;

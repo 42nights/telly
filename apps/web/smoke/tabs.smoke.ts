@@ -21,6 +21,10 @@ const replies: Record<string, unknown> = {
 		issuer: "http://127.0.0.1:9/issuer",
 		subject: "smoke-user",
 		identity: "a".repeat(64),
+		name: null,
+		givenName: null,
+		email: null,
+		picture: null,
 	} satisfies Me,
 	"/api/families": { families: [family] } satisfies FamilyList,
 	"/api/families/1": {

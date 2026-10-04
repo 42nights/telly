@@ -27,20 +27,14 @@ const RECORDS = {
 	acknowledgements: [],
 };
 
-test("with no paired person, alerts and messages say so", async () => {
+// #245: with no paired person the app sends the person to onboarding instead of the HUD.
+test("with no paired person, the HUD opens onboarding", async () => {
 	signIn();
-	serve({ "GET /api/families": { families: [] } });
-	renderRoute("/hud");
+	const calls = serve({ "GET /api/families": { families: [] } });
+	const { router } = renderRoute("/hud");
 
-	expect(
-		await screen.findByText("No person is paired yet, so there are no alerts."),
-	).toBeTruthy();
-	expect(
-		screen.getByText("No person is paired yet, so there are no messages."),
-	).toBeTruthy();
-	expect(
-		screen.getByText("Talk needs a paired person. You can still type."),
-	).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
+	expect(calls.some((c) => c.path.startsWith("/api/families/"))).toBe(false);
 });
 
 test("when records are unavailable, shows the offline banner and retries", async () => {

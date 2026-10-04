@@ -81,18 +81,19 @@ const failure = (status: number, message: string): ServerReply => ({
 	body: { error: "internal", message },
 });
 
-/** A list route whose first reply waits for `release`; later reads answer `next`. */
+/** A list route whose first reply waits for `release`, even when the read starts late; later reads answer `next`. */
 const held = (next: ServerReply) => {
-	let release = (_reply: ServerReply) => {};
-	let first = true;
+	const first = Promise.withResolvers<ServerReply>();
+	let asked = false;
 	const route = () => {
-		if (!first) return next;
-		first = false;
-		return new Promise<ServerReply>((resolve) => {
-			release = resolve;
-		});
+		if (asked) return next;
+		asked = true;
+		return first.promise;
 	};
-	return { route, release: (reply: ServerReply) => act(() => release(reply)) };
+	return {
+		route,
+		release: (reply: ServerReply) => act(() => first.resolve(reply)),
+	};
 };
 
 const reads = (calls: { method: string; path: string }[]) =>

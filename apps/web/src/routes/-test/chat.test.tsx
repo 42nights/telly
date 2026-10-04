@@ -40,6 +40,10 @@ const family = (routes: Record<string, unknown>) =>
 			issuer: "https://issuer.test",
 			subject: "user-1",
 			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
 		},
 		...routes,
 	});
@@ -47,16 +51,13 @@ const family = (routes: Record<string, unknown>) =>
 const messageBox = () =>
 	screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
 
-test("a person without a family is told that pairing is manual", async () => {
+// #245: a person without a family goes to onboarding instead of the chat.
+test("a person without a family is sent to onboarding", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });
-	renderRoute("/chat");
+	const { router } = renderRoute("/chat");
 
-	expect(
-		await screen.findByText(
-			"You are not in a family yet. A family is paired manually for now.",
-		),
-	).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 	expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
 });
 

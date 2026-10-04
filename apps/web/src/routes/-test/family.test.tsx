@@ -4,7 +4,7 @@ import { setupDom } from "@/lib/test/dom";
 setupDom();
 
 // Dynamic: `dom` must register `document` and mock `@/env` before React and the app load.
-const { within } = await import("@testing-library/react");
+const { waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
@@ -30,14 +30,10 @@ const message = (over: object) => ({
 	...over,
 });
 
-// The preview is one paragraph: "<b>sender</b>: body".
-const preview = (text: string) => (_: string, el: Element | null) =>
-	el?.tagName === "P" && el.textContent === text;
+// The Overview shows the newest messages (#254); each item is the sender, then the body.
+const chat = () => screen.findByRole("region", { name: "Recent messages" });
 
-const chat = () =>
-	screen.getByRole("region", { name: "Family chat" }) as HTMLElement;
-
-test("shows the person's name and the newest message of this family in the chat preview", async () => {
+test("shows the person's name and the newest messages of this family", async () => {
 	signIn();
 	serve({
 		"GET /api/families": { families: [FAMILY] },
@@ -45,6 +41,10 @@ test("shows the person's name and the newest message of this family in the chat 
 			issuer: "https://issuer.test",
 			subject: "user-1",
 			identity: ME,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
 		},
 		"GET /api/families/fam-1": records([
 			message({
@@ -73,15 +73,18 @@ test("shows the person's name and the newest message of this family in the chat 
 		await screen.findByRole("heading", { name: "Grandma Rose", level: 2 }),
 	).toBeTruthy();
 	expect(screen.getByText("Family · Grandma Rose")).toBeTruthy();
+	const region = within(await chat());
+	expect(await region.findByText("You")).toBeTruthy();
 	expect(
-		await within(chat()).findByText(preview("You: Lunch is ready")),
-	).toBeTruthy();
-	expect(within(chat()).getByText("You")).toBeTruthy();
-	expect(within(chat()).queryByText("Other family")).toBeNull();
+		region.getAllByRole("listitem").map((item) => item.textContent),
+	).toEqual([
+		expect.stringMatching(/^You.*Lunch is ready$/),
+		expect.stringMatching(/^Member bbbbbb.*Older$/),
+		expect.stringMatching(/^Member bbbbbb.*Old news$/),
+	]);
+	expect(region.queryByText("Other family")).toBeNull();
 	expect(
-		within(chat())
-			.getByRole("link", { name: "Open chat" })
-			.getAttribute("href"),
+		region.getByRole("link", { name: "Open chat" }).getAttribute("href"),
 	).toBe("/chat");
 });
 
@@ -93,9 +96,7 @@ test("says there are no messages when the family has none", async () => {
 	});
 	renderRoute("/family");
 	expect(
-		await within(
-			await screen.findByRole("region", { name: "Family chat" }),
-		).findByText("No messages yet."),
+		await within(await chat()).findByText("No messages yet."),
 	).toBeTruthy();
 });
 
@@ -106,10 +107,9 @@ test("shows a member label for a message from someone else", async () => {
 		"GET /api/families/fam-1": records([message({ body: "Hi Mum" })]),
 	});
 	renderRoute("/family");
-	expect(
-		await screen.findByText(preview("Member bbbbbb: Hi Mum")),
-	).toBeTruthy();
-	expect(within(chat()).getByText("Member bbbbbb")).toBeTruthy();
+	const region = within(await chat());
+	expect(await region.findByText("Hi Mum")).toBeTruthy();
+	expect(region.getByText("Member bbbbbb")).toBeTruthy();
 });
 
 test("tells a caller who is not a member of the family that the messages are forbidden", async () => {
@@ -122,7 +122,7 @@ test("tells a caller who is not a member of the family that the messages are for
 		}),
 	});
 	renderRoute("/family");
-	const region = await screen.findByRole("region", { name: "Family chat" });
+	const region = await chat();
 	expect(
 		await within(region).findByText("Not a member of this family"),
 	).toBeTruthy();
@@ -131,16 +131,13 @@ test("tells a caller who is not a member of the family that the messages are for
 	).toBeTruthy();
 });
 
-test("says no person is paired when the account has no family", async () => {
+// #245: an account with no family goes to onboarding instead of an empty Family screen.
+test("sends an account with no family to the welcome screen", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [] } });
-	renderRoute("/family");
-	expect(
-		await screen.findByText(
-			"No person is paired with this account yet. People are paired manually.",
-		),
-	).toBeTruthy();
-	expect(screen.getByText("Family · No person")).toBeTruthy();
+	const { router } = renderRoute("/family");
+	expect(await screen.findByRole("region", { name: "Welcome" })).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 });
 
 test("reports an unavailable family list", async () => {

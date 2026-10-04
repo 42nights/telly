@@ -4,7 +4,7 @@ import { setupDom } from "@/lib/test/dom";
 setupDom();
 
 // Dynamic: dom must register `document` and mock `@/env` before react-dom and the app load.
-const { fireEvent, waitFor } = await import("@testing-library/react");
+const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
@@ -72,6 +72,10 @@ const findMeals = async () =>
 		name: "Find meals",
 	})) as HTMLButtonElement;
 
+// The shell taskbar has its own Start menu button; a meal's Start is inside the screen's main.
+const mealStart = () =>
+	within(screen.getByRole("main")).queryByRole("button", { name: "Start" });
+
 test("sends the cleaned food lists and shows notices, instructions and meals", async () => {
 	signIn();
 	const calls = withFamily({
@@ -125,11 +129,11 @@ test("Start opens the meal one step at a time, and stopping returns to the meal 
 	});
 	renderRoute("/cooking");
 	await ask(calls);
-	expect(await screen.findByRole("button", { name: "Start" })).toBeTruthy();
+	await waitFor(() => expect(mealStart()).not.toBeNull());
 	expect(screen.queryByText("Before you choose")).toBeNull();
 	expect(screen.queryByText("Your care instructions about food")).toBeNull();
 
-	fireEvent.click(screen.getByRole("button", { name: "Start" }));
+	fireEvent.click(mealStart() as HTMLElement);
 	expect(await screen.findByText("Boiled eggs · Step 1 of 1")).toBeTruthy();
 	expect(screen.queryByRole("button", { name: "Find meals" })).toBeNull();
 
@@ -154,7 +158,7 @@ test("no fitting meal tells the person to ask for help choosing", async () => {
 			"No meal here fits your needs. Ask your caregiver or a family member to help you choose.",
 		),
 	).toBeTruthy();
-	expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+	expect(mealStart()).toBeNull();
 });
 
 test("the button is disabled while the request is in flight", async () => {
@@ -171,17 +175,13 @@ test("the button is disabled while the request is in flight", async () => {
 	expect(screen.getByText(/^No meal here fits your needs/)).toBeTruthy();
 });
 
-test("with no paired person it asks for nothing and says why", async () => {
+// #245: with no paired person the app sends the person to onboarding, so Cook asks for nothing.
+test("with no paired person it asks for nothing and opens onboarding", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [] } });
-	renderRoute("/cooking");
-	const button = await findMeals();
+	const { router } = renderRoute("/cooking");
 
-	await waitFor(() => {
-		fireEvent.click(button);
-		expect(screen.getByText("No person is paired yet.")).toBeTruthy();
-	});
-	expect(screen.getByText("Could not load meal ideas")).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 	expect(posts(calls)).toEqual([]);
 });
 
@@ -274,5 +274,5 @@ test("a malformed reply or a lost network shows an error, never meals", async ()
 			"The server is not reachable: TypeError: Failed to fetch",
 		),
 	).toBeTruthy();
-	expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+	expect(mealStart()).toBeNull();
 });

@@ -38,6 +38,7 @@ const report = (over: Partial<Report> = {}): Report => ({
 	familyId: "1",
 	createdBy: "me",
 	createdAt: "2026-10-01T09:00:00.000Z",
+	email: null,
 	markers: [],
 	meals: null,
 	unresolved: null,
@@ -258,7 +259,9 @@ describe("ReportScreen with reports", () => {
 		within(panel).getByRole("textbox", { name: /^Notes for the physician/ });
 		fireEvent.click(view.getByRole("tab", { name: "Send" }));
 		expect(panel.getAttribute("aria-labelledby")).toBe("report-tab-4");
-		within(panel).getByText("Not sent. Mark the report as reviewed first.");
+		within(panel).getByText(
+			"Hospital: not sent. Mark the report as reviewed first.",
+		);
 	});
 
 	test("a save reloads the reports", async () => {

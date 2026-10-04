@@ -30,6 +30,7 @@ const report: Report = {
 	familyId: "f1",
 	createdBy: "u1",
 	createdAt: "2026-03-01T09:00:00Z",
+	email: null,
 	markers: [],
 	meals: null,
 	unresolved: null,
@@ -129,12 +130,13 @@ describe("Past PDFs", () => {
 
 	test("waits for the list, then shows each PDF with its report and size", async () => {
 		let reply: (value: ServerReply) => void = () => {};
-		serve({
+		const calls = serve({
 			[LIST]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const view = open();
 		const dialog = view.getByRole("dialog", { name: "Past PDFs" });
 		expect(within(dialog).getByText("Waiting for the server.")).toBeDefined();
+		await waitFor(() => expect(calls).toHaveLength(1));
 		reply({
 			json: {
 				pdfs: [pdf, { ...pdf, id: "p2", reportId: "gone", bytes: 1024 }],

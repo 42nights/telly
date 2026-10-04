@@ -64,7 +64,17 @@ const ready = (messages: FamilyMessage[]): ApiState<FamilyRecords> => ({
 	},
 });
 const meRoute = {
-	"GET /api/me": { json: { issuer: "i", subject: "s", identity: me } },
+	"GET /api/me": {
+		json: {
+			issuer: "i",
+			subject: "s",
+			identity: me,
+			name: null,
+			givenName: null,
+			email: null,
+			picture: null,
+		},
+	},
 };
 
 // happy-dom does not play sound: record what would play instead.

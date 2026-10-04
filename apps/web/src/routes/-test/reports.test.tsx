@@ -42,11 +42,13 @@ test("with no reports, offers to create one and says why creating failed", async
 	);
 });
 
-test("with no paired person, says so and reads no reports", async () => {
+// #245: an account with no person goes to onboarding, so no report is read.
+test("with no paired person, goes to the welcome screen and reads no reports", async () => {
 	signIn();
 	const calls = serve({ "GET /api/families": { families: [] } });
-	renderRoute("/reports");
+	const { router } = renderRoute("/reports");
 
-	expect(await screen.findByText("No person is paired yet.")).toBeTruthy();
-	expect(calls.map((call) => call.path)).toEqual(["/api/families"]);
+	expect(await screen.findByRole("region", { name: "Welcome" })).toBeTruthy();
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
+	expect(calls.some((call) => call.path.includes("/reports"))).toBe(false);
 });
