@@ -8,8 +8,9 @@ export const memberLabel = (identity: string, me: string | null): string =>
 	identity === me ? "You" : `Member ${identity.slice(0, 6)}`;
 
 /**
- * The members of a family (#302) and a label for each: the name from their own sign-in, or when
- * they joined until they open Telly again. Never an identity.
+ * The members of a family (#302) and a label for each, never an identity. Display names come from
+ * the member-name API that another issue adds; until then a member shows as "Family member" with
+ * the day they joined, so two members can be told apart.
  */
 export function useMemberNames(familyId: string | null) {
 	const state = useApi(
@@ -19,11 +20,9 @@ export function useMemberNames(familyId: string | null) {
 	const members = state.kind === "ready" ? state.value.members : [];
 	const nameOf = (identity: string) => {
 		const member = members.find((m) => m.identity === identity);
-		if (member === undefined) return "A family member";
-		return (
-			member.name ??
-			`Family member since ${new Date(member.addedAt).toLocaleDateString([], { dateStyle: "medium" })}`
-		);
+		return member === undefined
+			? "Family member"
+			: `Family member since ${new Date(member.addedAt).toLocaleDateString([], { dateStyle: "medium" })}`;
 	};
 	return { state, members, nameOf };
 }

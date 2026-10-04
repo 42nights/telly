@@ -451,36 +451,33 @@ describe.skipIf(app === undefined)("sign-in and family access", () => {
 		});
 	});
 
-	test("a member's sign-in name shows in the family's member list, never another identity's", async () => {
-		const alice = `alice-${crypto.randomUUID()}`;
-		const bob = `bob-${crypto.randomUUID()}`;
+	test("the member list shows every member, oldest first, and only to members", async () => {
+		const [alice, bob, carol] = ["alice", "bob", "carol"].map(
+			(name) => `${name}-${crypto.randomUUID()}`,
+		) as [string, string, string];
 		const created = await call(alice, "POST", "/api/families", {
-			name: "Names",
+			name: "Members",
 		});
 		const family = Schema.decodeUnknownSync(Family)(await created.json());
-		const bobMe = Schema.decodeUnknownSync(Me)(
-			await (
-				await app?.request("/api/me", {
-					headers: {
-						Authorization: `Bearer ${await token(bob, { name: "Synthetic Bob" })}`,
-					},
-				})
-			)?.json(),
-		);
+		const identity = async (who: string) =>
+			Schema.decodeUnknownSync(Me)(
+				await (await call(who, "GET", "/api/me")).json(),
+			).identity;
 		await call(alice, "POST", `/api/families/${family.id}/members`, {
-			identity: bobMe.identity,
+			identity: await identity(bob),
 		});
+		const path = `/api/families/${family.id}/members`;
 		const members = Schema.decodeUnknownSync(FamilyMembers)(
-			await (
-				await call(alice, "GET", `/api/families/${family.id}/members`)
-			).json(),
+			await (await call(bob, "GET", path)).json(),
 		).members;
-		expect(members.map((m) => [m.identity === bobMe.identity, m.name])).toEqual(
-			[
-				[false, null],
-				[true, "Synthetic Bob"],
-			],
-		);
+		expect(members.map((m) => m.identity)).toEqual([
+			await identity(alice),
+			await identity(bob),
+		]);
+		expect(await errorOf(await call(carol, "GET", path))).toEqual([
+			403,
+			"forbidden",
+		]);
 	});
 
 	test("an invite admits one person once; members may reuse the link", async () => {

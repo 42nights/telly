@@ -393,17 +393,6 @@ const awayEvent = table(
 	},
 );
 
-// A person's display name, from their own sign-in (the ID token's name), so family screens show a
-// name instead of an identity. Members of a family the person is in read it (`my_member_names`).
-const memberName = table(
-	{ name: "member_name" },
-	{
-		member: t.identity().primaryKey(),
-		name: t.string(),
-		updatedAt: t.timestamp(),
-	},
-);
-
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -997,7 +986,6 @@ const spacetimedb = schema({
 	locationShare,
 	homeWatch,
 	awayEvent,
-	memberName,
 	medicineMemory,
 	medicineSighting,
 	contactLadder,
@@ -2226,19 +2214,6 @@ export const setAway = spacetimedb.reducer(
 			awaySince: away ? ctx.timestamp : undefined,
 		});
 		recordAway(ctx, familyId, away ? "Left" : "Back", true, undefined);
-	},
-);
-
-/** Stores the sender's display name. The server sends it from the sender's verified sign-in. */
-export const setMemberName = spacetimedb.reducer(
-	{ name: t.string() },
-	(ctx, { name }) => {
-		requireText("name", name);
-		if (name.length > 100) throw new SenderError("name is too long");
-		const row = { member: ctx.sender, name, updatedAt: ctx.timestamp };
-		if (ctx.db.memberName.member.find(ctx.sender) === null)
-			ctx.db.memberName.insert(row);
-		else ctx.db.memberName.member.update(row);
 	},
 );
 
@@ -3515,35 +3490,15 @@ export const saveCookingProfile = spacetimedb.reducer(
 	},
 );
 
-// The members of every family the caller belongs to.
+// The members of every family the caller belongs to. Procedural: on the host, a semijoin of
+// `family_member` with itself returned no rows (auth.test.ts).
 export const myFamilyMembers = spacetimedb.view(
 	{ name: "my_family_members", public: true },
 	t.array(familyMember.rowType),
 	(ctx) =>
-		ctx.from.familyMember
-			.where((m) => m.member.eq(ctx.sender))
-			.rightSemijoin(ctx.from.familyMember, (m, o) =>
-				m.familyId.eq(o.familyId),
-			),
-);
-
-// The names of the caller and of everyone who shares a family with the caller.
-export const myMemberNames = spacetimedb.view(
-	{ name: "my_member_names", public: true },
-	t.array(memberName.rowType),
-	(ctx) => {
-		const seen = new Set<string>();
-		const names = [];
-		for (const mine of ctx.db.familyMember.member.filter(ctx.sender))
-			for (const other of ctx.db.familyMember.familyId.filter(mine.familyId)) {
-				const key = other.member.toHexString();
-				if (seen.has(key)) continue;
-				seen.add(key);
-				const row = ctx.db.memberName.member.find(other.member);
-				if (row !== null) names.push(row);
-			}
-		return names;
-	},
+		[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap((mine) => [
+			...ctx.db.familyMember.familyId.filter(mine.familyId),
+		]),
 );
 
 // Per-sender reads: each view returns only rows of families the caller belongs to.

@@ -497,13 +497,6 @@ export const MedicineSighting = __t.object("MedicineSighting", {
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
 
-export const MemberName = __t.object("MemberName", {
-  member: __t.identity(),
-  name: __t.string(),
-  updatedAt: __t.timestamp(),
-});
-export type MemberName = __Infer<typeof MemberName>;
-
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -597,9 +590,6 @@ export type MyMedicineMemory = __Infer<typeof MyMedicineMemory>;
 
 export const MyMedicineSightings = __t.object("MyMedicineSightings", {});
 export type MyMedicineSightings = __Infer<typeof MyMedicineSightings>;
-
-export const MyMemberNames = __t.object("MyMemberNames", {});
-export type MyMemberNames = __Infer<typeof MyMemberNames>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;

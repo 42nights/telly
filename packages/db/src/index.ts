@@ -87,7 +87,6 @@ import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetHomeReducer from "./set_home_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
-import SetMemberNameReducer from "./set_member_name_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
@@ -130,7 +129,6 @@ import MyLocationsRow from "./my_locations_table";
 import MyMealFactsRow from "./my_meal_facts_table";
 import MyMedicineMemoryRow from "./my_medicine_memory_table";
 import MyMedicineSightingsRow from "./my_medicine_sightings_table";
-import MyMemberNamesRow from "./my_member_names_table";
 import MyMessagesRow from "./my_messages_table";
 import MyPushTokensRow from "./my_push_tokens_table";
 import MyReminderEventsRow from "./my_reminder_events_table";
@@ -344,13 +342,6 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMedicineSightingsRow),
-  myMemberNames: __table({
-    name: 'my_member_names',
-    indexes: [
-    ],
-    constraints: [
-    ],
-  }, MyMemberNamesRow),
   myMessages: __table({
     name: 'my_messages',
     indexes: [
@@ -492,7 +483,6 @@ const reducersSchema = __reducers(
   __reducerSchema("set_family_push_token", SetFamilyPushTokenReducer),
   __reducerSchema("set_home", SetHomeReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
-  __reducerSchema("set_member_name", SetMemberNameReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),

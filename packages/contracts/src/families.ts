@@ -67,17 +67,10 @@ export type DeleteFamily = typeof DeleteFamily.Type;
 export const NewFamilyMember = Schema.Struct({ identity: IdentityHex });
 export type NewFamilyMember = typeof NewFamilyMember.Type;
 
-/**
- * `GET /api/families/:familyId/members`: every member of the family. `name` is the name from the
- * member's own sign-in (#302), or null until they open Telly again; never an identity.
- */
+/** `GET /api/families/:familyId/members`: every member of the family, oldest first. */
 export const FamilyMembers = Schema.Struct({
 	members: Schema.Array(
-		Schema.Struct({
-			identity: IdentityHex,
-			name: Schema.NullOr(Schema.String),
-			addedAt: UtcTime,
-		}),
+		Schema.Struct({ identity: IdentityHex, addedAt: UtcTime }),
 	),
 });
 export type FamilyMembers = typeof FamilyMembers.Type;

@@ -47,21 +47,9 @@ const added = <T extends { id: string }>(
 /** Signed-in routes outside one family, mounted at `/api`. */
 export const accountRoutes = () =>
 	new Hono<AuthEnv>()
-		// Keeps the caller's sign-in name, so family screens show it instead of an identity (#302).
-		.get("/me", async (c) => {
-			const { db, identity } = c.var;
-			const name = (identity.name ?? identity.givenName)?.trim().slice(0, 100);
-			const stored = [...db.connection.db.myMemberNames.iter()].find(
-				(row) => row.member.toHexString() === db.identity,
-			)?.name;
-			if (name !== undefined && name !== "" && name !== stored)
-				await callReducer(db, (connection) =>
-					connection.reducers.setMemberName({ name }),
-				).catch((error: unknown) =>
-					console.warn("could not store the member name", error),
-				);
-			return c.json({ ...identity, identity: db.identity } satisfies Me);
-		})
+		.get("/me", (c) =>
+			c.json({ ...c.var.identity, identity: c.var.db.identity } satisfies Me),
+		)
 		.get("/families", (c) => {
 			const { families, samples } = readFamilyRecords(c.var.db);
 			const newest = new Map<string, string>();
@@ -142,25 +130,17 @@ export const familyRoutes = (storage?: R2Bucket) =>
 			);
 			return c.body(null, 204);
 		})
-		.get("/members", (c) => {
-			const { connection } = c.var.db;
-			const names = new Map(
-				[...connection.db.myMemberNames.iter()].map((row) => [
-					row.member.toHexString(),
-					row.name,
-				]),
-			);
-			return c.json({
-				members: [...connection.db.myFamilyMembers.iter()]
+		.get("/members", (c) =>
+			c.json({
+				members: [...c.var.db.connection.db.myFamilyMembers.iter()]
 					.filter((row) => row.familyId === c.var.familyId)
 					.sort((a, b) => (a.id < b.id ? -1 : 1))
 					.map((row) => ({
 						identity: row.member.toHexString(),
-						name: names.get(row.member.toHexString()) ?? null,
 						addedAt: row.addedAt.toISOString(),
 					})),
-			} satisfies FamilyMembers);
-		})
+			} satisfies FamilyMembers),
+		)
 		.post("/members", async (c) => {
 			const { identity } = await decodeBody(c, NewFamilyMember);
 			await callReducer(c.var.db, (db) =>

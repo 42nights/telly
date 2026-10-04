@@ -199,20 +199,9 @@ describe("who sees a trip start or end", () => {
 	});
 });
 
-describe("member names", () => {
-	test("family members read each other's names and member lists; outsiders do not", () => {
-		h.call(mod.setMemberName, bob, { name: "Bob Rivera" });
-		h.call(mod.setMemberName, bob, { name: "Bobby" });
-		h.call(mod.setMemberName, mallory, { name: "Mallory" });
-		const names = (who: typeof alice) =>
-			h.view<{ name: string }>(mod.myMemberNames, who).map((n) => n.name);
-		expect(names(alice)).toEqual(["Bobby"]);
-		// Mallory shares no family with anyone: no name is visible, Bob's included.
-		expect(names(mallory)).toEqual([]);
-		expect(h.view(mod.myFamilyMembers, alice)).toHaveLength(3);
+describe("family member list", () => {
+	test("members read their family's member list; outsiders do not", () => {
+		expect(h.view(mod.myFamilyMembers, bob)).toHaveLength(3);
 		expect(h.view(mod.myFamilyMembers, mallory)).toEqual([]);
-		expect(() => h.call(mod.setMemberName, bob, { name: " " })).toThrow(
-			"name must not be empty",
-		);
 	});
 });
