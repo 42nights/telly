@@ -135,6 +135,8 @@ export const marker = (
 	const head = fromTop ? -gap * 1.5 : gap * 1.5;
 	return {
 		rect,
+		/** The arrow comes down from the frame's top edge (else up from the bottom). */
+		fromTop,
 		arrow: `M${startX} ${startY} C ${startX} ${midY}, ${cx} ${midY}, ${cx} ${endY + head * 0.5}`,
 		head: `${cx},${endY} ${cx - gap},${endY + head} ${cx + gap},${endY + head}`,
 	};
