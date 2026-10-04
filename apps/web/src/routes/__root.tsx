@@ -55,8 +55,13 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				{signingIn ? (
-					<div className="win95-desktop h-svh overflow-y-auto">
-						<Outlet />
+					<div className="win95-desktop flex h-svh flex-col">
+						<header className="win95-titlebar px-2 py-1 text-[0.9375rem]">
+							Telly
+						</header>
+						<div className="min-h-0 flex-1 overflow-y-auto">
+							<Outlet />
+						</div>
 					</div>
 				) : (
 					<FamilyProvider>
