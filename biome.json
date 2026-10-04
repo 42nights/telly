@@ -12,6 +12,7 @@
 			"!.sentrux",
 			"!noop",
 			"!docs",
+			"!data",
 			"!**/.next",
 			"!**/dist",
 			"!**/.turbo",
