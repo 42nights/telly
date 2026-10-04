@@ -180,7 +180,11 @@ function LocationPanel({
 		) : (
 			<>
 				<ReportLine reporting={reporting} trip={trip} sharing={sharing} />
-				<OwnLocation locations={locations.value} me={me.value.identity} />
+				<OwnLocation
+					reporting={reporting}
+					locations={locations.value}
+					me={me.value.identity}
+				/>
 				<SharingControls
 					familyId={familyId}
 					locations={locations.value}
@@ -423,15 +427,22 @@ function ReportLine(props: {
 	);
 }
 
+/** The caller's latest report, as the people they share with see it. */
 function OwnLocation({
+	reporting,
 	locations,
 	me,
 }: {
+	reporting: Reporting;
 	locations: FamilyLocations;
 	me: string;
 }) {
 	const now = useNow();
-	const own = locations.locations.find((l) => l.sharer === me);
+	// The report just sent is newer than the last poll.
+	const own =
+		reporting.kind === "sent"
+			? reporting.report
+			: locations.locations.find((l) => l.sharer === me);
 	return own === undefined ? null : (
 		<LocationCard location={own} name="What your family sees" now={now} />
 	);
