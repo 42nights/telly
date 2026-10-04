@@ -1,13 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { serverConfig } from "../src/config";
-import { parseEnv, secretNames, serverKeys } from "./cloudflare-keys";
+import {
+	parseEnv,
+	secretNames,
+	serverKeys,
+	workerBindings,
+} from "./cloudflare-keys";
 import worker from "./cloudflare-keys-worker";
 
 const secret = (value: string) => ({ get: async () => value });
 const pull = "p".repeat(64);
 const env = {
 	pull_token: secret(pull),
+	pull_token_agents: secret("a".repeat(64)),
 	GEMINI_API_KEY: secret("gemini-test-value"),
 	ELEVENLABS_API_KEY: secret("eleven-test-value"),
 };
@@ -112,5 +118,37 @@ describe("TELLY_REQUIRED_KEYS", () => {
 			TELLY_REQUIRED_KEYS: "GEMINI_API_KEY",
 		});
 		expect(config.gemini?.apiKey).toBe("gemini-test-value");
+	});
+});
+
+describe("Worker bindings", () => {
+	test("a second pull token also works and is never served", async () => {
+		const response = await ask({ "X-Telly-Pull-Token": "a".repeat(64) });
+		expect(response.status).toBe(200);
+		expect(await response.text()).not.toContain("aaaa");
+	});
+
+	test("binds served keys, TELLY_ aliases only when the plain name is absent, and all pull tokens", () => {
+		const served = new Set([
+			"GEMINI_API_KEY",
+			"OIDC_CLIENT_SECRET",
+			"RIVER_API_KEY",
+		]);
+		const stored = [
+			"GEMINI_API_KEY",
+			"TELLY_GEMINI_API_KEY",
+			"TELLY_OIDC_CLIENT_SECRET",
+			"XAI_API_KEY",
+			"TELLY_SECRETS_PULL_TOKEN",
+			"TELLY_SECRETS_PULL_TOKEN_AGENTS",
+		].map((name) => ({ name }));
+		expect(
+			workerBindings(stored, served).map(([b, s]) => `${b}<-${s.name}`),
+		).toEqual([
+			"GEMINI_API_KEY<-GEMINI_API_KEY",
+			"OIDC_CLIENT_SECRET<-TELLY_OIDC_CLIENT_SECRET",
+			"pull_token<-TELLY_SECRETS_PULL_TOKEN",
+			"pull_token_agents<-TELLY_SECRETS_PULL_TOKEN_AGENTS",
+		]);
 	});
 });

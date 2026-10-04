@@ -86,6 +86,43 @@ const need = (env: ReadonlyMap<string, string>, name: string, file: string) => {
 
 type Secret = { id: string; name: string; comment?: string; modified?: string };
 
+/**
+ * The Worker's binding name for each store secret it serves: every server and Fetch agent key in
+ * `served`, including ones other members uploaded. A store secret TELLY_<NAME> serves as <NAME>
+ * when <NAME> itself is not stored, such as TELLY_OIDC_CLIENT_SECRET for OIDC_CLIENT_SECRET. Every
+ * TELLY_SECRETS_PULL_TOKEN* secret becomes a pull_token* binding: a new token never revokes another.
+ */
+export const workerBindings = <S extends { name: string }>(
+	stored: readonly S[],
+	served: ReadonlySet<string>,
+): [string, S][] => {
+	const has = new Set(stored.map((s) => s.name));
+	return stored.flatMap((s): [string, S][] => {
+		if (s.name.startsWith(pullToken))
+			return [[`pull_token${s.name.slice(pullToken.length).toLowerCase()}`, s]];
+		if (served.has(s.name)) return [[s.name, s]];
+		const alias = s.name.replace(/^TELLY_/, "");
+		return alias !== s.name && served.has(alias) && !has.has(alias)
+			? [[alias, s]]
+			: [];
+	});
+};
+
+/** Writes a new member's pull file; an existing one is never replaced. */
+const writePullFile = (url: string, value: string) => {
+	const pullFile = join(config, "secrets-pull.env");
+	if (!existsSync(pullFile))
+		writeFileSync(
+			pullFile,
+			`TELLY_SECRETS_URL=${url}\n${pullToken}=${value}\n`,
+			{
+				mode: 0o600,
+				flag: "wx",
+			},
+		);
+	console.log(`Created ${pullToken}; its pull file is ${pullFile}`);
+};
+
 const push = async (source: string) => {
 	const credsFile = join(config, "cloudflare.env");
 	const creds = readPrivate(credsFile);
@@ -156,14 +193,7 @@ const push = async (source: string) => {
 		await api("POST", secrets, [
 			{ name: pullToken, value, scopes: ["workers"], comment },
 		]);
-		const pullFile = join(config, "secrets-pull.env");
-		if (!existsSync(pullFile))
-			writeFileSync(
-				pullFile,
-				`TELLY_SECRETS_URL=${url}\n${pullToken}=${value}\n`,
-				{ mode: 0o600, flag: "wx" },
-			);
-		console.log(`Created ${pullToken}; wrote it to ${pullFile}`);
+		writePullFile(url, value);
 	}
 	const created = [...keys].filter(([name]) => !existing.has(name));
 	if (created.length > 0)
@@ -187,9 +217,6 @@ const push = async (source: string) => {
 			});
 	}
 
-	// Bind every server and Fetch agent key in the store, including ones other members uploaded.
-	// A store secret TELLY_<NAME> serves as <NAME> when <NAME> itself is not stored, such as
-	// TELLY_OIDC_CLIENT_SECRET for OIDC_CLIENT_SECRET. Every TELLY_SECRETS_PULL_TOKEN* is a token.
 	const agentSchema = new URL(
 		"../../../agents/fetch/.env.schema",
 		import.meta.url,
@@ -200,17 +227,7 @@ const push = async (source: string) => {
 			? secretNames(readFileSync(agentSchema, "utf8"))
 			: []),
 	]);
-	const all = await list();
-	const has = new Set(all.map((s) => s.name));
-	const bindings = all.flatMap((s) => {
-		if (s.name.startsWith(pullToken))
-			return [[`pull_token${s.name.slice(pullToken.length).toLowerCase()}`, s]];
-		if (served.has(s.name)) return [[s.name, s]];
-		const alias = s.name.replace(/^TELLY_/, "");
-		return alias !== s.name && served.has(alias) && !has.has(alias)
-			? [[alias, s]]
-			: [];
-	}) as [string, Secret][];
+	const bindings = workerBindings(await list(), served);
 	const stored = bindings.filter(([name]) => !name.startsWith("pull_token"));
 	const form = new FormData();
 	form.append(
