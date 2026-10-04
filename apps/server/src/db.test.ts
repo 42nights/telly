@@ -374,7 +374,11 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					expect(tokens()).toEqual([{ familyId, tokenHash: second }]);
 					// Family members never see the token hash; the ingest identity holds no grant.
 					expect([...owner.connection.db.myPushTokens.iter()]).toEqual([]);
-					expect([...owner.connection.db.myCareGrants.iter()]).toEqual([]);
+					expect(
+						[...owner.connection.db.myCareGrants.iter()].filter(
+							(grant) => grant.member.toHexString() === ingest.identity,
+						),
+					).toEqual([]);
 				}),
 			),
 		));
