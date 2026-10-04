@@ -124,7 +124,7 @@ const noopSamples = (body: ArrayBuffer): NoopSample[] => {
 
 const slot = ({ source, metric, time }: NoopSample) =>
 	metric === "heart_rate"
-		? `${source}|${metric}|${Math.floor(time / 15_000)}`
+		? `${source}|${metric}|${Math.floor(time / 30_000)}`
 		: `${source}|${metric}|${time}`;
 
 export const unstoredSamples = (
