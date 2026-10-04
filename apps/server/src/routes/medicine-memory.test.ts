@@ -175,6 +175,16 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 						seenAt: Timestamp.now(),
 					}),
 					theirs.markMedicineNotFound({ id: BigInt(stored?.id ?? "0") }),
+					theirs.saveMedicineArPin({
+						familyId: BigInt(familyId),
+						containerId: BigInt(stored?.id ?? "0"),
+						anchorId: "outsider-anchor",
+						mapBytes: 1,
+					}),
+					theirs.deleteMedicineArPin({
+						familyId: BigInt(familyId),
+						containerId: BigInt(stored?.id ?? "0"),
+					}),
 				];
 				const results = yield* Effect.promise(() => Promise.allSettled(writes));
 				expect(
