@@ -22,6 +22,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # The AR tracking math (#351) is plain Swift: it builds and runs without the iOS SDK.
+      - name: Test the AR tracking math
+        run: >-
+          swiftc -parse-as-library apps/native/modules/telly-ar/ios/TellyArTracking.swift
+          apps/native/modules/telly-ar/tests/TellyArTrackingTests.swift -o "$RUNNER_TEMP/ar-tracking"
+          && "$RUNNER_TEMP/ar-tracking"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version-file: package.json

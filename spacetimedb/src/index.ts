@@ -2055,7 +2055,11 @@ const sharesOf = (ctx: Ctx, familyId: bigint) => [
 	...ctx.db.locationShare.byFamilySharer.filter([familyId, ctx.sender]),
 ];
 
-/** Lets one other member of the family see the sender's location. Sharing twice changes nothing. */
+/**
+ * Lets one other member of the family see the sender's location. The sender owns that location, so
+ * sharing also grants the viewer the `location` care scope when they lack it; without it the share
+ * would show nothing. Sharing twice changes nothing.
+ */
 export const shareLocation = spacetimedb.reducer(
 	{ familyId: t.u64(), viewer: t.identity() },
 	(ctx, { familyId, viewer }) => {
@@ -2068,6 +2072,20 @@ export const shareLocation = spacetimedb.reducer(
 		]);
 		if (member.next().done)
 			throw new SenderError("viewer is not a member of this family");
+		const scopes = ctx.db.careGrantEvent.byFamilyMember.filter([
+			familyId,
+			viewer,
+		]);
+		if (!holdsCareScope(scopes, "location"))
+			ctx.db.careGrantEvent.insert({
+				id: 0n,
+				familyId,
+				member: viewer,
+				scope: "location",
+				granted: true,
+				changedBy: ctx.sender,
+				changedAt: ctx.timestamp,
+			});
 		if (sharesOf(ctx, familyId).some((s) => s.viewer.isEqual(viewer))) return;
 		ctx.db.locationShare.insert({
 			id: 0n,
@@ -2187,6 +2205,8 @@ const AWAY_DWELL_MICROS = 60_000_000n;
 const MIN_HOME_RADIUS = 100;
 const MAX_HOME_RADIUS = 5000;
 const EARTH_RADIUS_METERS = 6_371_000;
+// `APPROXIMATE_METERS` of `@health/contracts/location`: a wider fix is too rough to become home.
+const AUTO_HOME_ACCURACY_METERS = 100;
 
 type Point = { latitude: number; longitude: number };
 
@@ -2252,10 +2272,11 @@ const outsideStep = (
 
 /**
  * Records how far one fix is from the sender's home and, with automatic trips on, moves the trip.
- * A fix is inside when its center is within the radius and its accuracy is no wider than the
- * radius; it is clearly outside only when even the near edge of its accuracy circle is beyond the
- * radius, so GPS jitter at home starts no trip. Fixes in between change nothing. A manual trip
- * ends only after a fix clearly outside.
+ * Without a home, the first fix accurate to `AUTO_HOME_ACCURACY_METERS` becomes home and turns on
+ * automatic trips; a caregiver corrects it in Settings. A fix is inside when its center is within
+ * the radius and its accuracy is no wider than the radius; it is clearly outside only when even the
+ * near edge of its accuracy circle is beyond the radius, so GPS jitter at home starts no trip. Fixes
+ * in between change nothing. A manual trip ends only after a fix clearly outside.
  */
 const followHome = (
 	ctx: Ctx,
@@ -2263,7 +2284,17 @@ const followHome = (
 	fix: Infer<typeof LocationFix>,
 ) => {
 	const watch = homeWatchOf(ctx, familyId);
-	if (watch?.home === undefined) return;
+	if (watch?.home === undefined) {
+		// ponytail: the first fix, not the overnight place; learn from night fixes if a first fix away
+		// from home turns out common.
+		if (fix.accuracyMeters <= AUTO_HOME_ACCURACY_METERS)
+			upsertHomeWatch(ctx, familyId, {
+				home: { latitude: fix.latitude, longitude: fix.longitude },
+				autoTrip: true,
+				distanceMeters: 0,
+			});
+		return;
+	}
 	const distance = distanceMeters(watch.home, fix);
 	const { autoTrip, radiusMeters: radius } = watch;
 	const step: HomeStep = !autoTrip

@@ -117,28 +117,11 @@ const members: ServerReply = {
 		],
 	},
 };
-// Rosa holds Location access; nobody else does.
-const access: ServerReply = {
-	json: {
-		mine: [],
-		grants: [
-			{
-				identity: sister,
-				scope: "location",
-				granted: true,
-				changedBy: me,
-				changedAt: at(10),
-			},
-		],
-		history: [],
-	},
-};
 
 describe("WhoSeesMe", () => {
-	test("lists every other member by name with an on/off box, never by identity", async () => {
+	test("lists every other member by name with an on/off box and no extra text", async () => {
 		const calls = serve({
 			[MEMBERS]: members,
-			"GET /api/families/1/care-access": access,
 			[`DELETE ${sharesPath(sister)}`]: ok,
 		});
 		const view = render(
@@ -148,9 +131,7 @@ describe("WhoSeesMe", () => {
 				me={me}
 			/>,
 		);
-		await waitFor(() =>
-			expect(view.container.textContent).toContain("Cannot see it yet"),
-		);
+		await view.findByText("Rosa Rivera");
 		const boxes = view.getAllByRole("checkbox");
 		expect(
 			boxes.map((b) => [
@@ -159,12 +140,9 @@ describe("WhoSeesMe", () => {
 			]),
 		).toEqual([
 			["Rosa Rivera", true],
-			[
-				"Family memberCannot see it yet: turn on Location for them in Care › Sharing.",
-				true,
-			],
+			// No name stored yet: a short label, never "Family member".
+			[`Member ${brother.slice(0, 6)}`, true],
 		]);
-		expect(view.container.textContent).not.toContain(sister.slice(0, 6));
 		await act(async () => boxes[0]?.click());
 		expect(calls.map((c) => `${c.method} ${c.path}`)).toContain(
 			`DELETE ${sharesPath(sister)}`,
@@ -174,7 +152,6 @@ describe("WhoSeesMe", () => {
 	test("a refused change shows why and changes nothing", async () => {
 		serve({
 			[MEMBERS]: members,
-			"GET /api/families/1/care-access": access,
 			[`PUT ${sharesPath(sister)}`]: {
 				status: 403,
 				body: { error: "forbidden", message: "Not a member." },
