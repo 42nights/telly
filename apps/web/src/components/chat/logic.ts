@@ -132,7 +132,7 @@ export const GEMINI_CHIP: Record<GeminiStatus["kind"], string> = {
 	unavailable: "Gemini · unavailable",
 };
 
-/** One compact source line: metric, value and unit, source, source time, and stale. */
+/** One compact source line: metric, value and unit, source, source time, demo, and stale. */
 export function evidenceLine(
 	evidence: Evidence,
 	formatTime: (iso: string) => string,
@@ -142,6 +142,7 @@ export function evidenceLine(
 		evidence.source,
 		formatTime(evidence.sourceTime),
 	];
+	if (evidence.synthetic) parts.push("demo, not real");
 	if (evidence.stale) parts.push("stale");
 	return parts.join(" · ");
 }

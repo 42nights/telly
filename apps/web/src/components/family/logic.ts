@@ -67,16 +67,6 @@ export const newestPerMetric = (
 		});
 };
 
-/** The count and metrics (no values) of samples that are not real, or null when all are real. */
-export const demoSampleSummary = (
-	samples: readonly HealthSample[],
-): string | null => {
-	const demo = samples.filter((s) => s.synthetic);
-	if (demo.length === 0) return null;
-	const metrics = [...new Set(demo.map((s) => s.metric))].sort().join(", ");
-	return `${demo.length} demo samples that are not real readings (${metrics})`;
-};
-
 /** One delivery status per alert, in plain words. */
 export const deliveryText = (delivery: AlertDelivery | null): string => {
 	if (delivery === null) return "No delivery record";
