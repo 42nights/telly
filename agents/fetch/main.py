@@ -1,6 +1,7 @@
 """telly Fetch.ai worker: answers ToolCall messages from granted Agentverse agents, and Agent
 Chat Protocol messages from granted chat senders (such as ASI:One) with synthetic records only."""
 
+import os
 import sys
 
 from uagents import Agent, Context, Protocol
@@ -20,7 +21,15 @@ try:
 except ConfigError as exc:
     sys.exit(f"telly fetch worker: {exc}")
 
-agent = Agent(name="telly-fetch", seed=cfg.seed, port=cfg.port, mailbox=cfg.mailbox)
+agent = Agent(
+    name="telly-fetch",
+    seed=cfg.seed,
+    port=cfg.port,
+    mailbox=cfg.mailbox,
+    # Public on Agentverse and ASI:One: synthetic demo family only, no addresses or secrets.
+    readme_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "agentverse.md"),
+    description="telly demo care agent: alerts and health readings for one synthetic family.",
+)
 # The inspector caches every message payload in memory and serves it at GET /messages
 # (CORS *, bound to 0.0.0.0). Replies carry health data, so turn that cache off.
 # The inspector stays on because Agentverse "Connect" (mailbox setup) calls POST /connect.

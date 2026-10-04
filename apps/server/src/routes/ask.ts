@@ -10,7 +10,7 @@ import {
 	type VoiceAnswer,
 } from "@health/contracts/ask";
 import { Cause, Effect, Exit, Schema } from "effect";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { familyTools } from "../family-tools";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
@@ -18,6 +18,7 @@ import { maxAudioBytes, type Voice } from "../integrations/elevenlabs";
 import type { FetchAgentConfig } from "../integrations/fetch";
 import type { GeminiConfig } from "../integrations/gemini";
 import { askGemini } from "../integrations/gemini-chat";
+import { listFact, readCareFacts } from "./care-profile";
 
 export type AskDeps = {
 	/** Unset: questions answer `unavailable`. */
@@ -86,15 +87,85 @@ const urgentAnswer = {
 const wearerRules = [
 	"You are talking with the person with memory loss. You are an assistant, not a relative or a friend. Never pretend to be a family member, and say that you are an assistant when asked.",
 	"They may ask the same thing again. Answer again patiently, the same way. Never say that they asked before, never test their memory, and never correct, embarrass, or argue with them.",
-	"Repeat names, routines, trips, plans, and earlier requests only when your tools returned them. When something is not saved, say kindly that you do not have it saved and suggest asking a family member. Never invent or guess a memory.",
+	"Repeat names, routines, trips, plans, and earlier requests only when the saved facts below or your tools gave them. When something is not saved, say kindly that you do not have it saved and suggest asking a family member. Never invent or guess a memory.",
 	"When they tell you how they feel, say back the feeling in their own words, then offer to keep talking or to call a family member or friend. Do not call a feeling anxiety unless they did, and do not promise that everything is fine.",
 	"When they feel lonely or miss someone, you may suggest a call to a family member or friend.",
 	"If they ask for urgent help or describe a serious symptom, tell them only to call their emergency number or a family member now.",
 	"Use short, simple sentences. Give at most one next step.",
 ].join("\n");
 
-export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
-	const ask = (familyId: bigint, question: FamilyQuestion) => {
+/**
+ * Saved facts the wearer may hear again. The #26 profile only when the caller holds
+ * `health_records`, as everywhere else; the latest trip plan and the caller's own requests are
+ * already readable by every member.
+ */
+const wearerFacts = (c: Context<FamilyEnv>): string[] => {
+	const { db, familyId } = c.var;
+	const profile = readCareFacts(c)?.profile;
+	const lines =
+		profile === undefined
+			? []
+			: [
+					`Their preferred name: ${profile.preferredName ?? "not saved"}.`,
+					...(profile.language === null
+						? []
+						: [
+								`Their preferred language: ${profile.language}. Answer in it unless they ask for another language.`,
+							]),
+					listFact(
+						"Their routines",
+						profile.routines?.map((r) =>
+							r.time === null ? r.name : `${r.name} at ${r.time}`,
+						) ?? null,
+					),
+					// Names and relationships only: phone numbers never go to the model.
+					listFact(
+						"Their people, in contact order",
+						profile.contacts?.map((p) =>
+							p.relationship === null
+								? p.name
+								: `${p.name} (${p.relationship})`,
+						) ?? null,
+					),
+				];
+	const trips = [...db.connection.db.myTripEvents.iter()]
+		.filter((row) => row.familyId === familyId)
+		.sort((a, b) => (a.id < b.id ? 1 : -1));
+	const plan = trips.find(
+		(row) => row.step.tag === "Leaving" && row.purpose !== undefined,
+	);
+	const latest = trips.find((row) => row.tripId === plan?.tripId);
+	if (plan !== undefined && latest !== undefined)
+		lines.push(
+			`Their latest trip plan, stated ${plan.at.toISOString()}: ${plan.purpose}${plan.destination === undefined ? "" : `, to ${plan.destination}`}. Now: ${latest.step.tag.toLowerCase()}.`,
+		);
+	const requests = [...db.connection.db.myCareNeeds.iter()]
+		.filter(
+			(row) =>
+				row.familyId === familyId &&
+				row.kind.tag !== "Alert" &&
+				row.raisedBy.toHexString() === db.identity,
+		)
+		.sort((a, b) => (a.id < b.id ? 1 : -1))
+		.slice(0, 3);
+	for (const row of requests)
+		lines.push(
+			`They asked their family, ${row.createdAt.toISOString()}: “${row.summary}”. Status: ${row.status.tag.toLowerCase()}.`,
+		);
+	return lines.length === 0 ? [] : ["Saved facts you may repeat:", ...lines];
+};
+
+/**
+ * Answers one family question; the routes and the iMessage agent share it. `facts` gives the
+ * saved facts a wearer may hear again; it is read only for a wearer's question.
+ */
+export const familyAnswer =
+	({ gemini, fetchAgent }: Pick<AskDeps, "gemini" | "fetchAgent">) =>
+	(
+		familyId: bigint,
+		question: FamilyQuestion,
+		facts: () => readonly string[] = () => [],
+	) => {
 		const now = new Date();
 		// Checked before any provider, so help never waits on a model or a missing configuration.
 		const urgent = urgentRequest(question.question);
@@ -118,7 +189,7 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 		const family = familyTools(fetchAgent, familyId, now, question.timeZone);
 		const rules =
 			question.asker === "wearer"
-				? `${family.rules}\n${wearerRules}`
+				? [family.rules, wearerRules, ...facts()].join("\n")
 				: family.rules;
 		return askGemini(gemini, question, { ...family, rules }).pipe(
 			Effect.map(
@@ -133,6 +204,9 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 			),
 		);
 	};
+
+export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
+	const askFamily = familyAnswer({ gemini, fetchAgent });
 	return new Hono<FamilyEnv>()
 		.post(
 			"/ask",
@@ -150,7 +224,7 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 				checkAttachments(question);
 				const answer = await run(
 					c.req.raw.signal,
-					ask(c.var.familyId, question),
+					askFamily(c.var.familyId, question, () => wearerFacts(c)),
 				);
 				if (answer === undefined) return gone();
 				c.header("cache-control", "no-store");
@@ -192,7 +266,10 @@ export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
 						"invalid_request",
 						"No question was recognized, or timeZone or asker is not valid",
 					);
-				const answer = await run(signal, ask(c.var.familyId, question.value));
+				const answer = await run(
+					signal,
+					askFamily(c.var.familyId, question.value, () => wearerFacts(c)),
+				);
 				if (answer === undefined) return gone();
 				// The text answer stands when speech fails; the reason stays explicit.
 				const speech = await run(

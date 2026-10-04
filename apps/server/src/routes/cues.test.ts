@@ -9,10 +9,10 @@ import { Hono } from "hono";
 import type { FamilyDb } from "../db";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import {
-	type GemmaConfig,
+	type QwenConfig,
 	renderCueInput,
 	requestCue,
-} from "../integrations/gemma";
+} from "../integrations/qwen";
 import { cueRoutes, pickSamples } from "./cues";
 
 let reply: (signal: AbortSignal) => Response | Promise<Response> = () =>
@@ -30,7 +30,7 @@ const provider = Bun.serve({
 });
 afterAll(() => provider.stop(true));
 
-const gemma: GemmaConfig = {
+const qwen: QwenConfig = {
 	baseUrl: `${provider.url.origin}/v1/`,
 	deployment: "dep-test",
 	checkpoint: "river://run-test/sampler_weights/health-cue-v1-test",
@@ -60,7 +60,7 @@ const sample = (overrides: Partial<HealthSample>): HealthSample => ({
 	...overrides,
 });
 
-const failureOf = (config: GemmaConfig | undefined) =>
+const failureOf = (config: QwenConfig | undefined) =>
 	Effect.runPromise(Effect.flip(requestCue(config, [sample({})])));
 
 describe("cue format", () => {
@@ -107,7 +107,7 @@ describe("cue route", () => {
 			throw new Error("database read");
 		},
 	});
-	const appWith = (config: GemmaConfig | undefined) => {
+	const appWith = (config: QwenConfig | undefined) => {
 		const app = new Hono<FamilyEnv>()
 			.use(async (c, next) => {
 				c.set("db", untouched);
@@ -126,7 +126,7 @@ describe("cue route", () => {
 		);
 		return app;
 	};
-	const post = (config: GemmaConfig | undefined, body: string) =>
+	const post = (config: QwenConfig | undefined, body: string) =>
 		appWith(config).request("/cues", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -156,7 +156,7 @@ describe("cue route", () => {
 			}),
 		],
 	])("rejects %s", async (_, body) => {
-		const response = await post(gemma, body);
+		const response = await post(qwen, body);
 		expect(response.status).toBe(400);
 		expect(
 			Schema.decodeUnknownSync(ApiError)(await response.json()).error,
@@ -164,11 +164,11 @@ describe("cue route", () => {
 	});
 });
 
-describe("Gemma deployment adapter", () => {
+describe("Qwen deployment adapter", () => {
 	test("sends the trained prompt with the key and decodes one cue", async () => {
 		reply = () =>
 			completion('{"kind":"walk","text":"A short walk may feel good."}');
-		const cue = await Effect.runPromise(requestCue(gemma, [sample({})]));
+		const cue = await Effect.runPromise(requestCue(qwen, [sample({})]));
 		expect(cue).toEqual({ kind: "walk", text: "A short walk may feel good." });
 		expect(seen?.authorization).toBe("Bearer test-key");
 		expect(seen?.body).toMatchObject({
@@ -184,13 +184,13 @@ describe("Gemma deployment adapter", () => {
 
 	test("no configuration is unavailable without a network call", async () => {
 		seen = undefined;
-		expect((await failureOf(undefined))._tag).toBe("GemmaUnavailable");
+		expect((await failureOf(undefined))._tag).toBe("QwenUnavailable");
 		expect(seen).toBeUndefined();
 	});
 
 	test("a deployment that is not serving is unavailable", async () => {
 		reply = () => new Response("scaled to zero", { status: 503 });
-		expect((await failureOf(gemma))._tag).toBe("GemmaUnavailable");
+		expect((await failureOf(qwen))._tag).toBe("QwenUnavailable");
 	});
 
 	test.each([
@@ -215,8 +215,8 @@ describe("Gemma deployment adapter", () => {
 		["a malformed completion", () => Response.json({ choices: [] })],
 	])("%s is an upstream error that leaks no provider body", async (_, make) => {
 		reply = make;
-		const failure = await failureOf(gemma);
-		expect(failure._tag).toBe("GemmaUpstreamError");
+		const failure = await failureOf(qwen);
+		expect(failure._tag).toBe("QwenUpstreamError");
 		expect(failure.message).not.toContain("test-key");
 	});
 
@@ -229,7 +229,7 @@ describe("Gemma deployment adapter", () => {
 			return new Promise<Response>(() => {});
 		};
 		const controller = new AbortController();
-		const run = Effect.runPromiseExit(requestCue(gemma, [sample({})]), {
+		const run = Effect.runPromiseExit(requestCue(qwen, [sample({})]), {
 			signal: controller.signal,
 		});
 		await arrived;

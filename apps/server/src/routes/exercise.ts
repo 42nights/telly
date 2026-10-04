@@ -1,7 +1,9 @@
 // Guided exercise routes (#41), mounted at `/api/families/:familyId`. The module's reducers check
 // membership, plan verification, and the order of session events again, so a retry or a race cannot
-// record a session twice or complete one that never started.
+// record a session twice or complete one that never started. Verifying a plan reads the #26 care
+// profile, so it needs `health_records` access.
 import {
+	type ExerciseDemand,
 	ExerciseEventInput,
 	ExerciseEventKind,
 	type ExercisePlan,
@@ -14,8 +16,19 @@ import { Schema } from "effect";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
+import { readProfile } from "./care-profile";
 
 const PlanBody = Schema.fromJsonString(ExercisePlanInput);
+
+// ponytail: keyword match on the profile's free-text restrictions. A restriction that names no
+// demand is left to the verifier, who can read the profile. Upgrade when #26 records demands.
+const demandWords: Record<ExerciseDemand, RegExp> = {
+	standing: /\bstand(s|ing)?\b/i,
+	walking: /\bwalk(s|ing)?\b/i,
+	floor: /\bfloor\b/i,
+	overhead_arms: /\boverhead\b/i,
+	weights: /\b(weights?|lift(s|ing)?)\b/i,
+};
 
 const readPlans = (c: Context<FamilyEnv>): ExercisePlan[] =>
 	[...c.var.db.connection.db.myExercisePlans.iter()]
@@ -99,7 +112,21 @@ export const exerciseRoutes = () =>
 			return c.json(findPlan(c, id) satisfies ExercisePlan, 201);
 		})
 		.post("/exercise/plans/:planId/verify", async (c) => {
-			const { id } = findPlan(c, c.req.param("planId"));
+			const { id, demands } = findPlan(c, c.req.param("planId"));
+			const { activityRestrictions } = readProfile(c).profile;
+			if (activityRestrictions === null)
+				throw new ApiFailure(
+					"conflict",
+					"Record the wearer's activity restrictions in the care profile first",
+				);
+			const clash = activityRestrictions.find((text) =>
+				demands.some((demand) => demandWords[demand].test(text)),
+			);
+			if (clash !== undefined)
+				throw new ApiFailure(
+					"conflict",
+					`The activity conflicts with the care profile restriction “${clash}”`,
+				);
 			await callReducer(c.var.db, (connection) =>
 				connection.reducers.verifyExercisePlan({ id }),
 			);

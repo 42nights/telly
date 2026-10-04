@@ -30,7 +30,7 @@ const planFields = {
 	/** Read and shown one at a time, exactly as written in the source. */
 	steps: Schema.NonEmptyArray(Line(300)).check(Schema.isMaxLength(20)),
 	demands: Schema.Array(ExerciseDemand),
-	/** The wearer's recorded activity restrictions. Until #26 lands they are recorded here. */
+	/** Demands the wearer must avoid. Verifying the plan also checks the #26 care profile. */
 	restrictions: Schema.Array(ExerciseDemand),
 	/** Where the activity was agreed, such as "Physiotherapist handout, 30 Sep". */
 	source: Line(200),
