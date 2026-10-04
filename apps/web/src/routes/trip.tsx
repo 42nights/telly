@@ -1,7 +1,8 @@
 // "Going out" (issue #40): the wearer's chosen destination and purpose, a spoken reminder, walking
 // directions in the phone's own maps app, location sharing, and "Help me get home".
 // ponytail: the trip and home address stay on this device until the trip-purpose contract (#39).
-import { FamilyMessage, FamilyRecords } from "@health/contracts";
+import { FamilyRecords } from "@health/contracts";
+import { CareNeed } from "@health/contracts/care";
 import { Me } from "@health/contracts/families";
 import { FamilyLocations } from "@health/contracts/location";
 import { Button, buttonVariants } from "@health/ui/components/button";
@@ -234,6 +235,7 @@ function TripForm({
 				id="trip-destination"
 				className="win95-inset win95-field h-12 bg-card px-2"
 				value={destination}
+				maxLength={150}
 				onChange={(event) => setDestination(event.target.value)}
 				placeholder="The pharmacy on Main Street"
 			/>
@@ -242,6 +244,7 @@ function TripForm({
 				id="trip-purpose"
 				className="win95-inset win95-field h-12 bg-card px-2"
 				value={purpose}
+				maxLength={150}
 				onChange={(event) => setPurpose(event.target.value)}
 				placeholder="pick up my pills"
 			/>
@@ -270,8 +273,8 @@ function TripForm({
 }
 
 type Help =
-	| { readonly kind: "idle" | "sending" | "sent" }
-	| { readonly kind: "failed"; readonly message: string };
+	| { readonly kind: "idle" | "sending" }
+	| { readonly kind: "sent" | "failed"; readonly message: string };
 
 function HelpHome({
 	familyId,
@@ -289,7 +292,7 @@ function HelpHome({
 	const [contacts] = useContacts();
 	const [home, setHome] = useState(() => localStorage.getItem(HOME_KEY) ?? "");
 	const [help, setHelp] = useState<Help>({ kind: "idle" });
-	// One id per help request, reused by a retry, so the family gets the message once.
+	// One id per help request, reused by a retry, so the family ladder opens one need.
 	const clientId = useRef<string | null>(null);
 
 	const ask = async () => {
@@ -303,17 +306,28 @@ function HelpHome({
 		clientId.current ??= crypto.randomUUID();
 		setHelp({ kind: "sending" });
 		const result = await apiRequest(
-			FamilyMessage,
-			familyPath(familyId, "/messages"),
+			CareNeed,
+			familyPath(familyId, "/care/needs"),
 			{
 				method: "POST",
-				body: { clientId: clientId.current, body: helpMessage(trip, sharing) },
+				body: {
+					clientId: clientId.current,
+					kind: "help",
+					summary: helpMessage(trip, sharing),
+					sampleIds: [],
+					dueAt: null,
+				},
 			},
 		);
 		if (result.kind === "ready") {
 			clientId.current = null;
-			setHelp({ kind: "sent" });
-			void say("help", "I told your family that you need help getting home.");
+			const contact = result.value.attempts.at(-1);
+			const message =
+				contact === undefined
+					? "Nobody is set up to be contacted yet. Your request stays open on the Care page. Call instead."
+					: `I asked ${contact.name}. Telly keeps asking your family until someone says they will help.`;
+			setHelp({ kind: "sent", message });
+			void say("help", message);
 		} else
 			setHelp({
 				kind: "failed",
@@ -340,8 +354,7 @@ function HelpHome({
 			</Button>
 			<p aria-live="polite" className="text-[16px]">
 				{help.kind === "sending" && "Sending…"}
-				{help.kind === "sent" &&
-					"Your family got a message in Telly's family chat."}
+				{help.kind === "sent" && help.message}
 			</p>
 			{help.kind === "failed" && (
 				<p className="font-bold text-[16px] text-destructive" role="alert">
