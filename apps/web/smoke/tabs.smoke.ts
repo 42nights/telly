@@ -41,7 +41,7 @@ const replies: Record<string, unknown> = {
 		thresholds: [],
 	},
 	"/api/families/1/messages": { messages: [] },
-	"/api/families/1/location": { locations: [], shares: [] },
+	"/api/families/1/location": { locations: [], shares: [], seesShared: false },
 	"/api/families/1/trips/current": { trip: null },
 	"/api/families/1/exercise": { plans: [], sessions: [] },
 	"/api/families/1/cooking/profile": {
@@ -49,6 +49,7 @@ const replies: Record<string, unknown> = {
 		editedBy: null,
 		editedAt: null,
 	},
+	"/api/families/1/reminders": { reminders: [] },
 	"/api/families/1/reminder-occurrences": { occurrences: [] },
 	"/api/families/1/reminder-settings": { settings: null },
 	"/api/families/1/speaker-settings": {
@@ -137,18 +138,17 @@ test("a signed-out deep link leads to the sign-in screen", async ({
 	expect(problems).toEqual([]);
 });
 
+// #254: the desktop Screens tree, in menu order, for the default family view.
 const tabs = [
+	{ name: "Family", path: "/family", heading: "Family · Smoke Family" },
+	{ name: "Chat", path: "/chat", heading: "Family chat · Smoke Family" },
+	{ name: "Care", path: "/care", heading: "Care needs" },
+	{ name: "Visits", path: "/appointments", heading: "Upcoming visits" },
+	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
 	{ name: "Home", path: "/hud", heading: /^Home · / },
 	{ name: "Medicine", path: "/medicine", heading: "Find medicine" },
 	{ name: "Bedtime", path: "/bedtime", heading: "Bedtime" },
 	{ name: "Going out", path: "/trip", heading: "Going out" },
-	{ name: "Family", path: "/family", heading: "Family · Smoke Family" },
-	{ name: "Care plan", path: "/care-profile", heading: "Sharing" },
-	{ name: "Chat", path: "/chat", heading: "Family chat · Smoke Family" },
-	{ name: "Care", path: "/care", heading: "Care · Smoke Family" },
-	{ name: "Dashboard", path: "/dashboard", heading: "Family dashboard" },
-	{ name: "Reports", path: "/reports", heading: "Lab report properties" },
-	{ name: "Visits", path: "/appointments", heading: "Upcoming visits" },
 	{ name: "Settings", path: "/settings", heading: "Settings · Phone numbers" },
 ] as const;
 
