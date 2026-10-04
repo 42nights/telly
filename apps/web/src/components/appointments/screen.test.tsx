@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { expect, test } from "bun:test";
 import type { Appointment } from "@health/contracts/appointments";
@@ -16,7 +16,7 @@ import {
 	signIn,
 	waitFor,
 	within,
-} from "../test/dom";
+} from "../test/dom-routed";
 import { AppointmentsScreen } from "./screen";
 
 setupDom();

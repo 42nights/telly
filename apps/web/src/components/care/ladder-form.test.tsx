@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { expect, test } from "bun:test";
 import type { ContactLadder, LadderContact } from "@health/contracts/care";
@@ -11,7 +11,7 @@ import {
 	setupDom,
 	signIn,
 	within,
-} from "../test/dom";
+} from "../test/dom-routed";
 import { LadderForm } from "./ladder-form";
 
 setupDom();

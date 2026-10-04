@@ -1,9 +1,9 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { afterEach, expect, test } from "bun:test";
 
-import { act, fireEvent, render, setupDom } from "../test/dom";
+import { act, fireEvent, render, setupDom } from "../test/dom-routed";
 import { CameraPreview, useCamera } from "./camera-preview";
 
 setupDom();

@@ -1,10 +1,10 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { expect, test } from "bun:test";
 import type { Alert, FamilyRecords } from "@health/contracts";
 
-import { render, setupDom, within } from "../test/dom";
+import { render, setupDom, within } from "../test/dom-routed";
 import { Alerts } from "./alerts";
 
 setupDom();

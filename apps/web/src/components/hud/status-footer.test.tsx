@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { afterEach, expect, jest, test } from "bun:test";
 import type { FamilyRecords, HealthSample } from "@health/contracts";
@@ -7,7 +7,7 @@ import type { RenderResult } from "@testing-library/react";
 
 import { setSessionToken } from "@/lib/session";
 
-import { act, render, serve, setupDom } from "../test/dom";
+import { act, render, serve, setupDom } from "../test/dom-routed";
 import { StatusFooter } from "./status-footer";
 
 setupDom();

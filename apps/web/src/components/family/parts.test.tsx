@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { describe, expect, mock, test } from "bun:test";
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
@@ -12,7 +12,13 @@ import type {
 
 import type { ApiState } from "@/lib/api";
 
-import { fireEvent, render, renderRouted, setupDom, within } from "../test/dom";
+import {
+	fireEvent,
+	render,
+	renderRouted,
+	setupDom,
+	within,
+} from "../test/dom-routed";
 import type { FamilyData } from "./data";
 import { clock } from "./logic";
 import {

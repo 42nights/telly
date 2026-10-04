@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { expect, test } from "bun:test";
 import type {
@@ -8,7 +8,7 @@ import type {
 } from "@health/contracts/care-profile";
 import type { RenderResult } from "@testing-library/react";
 
-import { act, fireEvent, render, setupDom } from "../test/dom";
+import { act, fireEvent, render, setupDom } from "../test/dom-routed";
 import type { CareData } from "./data";
 import { ProfileWindow } from "./profile-window";
 

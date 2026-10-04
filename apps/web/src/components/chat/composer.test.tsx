@@ -1,5 +1,5 @@
 // First: registers Happy DOM before React DOM and the router load.
-import "../test/dom";
+import "../test/dom-routed";
 
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import type { QuestionAttachment } from "@health/contracts/ask";
@@ -10,7 +10,13 @@ import { useRef, useState } from "react";
 import type { ApiResult } from "@/lib/api";
 import type { Outcome } from "@/lib/pending";
 
-import { fireEvent, render, setupDom, waitFor, within } from "../test/dom";
+import {
+	fireEvent,
+	render,
+	setupDom,
+	waitFor,
+	within,
+} from "../test/dom-routed";
 import { Composer } from "./composer";
 import { ASK_AGENT, type ChatTarget } from "./logic";
 
