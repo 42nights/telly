@@ -55,7 +55,7 @@ export type ArFailure = {
 
 /** Capabilities are answered at once; save and find wait while the person scans the room. */
 export const CAPABILITIES_TIMEOUT_MS = 3_000;
-export const SESSION_TIMEOUT_MS = 10 * 60_000;
+const SESSION_TIMEOUT_MS = 10 * 60_000;
 
 type Request =
 	| { readonly type: "ar.capabilities" }
