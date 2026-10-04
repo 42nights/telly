@@ -372,7 +372,6 @@ export function SendTab({
 	onAsk: () => void;
 }) {
 	const { reviewed, sendFailure } = sheet;
-	const { email } = report;
 	return (
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
@@ -390,16 +389,7 @@ export function SendTab({
 							: `Not sent: ${failureText(sendFailure)}`}
 					</p>
 				)}
-				<p role="status">
-					Email:{" "}
-					{email === null
-						? "not emailed."
-						: email.status === "queued"
-							? `sending to ${email.recipient}…`
-							: email.status === "sent"
-								? `sent to ${email.recipient} ${formatTime(email.updatedAt)}${email.automatic ? " (automatic)" : ""}.`
-								: `failed to ${email.recipient} ${formatTime(email.updatedAt)}: ${email.reason ?? "no reason given"}`}
-				</p>
+				<EmailStatus email={report.email} />
 				<p>
 					A family review is not a clinician review. Sending a report does not
 					mean that a clinician has read it.
@@ -429,6 +419,22 @@ export function SendTab({
 				</div>
 			</fieldset>
 		</>
+	);
+}
+
+/** The latest email of the report: not emailed, sending, sent, or failed with its reason. */
+function EmailStatus({ email }: { email: Report["email"] }) {
+	if (email === null) return <p role="status">Email: not emailed.</p>;
+	const at = formatTime(email.updatedAt);
+	return (
+		<p role="status">
+			Email:{" "}
+			{email.status === "queued"
+				? `sending to ${email.recipient}…`
+				: email.status === "sent"
+					? `sent to ${email.recipient} ${at}${email.automatic ? " (automatic)" : ""}.`
+					: `failed to ${email.recipient} ${at}: ${email.reason ?? "no reason given"}`}
+		</p>
 	);
 }
 
