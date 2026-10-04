@@ -14,6 +14,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 
@@ -53,6 +54,7 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db, familyId } = yield* openFamily(config, "Emergency family");
+				yield* setOwnScopes(db, familyId, ["health_records"], false);
 				const calls: Handoff[] = [];
 				let answer: "connected" | "failed" = "connected";
 				const fake: Dispatcher = async (handoff) => {
@@ -212,16 +214,7 @@ describe.skipIf(dbConfig === undefined)("emergency requests", () => {
 				// With health_records access, the handoff carries the saved care facts (#26): the
 				// profile's name when the device sends none, and only verified medicines.
 				const care = familyApp(db, familyId, careProfileRoutes());
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					yield* send(care, "POST", "/care-access", {
-						identity: db.identity,
-						scope,
-						granted: true,
-					});
+				yield* setOwnScopes(db, familyId, ["health_records"], true);
 				yield* send(care, "PUT", "/care-profile", {
 					preferredName: "Synthetic Sam",
 					language: "en",

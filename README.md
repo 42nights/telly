@@ -79,16 +79,16 @@ flowchart LR
     q["Family question"] -->|"POST …/ask"| api
     meal["Meal photo"] -->|"…/meals"| api
     api -->|"store: false"| gem["Gemini<br/>gemini-3.8-flash"]
-    gem -.->|"429 or 503"| fb["gemini-3.5-flash<br/>one retry: vision, questions"]
+    gem -.->|"429 or 503"| fb["gemini-3.5-flash<br/>vision: one retry<br/>questions: retries after 1 s, 3 s"]
     gem -->|"function calls"| tools["Family data tools<br/>via Fetch.ai"]
     gem --> out["Boxes in frame pixels ·<br/>cited answer · meal estimate"]
     out --> app["App draws the marker<br/>or shows the answer"]
 ```
 
-- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision and questions retry once on `gemini-3.5-flash`.
+- **Use:** finds medicine boxes in one camera frame (`POST …/vision/medicine-detections`), answers family questions with Fetch.ai data tools (`POST …/ask`), and estimates meals from a photo (`…/meals`). Calls use `store: false`. When the main model answers 429 or 503, vision retries once on `gemini-3.5-flash`. Questions try `gemini-3.5-flash` at once, then both models again after 1 s and 3 s, within 45 s per question ([docs/ask.md](docs/ask.md#provider)).
 - **Code:** `apps/server/src/integrations/gemini.ts`, `gemini-chat.ts`, `gemini-meal.ts`. **Key:** `GEMINI_API_KEY`.
 - **Proof:** live medicine detection answered 200 ([#174](https://github.com/ayaangazali/telly/pull/174)). Live Gemini checks for calm support, meal photos, and medicine memory are in [#180](https://github.com/ayaangazali/telly/pull/180). A request with the stored key returned 200 ([#126](https://github.com/ayaangazali/telly/pull/126)).
-- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota, Telly shows "unavailable". A found box does not confirm that a dose was taken.
+- **Limits:** the key is on the free tier, with 20 requests a day per model. When both models are out of quota or overloaded, a question says "The assistant is busy right now". A found box does not confirm that a dose was taken.
 
 - **Screenshots:** No screenshot yet: a live answer needs a signed-in session and Gemini quota. The proof is the PR record.
 
