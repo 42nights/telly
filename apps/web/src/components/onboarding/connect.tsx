@@ -2,9 +2,10 @@
 // skippable. Health data comes only from the WHOOP strap through NOOP; nothing here writes a reading.
 import type { Family } from "@health/contracts";
 import { WhoopPushToken } from "@health/contracts/families";
-import { Button } from "@health/ui/components/button";
+import { Button, buttonVariants } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { toQR } from "toqr";
 
 import { InviteLink, useInvite } from "@/components/family/invite";
 import { ENV } from "@/env";
@@ -52,6 +53,25 @@ function Row({
 			</div>
 			{children}
 		</li>
+	);
+}
+
+function QrCode({ text }: { text: string }) {
+	const bits = toQR(text);
+	const size = Math.sqrt(bits.length);
+	const path = Array.from(bits, (bit, i) =>
+		bit ? `M${i % size} ${Math.floor(i / size)}h1v1h-1z` : "",
+	).join("");
+	return (
+		<svg
+			aria-label="QR code of the link"
+			className="size-48 justify-self-center bg-white"
+			role="img"
+			shapeRendering="crispEdges"
+			viewBox={`-4 -4 ${size + 8} ${size + 8}`}
+		>
+			<path d={path} />
+		</svg>
 	);
 }
 
@@ -138,9 +158,22 @@ export function ConnectScreen({ family }: { family: Family }) {
 					{open === "whoop" && whoopLink !== null && (
 						<div className="grid gap-2">
 							<p>
-								Send this link to the person with the WHOOP strap. They tap it
-								on the iPhone that runs NOOP. NOOP then sends the strap's
-								readings to {family.name}. A new link stops the old one.
+								Open this link on the iPhone that runs Healer S.I., or send it
+								to the person with the WHOOP strap. Healer S.I. then sends the
+								strap's readings to {family.name}. A new link stops the old one.
+							</p>
+							<a
+								className={buttonVariants({
+									className: "win95-primary h-11 w-full",
+								})}
+								data-slot="button"
+								href={whoopLink}
+							>
+								Open in Healer S.I.
+							</a>
+							<QrCode text={whoopLink} />
+							<p className="text-center text-xs">
+								On a computer, scan this code with the iPhone camera.
 							</p>
 							<ShareLink link={whoopLink} title="Connect WHOOP to Telly" />
 						</div>
