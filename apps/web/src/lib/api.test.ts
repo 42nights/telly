@@ -152,10 +152,17 @@ describe("apiRequest", () => {
 
 	test("an error reply that is not JSON keeps its HTTP status", async () => {
 		setSessionToken("token");
+		// A gateway's 5xx page tells the user the server is having trouble.
 		fake(() => new Response("<html>bad gateway</html>", { status: 502 }));
 		expect(await apiRequest(Health, "/health")).toEqual({
 			kind: "error",
-			message: "HTTP 502",
+			message:
+				"The server is busy or had a problem (HTTP 502). Try again in a minute.",
+		});
+		fake(() => new Response("not found", { status: 404 }));
+		expect(await apiRequest(Health, "/health")).toEqual({
+			kind: "error",
+			message: "HTTP 404",
 		});
 	});
 
@@ -225,7 +232,8 @@ describe("apiBlob", () => {
 		fake(() => new Response("oops", { status: 500 }));
 		expect(await apiBlob("/api/speech")).toEqual({
 			kind: "error",
-			message: "HTTP 500",
+			message:
+				"The server is busy or had a problem (HTTP 500). Try again in a minute.",
 		});
 	});
 
