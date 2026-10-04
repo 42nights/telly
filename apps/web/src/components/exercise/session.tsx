@@ -230,12 +230,7 @@ function Session({
 	const { speech, say, stop } = useSpeech(familyId);
 
 	const speak = (step: number, slow: boolean) =>
-		void say(
-			`exercise-${step}`,
-			plan.steps[step] ?? "",
-			undefined,
-			slow ? SLOW : 1,
-		);
+		void say(`exercise-${step}`, plan.steps[step] ?? "", { slow });
 
 	/** Sends one event; a failed send keeps its id, so "Try again" cannot record it twice. */
 	const send = async (event: ExerciseEventInput, then: Phase) => {
