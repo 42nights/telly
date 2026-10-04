@@ -179,10 +179,12 @@ input[type="checkbox"]:focus-visible {
 	outline-offset: 2px;
 }
 
-/* Taskbar buttons for the screens. The current screen shows pressed in, with bold text. */
+/* Taskbar buttons for the screens. The current screen shows pressed in, with bold text; so does
+   More while its menu is open or holds the current screen. */
 .win95-tab {
 	display: inline-flex;
 	flex: none;
+	gap: 0.4rem;
 	align-items: center;
 	min-height: 2.75rem;
 	padding: 0 0.9rem;
@@ -196,7 +198,14 @@ input[type="checkbox"]:focus-visible {
 		inset -4px -4px 0 var(--win95-shadow),
 		inset 4px 4px 0 var(--win95-light);
 }
-.win95-tab[aria-current="page"] {
+.win95-tab svg {
+	width: 1rem;
+	height: 1rem;
+	flex: none;
+}
+.win95-tab[aria-current="page"],
+.win95-tab[data-current],
+.win95-tab:has(+ :popover-open) {
 	background-color: var(--win95-light);
 	font-weight: 700;
 	box-shadow:
@@ -208,6 +217,28 @@ input[type="checkbox"]:focus-visible {
 .win95-tab:focus-visible {
 	outline: 2px dotted #000000;
 	outline-offset: -7px;
+}
+/* Phone: the six buttons share one row, icon over label, like a Pocket PC taskbar. The pressed
+   bevel alone marks the current screen here, so a bold "Medicine" cannot outgrow its button. */
+@media (max-width: 639.98px) {
+	.win95-taskbar {
+		gap: 2px;
+	}
+	.win95-taskbar > .win95-tab {
+		flex: 1 1 0;
+		min-width: 0;
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.125rem;
+		padding: 0.25rem 0;
+		font-size: 0.6875rem;
+		font-weight: 400;
+		overflow: hidden;
+	}
+	.win95-taskbar > .win95-tab svg {
+		width: 1.25rem;
+		height: 1.25rem;
+	}
 }
 
 @layer components {

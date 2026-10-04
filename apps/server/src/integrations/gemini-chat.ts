@@ -165,7 +165,7 @@ const interact = (
 					deadline,
 					AbortSignal.timeout(requestTimeoutMs),
 				]),
-				config.overloadBackoffMs ?? overloadBackoffMs,
+				{ backoffMs: config.overloadBackoffMs ?? overloadBackoffMs },
 			);
 			if (!response.ok) {
 				await response.body?.cancel();
