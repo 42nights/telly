@@ -28,6 +28,8 @@ Reply = tuple[int, dict[str, Any]]
 class ToolCall(Model):
     family_id: str
     request: dict[str, Any]
+    # The server's per-question delegation for this family (server `delegation.ts`), if any.
+    delegation: str | None = None
 
 
 class ToolResult(Model):
@@ -37,11 +39,13 @@ class ToolResult(Model):
 
 
 class BridgeCall(Model):
-    """The server's request to the bridge: its shared token, the family, and one ToolRequest."""
+    """The server's request to the bridge: its shared token, the family, one ToolRequest, and the
+    question's delegation when the server gives one."""
 
     token: str
     family_id: str
     request: dict[str, Any]
+    delegation: str | None = None
 
 
 # Sends one ToolCall to the worker and waits for its ToolResult; None when nothing came back.
@@ -60,6 +64,8 @@ class Config:
     grants: dict[str, frozenset[str]]
     port: int
     mailbox: bool
+    # Read on each call instead of `token`, so a refreshed sign-in token needs no restart.
+    token_file: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,13 +109,15 @@ def _mailbox(env: Mapping[str, str]) -> bool:
 
 
 def load_config(env: Mapping[str, str] = os.environ) -> Config:
+    token_file = env.get("TELLY_FETCH_SERVER_TOKEN_FILE", "").strip() or None
     return Config(
         seed=_need(env, "TELLY_FETCH_AGENT_SEED"),
         server_url=_http_url(env, "TELLY_SERVER_URL"),
-        token=_need(env, "TELLY_FETCH_SERVER_TOKEN"),
+        token="" if token_file else _need(env, "TELLY_FETCH_SERVER_TOKEN"),
         grants=parse_grants(_need(env, "TELLY_FETCH_GRANTS")),
         port=_port(env, "TELLY_FETCH_PORT", "8001"),
         mailbox=_mailbox(env),
+        token_file=token_file,
     )
 
 
@@ -150,15 +158,32 @@ def error(status: int, code: str, message: str) -> Reply:
     return status, {"error": code, "message": message}
 
 
-async def handle_call(cfg: Config, sender: str, family_id: str, request: dict[str, Any]) -> Reply:
-    """Check the grant and the request, forward to the server, and check its answer."""
-    if family_id not in cfg.grants.get(sender, ()):
+async def handle_call(
+    cfg: Config,
+    sender: str,
+    family_id: str,
+    request: dict[str, Any],
+    delegation: str | None = None,
+) -> Reply:
+    """Check the grant and the request, forward to the server, and check its answer. A "*" grant
+    covers any family, but only with the server's delegation: the server then lends the asking
+    member's access for that one family, and the worker needs no standing access."""
+    granted = cfg.grants.get(sender, frozenset())
+    if family_id not in granted and not ("*" in granted and delegation):
         return error(403, "forbidden", "sender has no grant for this family")
     if not TOOL_REQUEST.is_valid(request):
         return error(400, "invalid_request", "request does not match the ToolRequest schema")
 
+    try:
+        token = Path(cfg.token_file).read_text().strip() if cfg.token_file else cfg.token
+    except OSError:
+        token = ""
+    if not token:
+        return error(503, "unavailable", "the worker has no server sign-in token")
     url = f"{cfg.server_url}/api/families/{quote(family_id, safe='')}/tools"
-    headers = {"Authorization": f"Bearer {cfg.token}"}
+    headers = {"Authorization": f"Bearer {token}"}
+    if delegation:
+        headers["X-Telly-Delegation"] = delegation
     try:
         async with aiohttp.ClientSession(timeout=TIMEOUT) as session:
             # No redirects: a redirect must not carry the bearer token to another URL.
@@ -193,7 +218,9 @@ async def bridge_call(cfg: BridgeConfig, call: BridgeCall, send: SendToWorker) -
         return fail(401, "unauthorized", "bridge token is not valid")
     if not TOOL_REQUEST.is_valid(call.request):
         return fail(400, "invalid_request", "request does not match the ToolRequest schema")
-    result = await send(ToolCall(family_id=call.family_id, request=call.request))
+    result = await send(
+        ToolCall(family_id=call.family_id, request=call.request, delegation=call.delegation)
+    )
     if result is None:
         return fail(503, "unavailable", "the Fetch.ai worker did not reply through Agentverse")
     if result.family_id != call.family_id:
