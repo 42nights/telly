@@ -10,6 +10,7 @@ const DrawerLayout = () => {
 
 	return (
 		<Drawer
+			initialRouteName="web"
 			screenOptions={{
 				headerStyle: {
 					backgroundColor: theme.background,
@@ -27,6 +28,16 @@ const DrawerLayout = () => {
 				drawerInactiveTintColor: theme.text,
 			}}
 		>
+			<Drawer.Screen
+				name="web"
+				options={{
+					headerTitle: "App",
+					drawerLabel: "App",
+					drawerIcon: ({ size, color }) => (
+						<Ionicons name="globe-outline" size={size} color={color} />
+					),
+				}}
+			/>
 			<Drawer.Screen
 				name="index"
 				options={{
