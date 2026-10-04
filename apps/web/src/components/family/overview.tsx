@@ -1,5 +1,6 @@
-// The family screen's overview parts, from the old dashboard (#209): key numbers, health sources,
-// the recent-alerts table, and the newest messages. Each shows only what the server returned.
+// The family screen's parts from the old dashboard (#209): key numbers, health sources, the
+// recent-alerts table, the newest messages, and the alert thresholds. Each shows only what the
+// server returned.
 import {
 	type Family,
 	type Loaded,
@@ -7,16 +8,21 @@ import {
 	type NoopConnection,
 	Sources,
 } from "@health/contracts";
-import type { FamilyAlert } from "@health/contracts/alerts";
+import type {
+	AlertThreshold,
+	FamilyAlert,
+	Monitoring,
+} from "@health/contracts/alerts";
 import { cn } from "@health/ui/lib/utils";
 import { useEffect, useState } from "react";
 
 import { ApiNotice } from "@/components/win95";
 import { ENV } from "@/env";
+import type { ApiState } from "@/lib/api";
 import { memberLabel, senderLabel } from "@/lib/members";
 
 import type { FamilyData } from "./data";
-import { clock, deliveryText } from "./logic";
+import { clock, deliveryText, metricLabel } from "./logic";
 
 export function KeyNumbers({
 	data,
@@ -182,5 +188,55 @@ function AlertRow({ item, me }: { item: FamilyAlert; me: string | null }) {
 					: `${memberLabel(ack.member, me)}, ${clock(ack.acknowledgedAt)}`}
 			</td>
 		</tr>
+	);
+}
+
+/** Each alert rule and its state now. A rule without a fresh validated reading is unavailable. */
+export function Thresholds({
+	state,
+	monitoring,
+}: {
+	state: ApiState<{ readonly thresholds: readonly AlertThreshold[] }>;
+	monitoring: ApiState<Monitoring>;
+}) {
+	if (state.kind !== "ready")
+		return <ApiNotice state={state} what="thresholds" />;
+	if (state.value.thresholds.length === 0)
+		return (
+			<p className="win95-inset bg-card p-2">
+				No thresholds set: nothing is monitored.
+			</p>
+		);
+	return (
+		<ul className="win95-inset divide-y divide-border bg-card">
+			{state.value.thresholds.map((t) => {
+				const row =
+					monitoring.kind === "ready"
+						? monitoring.value.thresholds.find((m) => m.threshold.id === t.id)
+						: undefined;
+				return (
+					<li key={t.id} className="flex flex-wrap justify-between gap-x-2 p-2">
+						<span>
+							{metricLabel(t.metric)} {t.direction} {t.limit} {t.unit}
+						</span>
+						<span
+							className={cn(
+								row?.state === "out_of_range" && "font-bold text-destructive",
+								(row === undefined || row.state === "unavailable") &&
+									"bg-[#ffffe1] px-1",
+							)}
+						>
+							{row === undefined
+								? "State unknown"
+								: row.state === "in_range"
+									? "In range"
+									: row.state === "out_of_range"
+										? "Out of range"
+										: `Unavailable: ${row.reason === "stale" ? "stale reading" : "no validated reading"}`}
+						</span>
+					</li>
+				);
+			})}
+		</ul>
 	);
 }

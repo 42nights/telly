@@ -6,6 +6,7 @@ import {
 	Reminder,
 	ReminderHistory,
 	ReminderOccurrenceDetail,
+	Reminders,
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
 import { Effect, Schema } from "effect";
@@ -28,6 +29,7 @@ import {
 
 const detailOf = Schema.decodeUnknownSync(ReminderOccurrenceDetail);
 const historyOf = Schema.decodeUnknownSync(ReminderHistory);
+const remindersOf = Schema.decodeUnknownSync(Reminders);
 
 /** `HH:MM` and its local date in `timeZone` at `ms`. */
 const wallClock = (ms: number, timeZone: string) =>
@@ -102,6 +104,9 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 				expect(created.status).toBe(201);
 				const reminder = Schema.decodeUnknownSync(Reminder)(created.json);
 				expect(reminder).toMatchObject(input);
+				expect(
+					remindersOf((yield* send(app, "GET", "/reminders")).json).reminders,
+				).toEqual([reminder]);
 
 				const { occurrences } = historyOf(
 					(yield* send(app, "GET", "/reminder-occurrences")).json,
@@ -134,15 +139,14 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 
 				// Another family sees nothing, and the database refuses it on its own.
 				const other = yield* openFamily(config, "Other family");
+				const otherApp = familyApp(other.db, other.familyId, reminderRoutes());
+				expect(
+					remindersOf((yield* send(otherApp, "GET", "/reminders")).json)
+						.reminders,
+				).toEqual([]);
 				const id = occurrences[0]?.occurrence.id ?? "";
 				expect(
-					failure(
-						yield* send(
-							familyApp(other.db, other.familyId, reminderRoutes()),
-							"GET",
-							`/reminder-occurrences/${id}`,
-						),
-					),
+					failure(yield* send(otherApp, "GET", `/reminder-occurrences/${id}`)),
 				).toEqual([404, "not_found"]);
 				const refused = yield* Effect.promise(() =>
 					other.db.connection.reducers
@@ -168,6 +172,9 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 				expect(
 					historyOf((yield* send(app, "GET", "/reminder-occurrences")).json)
 						.occurrences,
+				).toEqual([]);
+				expect(
+					remindersOf((yield* send(app, "GET", "/reminders")).json).reminders,
 				).toEqual([]);
 			}),
 		));
@@ -292,8 +299,8 @@ describe.skipIf(dbConfig === undefined)("reminder lifecycle", () => {
 							);
 							const app = familyApp(db, familyId, reminderRoutes());
 							yield* send(app, "PUT", "/reminder-settings", settings("UTC"));
-							// At least 30 s ahead, so the database never sees this minute as past.
-							const time = wallClock(Date.now() + 90_000, "UTC");
+							// At least 10 s ahead, so the database never sees this minute as past.
+							const time = wallClock(Date.now() + 70_000, "UTC");
 							const reminder = Schema.decodeUnknownSync(Reminder)(
 								(yield* send(app, "POST", "/reminders", {
 									kind: "medication",

@@ -105,8 +105,15 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 					const key = tag(entry, "Key");
 					const size = Number(tag(entry, "Size"));
 					const lastModified = tag(entry, "LastModified");
-					if (key === undefined || lastModified === undefined)
-						throw failed("list the PDFs", 502);
+					if (
+						key === undefined ||
+						lastModified === undefined ||
+						!Number.isFinite(size)
+					)
+						throw new ApiFailure(
+							"upstream_error",
+							"PDF storage sent an unreadable listing",
+						);
 					objects.push({ key, size, lastModified });
 				}
 				const next = tag(xml, "NextContinuationToken");

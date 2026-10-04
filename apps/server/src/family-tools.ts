@@ -1,12 +1,16 @@
 // Provider-independent family tools for the chat model. A chat adapter (Gemini) offers `tools` to
-// the model, passes each function call to `run`, and returns the result to the model. Every call
-// goes through Fetch.ai Agentverse (`callAgentTool`), never around it. The server, not the model,
-// collects which records the answer can cite (`cited`), with source and freshness.
+// the model, passes each function call to `run`, and returns the result to the model. With the
+// Fetch.ai bridge configured, every call goes through Fetch.ai Agentverse (`callAgentTool`). Without
+// it, the call reads the asking member's own database connection (`runTool`, the same code the
+// worker's `/tools` route runs), so production answers from real records. The server, not the
+// model, collects which records the answer can cite (`cited`), with source and freshness.
 import type { Alert } from "@health/contracts";
 import type { CitedRecords, Evidence } from "@health/contracts/chat";
 import { ToolRequest } from "@health/contracts/tools";
 import { Schema, SchemaAST } from "effect";
+import type { FamilyDb } from "./db";
 import { callAgentTool, type FetchAgentConfig } from "./integrations/fetch";
+import { runTool } from "./tools";
 
 /** One function the model may call. `parameters` is JSON Schema with an object root. */
 export type FamilyToolSpec = {
@@ -46,11 +50,12 @@ const specs: ReadonlyArray<FamilyToolSpec> = ToolRequest.members.map(
 );
 
 /**
- * The family tools for one question. `now` decides which records are stale; `timeZone` (IANA)
- * is the zone the answer writes times in.
+ * The family tools for one question. `source` is the Fetch.ai bridge when configured, otherwise
+ * the asking member's database connection. `now` decides which records are stale; `timeZone`
+ * (IANA) is the zone the answer writes times in.
  */
 export const familyTools = (
-	fetchAgent: FetchAgentConfig | undefined,
+	source: FetchAgentConfig | FamilyDb | undefined,
 	familyId: bigint,
 	now: Date,
 	timeZone = "UTC",
@@ -79,12 +84,10 @@ export const familyTools = (
 				return {
 					error: `${name} is not a tool, or its arguments do not match`,
 				};
-			const response = await callAgentTool(
-				fetchAgent,
-				familyId,
-				request.value,
-				signal,
-			);
+			const response =
+				source !== undefined && "connection" in source
+					? runTool(source, familyId.toString(), request.value)
+					: await callAgentTool(source, familyId, request.value, signal);
 			if (response.tool === "alerts") {
 				for (const alert of response.alerts) alerts.set(alert.id, alert);
 				return response;

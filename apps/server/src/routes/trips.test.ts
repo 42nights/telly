@@ -107,6 +107,24 @@ const newFamily = async (subject: string) => {
 	return `/api/families/${Schema.decodeUnknownSync(Family)(await created.json()).id}`;
 };
 
+/** A synthetic care profile (#26) whose only facts are these accessibility needs. */
+const profile = (accessibilityNeeds: string[]) => ({
+	preferredName: "Synthetic Sam",
+	language: "en",
+	timeZone: null,
+	accessibilityNeeds,
+	diagnoses: null,
+	allergies: null,
+	dietaryRestrictions: null,
+	fluidRestrictions: null,
+	activityRestrictions: null,
+	routines: null,
+	contacts: null,
+	familiarDestinations: null,
+	devices: null,
+	declinedPrompts: [],
+});
+
 test("essentials follow the saved aids, the purpose, and a low battery only", () => {
 	expect(essentials("groceries", null, [])).toEqual(["keys", "phone"]);
 	expect(
@@ -154,22 +172,12 @@ describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
 			).toBe(204);
 		expect(
 			(
-				await call(wearer, "PUT", `${path}/care-profile`, {
-					preferredName: "Synthetic Sam",
-					language: "en",
-					timeZone: null,
-					accessibilityNeeds: ["Uses a cane outdoors", "large text"],
-					diagnoses: null,
-					allergies: null,
-					dietaryRestrictions: null,
-					fluidRestrictions: null,
-					activityRestrictions: null,
-					routines: null,
-					contacts: null,
-					familiarDestinations: null,
-					devices: null,
-					declinedPrompts: [],
-				})
+				await call(
+					wearer,
+					"PUT",
+					`${path}/care-profile`,
+					profile(["Uses a cane outdoors", "large text"]),
+				)
 			).status,
 		).toBe(204);
 
@@ -218,7 +226,18 @@ describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
 			"Before you go, check: keys, phone, cane, appointment letter, medicine list, phone charger (battery at 20%).",
 		);
 
-		// Plans change: the later plan wins, the earlier one stays in the history.
+		// Plans change: the later plan wins, the earlier one stays in the history. The latest saved
+		// profile names the aids: the walker replaces the cane.
+		expect(
+			(
+				await call(
+					wearer,
+					"PUT",
+					`${path}/care-profile`,
+					profile(["Uses a walker now"]),
+				)
+			).status,
+		).toBe(204);
 		const changed = await read(
 			TripReply,
 			call(wearer, "POST", `${trip}/answer`, {
@@ -229,6 +248,7 @@ describe.skipIf(app === undefined)("leaving-home check-in routes", () => {
 				battery: null,
 			}),
 		);
+		expect(changed.essentials).toEqual(["keys", "phone", "walker"]);
 		expect(changed.trip.plan).toMatchObject({
 			purpose: "Pharmacy pickup",
 			destination: null,

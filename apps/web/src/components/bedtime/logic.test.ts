@@ -6,6 +6,7 @@ import {
 	awaitsAnswer,
 	chargeLine,
 	connectionLine,
+	fallbackText,
 	speakerLine,
 	timerLeft,
 	tonight,
@@ -69,6 +70,20 @@ describe("overnight reminders", () => {
 		expect(awaitsAnswer(occurrence("b", { state: "delivered" }))).toBe(true);
 		expect(awaitsAnswer(occurrence("c", { state: "acknowledged" }))).toBe(
 			false,
+		);
+	});
+
+	test("an unanswered prompt repeats by the saved routine and never calls 911", () => {
+		expect(
+			fallbackText({
+				timeZone: "America/New_York",
+				quietHours: null,
+				repeatEveryMinutes: 5,
+				maxPrompts: 3,
+				snoozeMinutes: 10,
+			}),
+		).toBe(
+			"If nobody answers, I ask again every 5 minutes, up to 3 times. Then your family sees it as unanswered. Nobody calls 911.",
 		);
 	});
 });

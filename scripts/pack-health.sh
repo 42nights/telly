@@ -18,5 +18,10 @@ git rev-parse HEAD >"$tmp/web/version.txt"
 cp apps/server/scripts/cloudflare-keys.ts "$tmp/server/scripts/"
 cp -RL apps/server/node_modules/varlock "$tmp/server/node_modules/varlock"
 ln -s ../varlock/bin/cli.js "$tmp/server/node_modules/.bin/varlock"
+# The bundled iMessage client checks at start that its gRPC peers resolve from node_modules.
+imessage_deps=$(realpath apps/server/node_modules/@spectrum-ts/imessage/../..)
+mkdir -p "$tmp/server/node_modules/@grpc"
+cp -RL "$imessage_deps/nice-grpc" "$imessage_deps/nice-grpc-common" "$tmp/server/node_modules/"
+cp -RL "$imessage_deps/@grpc/grpc-js" "$tmp/server/node_modules/@grpc/"
 tar -czf "$out" -C "$tmp" .
 echo "packed $out"
