@@ -28,6 +28,7 @@ type Env = {
 	readonly CORS_ORIGIN: string;
 	readonly OIDC_ISSUER?: string | undefined;
 	readonly OIDC_AUDIENCE?: string | undefined;
+	readonly OIDC_CLIENT_SECRET?: string | undefined;
 	readonly SPACETIMEDB_URI?: string | undefined;
 	readonly SPACETIMEDB_DATABASE?: string | undefined;
 	readonly ELEVENLABS_API_KEY?: string | undefined;
@@ -74,7 +75,10 @@ const r2Config = (env: Env): R2Config | undefined => {
 	return { endpoint, bucket, accessKeyId, secretAccessKey };
 };
 
-/** Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. */
+/**
+ * Sign-in needs all four values; a partial set is a deployment mistake, so startup fails. The client
+ * secret is optional (Google web clients need it) but means nothing without the four.
+ */
 export const serverConfig = (env: Env): ServerConfig => {
 	const {
 		OIDC_ISSUER: issuer,
@@ -106,11 +110,16 @@ export const serverConfig = (env: Env): ServerConfig => {
 			...base,
 			gemini,
 			gemma,
-			auth: { issuer, audience, db: { uri, database } },
+			auth: {
+				issuer,
+				audience,
+				clientSecret: env.OIDC_CLIENT_SECRET,
+				db: { uri, database },
+			},
 		};
-	if (issuer || audience || uri || database)
+	if (issuer || audience || uri || database || env.OIDC_CLIENT_SECRET)
 		throw new Error(
-			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none",
+			"Set all of OIDC_ISSUER, OIDC_AUDIENCE, SPACETIMEDB_URI, and SPACETIMEDB_DATABASE, or none (OIDC_CLIENT_SECRET needs all four)",
 		);
 	return { ...base, gemini, gemma, auth: undefined };
 };

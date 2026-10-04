@@ -1,7 +1,13 @@
 // Web sign-in (issue #4): the OIDC authorization code flow with PKCE (S256), `state`, and `nonce`.
-// The issuer is configured, never chosen here. The ID token becomes the session token; the server
-// checks its signature, issuer, audience, and expiry.
-import { tokenClaims } from "@health/contracts/session";
+// The issuer is configured, never chosen here (Google in production). The server's
+// `POST /api/sign-in/token` exchanges the code, because Google's web client needs its client secret,
+// which never reaches the browser. The ID token becomes the session token; the server checks its
+// signature, issuer, audience, and expiry on every request.
+import {
+	authorizationUrl,
+	exchangeSignInCode,
+	tokenMatches,
+} from "@health/contracts/session";
 import { Schema } from "effect";
 
 import { ENV } from "@/env";
@@ -10,17 +16,12 @@ import { setSessionToken } from "./session";
 
 const PENDING = "telly.sign-in.pending";
 
-const Discovery = Schema.Struct({
-	authorization_endpoint: Schema.String,
-	token_endpoint: Schema.String,
-});
+const Discovery = Schema.Struct({ authorization_endpoint: Schema.String });
 const Pending = Schema.Struct({
 	verifier: Schema.String,
 	state: Schema.String,
 	nonce: Schema.String,
 });
-const TokenReply = Schema.Struct({ id_token: Schema.String });
-const IdClaims = Schema.Struct({ iss: Schema.String, nonce: Schema.String });
 
 export type SignInConfig = {
 	readonly issuer: string;
@@ -42,46 +43,33 @@ const base64url = (bytes: Uint8Array) =>
 
 const random = () => base64url(crypto.getRandomValues(new Uint8Array(32)));
 
-const getJson = async <T>(
-	url: string,
-	schema: Schema.Decoder<T>,
-	init?: RequestInit,
-) => {
-	const response = await fetch(url, init);
-	if (!response.ok)
-		throw new Error(`The sign-in server replied HTTP ${response.status}.`);
-	return Schema.decodeUnknownSync(schema)(await response.json());
-};
-
-const discover = (issuer: string) =>
-	getJson(
-		`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
-		Discovery,
-	);
-
 const redirectUri = () => `${location.origin}/sign-in`;
 
 /** Sends the browser to the issuer's sign-in page. */
 export const startSignIn = async (config: SignInConfig) => {
-	const { authorization_endpoint } = await discover(config.issuer);
+	const response = await fetch(
+		`${config.issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
+	);
+	if (!response.ok)
+		throw new Error(`The sign-in server replied HTTP ${response.status}.`);
+	const { authorization_endpoint } = Schema.decodeUnknownSync(Discovery)(
+		await response.json(),
+	);
 	const pending = { verifier: random(), state: random(), nonce: random() };
 	sessionStorage.setItem(PENDING, JSON.stringify(pending));
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
 		new TextEncoder().encode(pending.verifier),
 	);
-	const url = new URL(authorization_endpoint);
-	url.search = new URLSearchParams({
-		response_type: "code",
-		client_id: config.clientId,
-		redirect_uri: redirectUri(),
-		scope: "openid",
-		state: pending.state,
-		nonce: pending.nonce,
-		code_challenge: base64url(new Uint8Array(digest)),
-		code_challenge_method: "S256",
-	}).toString();
-	location.assign(url);
+	location.assign(
+		authorizationUrl(authorization_endpoint, {
+			clientId: config.clientId,
+			redirectUri: redirectUri(),
+			state: pending.state,
+			nonce: pending.nonce,
+			challenge: base64url(new Uint8Array(digest)),
+		}),
+	);
 };
 
 const takePending = () => {
@@ -95,7 +83,7 @@ const takePending = () => {
 	}
 };
 
-/** Completes the issuer's `?code=&state=` return and stores the ID token. */
+/** Completes the issuer's `?code=&state=` return through the server and stores the ID token. */
 export const finishSignIn = async (
 	config: SignInConfig,
 	reply: { readonly code: string; readonly state: string },
@@ -103,24 +91,12 @@ export const finishSignIn = async (
 	const pending = takePending();
 	if (pending === null || pending.state !== reply.state)
 		throw new Error("This sign-in reply is not from this tab. Sign in again.");
-	const { token_endpoint } = await discover(config.issuer);
-	const { id_token } = await getJson(token_endpoint, TokenReply, {
-		method: "POST",
-		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: new URLSearchParams({
-			grant_type: "authorization_code",
-			code: reply.code,
-			redirect_uri: redirectUri(),
-			client_id: config.clientId,
-			code_verifier: pending.verifier,
-		}),
+	const idToken = await exchangeSignInCode(ENV.VITE_SERVER_URL, {
+		code: reply.code,
+		codeVerifier: pending.verifier,
+		redirectUri: redirectUri(),
 	});
-	const claims = Schema.decodeUnknownOption(IdClaims)(tokenClaims(id_token));
-	if (
-		claims._tag === "None" ||
-		claims.value.iss !== config.issuer ||
-		claims.value.nonce !== pending.nonce
-	)
+	if (!tokenMatches(idToken, config.issuer, pending.nonce))
 		throw new Error("The sign-in server sent a token for another sign-in.");
-	setSessionToken(id_token);
+	setSessionToken(idToken);
 };
