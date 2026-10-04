@@ -9,6 +9,7 @@ import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
+import { mealRoutes } from "./meals";
 import { reportRoutes } from "./reports";
 import { toolRoutes } from "./tools";
 import { visionRoutes } from "./vision";
@@ -33,6 +34,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			}),
 		)
 		.route("/vision", visionRoutes(config.gemini))
+		.route("/", mealRoutes(config.gemini))
 		.route("/", reportRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())

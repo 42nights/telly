@@ -146,6 +146,16 @@ export const HealthSample = __t.object("HealthSample", {
 });
 export type HealthSample = __Infer<typeof HealthSample>;
 
+export const MealFact = __t.object("MealFact", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  mealId: __t.string(),
+  fact: __t.string(),
+  recordedBy: __t.identity(),
+  recordedAt: __t.timestamp(),
+});
+export type MealFact = __Infer<typeof MealFact>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -185,6 +195,9 @@ export type MyFinchnodeLinks = __Infer<typeof MyFinchnodeLinks>;
 
 export const MyHealthSamples = __t.object("MyHealthSamples", {});
 export type MyHealthSamples = __Infer<typeof MyHealthSamples>;
+
+export const MyMealFacts = __t.object("MyMealFacts", {});
+export type MyMealFacts = __Infer<typeof MyMealFacts>;
 
 export const MyMessages = __t.object("MyMessages", {});
 export type MyMessages = __Infer<typeof MyMessages>;

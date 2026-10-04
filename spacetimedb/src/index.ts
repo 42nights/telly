@@ -294,6 +294,22 @@ const careGrantEvent = table(
 	},
 );
 
+// One fact about one meal, as its own row: a photo was taken, a food estimate, or an intake
+// report. The photo itself is never stored. The server validates `fact` against `MealFact` in
+// `@health/contracts/meals` and records a photo or an estimate only as itself, never as eaten food.
+const mealFact = table(
+	{ name: "meal_fact" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The client's id for one meal occasion; it groups the meal's facts.
+		mealId: t.string(),
+		fact: t.string(),
+		recordedBy: t.identity(),
+		recordedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -310,6 +326,7 @@ const spacetimedb = schema({
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	mealFact,
 });
 export default spacetimedb;
 
@@ -865,6 +882,21 @@ export const setCareGrant = spacetimedb.reducer(
 	},
 );
 
+export const recordMealFact = spacetimedb.reducer(
+	{ familyId: t.u64(), mealId: t.string(), fact: t.string() },
+	(ctx, recorded) => {
+		requireMember(ctx, recorded.familyId);
+		requireText("mealId", recorded.mealId);
+		requireText("fact", recorded.fact);
+		ctx.db.mealFact.insert({
+			...recorded,
+			id: 0n,
+			recordedBy: ctx.sender,
+			recordedAt: ctx.timestamp,
+		});
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -1032,4 +1064,13 @@ export const myCareGrants = spacetimedb.view(
 			.rightSemijoin(ctx.from.careGrantEvent, (m, g) =>
 				m.familyId.eq(g.familyId),
 			),
+);
+
+export const myMealFacts = spacetimedb.view(
+	{ name: "my_meal_facts", public: true },
+	t.array(mealFact.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.mealFact, (m, f) => m.familyId.eq(f.familyId)),
 );

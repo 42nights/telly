@@ -5,10 +5,10 @@ import {
 	loadDecoded,
 	Sources,
 } from "@health/contracts";
-import { Button } from "@health/ui/components/button";
-import { createFileRoute } from "@tanstack/react-router";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import { CloudOff, Glasses, Home, RotateCw } from "lucide-react";
+import { CloudOff, Glasses, Home, RotateCw, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
@@ -243,12 +243,23 @@ function HudComponent() {
 						<HeartReading familyId={familyId} now={now} records={records} />
 					</div>
 
-					<div className="min-w-0">
+					<div className="grid min-w-0 content-start gap-3">
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
 							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
 						)}
+						<Link
+							className={buttonVariants({
+								variant: "outline",
+								className: "h-14 w-full text-[20px] [&_svg]:size-6",
+							})}
+							data-slot="button"
+							to="/meals"
+						>
+							<Utensils aria-hidden />
+							Meal
+						</Link>
 					</div>
 
 					<section
