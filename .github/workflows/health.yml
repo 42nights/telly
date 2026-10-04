@@ -1,4 +1,4 @@
-# Checks for the health application at the repository root (apps/, packages/, root manifests).
+# Checks for the health application at the repository root (apps/, packages/, agents/, root manifests).
 # NOOP's own workflows are separate and cover noop/.
 #
 # Every job runs on every PR so that `health / required` always reports: it passes when the app is
@@ -48,6 +48,7 @@ jobs:
             health:
               - 'apps/**'
               - 'packages/**'
+              - 'agents/**'
               - 'spacetimedb/**'
               - 'patches/**'
               - 'package.json'
@@ -88,6 +89,15 @@ jobs:
               git diff --exit-code -- packages/db &&
               test -z "$(git status --porcelain -- packages/db)" &&
               bun run db:test
+          # Fails when agents/fetch/contract.json is stale against the shared schemas, then runs the
+          # Python worker's tests with its pinned requirements.
+          - name: fetch-agent
+            run: >-
+              bun run --filter @health/contracts agent-contract &&
+              git diff --exit-code -- agents/fetch/contract.json &&
+              python -m venv agents/fetch/.venv &&
+              agents/fetch/.venv/bin/pip install -r agents/fetch/requirements.txt &&
+              cd agents/fetch && .venv/bin/python -m unittest -v
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -98,6 +108,10 @@ jobs:
         if: matrix.name == 'build-smoke'
         with:
           node-version: 24
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: matrix.name == 'fetch-agent'
+        with:
+          python-version: "3.12"
       - name: Install SpacetimeDB CLI (checksum-verified)
         if: matrix.name == 'db'
         run: |
