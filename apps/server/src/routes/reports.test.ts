@@ -72,6 +72,7 @@ const memoryBucket = () => {
 		put: async (key, body) =>
 			void objects.set(key, { body, at: new Date().toISOString() }),
 		exists: async (key) => objects.has(key),
+		get: async (key) => objects.get(key)?.body,
 		presign: async (key) => `https://storage.test/${key}?signed`,
 		list: async (prefix) =>
 			[...objects]

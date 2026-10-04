@@ -158,11 +158,13 @@ describe("apiRequest", () => {
 			kind: "error",
 			message:
 				"The server is busy or had a problem (HTTP 502). Try again in a minute.",
+			status: 502,
 		});
 		fake(() => new Response("not found", { status: 404 }));
 		expect(await apiRequest(Health, "/health")).toEqual({
 			kind: "error",
 			message: "HTTP 404",
+			status: 404,
 		});
 	});
 
@@ -234,6 +236,7 @@ describe("apiBlob", () => {
 			kind: "error",
 			message:
 				"The server is busy or had a problem (HTTP 500). Try again in a minute.",
+			status: 500,
 		});
 	});
 
