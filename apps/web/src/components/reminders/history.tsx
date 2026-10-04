@@ -46,6 +46,12 @@ function EventLine({ event, me }: { event: ReminderEvent; me: string | null }) {
 	);
 }
 
+/** The newest occurrences already due; the rest are still ahead. */
+const dueNow = (occurrences: ReminderHistory["occurrences"]) =>
+	occurrences
+		.filter((d) => Date.parse(d.occurrence.scheduledFor) <= Date.now())
+		.slice(0, SHOWN);
+
 export function ReminderHistorySection({
 	familyId,
 	me,
@@ -58,22 +64,18 @@ export function ReminderHistorySection({
 		familyPath(familyId, "/reminder-occurrences"),
 		{ pollMs: 15_000 },
 	);
-	const now = Date.now();
+	const due = state.kind === "ready" ? dueNow(state.value.occurrences) : [];
+	if (state.kind === "ready" && due.length === 0) return null;
 	return (
 		<section aria-labelledby="reminders" className="grid gap-2">
 			<h3 id="reminders" className="font-bold">
-				Reminders
+				Reminders due
 			</h3>
 			<div className="win95-inset grid gap-3 bg-card p-2">
 				{state.kind !== "ready" ? (
 					<ApiNotice state={state} what="reminders" />
 				) : (
-					<ReminderList
-						occurrences={state.value.occurrences
-							.filter((d) => Date.parse(d.occurrence.scheduledFor) <= now)
-							.slice(0, SHOWN)}
-						me={me}
-					/>
+					<ReminderList occurrences={due} me={me} />
 				)}
 			</div>
 		</section>
@@ -87,7 +89,6 @@ function ReminderList({
 	occurrences: ReminderHistory["occurrences"];
 	me: string | null;
 }) {
-	if (occurrences.length === 0) return <p>No reminder has come due yet.</p>;
 	return occurrences.map(({ occurrence, events }) => (
 		<article key={occurrence.id} className="grid gap-1">
 			<h4 className="font-bold">

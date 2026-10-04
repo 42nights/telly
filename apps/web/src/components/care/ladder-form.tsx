@@ -38,7 +38,7 @@ function ContactFields({
 	const set = (patch: Partial<LadderContact>) =>
 		onChange({ ...value, ...patch });
 	return (
-		<fieldset className="win95-inset grid gap-2 bg-card p-2 sm:grid-cols-2">
+		<fieldset className="grid gap-2 border border-border p-2 sm:grid-cols-2">
 			<legend className="px-1 font-bold">{label}</legend>
 			<label className="grid gap-1">
 				Name
@@ -159,7 +159,8 @@ export function LadderForm({
 				/>
 			</p>
 			{/* ponytail: a list box with a fixed share of the screen; the ladder holds at most 5 contacts. */}
-			<div className="grid max-h-[25svh] gap-2 overflow-y-auto">
+			{/* A desktop scrolls the contacts in this box; a phone scrolls the whole screen (#366). */}
+			<div className="grid gap-2 md:max-h-[25svh] md:overflow-y-auto">
 				{draft.contacts.map((contact, index) => (
 					<ContactFields
 						// biome-ignore lint/suspicious/noArrayIndexKey: the ladder order is the identity of a row.

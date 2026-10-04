@@ -334,7 +334,8 @@ body {
 		inset -2px 0 0 var(--win95-dark-shadow),
 		inset -3px 0 0 var(--win95-shadow);
 }
-.win95-sheet-tab[aria-current="page"] {
+.win95-sheet-tab[aria-current="page"],
+.win95-sheet-tab[aria-selected="true"] {
 	margin-top: 0;
 	padding-bottom: 0.6rem;
 	font-weight: 700;
@@ -438,8 +439,9 @@ body {
 		color: #ffffff;
 		font-weight: 700;
 	}
+	/* The screen area inside the app frame: the face of the one window (captain: no nested windows). */
 	.win95-desktop {
-		background-color: var(--win95-desktop);
+		background-color: var(--win95-face);
 	}
 }
 
@@ -471,4 +473,31 @@ body {
 }
 .win95-desktop > main > .win95-window:last-child {
 	flex-grow: 1;
+}
+
+/*
+ * One window per page (captain: "nested windows + elements are all over the place"). Inside the app
+ * frame a screen's `Window` is a plain area: no bevel and no title bar. Its title is for screen
+ * readers only, because the frame's title bar already names the screen; a part of a screen with
+ * siblings (`group`) keeps it as a bold heading. Outside the frame (sign-in, join, welcome) and in
+ * dialogs, a `Window` keeps its full chrome.
+ */
+.win95-desktop .win95-window:not(dialog) {
+	padding: 0;
+	background: none;
+	box-shadow: none;
+}
+.win95-desktop .win95-window:not(dialog) > .win95-titlebar {
+	padding: 0 0.25rem;
+	background: none;
+	color: inherit;
+}
+.win95-desktop .win95-window:not(dialog, [data-group]) > .win95-titlebar {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }

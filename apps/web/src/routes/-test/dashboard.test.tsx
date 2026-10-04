@@ -147,9 +147,10 @@ test("shows empty states for a family with no data", async () => {
 			.getAttribute("href"),
 	).toBe("/chat");
 
-	expect(
-		await (await alertsTab()).findByText("No alerts recorded."),
-	).toBeTruthy();
+	// No alert yet: the alert summary says so, and the empty Recent alerts list is hidden.
+	const alerts = await alertsTab();
+	expect(await alerts.findByText("No alerts right now")).toBeTruthy();
+	expect(alerts.queryByText("Recent alerts")).toBeNull();
 	expect(
 		await (await thresholdsTab()).findByText(
 			"No thresholds set: nothing is monitored.",

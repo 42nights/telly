@@ -1,8 +1,9 @@
 // Layout smoke test (captain: "it should fill the box its in ... if its too big then thats probably
-// a sign to compact or break it apart"): no page scrolls as a whole at two desktop sizes. Only long
-// lists scroll, inside their own box. On a phone a taller screen scrolls instead of squeezing its
-// content (captain: "i cannot see today at a glance ... it just doesnt scroll down on mobile"), so
-// the phone is not checked here. Wearer Home is out of scope.
+// a sign to compact or break it apart"; "nested windows + elements are all over the place"): no
+// page scrolls as a whole at two desktop sizes, and no page at any size shows a window inside the
+// app frame's window. Only long lists scroll, inside their own box. On a phone a taller screen
+// scrolls instead of squeezing its content (captain: "i cannot see today at a glance ... it just
+// doesnt scroll down on mobile"). Wearer Home is out of scope.
 import { expect, test } from "@playwright/test";
 
 import { family, replies, signIn, watch } from "./fake-api";
@@ -93,9 +94,10 @@ const wearerPaths = ["/find", "/trip", "/settings"];
 for (const [width, height] of [
 	[1440, 900],
 	[1280, 800],
+	[390, 844],
 ] as const)
 	for (const view of ["family", "wearer"] as const)
-		test(`no page scrolls as a whole at ${width}x${height} in the ${view} view`, async ({
+		test(`each page is one window at ${width}x${height} in the ${view} view`, async ({
 			page,
 			baseURL,
 		}) => {
@@ -109,6 +111,7 @@ for (const [width, height] of [
 			);
 			await watch(page, baseURL, routes);
 			const overflow: string[] = [];
+			const nested: string[] = [];
 			for (const path of view === "family" ? paths : wearerPaths) {
 				await page.goto(path);
 				// Every read has answered and the screen has its final content, then measure.
@@ -122,7 +125,22 @@ for (const [width, height] of [
 						desktop === null ? 0 : desktop.scrollHeight - desktop.clientHeight,
 					);
 				});
-				if (extra > 1) overflow.push(`${path} scrolls by ${extra} px`);
+				// One window per page (#357): no blue title bar inside the frame, except in a dialog.
+				const bars = await page
+					.locator(".win95-desktop .win95-titlebar")
+					.evaluateAll(
+						(all) =>
+							all.filter(
+								(bar) =>
+									bar.closest("dialog") === null &&
+									getComputedStyle(bar).backgroundImage !== "none",
+							).length,
+					);
+				if (bars > 0) nested.push(`${path} has ${bars} inner title bars`);
+				// A phone scrolls a taller screen (#366); a desktop must fit.
+				if (width > 899 && extra > 1)
+					overflow.push(`${path} scrolls by ${extra} px`);
 			}
 			expect(overflow).toEqual([]);
+			expect(nested).toEqual([]);
 		});

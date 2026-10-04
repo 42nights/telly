@@ -16,7 +16,7 @@ import { useState } from "react";
 import { LadderForm } from "@/components/care/ladder-form";
 import { NeedCard } from "@/components/care/need-card";
 import { Window } from "@/components/hud/window";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
 const POLL_MS = 5_000;
@@ -37,11 +37,7 @@ export function CareWindow({
 		<Window
 			title={part === "needs" ? "Care needs" : "Contact ladder"}
 			icon={part === "needs" ? HeartHandshake : PhoneForwarded}
-			status={
-				part === "needs"
-					? "Calls are simulated. Only accepting and then confirming help closes a need."
-					: "Calls are simulated."
-			}
+			status={part === "ladder" ? "Calls are simulated." : undefined}
 		>
 			<div className="grid gap-4 p-2 text-sm">
 				{part === "needs" ? (
@@ -110,9 +106,12 @@ function NeedsSection({ base, me }: { base: string; me: string | null }) {
 				)}
 			</section>
 			<section aria-labelledby="ask" className="grid gap-2">
-				<h3 id="ask" className="font-bold">
-					Ask the family
-				</h3>
+				<div className="flex items-center gap-1">
+					<h3 id="ask" className="font-bold">
+						Ask the family
+					</h3>
+					<Tip text="Calls are simulated. Only accepting and then confirming help closes a need." />
+				</div>
 				<NewNeedForm path={`${base}/needs`} />
 			</section>
 		</>

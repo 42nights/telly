@@ -31,18 +31,21 @@ export const Route = createFileRoute("/care_/plan")({
 									)}
 								</Part>
 								<Part state={care.prompt} what="the wearer's prompt">
-									{({ lines }) => (
-										<Window
-											title="What the wearer hears"
-											icon={MessageSquareText}
-										>
-											<ul className="grid list-disc gap-1 p-2 pl-6 text-sm">
-												{lines.map((line) => (
-													<li key={line}>{line}</li>
-												))}
-											</ul>
-										</Window>
-									)}
+									{({ lines }) =>
+										lines.length === 0 ? null : (
+											<Window
+												group
+												title="What the wearer hears"
+												icon={MessageSquareText}
+											>
+												<ul className="grid list-disc gap-1 p-2 pl-6 text-sm">
+													{lines.map((line) => (
+														<li key={line}>{line}</li>
+													))}
+												</ul>
+											</Window>
+										)
+									}
 								</Part>
 							</div>
 						);

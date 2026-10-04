@@ -95,16 +95,15 @@ describe("ReminderHistorySection", () => {
 		);
 	});
 
-	test("says when nothing has come due yet", async () => {
+	test("hides the section while nothing has come due", async () => {
 		serve({
 			[PATH]: {
 				json: { occurrences: [detail("1", "2999-01-01T08:00:00.000Z")] },
 			},
 		});
 		const view = render(<ReminderHistorySection familyId="7" me={null} />);
-		expect(
-			await view.findByText("No reminder has come due yet."),
-		).toBeDefined();
+		expect(view.container.textContent).toContain("Loading reminders…");
+		await waitFor(() => expect(view.container.textContent).toBe(""));
 	});
 
 	test("shows at most the ten newest due occurrences", async () => {
