@@ -237,6 +237,37 @@ const finchnodeLink = table(
 	},
 );
 
+const TripStep = t.enum("TripStep", {
+	// The wearer was asked "Are you heading out now?".
+	Asked: t.unit(),
+	// The wearer confirmed and stated a plan. A later `Leaving` in the same trip is a changed plan.
+	Leaving: t.unit(),
+	Cancelled: t.unit(),
+	Arrived: t.unit(),
+});
+
+// A leaving-home check-in, one row per step. Rows are never changed, so an earlier plan stays in
+// the history and a later one never gets overwritten. No location is stored.
+const tripEvent = table(
+	{ name: "trip_event" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// Chosen by the server for the `Asked` row, so it knows which trip it started.
+		tripId: t.string().index("btree"),
+		step: TripStep,
+		// What started or changed the trip: `manual` or `departure_signal`.
+		source: t.string(),
+		purpose: t.option(t.string()),
+		destination: t.option(t.string()),
+		// The wearer's choice of family notices, set on `Leaving`.
+		notifyDeparture: t.bool(),
+		notifyArrival: t.bool(),
+		by: t.identity(),
+		at: t.timestamp(),
+	},
+);
+
 // One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
 // report, or caregiver help. The photo itself is never stored. The server validates `fact` against
 // `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
@@ -639,6 +670,7 @@ const spacetimedb = schema({
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
+	tripEvent,
 	exercisePlan,
 	exerciseEvent,
 });
@@ -1328,6 +1360,155 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 			linkedBy: ctx.sender,
 			linkedAt: ctx.timestamp,
 		});
+	},
+);
+
+// Debounce: an unanswered question stays open for 30 minutes and a confirmed trip for 12 hours. A
+// departure signal within 30 minutes of the family's last trip step asks nothing.
+const ASK_OPEN_MICROS = 30n * 60_000_000n;
+const TRIP_OPEN_MICROS = 12n * 3_600_000_000n;
+const SIGNAL_QUIET_MICROS = 30n * 60_000_000n;
+
+const tripNotice = (
+	ctx: Ctx,
+	familyId: bigint,
+	clientId: string,
+	body: string,
+) =>
+	ctx.db.message.insert({
+		id: 0n,
+		familyId,
+		sender: ctx.sender,
+		body,
+		sentAt: ctx.timestamp,
+		clientId,
+	});
+
+type TripRow = Infer<typeof tripEvent.rowType>;
+
+// ponytail: scans the family's trip history per step; index by time if it grows large.
+const tripHistory = (ctx: Ctx, familyId: bigint): TripRow[] =>
+	[...ctx.db.tripEvent.familyId.filter(familyId)].sort((a, b) =>
+		a.id < b.id ? -1 : 1,
+	);
+
+const TripPlan = t.object("TripPlan", {
+	purpose: t.string(),
+	destination: t.option(t.string()),
+	notifyDeparture: t.bool(),
+	notifyArrival: t.bool(),
+});
+type TripPlan = Infer<typeof TripPlan>;
+
+/** Whether a new question may start: no trip is open and a departure signal is not repeating. */
+const mayAsk = (ctx: Ctx, latest: TripRow | undefined, source: string) => {
+	if (latest === undefined) return true;
+	const age =
+		ctx.timestamp.microsSinceUnixEpoch - latest.at.microsSinceUnixEpoch;
+	if (latest.step.tag === "Asked" && age < ASK_OPEN_MICROS) return false;
+	if (latest.step.tag === "Leaving" && age < TRIP_OPEN_MICROS) return false;
+	return !(source === "departure_signal" && age < SIGNAL_QUIET_MICROS);
+};
+
+/** A stated plan. The first one sends the departure notice when the wearer chose it. */
+const leave = (
+	ctx: Ctx,
+	trip: TripRow[],
+	plan: TripPlan | undefined,
+	record: () => void,
+) => {
+	if (plan === undefined) throw new SenderError("purpose is required");
+	requireText("purpose", plan.purpose);
+	const last = trip[trip.length - 1];
+	if (
+		last?.step.tag === "Leaving" &&
+		last.purpose === plan.purpose &&
+		last.destination === plan.destination &&
+		last.notifyDeparture === plan.notifyDeparture &&
+		last.notifyArrival === plan.notifyArrival
+	)
+		return; // a resend
+	const first = !trip.some((e) => e.step.tag === "Leaving");
+	record();
+	if (first && plan.notifyDeparture && last !== undefined)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-left`,
+			`I'm leaving home: ${plan.purpose}${plan.destination === undefined ? "" : ` (${plan.destination})`}.`,
+		);
+};
+
+/** `Cancelled` or `Arrived`. Arrival sends the arrival notice when the wearer chose it. */
+const endTrip = (
+	ctx: Ctx,
+	last: TripRow,
+	arrived: boolean,
+	record: () => void,
+) => {
+	if (arrived && last.step.tag !== "Leaving")
+		throw new SenderError("the trip has not started");
+	record();
+	if (arrived && last.notifyArrival)
+		tripNotice(
+			ctx,
+			last.familyId,
+			`trip-${last.tripId}-arrived`,
+			`I arrived: ${last.destination ?? last.purpose ?? "my trip"}.`,
+		);
+};
+
+/**
+ * One step of a leaving-home check-in. `Asked` starts a trip unless one is open or a departure
+ * signal repeats within the quiet time; then it records nothing. `Leaving` needs the plan. The
+ * chosen family notices are family messages, written in the same transaction as the step.
+ */
+export const recordTripEvent = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		tripId: t.string(),
+		step: TripStep,
+		source: t.string(),
+		plan: t.option(TripPlan),
+	},
+	(ctx, { familyId, tripId, step, source, plan }) => {
+		requireMember(ctx, familyId);
+		requireText("tripId", tripId);
+		if (source !== "manual" && source !== "departure_signal")
+			throw new SenderError("source must be manual or departure_signal");
+		const history = tripHistory(ctx, familyId);
+		const trip = history.filter((e) => e.tripId === tripId);
+		const last = trip[trip.length - 1];
+		const record = () => {
+			ctx.db.tripEvent.insert({
+				id: 0n,
+				familyId,
+				tripId,
+				step,
+				source,
+				purpose: plan?.purpose,
+				destination: plan?.destination,
+				notifyDeparture: plan?.notifyDeparture === true,
+				notifyArrival: plan?.notifyArrival === true,
+				by: ctx.sender,
+				at: ctx.timestamp,
+			});
+		};
+		if (step.tag === "Asked") {
+			// A resend of the question finds its trip and records nothing.
+			if (
+				last === undefined &&
+				mayAsk(ctx, history[history.length - 1], source)
+			)
+				record();
+			return;
+		}
+		if (last === undefined) throw new SenderError("no such trip");
+		if (step.tag !== "Leaving" && last.step.tag === step.tag) return; // a resend
+		if (last.step.tag === "Cancelled" || last.step.tag === "Arrived")
+			throw new SenderError("the trip has ended");
+		if (step.tag === "Leaving") return leave(ctx, trip, plan, record);
+		endTrip(ctx, last, step.tag === "Arrived", record);
 	},
 );
 
@@ -2384,6 +2565,15 @@ export const myFinchnodeLinks = spacetimedb.view(
 			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
 				m.familyId.eq(l.familyId),
 			),
+);
+
+export const myTripEvents = spacetimedb.view(
+	{ name: "my_trip_events", public: true },
+	t.array(tripEvent.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.tripEvent, (m, e) => m.familyId.eq(e.familyId)),
 );
 
 // Only for families where the caller holds `health_records` now (#26).

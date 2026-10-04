@@ -28,6 +28,7 @@ import RecordExerciseEventReducer from "../record_exercise_event_reducer";
 import RecordMealFactReducer from "../record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "../record_reminder_delivery_reducer";
 import RecordSampleReducer from "../record_sample_reducer";
+import RecordTripEventReducer from "../record_trip_event_reducer";
 import RemoveAlertThresholdReducer from "../remove_alert_threshold_reducer";
 import RespondToCareNeedReducer from "../respond_to_care_need_reducer";
 import SaveCareProfileReducer from "../save_care_profile_reducer";
@@ -63,6 +64,7 @@ export type RecordExerciseEventParams = __Infer<typeof RecordExerciseEventReduce
 export type RecordMealFactParams = __Infer<typeof RecordMealFactReducer>;
 export type RecordReminderDeliveryParams = __Infer<typeof RecordReminderDeliveryReducer>;
 export type RecordSampleParams = __Infer<typeof RecordSampleReducer>;
+export type RecordTripEventParams = __Infer<typeof RecordTripEventReducer>;
 export type RemoveAlertThresholdParams = __Infer<typeof RemoveAlertThresholdReducer>;
 export type RespondToCareNeedParams = __Infer<typeof RespondToCareNeedReducer>;
 export type SaveCareProfileParams = __Infer<typeof SaveCareProfileReducer>;

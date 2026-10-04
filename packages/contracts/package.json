@@ -22,7 +22,8 @@
 		"./trends": "./src/trends.ts",
 		"./reminders": "./src/reminders.ts",
 		"./emergency": "./src/emergency.ts",
-		"./speaker": "./src/speaker.ts"
+		"./speaker": "./src/speaker.ts",
+		"./trips": "./src/trips.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

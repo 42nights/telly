@@ -56,6 +56,7 @@ import RecordExerciseEventReducer from "./record_exercise_event_reducer";
 import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordReminderDeliveryReducer from "./record_reminder_delivery_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
+import RecordTripEventReducer from "./record_trip_event_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
@@ -95,6 +96,7 @@ import MyReminderSettingsRow from "./my_reminder_settings_table";
 import MyRemindersRow from "./my_reminders_table";
 import MyReportsRow from "./my_reports_table";
 import MySpeakerSettingsRow from "./my_speaker_settings_table";
+import MyTripEventsRow from "./my_trip_events_table";
 import PendingAlertDeliveriesRow from "./pending_alert_deliveries_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -262,6 +264,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MySpeakerSettingsRow),
+  myTripEvents: __table({
+    name: 'my_trip_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTripEventsRow),
   pendingAlertDeliveries: __table({
     name: 'pending_alert_deliveries',
     indexes: [
@@ -295,6 +304,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_meal_fact", RecordMealFactReducer),
   __reducerSchema("record_reminder_delivery", RecordReminderDeliveryReducer),
   __reducerSchema("record_sample", RecordSampleReducer),
+  __reducerSchema("record_trip_event", RecordTripEventReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),

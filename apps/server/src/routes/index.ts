@@ -19,6 +19,7 @@ import { reportRoutes } from "./reports";
 import { speakerRoutes } from "./speaker";
 import { toolRoutes } from "./tools";
 import { trendRoutes } from "./trends";
+import { tripRoutes } from "./trips";
 import { visionRoutes } from "./vision";
 import { voiceRoutes } from "./voice";
 
@@ -56,5 +57,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", emergencyRoutes())
 		.route("/", cueRoutes(config.gemma))
 		.route("/", careProfileRoutes())
+		.route("/", tripRoutes())
 		.route("/", exerciseRoutes());
 };

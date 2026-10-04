@@ -21,6 +21,7 @@ import { HeartReading } from "@/components/wearer/heart";
 import { MedicationReminders } from "@/components/wearer/medication-reminder";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
+import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
 import { ENV } from "@/env";
 import { type ApiState, familyPath, useApi } from "@/lib/api";
@@ -253,6 +254,7 @@ function HudComponent() {
 								talkNote={talkNote[familiesKind]}
 							/>
 						)}
+						<TripCheckInCard familyId={familyId} />
 						<Link
 							className={buttonVariants({
 								variant: "outline",
