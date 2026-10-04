@@ -5,6 +5,7 @@ import { simulatedDelivery } from "../integrations/delivery";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { r2Bucket } from "../integrations/r2";
 import { alertRoutes } from "./alerts";
+import { appointmentRoutes } from "./appointments";
 import { askRoutes } from "./ask";
 import { careRoutes } from "./care";
 import { careProfileRoutes } from "./care-profile";
@@ -54,6 +55,7 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", reminderRoutes())
 		.route("/", speakerRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
+		.route("/", appointmentRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
