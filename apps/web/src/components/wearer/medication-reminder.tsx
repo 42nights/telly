@@ -5,6 +5,10 @@ import { CareNeed } from "@health/contracts/care";
 import { CareInstructions } from "@health/contracts/care-profile";
 import { Me } from "@health/contracts/families";
 import {
+	MedicineMemory,
+	type MedicineSighting,
+} from "@health/contracts/medicine-memory";
+import {
 	ReminderHistory,
 	type ReminderOccurrence,
 	ReminderOccurrenceDetail,
@@ -73,6 +77,7 @@ const failureText = (r: ApiFailure, signedOut: string, failed: string) =>
 function useOccurrenceActions(
 	familyId: string,
 	occurrence: ReminderOccurrence,
+	sightings: readonly MedicineSighting[],
 	me: string | null,
 	onChange: () => void,
 ) {
@@ -125,6 +130,7 @@ function useOccurrenceActions(
 					: uncertaintyAnswer(
 							result.value.occurrence,
 							result.value.events,
+							sightings,
 							(actor) =>
 								actor === "scheduler" ? "Telly" : memberLabel(actor, me),
 							time,
@@ -176,18 +182,21 @@ function Occurrence({
 	familyId,
 	occurrence,
 	instructions,
+	sightings,
 	me,
 	onChange,
 }: {
 	familyId: string;
 	occurrence: ReminderOccurrence;
 	instructions: ApiState<CareInstructions>;
+	sightings: readonly MedicineSighting[];
 	me: string | null;
 	onChange: () => void;
 }) {
 	const { step, setStep, failure, answer, askFamily } = useOccurrenceActions(
 		familyId,
 		occurrence,
+		sightings,
 		me,
 		onChange,
 	);
@@ -303,6 +312,11 @@ export function MedicationReminders({ familyId }: { familyId: string }) {
 		{ pollMs: 5 * 60_000 },
 	);
 	const me = useApi(Me, "/api/me");
+	// "Container found" evidence (#29); without it the answer reads the reminder events only.
+	const memory = useApi(
+		MedicineMemory,
+		familyPath(familyId, "/medicine-memory"),
+	);
 	if (history.kind === "loading") return null;
 	if (history.kind !== "ready")
 		return <ApiNotice state={history} what="medication reminders" />;
@@ -329,6 +343,7 @@ export function MedicationReminders({ familyId }: { familyId: string }) {
 					me={me.kind === "ready" ? me.value.identity : null}
 					occurrence={occurrence}
 					onChange={onChange}
+					sightings={memory.kind === "ready" ? memory.value.sightings : []}
 				/>
 			))}
 		</section>
