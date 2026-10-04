@@ -1,8 +1,10 @@
 #!/bin/sh
-# Starts an isolated, in-memory SpacetimeDB on 127.0.0.1, publishes the module from spacetimedb/,
-# and runs the database tests against it. Nothing is published to a cloud server, and nothing
-# outlives the run. The publisher is a new identity that this local database issues, logged in
-# through a CLI config in the temporary directory; the module makes it the alert delivery operator.
+# Starts an isolated, in-memory SpacetimeDB on 127.0.0.1, builds the module from spacetimedb/ once,
+# and runs the database tests against it. Each test file gets its own database on that server, and
+# all files run at the same time, so the run takes as long as the slowest file (the reminder tests
+# wait for minute-aligned schedules). Nothing is published to a cloud server, and nothing outlives
+# the run. The publisher is a new identity that this local database issues, logged in through a CLI
+# config in the temporary directory; the module makes it the alert delivery operator.
 # Needs the `spacetime` CLI (https://spacetimedb.com/install) and curl.
 # Usage: bun run db:test   (SPACETIMEDB_PORT picks the port; default 3399)
 set -eu
@@ -30,11 +32,36 @@ until spacetime server ping "$server" >/dev/null 2>&1; do
 done
 token=$(curl -fsS -X POST "$server/v1/identity" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 spacetime --config-path "$data/cli.toml" login --token "$token" >/dev/null
-spacetime --config-path "$data/cli.toml" publish --server "$server" --module-path spacetimedb --yes health-test
+spacetime build --module-path spacetimedb
 # reliability.test.ts runs the built server under Node.
 bun run --filter server build >/dev/null
-SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE=health-test SPACETIMEDB_OPERATOR_TOKEN="$token" \
-	bun test apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
+run_all() {
+	n=0
+	pids=
+	for file in "$@"; do
+		n=$((n + 1))
+		{
+			spacetime --config-path "$data/cli.toml" publish --server "$server" \
+				--js-path spacetimedb/dist/bundle.js --yes "health-test-$n" &&
+				SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE="health-test-$n" \
+					SPACETIMEDB_OPERATOR_TOKEN="$token" bun test "$file"
+		} >"$data/$n.log" 2>&1 || echo "$file" >>"$data/failed" &
+		pids="$pids $!"
+	done
+	for p in $pids; do wait "$p"; done
+	n=0
+	for file in "$@"; do
+		n=$((n + 1))
+		cat "$data/$n.log"
+	done
+	if [ -s "$data/failed" ]; then
+		echo "db:test: these files failed:" >&2
+		cat "$data/failed" >&2
+		return 1
+	fi
+	echo "db:test: all $# files passed"
+}
+run_all apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
 	apps/server/src/routes/alerts.test.ts apps/server/src/reliability.test.ts \
 	apps/server/src/routes/reports.test.ts apps/server/src/routes/finchnode.test.ts \
 	apps/server/src/routes/tools.test.ts apps/server/src/routes/healthkit.test.ts \
