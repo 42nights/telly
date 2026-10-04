@@ -156,7 +156,7 @@ test("polling re-reads every 5 s, keeps the last good reply time, and stops on u
 	expect(calls.filter(({ path }) => path === "/health")).toHaveLength(2);
 });
 
-test("a read still pending at the next poll is cancelled", async () => {
+test("a read still pending at the next poll is cancelled, and polling goes on", async () => {
 	jest.useFakeTimers();
 	serve(SILENT);
 	const signals: AbortSignal[] = [];
@@ -170,6 +170,10 @@ test("a read still pending at the next poll is cancelled", async () => {
 	);
 	render(<StatusFooter now={Date.now()} records={null} />);
 	expect(signals.map((signal) => signal.aborted)).toEqual([false, false]);
+	await act(async () => {
+		jest.advanceTimersByTime(5_000);
+	});
+	expect(signals.map((signal) => signal.aborted)).toEqual([true, true]);
 	await act(async () => {
 		jest.advanceTimersByTime(5_000);
 	});

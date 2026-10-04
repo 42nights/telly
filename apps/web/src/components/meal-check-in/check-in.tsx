@@ -41,11 +41,10 @@ export function MealCheckIn({
 	/** Opens the separate help path (#34) with the wearer's words. */
 	onUrgent: (words: string) => void;
 }) {
-	const [refresh, setRefresh] = useState(0);
 	const history = useApi(
 		ReminderHistory,
 		familyPath(familyId, "/reminder-occurrences"),
-		{ pollMs: 15_000, refreshKey: refresh },
+		{ pollMs: 15_000 },
 	);
 	const due = history.kind === "ready" ? dueCheckIn(history.value, now) : null;
 	if (history.kind !== "ready" && history.kind !== "loading")
@@ -62,7 +61,6 @@ export function MealCheckIn({
 			familyId={familyId}
 			kind={due.kind}
 			occurrence={due}
-			onAnswered={() => setRefresh((n) => n + 1)}
 			onUrgent={onUrgent}
 		/>
 	);
@@ -77,13 +75,11 @@ function Prompt({
 	familyId,
 	kind,
 	occurrence,
-	onAnswered,
 	onUrgent,
 }: {
 	familyId: string;
 	kind: MealKind;
 	occurrence: ReminderOccurrence;
-	onAnswered: () => void;
 	onUrgent: (words: string) => void;
 }) {
 	const [words, setWords] = useState("");
@@ -118,7 +114,6 @@ function Prompt({
 			});
 		clientId.current = crypto.randomUUID();
 		setStatus({ kind: "idle" });
-		onAnswered();
 	};
 
 	const take = (step: Step, wording: string) => {

@@ -66,7 +66,6 @@ export type ReportSheetState = {
 export function useReportSheet(
 	report: Report,
 	familyId: string,
-	onChanged: () => void,
 	createFailure: ApiFailure | null,
 ): ReportSheetState {
 	const [draft, setDraft] = useState<FieldDraft>(() => draftOf(report.fields));
@@ -104,19 +103,16 @@ export function useReportSheet(
 		if (!(await post("/fields", "Saving…", fieldsOf(draft)))) return;
 		setFailure(null);
 		setSavedAt(Date.now());
-		onChanged();
 	};
 
 	const review = async () => {
 		if (!(await post("/review", "Marking as reviewed…"))) return;
 		setFailure(null);
-		onChanged();
 	};
 
 	const email = async () => {
 		if (!(await post("/email", "Sending email…"))) return;
 		setFailure(null);
-		onChanged();
 	};
 
 	const submit = async () => {

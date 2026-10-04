@@ -8,7 +8,11 @@ import { Users } from "lucide-react";
 
 import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
-import { type FamilyData, useFamilyData } from "@/components/family/data";
+import {
+	type FamilyData,
+	familyReads,
+	useFamilyData,
+} from "@/components/family/data";
 import { FamilyPeople } from "@/components/family/invite";
 import {
 	KeyNumbers,
@@ -26,9 +30,10 @@ import { Window } from "@/components/hud/window";
 import { MealStatusSection } from "@/components/meal-check-in/family-status";
 import { ReminderHistorySection } from "@/components/reminders/history";
 import { FamilyLocationSection } from "@/components/trip/location";
-import { PersonPicker } from "@/lib/family";
+import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
+	loader: loadFamilyReads(familyReads),
 	component: FamilyOverview,
 });
 

@@ -174,21 +174,12 @@ function SummaryReview({
 export function SummaryPanel({
 	appointment,
 	base,
-	onChanged,
 }: {
 	appointment: Appointment;
 	base: string;
-	onChanged: () => void;
 }) {
-	const [sharesKey, setSharesKey] = useState(0);
-	const refresh = () => {
-		setSharesKey((key) => key + 1);
-		onChanged();
-	};
-	const { busy, failure, run } = useAction(refresh);
-	const shares = useApi(ClinicianShares, `${base}/shares`, {
-		refreshKey: sharesKey,
-	});
+	const { busy, failure, run } = useAction();
+	const shares = useApi(ClinicianShares, `${base}/shares`);
 	const reviewed = appointment.summary;
 	const zone = appointment.visit.timeZone;
 
