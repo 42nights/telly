@@ -964,6 +964,17 @@ const familyDeletion = table(
 	},
 );
 
+// The name each person signed in with (the Google profile name), written by that person
+// (`setMyName`) and shown only to the members of their families (`myFamilyPeople`).
+const memberName = table(
+	{ name: "member_name" },
+	{
+		member: t.identity().primaryKey(),
+		name: t.string(),
+		updatedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -1010,6 +1021,7 @@ const spacetimedb = schema({
 	familyInvite,
 	familyPushToken,
 	familyDeletion,
+	memberName,
 });
 export default spacetimedb;
 
@@ -4206,4 +4218,43 @@ export const deleteFamily = spacetimedb.reducer(
 			deletedAt: ctx.timestamp,
 		});
 	},
+);
+
+export const setMyName = spacetimedb.reducer(
+	{ name: t.string() },
+	(ctx, { name }) => {
+		requireText("name", name);
+		const row = { member: ctx.sender, name, updatedAt: ctx.timestamp };
+		if (ctx.db.memberName.member.find(ctx.sender) === null)
+			ctx.db.memberName.insert(row);
+		else ctx.db.memberName.member.update(row);
+	},
+);
+
+// The people of the caller's families, each with the name they signed in with (none until they
+// sign in again). The family's NOOP ingest identity is a member but not a person, so it is left out.
+export const myFamilyPeople = spacetimedb.view(
+	{ name: "my_family_people", public: true },
+	t.array(
+		t.object("FamilyPerson", {
+			familyId: t.u64(),
+			member: t.identity(),
+			name: t.option(t.string()),
+		}),
+	),
+	(ctx) =>
+		[...ctx.db.familyMember.member.filter(ctx.sender)].flatMap(
+			({ familyId }) => {
+				const ingest = ctx.db.familyPushToken.familyId.find(familyId)?.ingest;
+				return [...ctx.db.familyMember.familyId.filter(familyId)]
+					.filter(
+						({ member }) => ingest === undefined || !member.isEqual(ingest),
+					)
+					.map(({ member }) => ({
+						familyId,
+						member,
+						name: ctx.db.memberName.member.find(member)?.name,
+					}));
+			},
+		),
 );

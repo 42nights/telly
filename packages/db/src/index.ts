@@ -89,6 +89,7 @@ import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetFamilyPushTokenReducer from "./set_family_push_token_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
+import SetMyNameReducer from "./set_my_name_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
 import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
@@ -122,6 +123,7 @@ import MyExercisePlansRow from "./my_exercise_plans_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFamilyInvitesRow from "./my_family_invites_table";
 import MyFamilyMembersRow from "./my_family_members_table";
+import MyFamilyPeopleRow from "./my_family_people_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
 import MyLocationSharesRow from "./my_location_shares_table";
@@ -280,6 +282,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyFamilyMembersRow),
+  myFamilyPeople: __table({
+    name: 'my_family_people',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyFamilyPeopleRow),
   myFinchnodeLinks: __table({
     name: 'my_finchnode_links',
     indexes: [
@@ -479,6 +488,7 @@ const reducersSchema = __reducers(
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_family_push_token", SetFamilyPushTokenReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
+  __reducerSchema("set_my_name", SetMyNameReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
   __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
