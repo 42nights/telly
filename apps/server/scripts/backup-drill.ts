@@ -39,7 +39,20 @@ const keys = (dataDir: string) => ({
 	pub: join(dataDir, "jwt", "id_ecdsa.pub"),
 });
 
+const answers = (url: string) => {
+	try {
+		execFileSync("spacetime", ["server", "ping", url], { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+};
+
 const start = async (dataDir: string, at: number) => {
+	const url = `http://127.0.0.1:${at}`;
+	// Never publish to, read from, or stop a database this drill did not start.
+	if (answers(url))
+		throw new Error(`${url} is already in use; set DRILL_PORT to a free port`);
 	const server = spawn(
 		"spacetime",
 		[
@@ -56,17 +69,12 @@ const start = async (dataDir: string, at: number) => {
 		],
 		{ stdio: "ignore" },
 	);
-	const url = `http://127.0.0.1:${at}`;
-	for (let attempt = 0; ; attempt++) {
-		if (server.exitCode !== null || attempt === 100)
-			throw new Error(`SpacetimeDB did not start on ${url}`);
-		try {
-			execFileSync("spacetime", ["server", "ping", url], { stdio: "ignore" });
-			return { server, url };
-		} catch {
-			await sleep(200);
-		}
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (server.exitCode !== null) break;
+		if (answers(url) && server.exitCode === null) return { server, url };
+		await sleep(200);
 	}
+	throw new Error(`SpacetimeDB did not start on ${url}`);
 };
 
 const stop = async (server: ChildProcess, signal: NodeJS.Signals) => {
