@@ -33,6 +33,9 @@ export const familyScreens = [
 		icon: Users,
 		tabs: [
 			{ to: "/family", label: "Overview" },
+			{ to: "/family/daily", label: "Daily" },
+			{ to: "/family/exercise", label: "Exercise" },
+			{ to: "/family/cooking", label: "Cooking" },
 			{ to: "/family/alerts", label: "Alerts" },
 			{ to: "/family/trends", label: "Trends" },
 			{ to: "/family/thresholds", label: "Thresholds" },
@@ -47,6 +50,7 @@ export const familyScreens = [
 			{ to: "/care", label: "Needs" },
 			{ to: "/care/contacts", label: "Contacts" },
 			{ to: "/care/plan", label: "Care plan" },
+			{ to: "/care/facts", label: "Profile" },
 			{ to: "/care/sharing", label: "Sharing" },
 		],
 	},
@@ -71,6 +75,7 @@ export const settingsScreen = {
 		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
+		{ to: "/settings/demo", label: "Demo data" },
 		{ to: "/settings/family", label: "Family" },
 	],
 } as const satisfies Screen;

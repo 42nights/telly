@@ -14,7 +14,6 @@ import {
 	labRange,
 	labValue,
 	markerValue,
-	metricLabel,
 } from "./logic";
 
 const empty = draftOf(
@@ -108,12 +107,6 @@ test("demoText says demo for synthetic, in the same case", () => {
 		"Demo records, not real patient data",
 	);
 	expect(demoText("4.5 mmol/L")).toBe("4.5 mmol/L");
-});
-
-test("metricLabel turns a metric key into a sentence-case label", () => {
-	expect(metricLabel("heart_rate")).toBe("Heart rate");
-	expect(metricLabel("blood_oxygen_level")).toBe("Blood oxygen level");
-	expect(metricLabel("hrv")).toBe("Hrv");
 });
 
 test("a too-long field says its length and the limit", () => {

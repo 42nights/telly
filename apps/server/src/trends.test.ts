@@ -166,7 +166,7 @@ describe("explainTrend", () => {
 			"hrv: strap-b went up while strap-a went down.",
 		]);
 		expect(reply.unknown).toEqual([
-			"WHOOP data through NOOP: not connected.",
+			"WHOOP: no readings.",
 			"spo2: no samples in this period. The last one is from 2026-09-01T08:00:00Z.",
 			"Lab results: FinchNode is not set up on this server.",
 			"Nutrition estimates: none are recorded.",
@@ -178,7 +178,7 @@ describe("explainTrend", () => {
 		expect(
 			explain({ labs: [subject([], { access: "inactive" })] }).unknown,
 		).toEqual([
-			"WHOOP data through NOOP: not connected.",
+			"WHOOP: no readings.",
 			"No wearable or device samples in the last 7 days.",
 			"Lab results: the patient stopped sharing them.",
 			"Nutrition estimates: none are recorded.",
@@ -242,7 +242,7 @@ describe("explainTrend", () => {
 			],
 		});
 		expect(reply.unknown).toEqual([
-			"WHOOP data through NOOP: not connected.",
+			"WHOOP: no readings.",
 			"No wearable or device samples in the last 7 days.",
 			"Lab results: the patient's consent does not cover labs.",
 			"Lab results: the FinchNode sync is partial.",

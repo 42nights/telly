@@ -91,9 +91,12 @@ test("an open need shows who was contacted, how, and who is next", () => {
 	expect(
 		within(card).getByText("Mom asked for help getting up."),
 	).toBeDefined();
+	const fact = within(card).getByText(/^Heart rate 120 · /);
+	expect(fact.textContent).not.toContain("single reading");
 	expect(
-		within(card).getByText(/Heart rate 120 · watch · .* · single reading/),
-	).toBeDefined();
+		document.getElementById(fact.getAttribute("aria-describedby") ?? "")
+			?.textContent,
+	).toBe("watch");
 	const steps = within(
 		within(card).getByRole("list", { name: "Contact attempts" }),
 	).getAllByRole("listitem");
@@ -102,8 +105,8 @@ test("an open need shows who was contacted, how, and who is next", () => {
 		"Carol (backup)Simulated callSenttheir time Sat 3:04 AM (Asia/Kolkata)",
 		"Dana: not contacted yet",
 	]);
-	// Someone who is not the current contact gets no answer buttons.
-	expect(within(card).queryAllByRole("button")).toHaveLength(0);
+	// Someone who is not the current contact gets no answer buttons: only the fact's tooltip.
+	expect(within(card).queryAllByRole("button")).toEqual([fact]);
 });
 
 test("the current contact of a ringing call may answer it, accept, or decline", () => {
