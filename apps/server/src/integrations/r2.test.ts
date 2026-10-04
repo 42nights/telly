@@ -158,7 +158,7 @@ describe("exists", () => {
 describe("presign", () => {
 	test("is a query-signed GET link with expiry and a download filename", async () => {
 		const link = new URL(
-			await bucket.presign("7/r.pdf", "Lab report.pdf", 300),
+			await bucket.presign("7/r.pdf", "Lab report.pdf", 300, "attachment"),
 		);
 		expect(link.origin).toBe(s3.url.origin);
 		expect(link.pathname).toBe("/reports/7/r.pdf");
@@ -177,6 +177,7 @@ describe("presign", () => {
 				"7/r.pdf",
 				"Lab report.pdf",
 				300,
+				"attachment",
 			),
 		);
 		expect(other.searchParams.get("X-Amz-Signature")).not.toBe(

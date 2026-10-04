@@ -29,6 +29,7 @@ export type R2Bucket = {
 		key: string,
 		filename: string,
 		seconds: number,
+		disposition: "attachment" | "inline",
 	) => Promise<string>;
 	/** Every object whose key starts with `prefix`. */
 	readonly list: (prefix: string) => Promise<StoredObject[]>;
@@ -131,12 +132,12 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 			if (!response.ok && response.status !== 404)
 				throw failed("delete the file", response.status);
 		},
-		presign: async (key, filename, seconds) => {
+		presign: async (key, filename, seconds, disposition) => {
 			const link = new URL(url(key));
 			link.searchParams.set("X-Amz-Expires", String(seconds));
 			link.searchParams.set(
 				"response-content-disposition",
-				`attachment; filename="${filename}"`,
+				`${disposition}; filename="${filename}"`,
 			);
 			const signed = await client.sign(link.toString(), {
 				method: "GET",
