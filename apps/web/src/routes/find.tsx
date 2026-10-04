@@ -92,7 +92,8 @@ const LAYOUT = {
 	overlay: {
 		frame:
 			"fixed inset-0 z-[1000] bg-black [--chip-left:3.75rem] [&>:first-child]:hidden",
-		camera: "absolute inset-0 overflow-hidden [&_video]:object-cover",
+		camera:
+			"absolute inset-0 overflow-hidden [&_.camera-controls]:hidden [&_video]:object-cover",
 		answer:
 			"finder-panel absolute inset-x-0 bottom-0 grid max-h-[65dvh] content-end gap-2 overflow-y-auto bg-gradient-to-t from-black/85 via-black/60 to-transparent px-3 pt-10 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-white md:left-auto md:w-[28rem]",
 	},
