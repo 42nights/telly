@@ -1,9 +1,16 @@
-import type { Family } from "@health/contracts";
+import {
+	type Family,
+	type Loaded,
+	loadDecoded,
+	type NoopConnection,
+	Sources,
+} from "@health/contracts";
 import type {
 	AlertThreshold,
 	FamilyAlert,
 	Monitoring,
 } from "@health/contracts/alerts";
+import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -14,6 +21,7 @@ import {
 	MessageCircle,
 	SlidersHorizontal,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { type FamilyData, useFamilyData } from "@/components/family/data";
 import { clock, deliveryText, metricLabel } from "@/components/family/logic";
@@ -25,6 +33,7 @@ import {
 } from "@/components/family/parts";
 import { Window } from "@/components/hud/window";
 import { ApiNotice, Tip } from "@/components/win95";
+import { ENV } from "@/env";
 import type { ApiState } from "@/lib/api";
 import { PersonPicker } from "@/lib/family";
 import { memberLabel } from "@/lib/members";
@@ -97,10 +106,16 @@ function DashboardNav() {
 
 function DashboardBody({ data, family }: { data: FamilyData; family: Family }) {
 	const now = Date.now();
+	const [sources, setSources] = useState<Loaded<Sources>>();
+	useEffect(
+		() =>
+			loadDecoded(Sources, `${ENV.VITE_SERVER_URL}/api/sources`, setSources),
+		[],
+	);
 	return (
 		<>
 			<AlertSection data={data} now={now} />
-			<KeyNumbers data={data} family={family} now={now} />
+			<KeyNumbers data={data} family={family} now={now} sources={sources} />
 			<div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 				<section
 					id="alerts"
@@ -133,6 +148,23 @@ function DashboardBody({ data, family }: { data: FamilyData; family: Family }) {
 					<Thresholds state={data.thresholds} monitoring={data.monitoring} />
 				</section>
 			</div>
+			<section
+				id="messages"
+				aria-labelledby="messages-title"
+				className="grid content-start gap-2"
+			>
+				<h3 id="messages-title" className="font-bold">
+					Recent messages
+				</h3>
+				<RecentMessages data={data} familyId={family.id} />
+				<Link
+					to="/chat"
+					data-slot="button"
+					className={cn(buttonVariants(), "h-11 justify-self-start")}
+				>
+					Open chat
+				</Link>
+			</section>
 		</>
 	);
 }
@@ -141,10 +173,12 @@ function KeyNumbers({
 	data,
 	family,
 	now,
+	sources,
 }: {
 	data: FamilyData;
 	family: Family;
 	now: number;
+	sources: Loaded<Sources> | undefined;
 }) {
 	const { alerts, records } = data;
 	const hrv =
@@ -163,7 +197,7 @@ function KeyNumbers({
 						<span>HRV</span>
 						<b className="text-muted-foreground text-xl">Unavailable</b>
 						<span className="text-muted-foreground text-xs">
-							WHOOP · NOOP not connected
+							No real reading stored
 						</span>
 					</div>
 				)}
@@ -182,7 +216,79 @@ function KeyNumbers({
 				</div>
 			</div>
 			<ReadingsGlance data={data} familyId={family.id} now={now} />
+			<SourceList sources={sources} />
 		</section>
+	);
+}
+
+// Typed by the contract: a new source or status fails type-checking here until it has its words.
+const sourceName = { noop: "WHOOP via NOOP" } satisfies Record<
+	NoopConnection["source"],
+	string
+>;
+const statusText = {
+	not_connected: "Unavailable: not connected",
+} satisfies Record<NoopConnection["status"], string>;
+
+/** Every health source from `/api/sources`, as the server reports it. */
+function SourceList({ sources }: { sources: Loaded<Sources> | undefined }) {
+	if (sources === undefined || sources.kind === "error")
+		return (
+			<div className="win95-inset bg-card">
+				<ApiNotice state={sources ?? { kind: "loading" }} what="sources" />
+			</div>
+		);
+	return (
+		<ul
+			aria-label="Health sources"
+			className="win95-inset grid divide-y divide-border bg-card"
+		>
+			{sources.value.sources.length === 0 && (
+				<li className="p-2">No health source configured.</li>
+			)}
+			{sources.value.sources.map(({ source, status }) => (
+				<li key={source} className="flex flex-wrap justify-between gap-x-2 p-2">
+					<span>{sourceName[source]}</span>
+					<span className="bg-[#ffffe1] px-1">{statusText[status]}</span>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** The family's newest messages, read-only. Replying happens in the chat. */
+function RecentMessages({
+	data,
+	familyId,
+}: {
+	data: FamilyData;
+	familyId: string;
+}) {
+	const { records, me } = data;
+	if (records.kind !== "ready")
+		return (
+			<div className="win95-inset bg-card">
+				<ApiNotice state={records} what="messages" />
+			</div>
+		);
+	const messages = records.value.messages
+		.filter((m) => m.familyId === familyId)
+		.toSorted((a, b) => b.sentAt.localeCompare(a.sentAt))
+		.slice(0, 5);
+	if (messages.length === 0)
+		return <p className="win95-inset bg-card p-2">No messages yet.</p>;
+	return (
+		<ul className="win95-inset grid divide-y divide-border bg-card">
+			{messages.map((m) => (
+				<li key={m.id} className="grid gap-0.5 p-2">
+					<span className="flex justify-between gap-2 text-xs">
+						<b>{memberLabel(m.sender, me)}</b>
+						<time dateTime={m.sentAt}>{clock(m.sentAt)}</time>
+					</span>
+					<span className="line-clamp-2 break-words">{m.body}</span>
+				</li>
+			))}
+		</ul>
 	);
 }
 
