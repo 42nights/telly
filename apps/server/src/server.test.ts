@@ -49,27 +49,30 @@ mock.module("@spectrum-ts/imessage", () => ({
 	imessage: { config: () => ({ name: "imessage" }) },
 }));
 mock.module("@spectrum-ts/core", () => ({
-	Spectrum: async () => ({
-		webhook: async (
-			request: Request,
-			handle: (space: Space, message: Message) => Promise<void>,
-		) => {
-			const { text, sender } = (await request.json()) as {
-				text: string;
-				sender: string;
-			};
-			void handle(space, {
-				id: crypto.randomUUID(),
-				direction: "inbound",
-				sender: { id: sender },
-				content: { type: "text", text },
-			} as unknown as Message);
-			return new Response(null, { status: 202 });
-		},
-		stop: async () => {
-			cloud.stopped += 1;
-		},
-	}),
+	Spectrum: async ({ projectSecret }: { projectSecret: string }) => {
+		if (projectSecret === "rejected") throw new Error("Spectrum Cloud: 401");
+		return {
+			webhook: async (
+				request: Request,
+				handle: (space: Space, message: Message) => Promise<void>,
+			) => {
+				const { text, sender } = (await request.json()) as {
+					text: string;
+					sender: string;
+				};
+				void handle(space, {
+					id: crypto.randomUUID(),
+					direction: "inbound",
+					sender: { id: sender },
+					content: { type: "text", text },
+				} as unknown as Message);
+				return new Response(null, { status: 202 });
+			},
+			stop: async () => {
+				cloud.stopped += 1;
+			},
+		};
+	},
 }));
 // Imported after the mocks so the iMessage client never loads the real Spectrum Cloud provider.
 const { serverLayer } = await import("./server");
@@ -189,5 +192,36 @@ describe("the server process", () => {
 		} finally {
 			errors.mockRestore();
 		}
+	});
+
+	test("keeps serving when the iMessage agent cannot start, and marks iMessage unavailable", async () => {
+		const port = await freePort();
+		const config = serverConfig({
+			...base,
+			SPECTRUM_PROJECT_ID: "project",
+			SPECTRUM_PROJECT_SECRET: "rejected",
+			SPECTRUM_WEBHOOK_SECRET: "hook",
+			TELLY_IMESSAGE_SENDERS: "+15550001111=7",
+		});
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					yield* Layer.build(
+						serverLayer(config, { HOST: "127.0.0.1", PORT: port }),
+					);
+					expect(yield* Effect.promise(() => health(port))).toEqual({
+						status: "ok",
+						service: "server",
+					});
+					const webhook = yield* Effect.promise(() =>
+						fetch(`http://127.0.0.1:${port}/api/imessage/webhook`, {
+							method: "POST",
+							body: "{}",
+						}),
+					);
+					expect(webhook.status).toBe(503);
+				}),
+			),
+		);
 	});
 });
