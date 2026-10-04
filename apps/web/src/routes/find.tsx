@@ -7,6 +7,10 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Page } from "@/components/hud/window";
 import {
+	FullScreenButton,
+	useFullScreen,
+} from "@/components/wearer/full-screen";
+import {
 	RememberPlace,
 	SavedThings,
 	useArSupported,
@@ -69,6 +73,17 @@ function FindThingsComponent() {
 	);
 }
 
+/**
+ * The finder's frame. Normal: it fills the window, the camera takes the room left, and the answer
+ * scrolls in its own box. Full screen: it covers the screen above the app frame, inside the
+ * safe area, and the header row goes.
+ */
+const FRAME = {
+	normal:
+		"grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3",
+	full: "fixed inset-0 z-[1000] grid grid-rows-[minmax(0,1fr)_auto] gap-2 bg-[#c0c0c0] pt-[max(0.5rem,env(safe-area-inset-top))] pr-[max(0.5rem,env(safe-area-inset-right))] pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] md:gap-x-6 [&>:first-child]:hidden",
+};
+
 function FindThingsPage({
 	q,
 	object,
@@ -97,14 +112,14 @@ function FindThingsPage({
 	// The lock-on follows one object of one check; its live direction belongs to that pair.
 	const lockKey = `${check?.id}:${choice.skipped}`;
 	const way = useLiveWay(lockKey);
+	const screen = useFullScreen<HTMLDivElement>(FRAME);
 
 	return (
 		<Page
 			icon={ScanSearch}
 			title={mode === "add" ? "Add a thing" : "Find things"}
 		>
-			{/* Fills the window: the camera takes the room left, and the answer scrolls in its own box. */}
-			<div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3">
+			<div {...screen.frame}>
 				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
 					<Link
 						className={buttonVariants({
@@ -134,17 +149,16 @@ function FindThingsPage({
 							showVideo();
 						}}
 					/>
-					{check !== null && (
-						<OverCamera
-							best={best}
-							check={check}
-							familyId={familyId}
-							key={lockKey}
-							live={live}
-							onWay={way.set}
-							video={video}
-						/>
-					)}
+					<OverCamera
+						best={best}
+						check={check}
+						familyId={familyId}
+						key={lockKey}
+						live={live}
+						onWay={way.set}
+						video={video}
+					/>
+					<FullScreenButton full={screen.full} toggle={screen.toggle} />
 				</div>
 
 				<div
@@ -206,13 +220,14 @@ function OverCamera({
 	live,
 	...lock
 }: {
-	check: PictureCheck;
+	check: PictureCheck | null;
 	best: ObjectDetection | null;
 	live: boolean;
 	familyId: string | null;
 	video: RefObject<HTMLVideoElement | null>;
 	onWay: (way: string) => void;
 }) {
+	if (check === null) return null;
 	return live && check.result.kind === "done" && best !== null ? (
 		<LockOn best={best} check={check} {...lock} />
 	) : (
