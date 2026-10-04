@@ -8,7 +8,7 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { FamilyProvider } from "@/lib/family";
+import { FamilyProvider, NewFamilyBar } from "@/lib/family";
 
 import "../index.css";
 
@@ -46,9 +46,10 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				<FamilyProvider>
-					<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
+					<div className="win95-desktop flex h-svh flex-col">
 						<Header />
-						<div className="min-h-0 overflow-y-auto">
+						<NewFamilyBar />
+						<div className="min-h-0 flex-1 overflow-y-auto">
 							<Outlet />
 						</div>
 					</div>
