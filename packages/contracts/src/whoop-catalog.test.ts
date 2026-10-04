@@ -26,6 +26,7 @@ test("the catalog holds every exported column and never presents an unavailable 
 	const spo2 = whoopCatalog.find((field) => field.column === "spo2Pct");
 	const ecg = whoopCatalog.find((field) => field.table === "live.ecg");
 	expect(() => decode({ ...spo2, metric: "recovery" })).toThrow();
+	expect(() => decode({ ...spo2, status: "measured" })).toThrow();
 	expect(() => decode({ ...ecg, status: "measured" })).toThrow();
 	expect(() => decode({ ...ecg, metric: "heart_rate" })).toThrow();
 });

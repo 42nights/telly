@@ -57,10 +57,9 @@ export const WhoopField = Schema.Struct({
 }).check(
 	Schema.makeFilter(
 		(field) =>
-			((field.metric === null ||
-				(field.unavailable === null && supported(field.validation))) &&
-				(field.status !== "measured" || supported(field.validation))) ||
-			`${field.table}.${field.column}: an unavailable or unsupported field is never recorded as a metric, and an unsupported field is never measured`,
+			(field.metric === null && field.status !== "measured") ||
+			(field.unavailable === null && supported(field.validation)) ||
+			`${field.table}.${field.column}: an unavailable or unsupported field is never measured and never recorded as a metric`,
 	),
 );
 export type WhoopField = typeof WhoopField.Type;
@@ -117,14 +116,7 @@ const exported = [
 		deviceId,
 		ts,
 		["soc", "float", "%", "measured", "confirmed"],
-		[
-			"mv",
-			"int",
-			"mV",
-			"measured",
-			"unvalidated",
-			"not reported by the WHOOP 5.0 / MG",
-		],
+		["mv", "int", "mV", "measured", "unvalidated"],
 		synced,
 		["charging", "flag", null, "measured", "confirmed"],
 	]),
@@ -243,8 +235,8 @@ const exported = [
 		["startTs", "int", "unix s", "metadata", "confirmed"],
 		["endTs", "int", "unix s", "metadata", "confirmed"],
 		["chargeAtStart", "float", "%", "computed", "baseline_dependent"],
-		["floorBpm", "float", "bpm", "metadata", "confirmed"],
-		["ceilingBpm", "float", "bpm", "metadata", "confirmed"],
+		["floorBpm", "float", "bpm", "computed", "baseline_dependent"],
+		["ceilingBpm", "float", "bpm", "computed", "baseline_dependent"],
 		["inBandSec", "float", "s", "computed", "unvalidated"],
 		["belowSec", "float", "s", "computed", "unvalidated"],
 		["aboveSec", "float", "s", "computed", "unvalidated"],
@@ -351,7 +343,7 @@ const catalogOnly = [
 		["rrMs", "int", "ms", "measured", "confirmed"],
 	]),
 	...fields(strap("live.battery", "every 60 s, 30 s while charging", LIVE), [
-		["soc", "float", "%", "measured", "confirmed", "kept in memory only"],
+		["soc", "float", "%", "raw", "confirmed", "kept in memory only"],
 	]),
 	...fields(strap("collector.imu", "100 Hz in 1 s buffers", LIVE), [
 		[
@@ -443,6 +435,14 @@ const catalogOnly = [
 			"unvalidated",
 			"computed on read in Healer S.I., not exported",
 		],
+		[
+			"*",
+			"float",
+			null,
+			"computed",
+			"unvalidated",
+			"hourly buckets not built yet",
+		],
 	]),
 	...fields(
 		{
@@ -451,7 +451,7 @@ const catalogOnly = [
 			cadence: "hourly",
 			delay: "on Apple Health import",
 		},
-		[["steps", "int", "steps", "measured", "unvalidated", "not in the export"]],
+		[["steps", "int", "steps", "raw", "unvalidated", "not in the export"]],
 	),
 	...fields(strap("metricSeries.key", "per day", AFTER_SYNC), [
 		["sleep_performance", "float", "%", "computed", "unvalidated"],
@@ -489,7 +489,18 @@ const catalogOnly = [
 		["RTC_LOST", "int", "unix s", "metadata", "confirmed"],
 		["BOOT", "int", "unix s", "metadata", "confirmed"],
 		["SET_RTC", "int", "unix s", "metadata", "confirmed"],
-		["0x6E, 0x7B, 0x78, …", "int", "unix s", "raw", "not_decoded"],
+		["BLE_CONNECTION_UP", "int", "unix s", "metadata", "confirmed"],
+		["BLE_CONNECTION_DOWN", "int", "unix s", "metadata", "confirmed"],
+		["FLASH_INIT_COMPLETE", "int", "unix s", "metadata", "confirmed"],
+		["EXTENDED_BATTERY_INFORMATION", "int", "unix s", "raw", "unvalidated"],
+		["STANDARD_HR_CONTACT", "int", "unix s", "raw", "unvalidated"],
+		[
+			"0x3D, 0x3E, 0x6E, 0x70, 0x74, 0x75, 0x78, 0x7B, …",
+			"int",
+			"unix s",
+			"raw",
+			"not_decoded",
+		],
 	]),
 	...fields(strap("sleepSession.stagesJSON", "per sleep", AFTER_SYNC), [
 		["start", "int", "unix s", "computed", "unvalidated"],
