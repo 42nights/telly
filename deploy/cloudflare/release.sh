@@ -22,6 +22,10 @@ spacetime --config-path "${TELLY_SPACETIME_CONFIG:-$config/spacetime/cli.toml}" 
 	publish telly -s maincloud --module-path spacetimedb --yes=remote </dev/null ||
 	{ echo "release: module publish refused (needs a data wipe or breaks clients?); Worker not deployed" >&2; exit 1; }
 
+if [ "${TELLY_RELEASE_MODULE_ONLY:-}" = 1 ]; then
+	echo "release: module published; Worker left to CI"
+	exit 0
+fi
 bun run --filter server build
 (
 	set -a; . deploy/cloudflare/settings.env; set +a
