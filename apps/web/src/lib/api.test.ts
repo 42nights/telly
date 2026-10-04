@@ -1,49 +1,47 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { Health } from "@health/contracts";
+import { setupDom } from "@/lib/test/dom";
 
-// The generated env module needs varlock at runtime; tests only need the server URL. The mock must
-// be in place before `./api` loads `@/env`, so these two imports cannot be static.
-mock.module("@/env", () => ({
-	ENV: { VITE_SERVER_URL: "http://server.test" },
-}));
-const { apiRequest, failureFor } = await import("./api");
+// `setupDom` mocks `@/env` and provides sessionStorage; `./api` must load after it.
+setupDom();
+const { apiBlob, apiRequest, failureFor, familyPath } = await import("./api");
 const { setSessionToken } = await import("./session");
 
-// Bun has no sessionStorage; the session module reads it lazily, so a small in-memory one works.
-class MemoryStorage implements Storage {
-	#items = new Map<string, string>();
-	get length() {
-		return this.#items.size;
-	}
-	clear() {
-		this.#items.clear();
-	}
-	getItem(key: string) {
-		return this.#items.get(key) ?? null;
-	}
-	key(index: number) {
-		return [...this.#items.keys()][index] ?? null;
-	}
-	removeItem(key: string) {
-		this.#items.delete(key);
-	}
-	setItem(key: string, value: string) {
-		this.#items.set(key, value);
-	}
-}
-globalThis.sessionStorage = new MemoryStorage();
-
 const realFetch = globalThis.fetch;
-const reply = (status: number, body: unknown) => {
+type Sent = { url: string; init: RequestInit | undefined };
+// Replaces fetch with one that records each request and answers with `respond`.
+const fake = (respond: () => Response | Promise<Response>) => {
+	const sent: Sent[] = [];
 	globalThis.fetch = Object.assign(
-		async () =>
+		async (input: RequestInfo | URL, init?: RequestInit) => {
+			sent.push({ url: String(input), init });
+			return respond();
+		},
+		{ preconnect: realFetch.preconnect },
+	);
+	return sent;
+};
+const reply = (status: number, body: unknown) =>
+	fake(
+		() =>
 			new Response(JSON.stringify(body), {
 				status,
 				headers: { "Content-Type": "application/json" },
 			}),
+	);
+const unreachable = () =>
+	fake(() => {
+		throw new TypeError("connection refused");
+	});
+// A fetch that rejects like the browser's when its signal is already aborted.
+const honorAbort = () =>
+	Object.assign(
+		async (_input: RequestInfo | URL, init?: RequestInit) => {
+			init?.signal?.throwIfAborted();
+			return new Response("{}");
+		},
 		{ preconnect: realFetch.preconnect },
 	);
-};
 
 afterEach(() => {
 	globalThis.fetch = realFetch;
@@ -101,13 +99,151 @@ describe("apiRequest", () => {
 
 	test("an unreachable server is an error with a reason", async () => {
 		setSessionToken("token");
-		globalThis.fetch = Object.assign(
-			async () => {
-				throw new TypeError("connection refused");
-			},
-			{ preconnect: realFetch.preconnect },
-		);
-		const result = await apiRequest(Health, "/health");
-		expect(result.kind).toBe("error");
+		unreachable();
+		expect(await apiRequest(Health, "/health")).toEqual({
+			kind: "error",
+			message: "The server is not reachable: TypeError: connection refused",
+			unreachable: true,
+		});
 	});
+
+	test("sends a JSON body with the token and the method", async () => {
+		setSessionToken("token");
+		const sent = reply(200, { status: "ok", service: "server" });
+		await apiRequest(Health, "/api/x", { method: "PUT", body: { a: 1 } });
+		expect(sent).toHaveLength(1);
+		expect(sent[0]?.url).toBe("http://server.test/api/x");
+		expect(sent[0]?.init?.method).toBe("PUT");
+		expect(sent[0]?.init?.body).toBe('{"a":1}');
+		expect(sent[0]?.init?.headers).toEqual({
+			Authorization: "Bearer token",
+			"Content-Type": "application/json",
+		});
+	});
+
+	test("a GET without a body sends no body and no Content-Type", async () => {
+		setSessionToken("token");
+		const sent = reply(200, { status: "ok", service: "server" });
+		await apiRequest(Health, "/health");
+		expect(sent[0]?.init?.method).toBe("GET");
+		expect(sent[0]?.init?.body).toBeUndefined();
+		expect(sent[0]?.init?.headers).toEqual({ Authorization: "Bearer token" });
+	});
+
+	test("sends a raw body with its own Content-Type", async () => {
+		setSessionToken("token");
+		const sent = fake(() => new Response(null, { status: 204 }));
+		const data = new Blob(["audio"], { type: "audio/webm" });
+		expect(
+			await apiRequest(null, "/api/voice", {
+				method: "POST",
+				rawBody: { data, type: "audio/webm" },
+			}),
+		).toEqual({ kind: "ready", value: undefined });
+		expect(sent[0]?.init?.body).toBe(data);
+		expect(sent[0]?.init?.headers).toEqual({
+			Authorization: "Bearer token",
+			"Content-Type": "audio/webm",
+		});
+	});
+
+	test("a 401 reply means signed out", async () => {
+		setSessionToken("token");
+		reply(401, { error: "unauthorized", message: "expired" });
+		expect(await apiRequest(Health, "/health")).toEqual({ kind: "signed_out" });
+	});
+
+	test("an error reply that is not JSON keeps its HTTP status", async () => {
+		setSessionToken("token");
+		fake(() => new Response("<html>bad gateway</html>", { status: 502 }));
+		expect(await apiRequest(Health, "/health")).toEqual({
+			kind: "error",
+			message: "HTTP 502",
+		});
+	});
+
+	test("rejects when its own signal aborts", async () => {
+		setSessionToken("token");
+		globalThis.fetch = honorAbort();
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			apiRequest(Health, "/health", { signal: controller.signal }),
+		).rejects.toThrow();
+	});
+});
+
+describe("apiBlob", () => {
+	test("does not call the server without a session", async () => {
+		const sent = reply(200, {});
+		expect(await apiBlob("/api/speech")).toEqual({ kind: "signed_out" });
+		expect(sent).toHaveLength(0);
+	});
+
+	test("POSTs the JSON body and returns the binary reply", async () => {
+		setSessionToken("token");
+		const sent = fake(
+			() =>
+				new Response("mp3-bytes", {
+					headers: { "Content-Type": "audio/mpeg" },
+				}),
+		);
+		const result = await apiBlob("/api/speech", { body: { text: "Hi" } });
+		expect(result.kind).toBe("ready");
+		if (result.kind !== "ready") return;
+		expect(await result.value.text()).toBe("mp3-bytes");
+		expect(sent[0]?.url).toBe("http://server.test/api/speech");
+		expect(sent[0]?.init?.method).toBe("POST");
+		expect(sent[0]?.init?.body).toBe('{"text":"Hi"}');
+		expect(sent[0]?.init?.headers).toEqual({
+			Authorization: "Bearer token",
+			"Content-Type": "application/json",
+		});
+	});
+
+	test("uses the given method", async () => {
+		setSessionToken("token");
+		const sent = fake(() => new Response("x"));
+		await apiBlob("/api/speech", { method: "PUT" });
+		expect(sent[0]?.init?.method).toBe("PUT");
+	});
+
+	test("maps an error reply like apiRequest", async () => {
+		setSessionToken("token");
+		reply(503, { error: "unavailable", message: "TTS is not configured" });
+		expect(await apiBlob("/api/speech")).toEqual({
+			kind: "unavailable",
+			message: "TTS is not configured",
+		});
+		fake(() => new Response("oops", { status: 500 }));
+		expect(await apiBlob("/api/speech")).toEqual({
+			kind: "error",
+			message: "HTTP 500",
+		});
+	});
+
+	test("an unreachable server is an error with a reason", async () => {
+		setSessionToken("token");
+		unreachable();
+		expect(await apiBlob("/api/speech")).toEqual({
+			kind: "error",
+			message: "The server is not reachable: TypeError: connection refused",
+			unreachable: true,
+		});
+	});
+
+	test("rejects when its own signal aborts", async () => {
+		setSessionToken("token");
+		globalThis.fetch = honorAbort();
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			apiBlob("/api/speech", { signal: controller.signal }),
+		).rejects.toThrow();
+	});
+});
+
+test("familyPath encodes the family id", () => {
+	expect(familyPath("a/b c", "/alerts")).toBe("/api/families/a%2Fb%20c/alerts");
+	expect(familyPath("123")).toBe("/api/families/123");
 });
