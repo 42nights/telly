@@ -35,18 +35,12 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
-      # The app's server and web app default to production (apps/native/.env.schema). Sign-in uses
-      # the public Google settings of the deployment.
-      - name: Use the production sign-in settings
-        run: |
-          . deploy/cloudflare/settings.env
-          echo "EXPO_PUBLIC_OIDC_ISSUER=$OIDC_ISSUER" >> "$GITHUB_ENV"
-          echo "EXPO_PUBLIC_OIDC_CLIENT_ID=$OIDC_AUDIENCE" >> "$GITHUB_ENV"
+      # The app's server, web app, and Google sign-in default to production (apps/native/.env.schema).
       - working-directory: apps/native
         run: bunx expo prebuild --platform ios
       - working-directory: apps/native/ios
         run: >-
-          xcodebuild -workspace health.xcworkspace -scheme health -configuration Release
+          xcodebuild -workspace Telly.xcworkspace -scheme Telly -configuration Release
           -destination 'generic/platform=iOS' -derivedDataPath build
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
           build

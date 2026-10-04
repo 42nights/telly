@@ -24,7 +24,7 @@ import { openAuthSessionAsync } from "expo-web-browser";
 import { ENV } from "@/src/env";
 
 export const issuer = ENV.EXPO_PUBLIC_OIDC_ISSUER;
-export const clientId = ENV.EXPO_PUBLIC_OIDC_CLIENT_ID;
+const clientId = ENV.EXPO_PUBLIC_OIDC_CLIENT_ID;
 const server = ENV.EXPO_PUBLIC_SERVER_URL;
 const redirectUri = `${server}/api/sign-in/callback`;
 
