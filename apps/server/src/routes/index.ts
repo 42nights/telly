@@ -4,6 +4,7 @@ import type { FamilyEnv, FamilyRoutes } from "../http";
 import { elevenLabsVoice } from "../integrations/elevenlabs";
 import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
+import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
 import { cueRoutes } from "./cues";
 import { familyRoutes } from "./families";
@@ -36,5 +37,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
-		.route("/", cueRoutes(config.gemma));
+		.route("/", cueRoutes(config.gemma))
+		.route("/", careProfileRoutes());
 };
