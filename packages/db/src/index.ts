@@ -56,6 +56,7 @@ import MarkAlertDeliveryUnavailableReducer from "./mark_alert_delivery_unavailab
 import MarkMedicineNotFoundReducer from "./mark_medicine_not_found_reducer";
 import OpenCareNeedReducer from "./open_care_need_reducer";
 import PostAlertMessageReducer from "./post_alert_message_reducer";
+import QueueReportEmailReducer from "./queue_report_email_reducer";
 import RaiseAlertReducer from "./raise_alert_reducer";
 import RecordDeliveryEventReducer from "./record_delivery_event_reducer";
 import RecordExerciseEventReducer from "./record_exercise_event_reducer";
@@ -80,7 +81,9 @@ import SetCareGrantReducer from "./set_care_grant_reducer";
 import SetContactLadderReducer from "./set_contact_ladder_reducer";
 import SetMedicineMemoryReducer from "./set_medicine_memory_reducer";
 import SetReminderSettingsReducer from "./set_reminder_settings_reducer";
+import SetReportEmailSettingsReducer from "./set_report_email_settings_reducer";
 import SetSpeakerSettingsReducer from "./set_speaker_settings_reducer";
+import SettleReportEmailReducer from "./settle_report_email_reducer";
 import ShareLocationReducer from "./share_location_reducer";
 import SuggestAppointmentReducer from "./suggest_appointment_reducer";
 import UpdateAppointmentPrepReducer from "./update_appointment_prep_reducer";
@@ -120,6 +123,8 @@ import MyReminderEventsRow from "./my_reminder_events_table";
 import MyReminderOccurrencesRow from "./my_reminder_occurrences_table";
 import MyReminderSettingsRow from "./my_reminder_settings_table";
 import MyRemindersRow from "./my_reminders_table";
+import MyReportEmailSettingsRow from "./my_report_email_settings_table";
+import MyReportEmailsRow from "./my_report_emails_table";
 import MyReportsRow from "./my_reports_table";
 import MySpeakerSettingsRow from "./my_speaker_settings_table";
 import MyTripEventsRow from "./my_trip_events_table";
@@ -332,6 +337,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyRemindersRow),
+  myReportEmailSettings: __table({
+    name: 'my_report_email_settings',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReportEmailSettingsRow),
+  myReportEmails: __table({
+    name: 'my_report_emails',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReportEmailsRow),
   myReports: __table({
     name: 'my_reports',
     indexes: [
@@ -386,6 +405,7 @@ const reducersSchema = __reducers(
   __reducerSchema("mark_medicine_not_found", MarkMedicineNotFoundReducer),
   __reducerSchema("open_care_need", OpenCareNeedReducer),
   __reducerSchema("post_alert_message", PostAlertMessageReducer),
+  __reducerSchema("queue_report_email", QueueReportEmailReducer),
   __reducerSchema("raise_alert", RaiseAlertReducer),
   __reducerSchema("record_delivery_event", RecordDeliveryEventReducer),
   __reducerSchema("record_exercise_event", RecordExerciseEventReducer),
@@ -410,7 +430,9 @@ const reducersSchema = __reducers(
   __reducerSchema("set_contact_ladder", SetContactLadderReducer),
   __reducerSchema("set_medicine_memory", SetMedicineMemoryReducer),
   __reducerSchema("set_reminder_settings", SetReminderSettingsReducer),
+  __reducerSchema("set_report_email_settings", SetReportEmailSettingsReducer),
   __reducerSchema("set_speaker_settings", SetSpeakerSettingsReducer),
+  __reducerSchema("settle_report_email", SettleReportEmailReducer),
   __reducerSchema("share_location", ShareLocationReducer),
   __reducerSchema("suggest_appointment", SuggestAppointmentReducer),
   __reducerSchema("update_appointment_prep", UpdateAppointmentPrepReducer),

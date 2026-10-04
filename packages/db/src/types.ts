@@ -522,6 +522,12 @@ export type MyReminderSettings = __Infer<typeof MyReminderSettings>;
 export const MyReminders = __t.object("MyReminders", {});
 export type MyReminders = __Infer<typeof MyReminders>;
 
+export const MyReportEmailSettings = __t.object("MyReportEmailSettings", {});
+export type MyReportEmailSettings = __Infer<typeof MyReportEmailSettings>;
+
+export const MyReportEmails = __t.object("MyReportEmails", {});
+export type MyReportEmails = __Infer<typeof MyReportEmails>;
+
 export const MyReports = __t.object("MyReports", {});
 export type MyReports = __Infer<typeof MyReports>;
 
@@ -681,6 +687,28 @@ export const Report = __t.object("Report", {
   reviewedAt: __t.option(__t.timestamp()),
 });
 export type Report = __Infer<typeof Report>;
+
+export const ReportEmail = __t.object("ReportEmail", {
+  reportId: __t.string(),
+  familyId: __t.u64(),
+  sendId: __t.string(),
+  recipient: __t.string(),
+  status: __t.string(),
+  reason: __t.option(__t.string()),
+  automatic: __t.bool(),
+  requestedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmail = __Infer<typeof ReportEmail>;
+
+export const ReportEmailSettings = __t.object("ReportEmailSettings", {
+  familyId: __t.u64(),
+  enabled: __t.bool(),
+  recipient: __t.string(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ReportEmailSettings = __Infer<typeof ReportEmailSettings>;
 
 // The tagged union or sum type for the algebraic type `SampleQuality`.
 export const SampleQuality = __t.enum("SampleQuality", {

@@ -246,6 +246,7 @@ describe("server boundaries", () => {
 				ELEVENLABS_VOICE_ID: "voice",
 				ELEVENLABS_API_URL: "http://127.0.0.1:1",
 				GEMINI_BASE_URL: "http://127.0.0.1:1",
+				REPORT_EMAIL_FROM: "Telly <reports@saintess.tech>",
 			}),
 		);
 		const allowed = async (origin: string) =>

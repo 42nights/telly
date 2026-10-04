@@ -10,10 +10,13 @@ import {
 	Reports,
 } from "@health/contracts/reports";
 import { Effect, Schema } from "effect";
+import type { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import type { FamilyDb } from "../db";
 import { openFamilyDb } from "../db";
+import type { FamilyEnv } from "../http";
 import type { R2Bucket } from "../integrations/r2";
+import type { Mail, Mailer } from "../integrations/resend";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import {
@@ -327,6 +330,153 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 
 				const unset = familyApp(owner, familyId, reportRoutes());
 				const none = yield* send(unset, "GET", "/report-pdfs");
+				expect(failure(none)).toEqual([503, "unavailable"]);
+			}),
+		));
+});
+
+describe.skipIf(dbConfig === undefined)("report email", () => {
+	const recipient = "family@example.com";
+	/** A mailer that records each email; it fails while `failWith` is set. */
+	const spyMailer = () => {
+		const sent: Mail[] = [];
+		const state = { failWith: null as string | null };
+		const mailer: Mailer = async (mail) => {
+			if (state.failWith !== null) throw new Error(state.failWith);
+			sent.push(mail);
+		};
+		return { sent, state, mailer };
+	};
+	const reviewedReport = (app: Hono<FamilyEnv>) =>
+		Effect.gen(function* () {
+			const created = yield* send(app, "POST", "/reports");
+			const { id } = Schema.decodeUnknownSync(Report)(created.json);
+			const reviewed = yield* send(app, "POST", `/reports/${id}/review`);
+			expect(reviewed.status).toBe(200);
+			return Schema.decodeUnknownSync(Report)(reviewed.json);
+		});
+
+	test("with automatic email off, a review sends nothing", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Email off");
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(db, familyId, reportRoutes(undefined, mailer));
+				expect((yield* send(app, "GET", "/report-email")).json).toEqual({
+					enabled: false,
+					recipient: null,
+				});
+				// An address alone does not turn automatic email on.
+				const saved = yield* send(app, "PUT", "/report-email", {
+					enabled: false,
+					recipient,
+				});
+				expect(saved.json).toEqual({ enabled: false, recipient });
+
+				const report = yield* reviewedReport(app);
+				expect(report.email).toBeNull();
+				expect(sent).toEqual([]);
+			}),
+		));
+
+	test("a review sends the PDF once, and only a family admin changes the setting", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Email on");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				const { sent, mailer } = spyMailer();
+				const app = familyApp(owner, familyId, reportRoutes(undefined, mailer));
+				const relativeApp = familyApp(
+					relative,
+					familyId,
+					reportRoutes(undefined, mailer),
+				);
+
+				const settings = { enabled: true, recipient };
+				const notAdmin = yield* send(
+					relativeApp,
+					"PUT",
+					"/report-email",
+					settings,
+				);
+				expect(failure(notAdmin)).toEqual([403, "forbidden"]);
+				const noAddress = { enabled: true, recipient: null };
+				const missing = yield* send(app, "PUT", "/report-email", noAddress);
+				expect(failure(missing)).toEqual([400, "invalid_request"]);
+				const bad = { enabled: true, recipient: "not an address" };
+				const invalid = yield* send(app, "PUT", "/report-email", bad);
+				expect(failure(invalid)).toEqual([400, "invalid_request"]);
+				const saved = yield* send(app, "PUT", "/report-email", settings);
+				expect(saved.json).toEqual(settings);
+				// Every member sees the setting, once their view catches up.
+				let seen = yield* send(relativeApp, "GET", "/report-email");
+				for (
+					let tries = 0;
+					tries < 50 && !Bun.deepEquals(seen.json, settings);
+					tries++
+				) {
+					yield* Effect.sleep("100 millis");
+					seen = yield* send(relativeApp, "GET", "/report-email");
+				}
+				expect(seen.json).toEqual(settings);
+
+				// The relative reviews; the email goes to the family address once.
+				const report = yield* reviewedReport(relativeApp);
+				expect(report.email).toMatchObject({
+					status: "sent",
+					recipient,
+					reason: null,
+					automatic: true,
+				});
+				const again = yield* send(app, "POST", `/reports/${report.id}/review`);
+				expect(again.status).toBe(200);
+				expect(sent.map((mail) => mail.to)).toEqual([recipient]);
+				const pdf = new TextDecoder("latin1").decode(
+					sent[0]?.attachment.content,
+				);
+				expect(pdf).toContain(`report ${report.id}`);
+
+				// A draft cannot be emailed by hand.
+				const created = yield* send(app, "POST", "/reports");
+				const draft = Schema.decodeUnknownSync(Report)(created.json);
+				const early = yield* send(app, "POST", `/reports/${draft.id}/email`);
+				expect(failure(early)).toEqual([400, "invalid_request"]);
+				expect(sent).toHaveLength(1);
+			}),
+		));
+
+	test("a failed send shows its reason, and a manual send retries it", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Email fails");
+				const { sent, state, mailer } = spyMailer();
+				const app = familyApp(db, familyId, reportRoutes(undefined, mailer));
+				yield* send(app, "PUT", "/report-email", { enabled: true, recipient });
+
+				state.failWith = "The email service refused the email (HTTP 422)";
+				const report = yield* reviewedReport(app);
+				expect(report.email).toMatchObject({
+					status: "failed",
+					reason: "The email service refused the email (HTTP 422)",
+					automatic: true,
+				});
+
+				state.failWith = null;
+				const retried = yield* send(app, "POST", `/reports/${report.id}/email`);
+				expect(
+					Schema.decodeUnknownSync(Report)(retried.json).email,
+				).toMatchObject({ status: "sent", reason: null, automatic: false });
+				expect(sent).toHaveLength(1);
+
+				// Without email on the server, a manual send is unavailable, not a false receipt.
+				const unset = familyApp(db, familyId, reportRoutes());
+				const none = yield* send(unset, "POST", `/reports/${report.id}/email`);
 				expect(failure(none)).toEqual([503, "unavailable"]);
 			}),
 		));

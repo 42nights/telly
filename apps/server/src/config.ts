@@ -6,6 +6,7 @@ import { type Finchnode, finchnodeFromEnv } from "./integrations/finchnode";
 import type { GeminiConfig } from "./integrations/gemini";
 import { type QwenConfig, qwenConfigFrom } from "./integrations/qwen";
 import type { R2Config } from "./integrations/r2";
+import type { ResendConfig } from "./integrations/resend";
 
 export type NoopConfig = {
 	readonly key: string;
@@ -29,6 +30,8 @@ export type ServerConfig = {
 	readonly qwen?: QwenConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
+	/** Undefined without `RESEND_API_KEY`: report email routes then answer `unavailable`. */
+	readonly reportEmail?: ResendConfig | undefined;
 	readonly noop?: NoopConfig | undefined;
 	/** Undefined when Photon Spectrum is not configured: no iMessage agent runs. */
 	readonly imessage?: IMessageConfig | undefined;
@@ -62,6 +65,8 @@ export type Env = {
 	readonly TELLY_R2_ACCESS_KEY_ID?: string | undefined;
 	readonly TELLY_R2_SECRET_ACCESS_KEY?: string | undefined;
 	readonly TELLY_R2_ENDPOINT?: string | undefined;
+	readonly RESEND_API_KEY?: string | undefined;
+	readonly REPORT_EMAIL_FROM: string;
 	readonly NOOP_INGEST_KEY?: string | undefined;
 	readonly NOOP_FAMILY_ID?: string | undefined;
 	readonly NOOP_SPACETIMEDB_TOKEN?: string | undefined;
@@ -207,6 +212,9 @@ export const serverConfig = (env: Env): ServerConfig => {
 		...(finchnode === undefined ? {} : { finchnode }),
 		fetchAgent: fetchAgentConfig(env),
 		r2: r2Config(env),
+		reportEmail: env.RESEND_API_KEY
+			? { apiKey: env.RESEND_API_KEY, from: env.REPORT_EMAIL_FROM }
+			: undefined,
 		gemini: env.GEMINI_API_KEY
 			? { apiKey: env.GEMINI_API_KEY, baseUrl: env.GEMINI_BASE_URL }
 			: undefined,
