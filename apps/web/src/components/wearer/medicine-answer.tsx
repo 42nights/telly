@@ -207,10 +207,12 @@ function PictureAnswer({
 			{choice.skipped > 0 ? (
 				<p className="text-[22px]">That was everything I found here.</p>
 			) : (
-				<p className="text-[22px]">I can't see {name} in this picture.</p>
+				<p className="text-[22px]">
+					I could not see anything to save. Try again.
+				</p>
 			)}
 			<p className="text-[18px] text-muted-foreground">
-				Point the phone at the counter or shelf and try again.
+				Point the camera at {name} on a counter or shelf.
 			</p>
 			<Button className={`win95-primary ${xl}`} disabled={!live} onClick={look}>
 				<Camera aria-hidden />

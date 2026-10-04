@@ -1,64 +1,5 @@
-import type { HealthSample } from "@health/contracts";
 import { urgentRequest } from "@health/contracts/ask";
 import type { ObjectCategory } from "@health/contracts/vision";
-
-/** A heart-rate reading older than this is not shown as current. */
-// ponytail: fixed 10 min window; read it from the family's alert threshold if they ever differ.
-export const HEART_RATE_FRESH_MS = 10 * 60_000;
-// Same rule as the server monitor: a source clock may run up to a minute ahead.
-const MAX_CLOCK_AHEAD_MS = 60_000;
-
-/** The usual adult resting band drawn on the range bar. A band only, never a score. */
-export const USUAL_BPM = { low: 60, high: 100 } as const;
-/** The range bar spans this many bpm. */
-const BAR_BPM = { low: 30, high: 180 } as const;
-
-/**
- * The newest validated, measured `heart_rate` sample in bpm for one family, or null when there is
- * none or the newest one is stale. Unvalidated and synthetic samples never count as a reading.
- */
-export const currentHeartRate = (
-	samples: readonly HealthSample[],
-	familyId: string,
-	now: number,
-): HealthSample | null =>
-	newestFreshHeartRate(
-		samples,
-		familyId,
-		now,
-		(s) => s.quality === "validated",
-	);
-
-export const whoopHeartRate = (
-	samples: readonly HealthSample[],
-	familyId: string,
-	now: number,
-): HealthSample | null =>
-	newestFreshHeartRate(samples, familyId, now, (s) =>
-		s.source.startsWith("noop:"),
-	);
-
-const newestFreshHeartRate = (
-	samples: readonly HealthSample[],
-	familyId: string,
-	now: number,
-	accept: (sample: HealthSample) => boolean,
-): HealthSample | null => {
-	let newest: HealthSample | null = null;
-	for (const s of samples)
-		if (
-			s.familyId === familyId &&
-			s.metric === "heart_rate" &&
-			s.unit === "bpm" &&
-			accept(s) &&
-			!s.synthetic &&
-			(newest === null || s.sourceTime > newest.sourceTime)
-		)
-			newest = s;
-	if (newest === null) return null;
-	const age = now - Date.parse(newest.sourceTime);
-	return age > HEART_RATE_FRESH_MS || age < -MAX_CLOCK_AHEAD_MS ? null : newest;
-};
 
 /** "just now", "42 s ago", "3 min ago", "2 h ago". */
 export const ago = (ms: number): string => {
@@ -92,13 +33,6 @@ export const evidenceLine = (
 			: "";
 	return `${name} ${sample.value} ${sample.unit} · from ${sample.source} · ${age}${flag}`;
 };
-
-/** Where `bpm` sits on the range bar, as a percentage clamped to the bar. */
-export const barPercent = (bpm: number): number =>
-	Math.min(
-		100,
-		Math.max(0, ((bpm - BAR_BPM.low) / (BAR_BPM.high - BAR_BPM.low)) * 100),
-	);
 
 // The words for each object the finder knows (#301), medicine first: "where are my keys?" opens it.
 const OBJECT_WORDS: ReadonlyArray<readonly [ObjectCategory, string]> = [

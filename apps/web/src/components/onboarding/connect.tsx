@@ -4,7 +4,7 @@ import type { Family } from "@health/contracts";
 import { WhoopPushToken } from "@health/contracts/families";
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { toQR } from "toqr";
 
 import { InviteLink, useInvite } from "@/components/family/invite";
@@ -80,18 +80,23 @@ export function ConnectScreen({ family }: { family: Family }) {
 	const status = useSetupStatus(family.id);
 	const [open, setOpen] = useState<Open | null>(null);
 	const [whoopLink, setWhoopLink] = useState<string | null>(null);
+	const whoopRequest = useRef<"pending" | "done" | null>(null);
 	const invite = useInvite(family.id);
 	const [message, setMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	const connectWhoop = async () => {
 		setOpen("whoop");
+		if (whoopRequest.current === "pending") return;
+		whoopRequest.current = "pending";
+		setWhoopLink(null);
 		setError(null);
 		const result = await apiRequest(
 			WhoopPushToken,
 			familyPath(family.id, "/whoop-token"),
 			{ method: "POST" },
 		);
+		whoopRequest.current = "done";
 		if (result.kind === "ready")
 			return setWhoopLink(noopLink(ENV.VITE_SERVER_URL, result.value.token));
 		setError(
@@ -126,7 +131,7 @@ export function ConnectScreen({ family }: { family: Family }) {
 					onAction={() =>
 						status.records.kind === "ready" &&
 						!status.hasWhoop &&
-						whoopLink === null
+						whoopRequest.current === null
 							? void connectWhoop()
 							: setOpen("replace-whoop")
 					}
@@ -220,10 +225,7 @@ export function ConnectScreen({ family }: { family: Family }) {
 			>
 				Finish
 			</Button>
-			<p className="text-xs">
-				Finish works with nothing checked. Skipped items show on Home as a
-				checklist.
-			</p>
+			<p className="text-xs">Finish works with nothing checked.</p>
 		</div>
 	);
 }

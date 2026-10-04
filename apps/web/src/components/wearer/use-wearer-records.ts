@@ -1,19 +1,15 @@
 import { FamilyRecords } from "@health/contracts";
-import { CareInstructions } from "@health/contracts/care-profile";
 import { Me } from "@health/contracts/families";
-import { MedicineMemory } from "@health/contracts/medicine-memory";
 import { ReminderHistory } from "@health/contracts/reminders";
 import { RECORDS_POLL_MS } from "@/components/family/data";
 import { type ApiState, familyPath, reread, useApi } from "@/lib/api";
 import { loadFamilyReads, useFamily } from "@/lib/family";
 
-/** The Home route loader: starts the wearer's records, reminders, and medicine reads. */
+/** The Home route loader: starts the reads of Home's Today box and request. */
 export const loadWearerHome = loadFamilyReads((familyId) => [
 	[Me, "/api/me"],
 	[FamilyRecords, familyPath(familyId)],
 	[ReminderHistory, familyPath(familyId, "/reminder-occurrences")],
-	[CareInstructions, familyPath(familyId, "/care-instructions")],
-	[MedicineMemory, familyPath(familyId, "/medicine-memory")],
 ]);
 
 /**

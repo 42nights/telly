@@ -32,7 +32,7 @@ export type Glance = {
 
 /**
  * The newest real sample of each metric (by source time), with staleness from the metric's
- * threshold. Synthetic samples never count, as in `currentHeartRate`.
+ * threshold. Synthetic samples never count.
  */
 export const newestPerMetric = (
 	samples: readonly HealthSample[],
