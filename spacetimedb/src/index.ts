@@ -1,9 +1,11 @@
 // Family-scoped health data. Every table is private: clients read only through the per-sender views
 // below, and every reducer checks the caller's family membership itself, independent of the server.
-import { type Infer, Timestamp } from "spacetimedb";
+import { Timestamp } from "spacetimedb";
 import {
+	type Infer,
 	type InferSchema,
 	type ReducerCtx,
+	ScheduleAt,
 	SenderError,
 	schema,
 	t,
@@ -261,6 +263,158 @@ const tripEvent = table(
 	},
 );
 
+// The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
+// the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
+const NeedKind = t.enum("NeedKind", {
+	Alert: t.unit(),
+	Help: t.unit(),
+	CallReminder: t.unit(),
+});
+
+// What one contact's notice may carry: only that the need exists, its summary, or its facts too.
+const ContactDetail = t.enum("ContactDetail", {
+	Minimal: t.unit(),
+	Summary: t.unit(),
+	Facts: t.unit(),
+});
+
+const ContactStep = t.object("ContactStep", {
+	member: t.identity(),
+	name: t.string(),
+	// IANA time zone, such as "America/Chicago". The server shows each attempt in the contact's time.
+	timeZone: t.string(),
+	detail: ContactDetail,
+	// Need kinds that this contact gets a (simulated) call for; every other kind is a message.
+	callFor: t.array(NeedKind),
+});
+
+const contactLadder = table(
+	{ name: "contact_ladder" },
+	{
+		familyId: t.u64().primaryKey(),
+		contacts: t.array(ContactStep),
+		backup: t.option(ContactStep),
+		// How long a contact has to accept before the next one is contacted.
+		answerSeconds: t.u32(),
+		// How long an accepted need may wait for confirmed help before the ladder continues.
+		followUpSeconds: t.u32(),
+		updatedBy: t.identity(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+// A fact copied from the family's records, never typed in by a person.
+const NeedFact = t.object("NeedFact", {
+	text: t.string(),
+	source: t.string(),
+	observedAt: t.timestamp(),
+	uncertainty: t.string(),
+});
+
+const NeedStatus = t.enum("NeedStatus", {
+	Open: t.unit(),
+	Accepted: t.unit(),
+	// Help confirmed by the member who accepted. The only closed state.
+	Resolved: t.unit(),
+	// Every contact declined or did not respond. It stays visible.
+	Unresolved: t.unit(),
+});
+
+const careNeed = table(
+	{
+		name: "care_need",
+		indexes: [
+			{
+				accessor: "byRaiserClientId",
+				algorithm: "btree",
+				columns: ["familyId", "raisedBy", "clientId"],
+			},
+		],
+	},
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		kind: NeedKind,
+		summary: t.string(),
+		facts: t.array(NeedFact),
+		alertId: t.option(t.u64()),
+		// The first contact is not notified before this time (a reminder's due time).
+		dueAt: t.timestamp(),
+		// The ladder as it stood when the need opened, backup last; later edits do not change it.
+		steps: t.array(ContactStep),
+		// The last step is the ladder's backup contact.
+		hasBackup: t.bool(),
+		answerSeconds: t.u32(),
+		followUpSeconds: t.u32(),
+		status: NeedStatus,
+		// Index into `steps` of the current (or last) contact.
+		step: t.u32(),
+		acceptedBy: t.option(t.identity()),
+		followUpBy: t.option(t.timestamp()),
+		raisedBy: t.identity(),
+		clientId: t.string(),
+		createdAt: t.timestamp(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const AttemptChannel = t.enum("AttemptChannel", {
+	Call: t.unit(),
+	Message: t.unit(),
+});
+
+const AttemptStatus = t.enum("AttemptStatus", {
+	// Waiting for the need's due time.
+	Queued: t.unit(),
+	// Message posted, or simulated call ringing.
+	Sent: t.unit(),
+	// The contact's app showed the message.
+	Delivered: t.unit(),
+	// The contact answered the call; that alone accepts nothing.
+	Answered: t.unit(),
+	Accepted: t.unit(),
+	Declined: t.unit(),
+	NoAnswer: t.unit(),
+	// Accepted, but help was not confirmed before the follow-up time.
+	FollowUpExpired: t.unit(),
+});
+
+// At most one attempt per need and step, so a retried step never calls anyone twice.
+const contactAttempt = table(
+	{ name: "contact_attempt" },
+	{
+		key: t.string().primaryKey(),
+		needId: t.u64().index("btree"),
+		familyId: t.u64().index("btree"),
+		step: t.u32(),
+		member: t.identity(),
+		channel: AttemptChannel,
+		status: AttemptStatus,
+		// The notice at the contact's allowed detail.
+		body: t.string(),
+		createdAt: t.timestamp(),
+		updatedAt: t.timestamp(),
+	},
+);
+
+const LadderTimerPurpose = t.enum("LadderTimerPurpose", {
+	Send: t.unit(),
+	AnswerDue: t.unit(),
+	FollowUpDue: t.unit(),
+});
+
+// Ladder deadlines, run by the database itself, so they survive a server restart.
+const ladderTimer = table(
+	{ name: "ladder_timer" },
+	{
+		scheduledId: t.u64().primaryKey().autoInc(),
+		scheduledAt: t.scheduleAt(),
+		needId: t.u64(),
+		step: t.u32(),
+		purpose: LadderTimerPurpose,
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -274,6 +428,10 @@ const spacetimedb = schema({
 	alertDelivery,
 	report,
 	finchnodeLink,
+	contactLadder,
+	careNeed,
+	contactAttempt,
+	ladderTimer,
 	tripEvent,
 });
 export default spacetimedb;
@@ -290,6 +448,223 @@ const requireMember = (ctx: Ctx, familyId: bigint) => {
 
 const requireText = (field: string, value: string) => {
 	if (value.trim() === "") throw new SenderError(`${field} must not be empty`);
+};
+
+type Need = Infer<typeof careNeed.rowType>;
+type Contact = Infer<typeof ContactStep>;
+type NewNeed = Pick<
+	Need,
+	"familyId" | "kind" | "summary" | "facts" | "alertId" | "dueAt" | "clientId"
+>;
+
+const kindLabel = {
+	Alert: "a health alert",
+	Help: "a request for help",
+	CallReminder: "a call reminder",
+} as const;
+
+const sampleFact = (
+	sample: Infer<typeof healthSample.rowType>,
+): Infer<typeof NeedFact> => ({
+	text: `${sample.metric} ${sample.value} ${sample.unit}`,
+	source: sample.source,
+	observedAt: sample.sourceTime,
+	uncertainty: `${sample.synthetic ? "synthetic demo data, " : ""}${sample.quality.tag === "Validated" ? "validated" : "unvalidated"} signal`,
+});
+
+// The notice for one contact, with only the detail that contact may receive.
+const notice = (need: Need, contact: Contact) => {
+	const lines = [
+		`Telly asks ${contact.name} to take on ${kindLabel[need.kind.tag]}. Open Care in Telly to accept or decline.`,
+	];
+	if (contact.detail.tag !== "Minimal") lines.push(need.summary);
+	if (contact.detail.tag === "Facts")
+		for (const fact of need.facts)
+			lines.push(
+				`${fact.text} (${fact.source}, ${fact.observedAt.toISOString()}, ${fact.uncertainty})`,
+			);
+	return lines.join("\n");
+};
+
+// Ladder progress in the family chat (the #11 messages), from the database identity. It names
+// people and the kind of need only; the facts stay in each contact's own notice.
+const postCareMessage = (
+	ctx: Ctx,
+	familyId: bigint,
+	clientId: string,
+	body: string,
+) => {
+	const sender = ctx.databaseIdentity;
+	const sent = ctx.db.message.bySenderClientId.filter([
+		familyId,
+		sender,
+		clientId,
+	]);
+	if (!sent.next().done) return;
+	ctx.db.message.insert({
+		id: 0n,
+		familyId,
+		sender,
+		body,
+		sentAt: ctx.timestamp,
+		clientId,
+	});
+};
+
+const attemptKey = (needId: bigint, step: number) => `${needId}/${step}`;
+
+const scheduleLadder = (
+	ctx: Ctx,
+	needId: bigint,
+	step: number,
+	purpose: Infer<typeof LadderTimerPurpose>["tag"],
+	at: Timestamp,
+) =>
+	ctx.db.ladderTimer.insert({
+		scheduledId: 0n,
+		scheduledAt: ScheduleAt.time(at.microsSinceUnixEpoch),
+		needId,
+		step,
+		purpose: { tag: purpose },
+	});
+
+const setAttemptStatus = (
+	ctx: Ctx,
+	attempt: Infer<typeof contactAttempt.rowType>,
+	status: Infer<typeof AttemptStatus>["tag"],
+) =>
+	ctx.db.contactAttempt.key.update({
+		...attempt,
+		status: { tag: status },
+		updatedAt: ctx.timestamp,
+	});
+
+// Posts the message or rings the simulated call, then gives the contact `answerSeconds` to accept.
+const sendAttempt = (ctx: Ctx, need: Need, step: number) => {
+	const attempt = ctx.db.contactAttempt.key.find(attemptKey(need.id, step));
+	const contact = need.steps[step];
+	if (attempt?.status.tag !== "Queued" || contact === undefined) return;
+	setAttemptStatus(ctx, attempt, "Sent");
+	const how =
+		attempt.channel.tag === "Call" ? "Calling (simulated)" : "Message for";
+	postCareMessage(
+		ctx,
+		need.familyId,
+		`care-${attempt.key}`,
+		`${how} ${contact.name}: Telly needs someone to take on ${kindLabel[need.kind.tag]}. Open Care in Telly to respond.`,
+	);
+	scheduleLadder(
+		ctx,
+		need.id,
+		step,
+		"AnswerDue",
+		secondsFromNow(ctx, need.answerSeconds),
+	);
+};
+
+// Moves the need to `step`: one attempt per step, so a repeated step contacts nobody twice. Past
+// the last contact, the need is unresolved and stays visible.
+const contactStep = (ctx: Ctx, need: Need, step: number) => {
+	const contact = need.steps[step];
+	const status = contact === undefined ? "Unresolved" : "Open";
+	ctx.db.careNeed.id.update({
+		...need,
+		status: { tag: status },
+		step,
+		acceptedBy: undefined,
+		followUpBy: undefined,
+		updatedAt: ctx.timestamp,
+	});
+	if (contact === undefined) {
+		postCareMessage(
+			ctx,
+			need.familyId,
+			`care-${need.id}-unresolved-${step}`,
+			`Nobody has taken on ${kindLabel[need.kind.tag]} yet. It stays open in Care.`,
+		);
+		return;
+	}
+	const key = attemptKey(need.id, step);
+	if (ctx.db.contactAttempt.key.find(key) !== null) return;
+	const call = contact.callFor.some((kind) => kind.tag === need.kind.tag);
+	ctx.db.contactAttempt.insert({
+		key,
+		needId: need.id,
+		familyId: need.familyId,
+		step,
+		member: contact.member,
+		channel: { tag: call ? "Call" : "Message" },
+		status: { tag: "Queued" },
+		body: notice(need, contact),
+		createdAt: ctx.timestamp,
+		updatedAt: ctx.timestamp,
+	});
+	if (need.dueAt.microsSinceUnixEpoch > ctx.timestamp.microsSinceUnixEpoch)
+		scheduleLadder(ctx, need.id, step, "Send", need.dueAt);
+	else sendAttempt(ctx, need, step);
+};
+
+const openNeed = (ctx: Ctx, fields: NewNeed) => {
+	const ladder = ctx.db.contactLadder.familyId.find(fields.familyId);
+	const steps =
+		ladder === null
+			? []
+			: ladder.backup === undefined
+				? ladder.contacts
+				: [...ladder.contacts, ladder.backup];
+	const need = ctx.db.careNeed.insert({
+		...fields,
+		id: 0n,
+		steps,
+		hasBackup: ladder?.backup !== undefined,
+		answerSeconds: ladder?.answerSeconds ?? 0,
+		followUpSeconds: ladder?.followUpSeconds ?? 0,
+		status: { tag: "Open" },
+		step: 0,
+		acceptedBy: undefined,
+		followUpBy: undefined,
+		raisedBy: ctx.sender,
+		createdAt: ctx.timestamp,
+		updatedAt: ctx.timestamp,
+	});
+	contactStep(ctx, need, 0);
+};
+
+// A family with a contact ladder gets a care need for each alert. While an alert need is still
+// open or accepted, a new alert adds its facts there instead of contacting everyone again.
+const alertNeed = (
+	ctx: Ctx,
+	familyId: bigint,
+	alertId: bigint,
+	sampleId: bigint | undefined,
+	summary: string,
+) => {
+	if (ctx.db.contactLadder.familyId.find(familyId) === null) return;
+	const sample =
+		sampleId === undefined ? null : ctx.db.healthSample.id.find(sampleId);
+	const facts = sample === null ? [] : [sampleFact(sample)];
+	for (const need of ctx.db.careNeed.familyId.filter(familyId)) {
+		if (
+			need.kind.tag !== "Alert" ||
+			(need.status.tag !== "Open" && need.status.tag !== "Accepted")
+		)
+			continue;
+		ctx.db.careNeed.id.update({
+			...need,
+			facts: [...need.facts, ...facts],
+			updatedAt: ctx.timestamp,
+		});
+		return;
+	}
+	openNeed(ctx, {
+		familyId,
+		kind: { tag: "Alert" },
+		summary,
+		facts,
+		alertId,
+		dueAt: ctx.timestamp,
+		clientId: `alert-${alertId}`,
+	});
 };
 
 const insertAlert = (
@@ -316,6 +691,7 @@ const insertAlert = (
 		lastError: undefined,
 		updatedAt: ctx.timestamp,
 	});
+	alertNeed(ctx, familyId, id, sampleId, summary);
 	return id;
 };
 
@@ -835,6 +1211,236 @@ export const recordTripEvent = spacetimedb.reducer(
 	},
 );
 
+const MAX_CONTACTS = 5;
+
+export const setContactLadder = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		contacts: t.array(ContactStep),
+		backup: t.option(ContactStep),
+		answerSeconds: t.u32(),
+		followUpSeconds: t.u32(),
+	},
+	(ctx, ladder) => {
+		requireMember(ctx, ladder.familyId);
+		if (ladder.contacts.length === 0 || ladder.contacts.length > MAX_CONTACTS)
+			throw new SenderError(`a ladder has 1 to ${MAX_CONTACTS} contacts`);
+		if (ladder.answerSeconds < 10 || ladder.answerSeconds > 86_400)
+			throw new SenderError("answerSeconds must be 10 to 86400");
+		if (ladder.followUpSeconds < 10 || ladder.followUpSeconds > 604_800)
+			throw new SenderError("followUpSeconds must be 10 to 604800");
+		const seen = new Set<string>();
+		for (const contact of [
+			...ladder.contacts,
+			...(ladder.backup === undefined ? [] : [ladder.backup]),
+		]) {
+			requireText("name", contact.name);
+			requireText("timeZone", contact.timeZone);
+			const member = ctx.db.familyMember.byFamilyMember.filter([
+				ladder.familyId,
+				contact.member,
+			]);
+			if (member.next().done)
+				throw new SenderError("every contact must be a member of this family");
+			const hex = contact.member.toHexString();
+			if (seen.has(hex))
+				throw new SenderError("a member appears in the ladder once");
+			seen.add(hex);
+		}
+		const row = {
+			...ladder,
+			backup: ladder.backup,
+			updatedBy: ctx.sender,
+			updatedAt: ctx.timestamp,
+		};
+		if (ctx.db.contactLadder.familyId.find(ladder.familyId) === null)
+			ctx.db.contactLadder.insert(row);
+		else ctx.db.contactLadder.familyId.update(row);
+	},
+);
+
+// A member asks for help or sets a call reminder. Facts come only from the family's own samples.
+export const openCareNeed = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		clientId: t.string(),
+		kind: NeedKind,
+		summary: t.string(),
+		sampleIds: t.array(t.u64()),
+		dueAt: t.option(t.timestamp()),
+	},
+	(ctx, { familyId, clientId, kind, summary, sampleIds, dueAt }) => {
+		requireMember(ctx, familyId);
+		requireText("clientId", clientId);
+		requireText("summary", summary);
+		if (kind.tag === "Alert")
+			throw new SenderError("alerts open their own care need");
+		// A client resends after a lost reply; the first stored need stands.
+		for (const prior of ctx.db.careNeed.byRaiserClientId.filter([
+			familyId,
+			ctx.sender,
+			clientId,
+		])) {
+			if (prior.summary !== summary)
+				throw new SenderError("clientId is already used for another need");
+			return;
+		}
+		const facts = sampleIds.map((id) => {
+			const sample = ctx.db.healthSample.id.find(id);
+			if (sample?.familyId !== familyId)
+				throw new SenderError("sample does not belong to this family");
+			return sampleFact(sample);
+		});
+		openNeed(ctx, {
+			familyId,
+			kind,
+			summary,
+			facts,
+			alertId: undefined,
+			dueAt: dueAt ?? ctx.timestamp,
+			clientId,
+		});
+	},
+);
+
+const NeedResponse = t.enum("NeedResponse", {
+	Seen: t.unit(),
+	Answer: t.unit(),
+	Accept: t.unit(),
+	Decline: t.unit(),
+	ConfirmHelp: t.unit(),
+});
+
+// Attempt states in which the contact can still accept or decline.
+const WAITING: Record<string, true> = {
+	Sent: true,
+	Delivered: true,
+	Answered: true,
+};
+
+type Attempt = Infer<typeof contactAttempt.rowType>;
+
+const confirmHelp = (ctx: Ctx, need: Need) => {
+	const acceptedByMe = need.acceptedBy?.isEqual(ctx.sender) === true;
+	if (need.status.tag === "Resolved" && acceptedByMe) return;
+	if (need.status.tag !== "Accepted" || !acceptedByMe)
+		throw new SenderError("only the member who accepted can confirm help");
+	ctx.db.careNeed.id.update({
+		...need,
+		status: { tag: "Resolved" },
+		followUpBy: undefined,
+		updatedAt: ctx.timestamp,
+	});
+	postCareMessage(
+		ctx,
+		need.familyId,
+		`care-${need.id}-resolved`,
+		`${need.steps[need.step]?.name} confirmed help with ${kindLabel[need.kind.tag]}.`,
+	);
+};
+
+// Accepting stops the ladder: nobody else is contacted unless help is not confirmed in time.
+const accept = (ctx: Ctx, need: Need, attempt: Attempt) => {
+	setAttemptStatus(ctx, attempt, "Accepted");
+	const followUpBy = secondsFromNow(ctx, need.followUpSeconds);
+	ctx.db.careNeed.id.update({
+		...need,
+		status: { tag: "Accepted" },
+		acceptedBy: ctx.sender,
+		followUpBy,
+		updatedAt: ctx.timestamp,
+	});
+	scheduleLadder(ctx, need.id, need.step, "FollowUpDue", followUpBy);
+	postCareMessage(
+		ctx,
+		need.familyId,
+		`care-${attempt.key}-accepted`,
+		`${need.steps[need.step]?.name} accepted ${kindLabel[need.kind.tag]}. Telly contacts nobody else unless help is not confirmed in time.`,
+	);
+};
+
+const currentAttempt = (ctx: Ctx, need: Need) => {
+	const attempt = ctx.db.contactAttempt.key.find(
+		attemptKey(need.id, need.step),
+	);
+	if (attempt === null || !attempt.member.isEqual(ctx.sender))
+		throw new SenderError("not the current contact for this need");
+	return attempt;
+};
+
+// "Seen" and "Answer" record transport progress only; neither accepts the need.
+const markProgress = (ctx: Ctx, attempt: Attempt, answered: boolean) => {
+	const status = attempt.status.tag;
+	if (!answered) {
+		if (status === "Sent") setAttemptStatus(ctx, attempt, "Delivered");
+		return;
+	}
+	if (attempt.channel.tag !== "Call")
+		throw new SenderError("this contact was sent a message, not a call");
+	if (status === "Sent" || status === "Delivered")
+		setAttemptStatus(ctx, attempt, "Answered");
+};
+
+/** The current contact answers the need; the member who accepted it confirms help. Repeats are no-ops. */
+export const respondToCareNeed = spacetimedb.reducer(
+	{ needId: t.u64(), response: NeedResponse },
+	(ctx, { needId, response }) => {
+		const need = ctx.db.careNeed.id.find(needId);
+		// A missing need fails like another family's need, so ids reveal nothing.
+		if (need === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, need.familyId);
+		if (response.tag === "ConfirmHelp") return confirmHelp(ctx, need);
+		const attempt = currentAttempt(ctx, need);
+		if (response.tag === "Seen" || response.tag === "Answer")
+			return markProgress(ctx, attempt, response.tag === "Answer");
+		const status = attempt.status.tag;
+		if (response.tag === "Accept" && status === "Accepted") return;
+		if (need.status.tag !== "Open" || WAITING[status] !== true)
+			throw new SenderError("this need is not waiting for you");
+		if (response.tag === "Accept") return accept(ctx, need, attempt);
+		setAttemptStatus(ctx, attempt, "Declined");
+		contactStep(ctx, need, need.step + 1);
+	},
+);
+
+export const runLadderTimer = spacetimedb.reducer(
+	{ onSchedule: ladderTimer },
+	{ timer: ladderTimer.rowType },
+	(ctx, { timer }) => {
+		if (!ctx.sender.isEqual(ctx.databaseIdentity))
+			throw new SenderError("only the database runs ladder timers");
+		const need = ctx.db.careNeed.id.find(timer.needId);
+		if (need === null || need.step !== timer.step) return;
+		const attempt = ctx.db.contactAttempt.key.find(
+			attemptKey(need.id, timer.step),
+		);
+		if (attempt === null) return;
+		switch (timer.purpose.tag) {
+			case "Send":
+				if (need.status.tag === "Open") sendAttempt(ctx, need, timer.step);
+				return;
+			case "AnswerDue":
+				if (need.status.tag !== "Open" || WAITING[attempt.status.tag] !== true)
+					return;
+				if (attempt.status.tag !== "Answered")
+					setAttemptStatus(ctx, attempt, "NoAnswer");
+				contactStep(ctx, need, timer.step + 1);
+				return;
+			case "FollowUpDue":
+				if (need.status.tag !== "Accepted") return;
+				setAttemptStatus(ctx, attempt, "FollowUpExpired");
+				postCareMessage(
+					ctx,
+					need.familyId,
+					`care-${attempt.key}-expired`,
+					`${need.steps[timer.step]?.name} has not confirmed help with ${kindLabel[need.kind.tag]}. Telly is asking the next contact.`,
+				);
+				contactStep(ctx, need, timer.step + 1);
+				return;
+		}
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -967,4 +1573,35 @@ export const myTripEvents = spacetimedb.view(
 		ctx.from.familyMember
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.tripEvent, (m, e) => m.familyId.eq(e.familyId)),
+);
+
+export const myContactLadders = spacetimedb.view(
+	{ name: "my_contact_ladders", public: true },
+	t.array(contactLadder.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.contactLadder, (m, l) =>
+				m.familyId.eq(l.familyId),
+			),
+);
+
+export const myCareNeeds = spacetimedb.view(
+	{ name: "my_care_needs", public: true },
+	t.array(careNeed.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.careNeed, (m, n) => m.familyId.eq(n.familyId)),
+);
+
+export const myContactAttempts = spacetimedb.view(
+	{ name: "my_contact_attempts", public: true },
+	t.array(contactAttempt.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.contactAttempt, (m, a) =>
+				m.familyId.eq(a.familyId),
+			),
 );

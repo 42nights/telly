@@ -58,6 +58,111 @@ export const AlertThreshold = __t.object("AlertThreshold", {
 });
 export type AlertThreshold = __Infer<typeof AlertThreshold>;
 
+// The tagged union or sum type for the algebraic type `AttemptChannel`.
+export const AttemptChannel = __t.enum("AttemptChannel", {
+  Call: __t.unit(),
+  Message: __t.unit(),
+});
+export type AttemptChannel = __Infer<typeof AttemptChannel>;
+
+// The tagged union or sum type for the algebraic type `AttemptStatus`.
+export const AttemptStatus = __t.enum("AttemptStatus", {
+  Queued: __t.unit(),
+  Sent: __t.unit(),
+  Delivered: __t.unit(),
+  Answered: __t.unit(),
+  Accepted: __t.unit(),
+  Declined: __t.unit(),
+  NoAnswer: __t.unit(),
+  FollowUpExpired: __t.unit(),
+});
+export type AttemptStatus = __Infer<typeof AttemptStatus>;
+
+export const CareNeed = __t.object("CareNeed", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  get kind() {
+    return NeedKind;
+  },
+  summary: __t.string(),
+  get facts() {
+    return __t.array(NeedFact);
+  },
+  alertId: __t.option(__t.u64()),
+  dueAt: __t.timestamp(),
+  get steps() {
+    return __t.array(ContactStep);
+  },
+  hasBackup: __t.bool(),
+  answerSeconds: __t.u32(),
+  followUpSeconds: __t.u32(),
+  get status() {
+    return NeedStatus;
+  },
+  step: __t.u32(),
+  acceptedBy: __t.option(__t.identity()),
+  followUpBy: __t.option(__t.timestamp()),
+  raisedBy: __t.identity(),
+  clientId: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type CareNeed = __Infer<typeof CareNeed>;
+
+export const ContactAttempt = __t.object("ContactAttempt", {
+  key: __t.string(),
+  needId: __t.u64(),
+  familyId: __t.u64(),
+  step: __t.u32(),
+  member: __t.identity(),
+  get channel() {
+    return AttemptChannel;
+  },
+  get status() {
+    return AttemptStatus;
+  },
+  body: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type ContactAttempt = __Infer<typeof ContactAttempt>;
+
+// The tagged union or sum type for the algebraic type `ContactDetail`.
+export const ContactDetail = __t.enum("ContactDetail", {
+  Minimal: __t.unit(),
+  Summary: __t.unit(),
+  Facts: __t.unit(),
+});
+export type ContactDetail = __Infer<typeof ContactDetail>;
+
+export const ContactLadder = __t.object("ContactLadder", {
+  familyId: __t.u64(),
+  get contacts() {
+    return __t.array(ContactStep);
+  },
+  get backup() {
+    return __t.option(ContactStep);
+  },
+  answerSeconds: __t.u32(),
+  followUpSeconds: __t.u32(),
+  updatedBy: __t.identity(),
+  updatedAt: __t.timestamp(),
+});
+export type ContactLadder = __Infer<typeof ContactLadder>;
+
+export const ContactStep = __t.object("ContactStep", {
+  member: __t.identity(),
+  name: __t.string(),
+  timeZone: __t.string(),
+  get detail() {
+    return ContactDetail;
+  },
+  get callFor() {
+    return __t.array(NeedKind);
+  },
+});
+export type ContactStep = __Infer<typeof ContactStep>;
+
 // The tagged union or sum type for the algebraic type `DeliveryStatus`.
 export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Queued: __t.unit(),
@@ -109,6 +214,25 @@ export const HealthSample = __t.object("HealthSample", {
 });
 export type HealthSample = __Infer<typeof HealthSample>;
 
+export const LadderTimer = __t.object("LadderTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  needId: __t.u64(),
+  step: __t.u32(),
+  get purpose() {
+    return LadderTimerPurpose;
+  },
+});
+export type LadderTimer = __Infer<typeof LadderTimer>;
+
+// The tagged union or sum type for the algebraic type `LadderTimerPurpose`.
+export const LadderTimerPurpose = __t.enum("LadderTimerPurpose", {
+  Send: __t.unit(),
+  AnswerDue: __t.unit(),
+  FollowUpDue: __t.unit(),
+});
+export type LadderTimerPurpose = __Infer<typeof LadderTimerPurpose>;
+
 export const Message = __t.object("Message", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -131,6 +255,15 @@ export type MyAlertThresholds = __Infer<typeof MyAlertThresholds>;
 export const MyAlerts = __t.object("MyAlerts", {});
 export type MyAlerts = __Infer<typeof MyAlerts>;
 
+export const MyCareNeeds = __t.object("MyCareNeeds", {});
+export type MyCareNeeds = __Infer<typeof MyCareNeeds>;
+
+export const MyContactAttempts = __t.object("MyContactAttempts", {});
+export type MyContactAttempts = __Infer<typeof MyContactAttempts>;
+
+export const MyContactLadders = __t.object("MyContactLadders", {});
+export type MyContactLadders = __Infer<typeof MyContactLadders>;
+
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;
 
@@ -148,6 +281,41 @@ export type MyReports = __Infer<typeof MyReports>;
 
 export const MyTripEvents = __t.object("MyTripEvents", {});
 export type MyTripEvents = __Infer<typeof MyTripEvents>;
+
+export const NeedFact = __t.object("NeedFact", {
+  text: __t.string(),
+  source: __t.string(),
+  observedAt: __t.timestamp(),
+  uncertainty: __t.string(),
+});
+export type NeedFact = __Infer<typeof NeedFact>;
+
+// The tagged union or sum type for the algebraic type `NeedKind`.
+export const NeedKind = __t.enum("NeedKind", {
+  Alert: __t.unit(),
+  Help: __t.unit(),
+  CallReminder: __t.unit(),
+});
+export type NeedKind = __Infer<typeof NeedKind>;
+
+// The tagged union or sum type for the algebraic type `NeedResponse`.
+export const NeedResponse = __t.enum("NeedResponse", {
+  Seen: __t.unit(),
+  Answer: __t.unit(),
+  Accept: __t.unit(),
+  Decline: __t.unit(),
+  ConfirmHelp: __t.unit(),
+});
+export type NeedResponse = __Infer<typeof NeedResponse>;
+
+// The tagged union or sum type for the algebraic type `NeedStatus`.
+export const NeedStatus = __t.enum("NeedStatus", {
+  Open: __t.unit(),
+  Accepted: __t.unit(),
+  Resolved: __t.unit(),
+  Unresolved: __t.unit(),
+});
+export type NeedStatus = __Infer<typeof NeedStatus>;
 
 export const Operator = __t.object("Operator", {
   identity: __t.identity(),
