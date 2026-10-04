@@ -49,11 +49,19 @@ export const accountRoutes = () =>
 		.get("/me", (c) =>
 			c.json({ ...c.var.identity, identity: c.var.db.identity } satisfies Me),
 		)
-		.get("/families", (c) =>
-			c.json({
-				families: readFamilyRecords(c.var.db).families,
-			} satisfies FamilyList),
-		)
+		.get("/families", (c) => {
+			const { families, samples } = readFamilyRecords(c.var.db);
+			const newest = new Map<string, string>();
+			for (const { familyId, sourceTime, synthetic } of samples)
+				if (!synthetic && sourceTime > (newest.get(familyId) ?? ""))
+					newest.set(familyId, sourceTime);
+			return c.json({
+				families: families.map((family) => ({
+					...family,
+					newestSampleAt: newest.get(family.id) ?? null,
+				})),
+			} satisfies FamilyList);
+		})
 		.post("/families", async (c) => {
 			const { name } = await decodeBody(c, NewFamily);
 			const before = readFamilyRecords(c.var.db).families;

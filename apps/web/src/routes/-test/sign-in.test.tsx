@@ -121,6 +121,18 @@ test("a first sign-in with no family opens onboarding", async () => {
 	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
 });
 
+test("a member signing in is never sent to onboarding, even when it was the saved page", async () => {
+	pending("/welcome");
+	serve({
+		"POST /api/sign-in/token": later({
+			idToken: signedInToken({ nonce: "n-1" }),
+		}),
+		"GET /api/families": { families: [FAMILY] },
+	});
+	const { router } = renderRoute("/sign-in?code=c-1&state=s-1");
+	await waitFor(() => expect(router.state.location.pathname).toBe("/hud"));
+});
+
 test("a callback from another tab is refused without calling the server", async () => {
 	const calls = serve({});
 	const { router } = renderRoute("/sign-in?code=c-1&state=s-1");
