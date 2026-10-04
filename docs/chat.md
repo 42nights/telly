@@ -26,8 +26,10 @@ The client makes a `clientId` (letters, digits, `_`, `-`, at most 128) one time 
 No route uses the adapter yet. These items are open:
 
 1. **Provider decision.** See below.
-2. **Fetch.ai tool path.** The plan sends the agent's data tools through Fetch.ai Agentverse. The tool contract is in PR #65 (`@health/contracts/tools`). The server needs a Node caller to the Fetch.ai uAgents worker (owner: Fetch.ai backend, #7) and approved Agentverse access. The agent must not read records around Fetch.ai.
+2. **Fetch.ai tool path.** The plan sends the agent's data tools through Fetch.ai Agentverse. PR #65 publishes the tool contract (`@health/contracts/tools`) and the Node caller `callAgentTool(config.fetchAgent, familyId, request, signal)` in `apps/server/src/integrations/fetch.ts`. The agent will call only `callAgentTool`, never the tool helper directly. A live Agentverse round trip needs two approved mailbox connections and the production worker identity.
 3. **Credentials.** An approved source for `XAI_API_KEY`. No live xAI round trip has run.
+
+A family message that must reach a person outside the app (Grokbot carries family messages in the plan) will use the alert outbox seam (`AlertTransport` in `apps/server/src/alerts/outbox.ts`) after the provider decision. That keeps delivery durable and keeps "sent" separate from "acknowledged".
 
 The planned route is `POST /ask` (`{ question, timeZone? }`). Its reply holds the answer and, filled by the server from the tool replies, each sample read (source, source time, quality, synthetic flag, stale flag), each alert read, and each metric with no records. `POST /ask/voice` uses the ElevenLabs adapter from #63 to transcribe the question and to speak the answer in the question's language.
 
