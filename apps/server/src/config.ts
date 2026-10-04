@@ -37,10 +37,12 @@ export type ServerConfig = {
 	readonly imessage?: IMessageConfig | undefined;
 };
 
-/** Photon Spectrum Cloud project and the iMessage addresses allowed to ask, each mapped to its family. */
+/** Photon Spectrum Cloud project, its webhook signing secret, and the iMessage addresses allowed to
+ * ask, each mapped to its family. */
 export type IMessageConfig = {
 	readonly projectId: string;
 	readonly projectSecret: string;
+	readonly webhookSecret: string;
 	readonly senders: ReadonlyMap<string, bigint>;
 };
 
@@ -73,6 +75,7 @@ export type Env = {
 	readonly TELLY_REQUIRED_KEYS?: string | undefined;
 	readonly SPECTRUM_PROJECT_ID?: string | undefined;
 	readonly SPECTRUM_PROJECT_SECRET?: string | undefined;
+	readonly SPECTRUM_WEBHOOK_SECRET?: string | undefined;
 	readonly TELLY_IMESSAGE_SENDERS?: string | undefined;
 } & Parameters<typeof qwenConfigFrom>[0];
 
@@ -105,17 +108,18 @@ const fetchAgentConfig = (env: Env): FetchAgentConfig | undefined => {
 	return undefined;
 };
 
-/** iMessage needs all three values; a partial set or a malformed sender list fails startup. */
+/** iMessage needs all four values; a partial set or a malformed sender list fails startup. */
 const imessageConfig = (env: Env): IMessageConfig | undefined => {
 	const {
 		SPECTRUM_PROJECT_ID: projectId,
 		SPECTRUM_PROJECT_SECRET: projectSecret,
+		SPECTRUM_WEBHOOK_SECRET: webhookSecret,
 		TELLY_IMESSAGE_SENDERS: list,
 	} = env;
-	if (!(projectId || projectSecret || list)) return undefined;
-	if (!(projectId && projectSecret && list))
+	if (!(projectId || projectSecret || webhookSecret || list)) return undefined;
+	if (!(projectId && projectSecret && webhookSecret && list))
 		throw new Error(
-			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
+			"Set all of SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, SPECTRUM_WEBHOOK_SECRET, and TELLY_IMESSAGE_SENDERS, or none",
 		);
 	const senders = new Map<string, bigint>();
 	for (const entry of list.split(",")) {
@@ -126,7 +130,7 @@ const imessageConfig = (env: Env): IMessageConfig | undefined => {
 			);
 		senders.set(match[1] as string, BigInt(match[2] as string));
 	}
-	return { projectId, projectSecret, senders };
+	return { projectId, projectSecret, webhookSecret, senders };
 };
 
 /** R2 needs all four values; with any missing, the PDF routes answer `unavailable`. */

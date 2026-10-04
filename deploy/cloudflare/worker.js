@@ -14,18 +14,37 @@ const passed = [
 	"TELLY_R2_ACCOUNT_ID",
 	"TELLY_R2_BUCKET",
 	"TELLY_R2_ACCESS_KEY_ID",
+	"SPECTRUM_PROJECT_ID",
 	"TELLY_SECRETS_URL",
 	"TELLY_PULL_KEYS",
 	"TELLY_SECRETS_PULL_TOKEN",
 ];
 
+// After the last request, the container keeps running this long, so work that a request started
+// in the background (an iMessage reply after the webhook's 200) can finish.
+const inactivityTimeoutMs = 10 * 60 * 1000;
+
 export class Api {
 	constructor(ctx, env) {
 		this.ctx = ctx;
 		this.env = env;
+		// A restarted Durable Object forgets the timeout of a container that is still running.
+		if (ctx.container.running)
+			void ctx.blockConcurrencyWhile(() => this.keepAfterRequests());
 	}
 
-	start(deploy) {
+	// A failure here only shortens how long the container stays up; it must not fail the request.
+	async keepAfterRequests() {
+		try {
+			await this.ctx.container.setInactivityTimeout(inactivityTimeoutMs);
+		} catch (error) {
+			console.log(
+				`could not set the container inactivity timeout: ${String(error).slice(0, 200)}`,
+			);
+		}
+	}
+
+	async start(deploy) {
 		console.log(`starting the API container for deploy ${deploy}`);
 		this.ctx.container.start({
 			enableInternet: true,
@@ -42,6 +61,7 @@ export class Api {
 			.catch((error) =>
 				console.log(`the API container failed: ${String(error).slice(0, 300)}`),
 			);
+		await this.keepAfterRequests();
 	}
 
 	async fetch(request) {
@@ -52,7 +72,7 @@ export class Api {
 		const deadline = Date.now() + 60_000;
 		let failure = "";
 		for (;;) {
-			if (!container.running) this.start(this.env.TELLY_DEPLOY_ID);
+			if (!container.running) await this.start(this.env.TELLY_DEPLOY_ID);
 			try {
 				const response = await tcp.fetch("http://api/health", {
 					signal: AbortSignal.timeout(3_000),

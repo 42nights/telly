@@ -36,11 +36,14 @@ const close = (server: ServerType) =>
 		});
 	});
 
-/** The HTTP server, the alert outbox, and the iMessage agent, each closed when the layer's scope ends. */
+/** The HTTP server, the iMessage agent, and the alert outbox, each closed when the layer's scope ends. */
 export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
-	const listen = (ingest: NoopIngest | undefined) =>
+	const listen = (
+		ingest: NoopIngest | undefined,
+		imessageWebhook: ((request: Request) => Promise<Response>) | undefined,
+	) =>
 		Effect.callback<ServerType, Error>((resume) => {
-			const app = createApp(config, ingest);
+			const app = createApp(config, ingest, imessageWebhook);
 			const server = serve(
 				{ fetch: app.fetch, hostname: env.HOST, port: env.PORT },
 				() => resume(Effect.succeed(server)),
@@ -48,11 +51,32 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 			server.once("error", (error) => resume(Effect.fail(error)));
 		});
 
+	// Answers allowlisted iMessage senders through Photon Spectrum Cloud; off without its configuration.
+	const { imessage } = config;
+	const ask = familyAnswer({
+		gemini: config.gemini,
+		fetchAgent: config.fetchAgent,
+	});
+	const startIMessage = (settings: NonNullable<typeof imessage>) =>
+		Effect.acquireRelease(
+			Effect.promise(() =>
+				startCloudIMessage(settings, (familyId, question) =>
+					Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
+				),
+			),
+			(agent) => Effect.promise(() => agent.stop()),
+		);
+
+	// The listener closes before the iMessage agent stops.
 	const HttpServer = Layer.effectDiscard(
 		Effect.gen(function* () {
 			const ingest = yield* openNoopIngest(config.noop);
-			yield* Effect.acquireRelease(listen(ingest), close);
+			const agent =
+				imessage === undefined ? undefined : yield* startIMessage(imessage);
+			yield* Effect.acquireRelease(listen(ingest, agent?.webhook), close);
 			yield* Effect.log(`server listening on http://${env.HOST}:${env.PORT}`);
+			if (agent)
+				yield* Effect.log("imessage agent listening on /api/imessage/webhook");
 		}),
 	);
 
@@ -68,29 +92,5 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 		),
 	);
 
-	// Answers allowlisted iMessage senders through Photon Spectrum Cloud; off without its configuration.
-	const { imessage } = config;
-	const ask = familyAnswer({
-		gemini: config.gemini,
-		fetchAgent: config.fetchAgent,
-	});
-	const IMessageAgent = Layer.effectDiscard(
-		imessage === undefined
-			? Effect.void
-			: Effect.gen(function* () {
-					yield* Effect.acquireRelease(
-						Effect.promise(() =>
-							startCloudIMessage(imessage, (familyId, question) =>
-								Effect.runPromise(
-									Effect.suspend(() => ask(familyId, question)),
-								),
-							),
-						),
-						(app) => Effect.promise(() => app.stop()),
-					);
-					yield* Effect.log("imessage agent listening");
-				}),
-	);
-
-	return Layer.mergeAll(HttpServer, AlertOutbox, IMessageAgent);
+	return Layer.mergeAll(HttpServer, AlertOutbox);
 };

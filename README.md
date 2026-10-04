@@ -199,7 +199,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     phone["iMessage sender"] --> spectrum["Photon Spectrum Cloud"]
-    spectrum --> agent["Telly API<br/>imessage agent"]
+    spectrum -->|"signed webhook POST"| agent["Telly API<br/>/api/imessage/webhook"]
     agent -->|"sender allowlist → family"| ask["Question flow<br/>urgent path · Gemini · tools"]
     agent -.->|"not allowlisted"| drop["No answer"]
     ask --> spectrum
@@ -207,7 +207,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. The server answers through the same question flow as the app, including the urgent-help path.
-- **Code:** `apps/server/src/imessage/`. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `TELLY_IMESSAGE_SENDERS`.
+- **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`, so the agent works while the API container sleeps between requests. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Proof:** a live round trip on 2026-10-04 at 06:38 UTC. "I need help" got the urgent reply. "How did I sleep last night?" got the designed "cannot answer" fallback, because Fetch.ai was off in that run ([#175](https://github.com/ayaangazali/telly/pull/175)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.
 
