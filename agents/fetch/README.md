@@ -109,6 +109,10 @@ When its mailbox connects, the worker sends `agentverse.md` as its public Agentv
 
 Keep `agentverse.md` free of real data, addresses of private hosts, and secrets.
 
+The browser asks to let agentverse.ai reach the local network for step 1. Allow it, or the inspector cannot find the agent.
+
+Published agent: `telly-fetch`, address `agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6` ([Agentverse profile](https://agentverse.ai/agents/details/agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6/profile), [ASI:One page](https://asi1.ai/ai/agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6)). It answers only while its worker runs. On 2026-10-04, ASI:One chats got the synthetic alerts and heart rate samples of a synthetic demo family through the mailbox (issue #170).
+
 ## Run locally without Agentverse
 
 This proves the protocol only. It is not a live Agentverse round trip.
