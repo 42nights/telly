@@ -1,4 +1,8 @@
-import { FamilyAnswer, VoiceAnswer } from "@health/contracts/ask";
+import {
+	FamilyAnswer,
+	urgentRequest,
+	VoiceAnswer,
+} from "@health/contracts/ask";
 import { Button } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { Loader2, Mic, Send, Square } from "lucide-react";
@@ -7,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
 import { AnswerFailed, AnswerPanel, type Reply, xl } from "./answer";
+import { HelpPanel, SupportActions } from "./help";
 import { isMedicineRequest } from "./logic";
 
 // ponytail: fixed cap keeps a forgotten recording under the 10 MiB upload limit.
@@ -31,6 +36,7 @@ type Step =
 			readonly cancel: () => void;
 	  }
 	| { readonly kind: "answer"; readonly reply: Reply }
+	| { readonly kind: "help"; readonly asked: string | null }
 	| {
 			readonly kind: "failed";
 			readonly asked: string | null;
@@ -188,9 +194,10 @@ function AskForm({
 }
 
 /**
- * The wearer's request: Talk or a typed question. A medicine request opens the medicine finder;
- * any other question goes to Gemini (`POST /ask`, or `POST /ask/voice` for Talk). A failure shows
- * as a failure, never as an answer, and keeps the request for Try again.
+ * The wearer's request: Talk or a typed question. An urgent request opens the help panel first,
+ * before any model; a medicine request opens the medicine finder; any other question goes to
+ * Gemini with the calm-support rules (`POST /ask`, or `POST /ask/voice` for Talk). A failure
+ * shows as a failure, never as an answer, and keeps the request for Try again.
  */
 export function Request({
 	familyId,
@@ -206,6 +213,9 @@ export function Request({
 	const release = useRef(() => {});
 	useEffect(() => () => release.current(), []);
 	const done = () => setStep({ kind: "ready" });
+	const support = (
+		<SupportActions onHelp={() => setStep({ kind: "help", asked: null })} />
+	);
 	const openMedicine = (q: string) =>
 		void navigate({ to: "/medicine", search: { q } });
 
@@ -227,6 +237,8 @@ export function Request({
 	const ask = async (text: string) => {
 		const question = text.trim();
 		if (question === "") return;
+		if (urgentRequest(question) !== null)
+			return setStep({ kind: "help", asked: question });
 		if (isMedicineRequest(question)) return openMedicine(question);
 		const request = { kind: "text", text: question } as const;
 		if (familyId === null)
@@ -242,7 +254,7 @@ export function Request({
 			familyPath(familyId, "/ask"),
 			{
 				method: "POST",
-				body: { question, timeZone: timeZone() },
+				body: { question, timeZone: timeZone(), asker: "wearer" },
 				signal,
 			},
 		).catch(() => null);
@@ -276,7 +288,7 @@ export function Request({
 			VoiceAnswer,
 			familyPath(
 				familyId,
-				`/ask/voice?timeZone=${encodeURIComponent(timeZone())}`,
+				`/ask/voice?asker=wearer&timeZone=${encodeURIComponent(timeZone())}`,
 			),
 			{
 				method: "POST",
@@ -293,6 +305,8 @@ export function Request({
 				request: { kind: "voice", audio },
 			});
 		const { transcript, answer, speech } = result.value;
+		if (answer.urgent)
+			return setStep({ kind: "help", asked: transcript.text.trim() });
 		if (isMedicineRequest(transcript.text))
 			return openMedicine(transcript.text.trim());
 		setStep({
@@ -324,9 +338,16 @@ export function Request({
 			return <Listening action={step.stop} thinking={false} />;
 		case "thinking":
 			return <Listening action={step.cancel} thinking />;
+		case "help":
+			return <HelpPanel asked={step.asked} onDone={done} />;
 		case "answer":
 			return (
-				<AnswerPanel familyId={familyId} onDone={done} reply={step.reply} />
+				<AnswerPanel
+					familyId={familyId}
+					onDone={done}
+					reply={step.reply}
+					support={support}
+				/>
 			);
 		case "failed": {
 			const { request } = step;
@@ -344,6 +365,7 @@ export function Request({
 							? ask(request.text)
 							: askByVoice(request.audio))
 					}
+					support={support}
 					title={
 						request.kind === "voice" && step.failure.kind === "unavailable"
 							? "Talk is not available right now. You can type your question."
