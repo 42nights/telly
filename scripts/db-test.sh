@@ -84,4 +84,5 @@ run_all apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/
 	apps/server/src/routes/ask.test.ts \
 	apps/server/src/routes/cooking.test.ts \
 	apps/server/src/routes/meal-check-ins.test.ts \
+	apps/server/src/routes/finder-link.test.ts \
 	apps/server/src/integration/

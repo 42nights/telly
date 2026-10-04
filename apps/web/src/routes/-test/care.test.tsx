@@ -116,7 +116,9 @@ test("shows an empty family with no needs and no ladder yet", async () => {
 	expect(
 		await screen.findByText("No ladder yet: alerts contact nobody."),
 	).toBeTruthy();
-	expect(await screen.findByText(ME)).toBeTruthy();
+	expect(
+		await screen.findByRole("button", { name: new RegExp(`Yours is ${ME}`) }),
+	).toBeTruthy();
 });
 
 test("shows why needs and the ladder could not load", async () => {

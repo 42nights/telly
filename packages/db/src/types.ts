@@ -392,6 +392,44 @@ export const FinchnodeLink = __t.object("FinchnodeLink", {
 });
 export type FinchnodeLink = __Infer<typeof FinchnodeLink>;
 
+export const FinderLink = __t.object("FinderLink", {
+  tokenHash: __t.string(),
+  familyId: __t.u64(),
+  personId: __t.identity(),
+  expiresAt: __t.timestamp(),
+  usedAt: __t.option(__t.timestamp()),
+  sessionHash: __t.option(__t.string()),
+});
+export type FinderLink = __Infer<typeof FinderLink>;
+
+export const FinderLinkPlaces = __t.object("FinderLinkPlaces", {
+  tokenHash: __t.string(),
+  sessionHash: __t.option(__t.string()),
+  familyId: __t.u64(),
+  personId: __t.identity(),
+  expiresAt: __t.timestamp(),
+  usedAt: __t.option(__t.timestamp()),
+  get sightings() {
+    return __t.array(FinderSighting);
+  },
+});
+export type FinderLinkPlaces = __Infer<typeof FinderLinkPlaces>;
+
+export const FinderLinks = __t.object("FinderLinks", {});
+export type FinderLinks = __Infer<typeof FinderLinks>;
+
+export const FinderSighting = __t.object("FinderSighting", {
+  id: __t.u64(),
+  container: __t.string(),
+  category: __t.string(),
+  place: __t.string(),
+  seenAt: __t.timestamp(),
+  confidence: __t.f64(),
+  labelRead: __t.bool(),
+  notFoundAt: __t.option(__t.timestamp()),
+});
+export type FinderSighting = __Infer<typeof FinderSighting>;
+
 export const HealthSample = __t.object("HealthSample", {
   id: __t.u64(),
   familyId: __t.u64(),
@@ -756,6 +794,18 @@ export const PendingDelivery = __t.object("PendingDelivery", {
 });
 export type PendingDelivery = __Infer<typeof PendingDelivery>;
 
+export const PendingWearerText = __t.object("PendingWearerText", {
+  key: __t.string(),
+  familyId: __t.u64(),
+  body: __t.string(),
+  createdAt: __t.timestamp(),
+  notBefore: __t.timestamp(),
+});
+export type PendingWearerText = __Infer<typeof PendingWearerText>;
+
+export const PendingWearerTexts = __t.object("PendingWearerTexts", {});
+export type PendingWearerTexts = __Infer<typeof PendingWearerTexts>;
+
 export const PushToken = __t.object("PushToken", {
   familyId: __t.u64(),
   tokenHash: __t.string(),
@@ -929,4 +979,17 @@ export const TripStep = __t.enum("TripStep", {
   Arrived: __t.unit(),
 });
 export type TripStep = __Infer<typeof TripStep>;
+
+export const WearerText = __t.object("WearerText", {
+  key: __t.string(),
+  familyId: __t.u64(),
+  body: __t.string(),
+  occurrenceId: __t.option(__t.u64()),
+  createdAt: __t.timestamp(),
+  notBefore: __t.timestamp(),
+  status: __t.string(),
+  note: __t.option(__t.string()),
+  settledAt: __t.option(__t.timestamp()),
+});
+export type WearerText = __Infer<typeof WearerText>;
 

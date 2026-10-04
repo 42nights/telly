@@ -21,11 +21,7 @@ test("with no reports, offers to create one and says why creating failed", async
 	});
 	renderRoute("/reports");
 
-	expect(
-		await screen.findByText(
-			"No reports yet. A new report collects the latest reading of each measure saved for Grandma Rose.",
-		),
-	).toBeTruthy();
+	expect(await screen.findByText("No reports yet.")).toBeTruthy();
 	expect(screen.getByText("No reports yet")).toBeTruthy();
 
 	fireEvent.click(screen.getByRole("button", { name: "New report" }));

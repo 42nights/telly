@@ -7,7 +7,7 @@ import {
 import { Button } from "@health/ui/components/button";
 import { useState } from "react";
 
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { apiRequest, familyPath, useApi } from "@/lib/api";
 
 const tasks: Record<CookingTask, string> = {
@@ -78,10 +78,15 @@ function Editor({
 				void save();
 			}}
 		>
-			<p>
-				{saved.profile === null
-					? "Nobody has recorded these yet, so every hot or sharp step asks for a helper."
-					: `Last changed ${new Date(saved.editedAt ?? "").toLocaleString()}.`}
+			<p className="flex items-center gap-1">
+				{saved.profile === null ? (
+					<>
+						Nobody has recorded these yet.
+						<Tip text="Until then, every hot or sharp step asks for a helper." />
+					</>
+				) : (
+					`Last changed ${new Date(saved.editedAt ?? "").toLocaleString()}.`
+				)}
 			</p>
 			{(Object.keys(tasks) as CookingTask[]).map((task) => (
 				<label className="flex items-center justify-between gap-2" key={task}>

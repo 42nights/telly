@@ -52,7 +52,7 @@ const wrap = ({ text, bold, size = 10 }: Line): Line[] => {
 };
 
 /** A valid PDF 1.4 file of `lines`, with as many pages as they need. */
-const pdfDocument = (lines: readonly Line[]): Uint8Array => {
+const pdfDocument = (lines: readonly Line[]): Uint8Array<ArrayBuffer> => {
 	const pages: string[][] = [[]];
 	let y = PAGE.height - PAGE.margin;
 	for (const line of lines.flatMap(wrap)) {
@@ -108,7 +108,10 @@ const label = (metric: string) => {
 const filled = (text: string | null) => text ?? "Not filled in";
 
 /** The report as stored, with the time the PDF was made. Nothing is added or inferred. */
-export const reportPdf = (report: Report, madeAt: Date): Uint8Array => {
+export const reportPdf = (
+	report: Report,
+	madeAt: Date,
+): Uint8Array<ArrayBuffer> => {
 	const { fields, markers, review } = report;
 	const demo = markers.filter((m) => m.sample?.synthetic).length;
 	const section = (text: string): Line => ({ text, bold: true, size: 12 });
@@ -147,7 +150,7 @@ export const reportPdf = (report: Report, madeAt: Date): Uint8Array => {
 			const correction = fields.corrections.find((c) => c.metric === metric);
 			return [
 				{
-					text: `${label(metric)}: ${sample.value} ${sample.unit}. Source ${sample.source}, measured ${sample.sourceTime}, ${sample.quality === "validated" ? "validated" : "not validated"}.${sample.synthetic ? " DEMO VALUE, NOT MEASURED." : ""}`,
+					text: `${label(metric)}: ${sample.value} ${sample.unit}. Source ${sample.source}, measured ${sample.sourceTime}.${sample.synthetic ? " DEMO VALUE, NOT MEASURED." : ""}`,
 				},
 				...(correction === undefined
 					? []

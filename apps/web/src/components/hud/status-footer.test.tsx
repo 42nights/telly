@@ -2,13 +2,12 @@
 import "../test/dom-routed";
 
 import { afterEach, expect, jest, test } from "bun:test";
-import type { FamilyRecords, HealthSample } from "@health/contracts";
 import type { RenderResult } from "@testing-library/react";
 
 import { setSessionToken } from "@/lib/session";
 
 import { act, render, serve, setupDom } from "../test/dom-routed";
-import { StatusFooter } from "./status-footer";
+import { StatusBar } from "./status-footer";
 
 setupDom();
 // Bun shares React DOM across test files: a static import would load it before Happy DOM.
@@ -18,7 +17,7 @@ const HEALTH = { status: "ok", service: "server" } as const;
 const NOT_CONNECTED = {
 	sources: [{ source: "noop", status: "not_connected", lastSeenAt: null }],
 };
-/** The server never answers, so only the device chips change. */
+/** The server never answers, so only the phone pane changes. */
 const SILENT = { "GET /health": "hang", "GET /api/sources": "hang" } as const;
 
 afterEach(() => {
@@ -27,22 +26,34 @@ afterEach(() => {
 	jest.useRealTimers();
 });
 
-const serverLine = (view: RenderResult) =>
-	view.getByText(/^(Checking the server|Server )/);
+/** A pane's words and its tooltip, which keyboard and screen-reader users get through aria-describedby. */
+const pane = (view: RenderResult, text: string | RegExp) => {
+	const words = view.getByText(text);
+	const button = words.closest("button");
+	return {
+		text: words.textContent,
+		detail: document.getElementById(
+			button?.getAttribute("aria-describedby") ?? "",
+		)?.textContent,
+	};
+};
 
-test("before the server answers, every chip says what is still unknown", async () => {
+const serverLine = (view: RenderResult) =>
+	pane(view, /^(Checking the server|Server )/);
+
+test("before the server answers, every pane says what is still unknown", async () => {
 	const calls = serve(SILENT);
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(serverLine(view).textContent).toBe("Checking the server…");
-	expect(view.getByText("Monitoring: checking…")).toBeDefined();
-	expect(
-		view.getByText("WHOOP · status unknown · last contact unknown"),
-	).toBeDefined();
-	expect(
-		view.getByText("Glasses not paired · optional · nothing needs them"),
-	).toBeDefined();
+	const view = render(<StatusBar familyId={null} />);
+	expect(serverLine(view)).toEqual({
+		text: "Checking the server…",
+		detail: "No reply yet.",
+	});
+	expect(pane(view, "Monitoring off").detail).toBe("No person is selected.");
+	expect(pane(view, "WHOOP").detail).toBe("Status unknown.");
+	// Glasses are never paired, so they get no pane.
+	expect(view.queryByText(/Glasses/)).toBeNull();
 	// Happy DOM has no Battery Status API: the battery is unknown, never 0 %.
-	expect(view.getByText("This phone · online · battery unknown")).toBeDefined();
+	expect(pane(view, "Phone online").detail).toBe("Online. Battery unknown.");
 	expect(view.queryByRole("status")).toBeNull();
 	expect(calls.map(({ method, path }) => `${method} ${path}`).sort()).toEqual([
 		"GET /api/sources",
@@ -50,80 +61,105 @@ test("before the server answers, every chip says what is still unknown", async (
 	]);
 });
 
-test("a fresh reply is connected, and it turns stale after three missed polls", async () => {
-	serve({
-		"GET /health": { json: HEALTH },
-		"GET /api/sources": { json: NOT_CONNECTED },
-	});
+test("a fresh reply is online, and it turns stale after three missed polls", async () => {
+	jest.useFakeTimers();
 	const now = Date.now();
-	const sample: HealthSample = {
-		id: "s1",
-		familyId: "f1",
-		metric: "heart_rate",
-		value: 61,
-		unit: "bpm",
-		sourceTime: new Date(now - 3_600_000).toISOString(),
-		receivedAt: new Date(now).toISOString(),
-		source: "noop:strap",
-		synthetic: false,
-		quality: "unvalidated",
-	};
-	const records: { kind: "ready"; value: FamilyRecords; at: number } = {
-		kind: "ready",
-		at: now,
-		value: {
-			families: [],
-			samples: [sample],
-			alerts: [],
-			messages: [],
-			acknowledgements: [],
+	let answered = false;
+	serve({
+		// The first poll answers; every later one hangs, so the last good reply only gets older.
+		"GET /health": () => {
+			if (answered) return "hang";
+			answered = true;
+			return { json: HEALTH };
 		},
-	};
-	const view = render(<StatusFooter now={now} records={records} />);
-	expect(await view.findByText("Monitoring: stopped")).toBeDefined();
-	expect(serverLine(view).textContent).toBe(
-		"Server connected · last reply 0 s ago",
+		"GET /api/sources": {
+			json: {
+				sources: [
+					{
+						source: "noop",
+						status: "not_connected",
+						lastSeenAt: new Date(now - 5 * 3_600_000).toISOString(),
+					},
+				],
+			},
+		},
+	});
+	const view = render(<StatusBar familyId={null} />);
+	await act(async () => {});
+	expect(pane(view, "WHOOP 5 h ago").detail).toBe(
+		"Not connected: no new readings, wear unknown. Last reading 5 h ago.",
 	);
-	expect(
-		view.getByText(
-			"WHOOP · not connected · no new readings · wear unknown · last reading 1 h ago · saved, not current",
-		),
-	).toBeDefined();
+	expect(serverLine(view)).toEqual({
+		text: "Server online",
+		detail: "Last reply 0 s ago.",
+	});
 
-	view.rerender(<StatusFooter now={now + 20_000} records={records} />);
-	expect(serverLine(view).textContent).toMatch(
-		/^Server data stale · last reply (19|20) s ago$/,
-	);
+	await act(async () => {
+		jest.advanceTimersByTime(20_000);
+	});
+	expect(serverLine(view)).toEqual({
+		text: "Server data stale",
+		detail: "Last reply 20 s ago.",
+	});
 });
 
-test("a failed read says the server is unavailable and why", async () => {
+test("a failed read says the server is offline and why", async () => {
 	serve({
 		"GET /health": { status: 500, json: { error: "boom", message: "boom" } },
 		"GET /api/sources": "network-error",
 	});
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(
-		await view.findByText("Monitoring: unknown · the server did not answer"),
-	).toBeDefined();
-	const line = serverLine(view);
-	expect(line.textContent).toBe("Server unavailable · no reply yet");
-	expect(line.getAttribute("title")).toBe(
-		"GET http://server.test/health failed with HTTP 500",
+	const view = render(<StatusBar familyId={null} />);
+	expect(await view.findByText("Server offline")).toBeDefined();
+	expect(serverLine(view).detail).toBe(
+		"GET http://server.test/health failed with HTTP 500. No reply yet.",
 	);
+	expect(pane(view, "WHOOP").detail).toBe("Status unknown.");
 });
 
-test("no configured source is reported as stopped, not as watched", async () => {
+test("no configured source is reported as not set up", async () => {
 	serve({
 		"GET /health": { json: HEALTH },
 		"GET /api/sources": { json: { sources: [] } },
 	});
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(
-		await view.findByText("Monitoring: stopped · no health source configured"),
-	).toBeDefined();
-	expect(
-		view.getByText("WHOOP · no source configured · last contact unknown"),
-	).toBeDefined();
+	const view = render(<StatusBar familyId={null} />);
+	expect(await view.findByText("WHOOP not set up")).toBeDefined();
+	expect(pane(view, "WHOOP not set up").detail).toBe("No source configured.");
+});
+
+const token = `h.${Buffer.from(JSON.stringify({ iss: "https://id.test", sub: "wearer", exp: 4e9 })).toString("base64url")}.s`;
+
+test("monitoring shows the selected person's level, never on without a fresh reading", async () => {
+	setSessionToken(token);
+	const rule = (state: string) => ({
+		threshold: {
+			id: state,
+			familyId: "f1",
+			metric: "heart_rate",
+			direction: "above",
+			limit: 120,
+			unit: "bpm",
+			maxAgeSeconds: 600,
+			updatedBy: "a",
+			updatedAt: "2026-01-01T00:00:00Z",
+		},
+		state,
+		reason: state === "unavailable" ? "stale" : null,
+		sample: null,
+	});
+	serve({
+		...SILENT,
+		"GET /api/families/f1/monitoring": {
+			json: {
+				checkedAt: "2026-01-01T00:00:00Z",
+				thresholds: [rule("in_range"), rule("unavailable")],
+			},
+		},
+	});
+	const view = render(<StatusBar familyId="f1" />);
+	expect(await view.findByText("Monitoring partial")).toBeDefined();
+	expect(pane(view, "Monitoring partial").detail).toBe(
+		"Some thresholds have no fresh reading, so an alert could be missed.",
+	);
 });
 
 test("polling re-reads every 5 s, keeps the last good reply time, and stops on unmount", async () => {
@@ -134,21 +170,18 @@ test("polling re-reads every 5 s, keeps the last good reply time, and stops on u
 			healthy ? { json: HEALTH } : { status: 503, json: null },
 		"GET /api/sources": { json: NOT_CONNECTED },
 	});
-	const start = Date.now();
-	const view = render(<StatusFooter now={start} records={null} />);
+	const view = render(<StatusBar familyId={null} />);
 	await act(async () => {});
-	expect(serverLine(view).textContent).toBe(
-		"Server connected · last reply 0 s ago",
-	);
+	expect(serverLine(view).text).toBe("Server online");
 
 	healthy = false;
 	await act(async () => {
 		jest.advanceTimersByTime(5_000);
 	});
-	view.rerender(<StatusFooter now={start + 6_000} records={null} />);
-	expect(serverLine(view).textContent).toBe(
-		"Server unavailable · last reply 6 s ago",
-	);
+	expect(serverLine(view)).toEqual({
+		text: "Server offline",
+		detail: expect.stringMatching(/ Last reply [56] s ago\.$/),
+	});
 	expect(calls.filter(({ path }) => path === "/health")).toHaveLength(2);
 
 	view.unmount();
@@ -168,7 +201,7 @@ test("a read still pending at the next poll is cancelled, and polling goes on", 
 		},
 		{ preconnect: () => {} },
 	);
-	render(<StatusFooter now={Date.now()} records={null} />);
+	render(<StatusBar familyId={null} />);
 	expect(signals.map((signal) => signal.aborted)).toEqual([false, false]);
 	await act(async () => {
 		jest.advanceTimersByTime(5_000);
@@ -185,7 +218,7 @@ test("a read still pending at the next poll is cancelled, and polling goes on", 
 	]);
 });
 
-test("the phone chip shows the battery level and follows its changes", async () => {
+test("the phone pane shows the battery level and follows its changes", async () => {
 	serve(SILENT);
 	const manager = Object.assign(new EventTarget(), {
 		level: 0.42,
@@ -195,33 +228,17 @@ test("the phone chip shows the battery level and follows its changes", async () 
 		configurable: true,
 		value: async () => manager,
 	});
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(
-		view.getByText("This phone · online · battery: checking…"),
-	).toBeDefined();
-	expect(
-		await view.findByText("This phone · online · battery 42 %"),
-	).toBeDefined();
+	const view = render(<StatusBar familyId={null} />);
+	expect(pane(view, "Phone online").detail).toBe("Online. Battery: checking…");
+	expect(await view.findByText("Phone 42 %")).toBeDefined();
 	act(() => {
 		manager.level = 0.5;
 		manager.charging = true;
 		manager.dispatchEvent(new Event("chargingchange"));
 	});
-	expect(
-		view.getByText("This phone · online · battery 50 % · charging"),
-	).toBeDefined();
-});
-
-test("a battery read that fails reports the battery unknown", async () => {
-	serve(SILENT);
-	Object.defineProperty(navigator, "getBattery", {
-		configurable: true,
-		value: () => Promise.reject(new Error("blocked")),
-	});
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(
-		await view.findByText("This phone · online · battery unknown"),
-	).toBeDefined();
+	expect(pane(view, "Phone 50 %").detail).toBe(
+		"Online. Battery 50 %, charging.",
+	);
 });
 
 test("going offline says what waits, and coming back online clears it", () => {
@@ -231,53 +248,56 @@ test("going offline says what waits, and coming back online clears it", () => {
 		configurable: true,
 		get: () => online,
 	});
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
+	const view = render(<StatusBar familyId={null} />);
 	act(() => {
 		online = false;
 		window.dispatchEvent(new Event("offline"));
 	});
-	expect(
-		view.getByText(
-			"This phone · offline · answers, directions, and messages wait · battery unknown",
-		),
-	).toBeDefined();
+	expect(pane(view, "Phone offline").detail).toBe(
+		"Offline: answers, directions, and messages wait. Battery unknown.",
+	);
 	act(() => {
 		online = true;
 		window.dispatchEvent(new Event("online"));
 	});
-	expect(view.getByText("This phone · online · battery unknown")).toBeDefined();
+	expect(view.getByText("Phone online")).toBeDefined();
 });
 
-test("a server-rendered footer assumes online and still checks battery and server", () => {
-	const html = renderToString(<StatusFooter now={0} records={null} />);
-	expect(html).toContain("This phone · online · battery: checking…");
+test("a server-rendered bar assumes online and still checks battery and server", () => {
+	const html = renderToString(<StatusBar familyId={null} />);
+	expect(html).toContain("Phone online");
+	expect(html).toContain("Battery: checking…");
 	expect(html).toContain("Checking the server…");
-	expect(html).not.toContain("saved on this phone");
+	expect(html).not.toContain("waiting");
 });
-
-const token = `h.${Buffer.from(JSON.stringify({ iss: "https://id.test", sub: "wearer", exp: 4e9 })).toString("base64url")}.s`;
 
 test.each([
-	[1, "1 action saved on this phone · sent once when the connection returns"],
-	[2, "2 actions saved on this phone · sent once when the connection returns"],
-])("%i saved action(s) of the signed-in wearer are counted", (count, text) => {
-	serve(SILENT);
-	setSessionToken(token);
-	localStorage.setItem(
-		"telly.pending",
-		JSON.stringify(
-			[
-				...Array(count).fill("https://id.test wearer"),
-				"https://id.test someone-else",
-			].map((owner: string, i) => ({
-				clientId: `c${i}`,
-				owner,
-				path: "/api/families/f1/messages",
-				payload: { body: "hi" },
-				queuedAt: 1,
-			})),
-		),
-	);
-	const view = render(<StatusFooter now={Date.now()} records={null} />);
-	expect(view.getByRole("status").textContent).toBe(text);
-});
+	[1, "1 waiting", "1 action is saved on this phone."],
+	[2, "2 waiting", "2 actions are saved on this phone."],
+])(
+	"%i saved action(s) of the signed-in wearer are counted",
+	(count, text, saved) => {
+		serve(SILENT);
+		setSessionToken(token);
+		localStorage.setItem(
+			"telly.pending",
+			JSON.stringify(
+				[
+					...Array(count).fill("https://id.test wearer"),
+					"https://id.test someone-else",
+				].map((owner: string, i) => ({
+					clientId: `c${i}`,
+					owner,
+					path: "/api/families/f1/messages",
+					payload: { body: "hi" },
+					queuedAt: 1,
+				})),
+			),
+		);
+		const view = render(<StatusBar familyId={null} />);
+		expect(view.getByRole("status").contains(view.getByText(text))).toBe(true);
+		expect(pane(view, text).detail).toBe(
+			`${saved} They are sent once when the connection returns.`,
+		);
+	},
+);

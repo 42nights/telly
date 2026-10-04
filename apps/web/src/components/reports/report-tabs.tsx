@@ -5,6 +5,8 @@ import {
 	unresolvedText,
 } from "@health/contracts/reports";
 import { Button } from "@health/ui/components/button";
+import { Tip } from "@/components/win95";
+import { metricLabel, sourceName } from "@/lib/readings";
 
 import { CorrectionForm } from "./corrections";
 import { DataTable } from "./data-table";
@@ -16,7 +18,6 @@ import {
 	type FieldName,
 	formatTime,
 	markerValue,
-	metricLabel,
 } from "./logic";
 import { PdfActions } from "./pdfs";
 import { failureText, type ReportSheetState } from "./use-report-sheet";
@@ -144,17 +145,10 @@ function MarkerRow({
 					? "No source"
 					: sample.synthetic
 						? demoText(sample.source)
-						: sample.source}
+						: sourceName(sample.source)}
 			</td>
 			<td className="p-1.5">
 				{sample === null ? "—" : formatTime(sample.sourceTime)}
-			</td>
-			<td className="p-1.5">
-				{sample === null
-					? "—"
-					: sample.quality === "validated"
-						? "Validated"
-						: "Not validated"}
 			</td>
 		</tr>
 	);
@@ -183,25 +177,15 @@ export function MarkersTab({
 					No measures were saved for this person when the report was made.
 				</p>
 			) : (
-				<DataTable
-					headers={[
-						"Marker · latest",
-						"Value",
-						"Source",
-						"Measured",
-						"Quality",
-					]}
-				>
+				<DataTable headers={["Marker", "Value", "Source", "Measured"]}>
 					{report.markers.map((marker) => (
 						<MarkerRow key={marker.metric} marker={marker} sheet={sheet} />
 					))}
 				</DataTable>
 			)}
-			<p>
-				Markers have no ranges or flags. Unavailable markers are kept in the
-				report as unavailable. This report lists readings that were already
-				saved: it is not a new lab test and not medical advice, and making it
-				does not make an old reading current.
+			<p className="flex items-center gap-1">
+				Saved readings, not a new lab test.
+				<Tip text="Markers have no ranges or flags, and unavailable markers stay unavailable. Not medical advice; making a report does not make an old reading current." />
 			</p>
 			<CorrectionForm sheet={sheet} markers={report.markers} />
 			<SaveBar sheet={sheet} />
@@ -264,9 +248,9 @@ export function DailyTab({ report }: { report: Report }) {
 				}
 				empty="None."
 			/>
-			<p>
-				These were saved before the report was made. A food estimate is not a
-				measurement, and an unresolved reminder is neither done nor missed.
+			<p className="flex items-center gap-1">
+				Saved when the report was made.
+				<Tip text="A food estimate is not a measurement, and an unresolved reminder is neither done nor missed." />
 			</p>
 		</>
 	);
@@ -376,7 +360,10 @@ export function SendTab({
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
 			<fieldset className="grid gap-2 border border-border p-2">
-				<legend className="px-1">Send and PDF</legend>
+				<legend className="px-1">
+					Send and PDF{" "}
+					<Tip text="A family review is not a clinician review. Sending a report does not mean that a clinician has read it." />
+				</legend>
 				{sendFailure === null ? (
 					<p>
 						Hospital: not sent.
@@ -390,10 +377,6 @@ export function SendTab({
 					</p>
 				)}
 				<EmailStatus email={report.email} />
-				<p>
-					A family review is not a clinician review. Sending a report does not
-					mean that a clinician has read it.
-				</p>
 				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						type="button"

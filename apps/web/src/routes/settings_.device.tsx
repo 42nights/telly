@@ -14,7 +14,7 @@ const choices = [
 	{
 		view: "wearer",
 		label: "The wearer",
-		detail: "Home first. Big buttons for Home, Medicine, and Bedtime.",
+		detail: "Home first. Big buttons for Home, Medicine, and Going out.",
 	},
 	{
 		view: "family",

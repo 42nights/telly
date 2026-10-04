@@ -69,9 +69,12 @@ describe("Save as PDF", () => {
 			[SAVE]: () => new Promise<ServerReply>((resolve) => (reply = resolve)),
 		});
 		const view = renderActions();
-		expect(view.getByRole("status").textContent).toBe(
-			"Saving a PDF does not send it to anyone.",
-		);
+		expect(view.getByRole("status").textContent).toBe("");
+		expect(
+			view.getByRole("button", {
+				name: "Saving a PDF does not send it to anyone.",
+			}),
+		).toBeDefined();
 		fireEvent.click(view.getByRole("button", { name: "Save as PDF" }));
 		const busy = await view.findByRole("button", { name: "Saving PDF…" });
 		expect(busy.hasAttribute("disabled")).toBe(true);
@@ -113,6 +116,48 @@ describe("Save as PDF", () => {
 			);
 		},
 	);
+});
+
+describe("Preview PDF", () => {
+	const PREVIEW = "GET /api/families/f1/reports/r%201/pdf";
+
+	test("shows the emailed PDF with open and download links, and frees it on close", async () => {
+		// happy-dom cannot load blob: URLs into a frame.
+		const url = "about:blank#pdf";
+		const made = spyOn(URL, "createObjectURL").mockReturnValue(url);
+		const freed = spyOn(URL, "revokeObjectURL").mockReturnValue();
+		const calls = serve({ [PREVIEW]: { status: 200 } });
+		const view = renderActions();
+		fireEvent.click(view.getByRole("button", { name: "Preview PDF" }));
+		const dialog = view.getByRole("dialog", { name: "Preview PDF" });
+		const frame = await within(dialog).findByTitle("Lab report PDF");
+		expect(frame.getAttribute("src")).toBe(url);
+		const open = within(dialog).getByRole("link", { name: "Open in new tab" });
+		expect(open.getAttribute("href")).toBe(url);
+		expect(open.getAttribute("target")).toBe("_blank");
+		const download = within(dialog).getByRole("link", { name: "Download" });
+		expect(download.getAttribute("download")).toBe("lab-report-r 1.pdf");
+		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([PREVIEW]);
+		fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+		expect(view.queryByRole("dialog")).toBeNull();
+		expect(freed).toHaveBeenCalledWith(url);
+		made.mockRestore();
+		freed.mockRestore();
+	});
+
+	test("a refused preview says why and offers no PDF", async () => {
+		serve({
+			[PREVIEW]: {
+				status: 403,
+				body: { error: "forbidden", message: "No health records access" },
+			},
+		});
+		const view = renderActions();
+		fireEvent.click(view.getByRole("button", { name: "Preview PDF" }));
+		const alert = await view.findByRole("alert");
+		expect(alert.textContent).toStartWith("Not previewed:");
+		expect(view.queryByRole("link")).toBeNull();
+	});
 });
 
 describe("Past PDFs", () => {

@@ -157,10 +157,7 @@ export function ConnectScreen({ family }: { family: Family }) {
 			>
 				Finish
 			</Button>
-			<p className="text-xs">
-				Finish works with nothing checked. Skipped items show on Home as a
-				checklist.
-			</p>
+			<p className="text-xs">Finish works with nothing checked.</p>
 		</div>
 	);
 }
