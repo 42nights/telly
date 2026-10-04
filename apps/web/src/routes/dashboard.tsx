@@ -13,6 +13,7 @@ import {
 	LayoutDashboard,
 	MessageCircle,
 	SlidersHorizontal,
+	TrendingUp,
 } from "lucide-react";
 
 import { type FamilyData, useFamilyData } from "@/components/family/data";
@@ -87,6 +88,9 @@ function DashboardNav() {
 			</Link>
 			<Link to="/reports" className={navClass}>
 				<FileText aria-hidden className="size-4" /> Reports
+			</Link>
+			<Link to="/trends" className={navClass}>
+				<TrendingUp aria-hidden className="size-4" /> Trends
 			</Link>
 			<a href="#thresholds" className={navClass}>
 				<SlidersHorizontal aria-hidden className="size-4" /> Thresholds
