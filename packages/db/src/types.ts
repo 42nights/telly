@@ -292,6 +292,23 @@ export const DeliveryStatus = __t.enum("DeliveryStatus", {
 });
 export type DeliveryStatus = __Infer<typeof DeliveryStatus>;
 
+export const DemoReplay = __t.object("DemoReplay", {
+  familyId: __t.u64(),
+  recordingFamilyId: __t.u64(),
+  next: __t.u32(),
+  lastAlertAt: __t.option(__t.timestamp()),
+  startedBy: __t.identity(),
+  startedAt: __t.timestamp(),
+});
+export type DemoReplay = __Infer<typeof DemoReplay>;
+
+export const DemoTimer = __t.object("DemoTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  familyId: __t.u64(),
+});
+export type DemoTimer = __Infer<typeof DemoTimer>;
+
 export const ExerciseEvent = __t.object("ExerciseEvent", {
   id: __t.string(),
   familyId: __t.u64(),

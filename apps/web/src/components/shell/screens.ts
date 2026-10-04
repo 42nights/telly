@@ -77,6 +77,7 @@ export const settingsScreen = {
 		{ to: "/settings/things", label: "Saved things" },
 		{ to: "/settings/reports", label: "Report email" },
 		{ to: "/settings/device", label: "This device" },
+		{ to: "/settings/demo", label: "Demo data" },
 		{ to: "/settings/family", label: "Family" },
 	],
 } as const satisfies Screen;

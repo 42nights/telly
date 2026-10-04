@@ -11,6 +11,7 @@ import {
 	ReadingsGlance,
 } from "@/components/family/parts";
 import { Page } from "@/components/hud/window";
+import { UseDemoData } from "@/components/settings/demo-data";
 import { loadFamilyReads, PersonPicker } from "@/lib/family";
 
 export const Route = createFileRoute("/family")({
@@ -48,6 +49,11 @@ function FamilyOverview() {
 								familyId={family.id}
 								now={Date.now()}
 							/>
+							{data.readings.kind === "ready" &&
+								!data.readings.value.samples.some(
+									(s) =>
+										s.familyId === family.id && s.source.startsWith("noop:"),
+								) && <UseDemoData familyId={family.id} />}
 						</section>
 					</div>
 				)}

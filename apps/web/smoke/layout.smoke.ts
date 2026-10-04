@@ -81,6 +81,7 @@ const paths = [
 	"/settings/things",
 	"/settings/reports",
 	"/settings/device",
+	"/settings/demo",
 	"/settings/family",
 ];
 

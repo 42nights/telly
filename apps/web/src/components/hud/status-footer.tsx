@@ -1,12 +1,13 @@
 // The app frame's Win95 status bar, on every page and in both views: the phone, the WHOOP strap,
 // monitoring, the server, and actions saved on this phone. One short phrase per pane on desktop,
 // only an icon and a state dot on a phone; the details are in each pane's tooltip.
-import { Health, Sources } from "@health/contracts";
+import { DEMO_SOURCE, FamilyRecords, Health, Sources } from "@health/contracts";
 import { Monitoring } from "@health/contracts/alerts";
 import { cn } from "@health/ui/lib/utils";
 import {
 	Activity,
 	type LucideIcon,
+	PlayCircle,
 	Server,
 	Smartphone,
 	Upload,
@@ -139,6 +140,24 @@ function MonitoringPane({ familyId }: { familyId: string }) {
 	);
 }
 
+/** "Demo", shown only while the selected family replays a WHOOP recording (#334). */
+function DemoPane({ familyId }: { familyId: string }) {
+	const records = useApi(FamilyRecords, familyPath(familyId));
+	return records.kind === "ready" &&
+		records.value.samples.some(
+			(s) => s.familyId === familyId && s.source === DEMO_SOURCE,
+		) ? (
+		<StatusPane
+			icon={PlayCircle}
+			pane={{
+				text: "Demo",
+				detail: "Replaying a real WHOOP recording.",
+				state: "warn",
+			}}
+		/>
+	) : null;
+}
+
 const dot: Record<Pane["state"], string> = {
 	ok: "bg-[#008000]",
 	warn: "bg-[#c0a000]",
@@ -209,7 +228,10 @@ export function StatusBar({ familyId }: { familyId: string | null }) {
 					}}
 				/>
 			) : (
-				<MonitoringPane familyId={familyId} />
+				<>
+					<MonitoringPane familyId={familyId} />
+					<DemoPane familyId={familyId} />
+				</>
 			)}
 			<StatusPane icon={Server} pane={serverLine(health, now)} align="end" />
 			{pending > 0 && (
