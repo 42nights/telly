@@ -2,7 +2,8 @@
 // server sends the whole history each turn, so Google keeps no copy of the family's records.
 // https://ai.google.dev/gemini-api/docs/function-calling (Stateless function calling)
 import { Data, Effect, Schema } from "effect";
-import type { ChatTool } from "../family-agent";
+import type { FamilyTools } from "../family-tools";
+import { ApiFailure } from "../http";
 import type { GeminiConfig } from "./gemini";
 
 /** Pinned so a provider alias change cannot silently change answers. */
@@ -106,45 +107,51 @@ const interact = (config: GeminiConfig, body: unknown) =>
 					),
 	});
 
-/** Runs the calls in order and returns their `function_result` steps. */
-const functionResults = <E>(
-	tools: ReadonlyArray<ChatTool<E>>,
+/**
+ * Runs the calls in order through the family tools and returns their `function_result` steps. A
+ * failed tool call stops the answer with its `ApiFailure`; the model never continues without data.
+ */
+const functionResults = (
+	run: FamilyTools["run"],
 	calls: ReadonlyArray<{ id: string; name: string; arguments?: unknown }>,
 ) =>
-	Effect.forEach(calls, (call) => {
-		const tool = tools.find((t) => t.name === call.name);
-		const output =
-			tool === undefined
-				? Effect.succeed({ error: `unknown tool ${call.name}` })
-				: tool.run(call.arguments ?? {});
-		return Effect.map(output, (result) => ({
-			type: "function_result",
-			name: call.name,
-			call_id: call.id,
-			result: [{ type: "text", text: JSON.stringify(result) }],
-		}));
-	});
+	Effect.forEach(calls, (call) =>
+		Effect.tryPromise({
+			try: (signal) => run(call.name, call.arguments ?? {}, signal),
+			catch: (error) =>
+				error instanceof ApiFailure
+					? error
+					: new ApiFailure("upstream_error", "A family tool failed"),
+		}).pipe(
+			Effect.map((result) => ({
+				type: "function_result",
+				name: call.name,
+				call_id: call.id,
+				result: [{ type: "text", text: JSON.stringify(result) }],
+			})),
+		),
+	);
 
 /**
  * Asks Gemini one question and runs the tools it calls until it answers in text. Fails when the
  * reply is empty, incomplete, or still calling tools after the round limit; it never makes up an
  * answer. Interrupting it aborts the provider call.
  */
-export const askGemini = <E>(
+export const askGemini = (
 	config: GeminiConfig | undefined,
-	request: {
-		readonly instructions: string;
-		readonly question: string;
-		readonly tools: ReadonlyArray<ChatTool<E>>;
-	},
-): Effect.Effect<{ text: string; model: string }, GeminiChatError | E> =>
+	question: string,
+	family: Pick<FamilyTools, "rules" | "tools" | "run">,
+): Effect.Effect<
+	{ text: string; model: string },
+	GeminiChatError | ApiFailure
+> =>
 	Effect.gen(function* () {
 		if (config === undefined)
 			return yield* new GeminiChatError({
 				reason: "unavailable",
 				message: "Gemini is not configured (GEMINI_API_KEY)",
 			});
-		const tools = request.tools.map(({ name, description, parameters }) => ({
+		const tools = family.tools.map(({ name, description, parameters }) => ({
 			type: "function",
 			name,
 			description,
@@ -153,14 +160,14 @@ export const askGemini = <E>(
 		const history: unknown[] = [
 			{
 				type: "user_input",
-				content: [{ type: "text", text: request.question }],
+				content: [{ type: "text", text: question }],
 			},
 		];
 		for (let round = 0; round <= maxRounds; round++) {
 			const reply = yield* interact(config, {
 				model: GEMINI_CHAT_MODEL,
 				store: false,
-				system_instruction: request.instructions,
+				system_instruction: family.rules,
 				input: history,
 				tools,
 				// About 2000 characters: short enough to read on a phone and to speak.
@@ -176,7 +183,7 @@ export const askGemini = <E>(
 				return yield* upstream("Gemini did not complete the answer");
 			history.push(
 				...reply.raw,
-				...(yield* functionResults(request.tools, calls)),
+				...(yield* functionResults(family.run, calls)),
 			);
 		}
 		return yield* upstream(

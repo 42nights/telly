@@ -1,6 +1,6 @@
 // Family questions answered by Gemini, under `/api/families/:familyId`. Voice uses ElevenLabs.
 import { Schema } from "effect";
-import { Alert, HealthSample } from "./index";
+import { CitedRecords } from "./chat";
 import { LanguageCode, VoiceTranscript } from "./voice";
 
 const isTimeZone = Schema.makeFilter((zone: string) => {
@@ -23,25 +23,13 @@ export const FamilyQuestion = Schema.Struct({
 });
 export type FamilyQuestion = typeof FamilyQuestion.Type;
 
-/** A sample the agent read for an answer. `stale` is true when the source time is over 24 hours old. */
-export const Evidence = Schema.Struct({
-	...HealthSample.fields,
-	stale: Schema.Boolean,
-});
-export type Evidence = typeof Evidence.Type;
-
 /**
- * `POST /ask` reply. The server fills `evidence`, `alerts`, and `unavailable` from the records that
- * the agent's Fetch.ai tool calls returned, not from the model's text.
+ * `POST /ask` reply. `evidence`, `alerts`, and `unavailable` are the family tools' `CitedRecords`:
+ * the server fills them from the records the Fetch.ai tool calls returned, not from the model's text.
  */
 export const FamilyAnswer = Schema.Struct({
 	answer: Schema.NonEmptyString,
-	/** Every sample the agent read, with source and freshness. Empty when it found none. */
-	evidence: Schema.Array(Evidence),
-	/** Every alert the agent read. */
-	alerts: Schema.Array(Alert),
-	/** What the agent looked for and found no records of: a metric, or `health_samples` for any metric. */
-	unavailable: Schema.Array(Schema.String),
+	...CitedRecords.fields,
 	/** The Gemini model that answered. */
 	model: Schema.String,
 	answeredAt: Schema.String,

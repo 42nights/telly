@@ -19,9 +19,9 @@ Errors use `ApiError`:
 
 The client makes a `clientId` (letters, digits, `_`, `-`, at most 128) one time for each message. After a lost reply, it sends the same `clientId` again. The database module (`sendMessage` in `spacetimedb/src/index.ts`) keeps the first stored copy, so the message is stored one time. To catch up after a disconnect, the client reads `GET /messages?after=<last id>`.
 
-## Family questions (not in this change)
+## Family questions
 
-By captain decision, Gemini is the only chat model for family questions, and ElevenLabs stays for speech. Grok is not used. The Gemini adapter and the question routes belong to the Gemini integration task. The provider-independent family tools belong to this area.
+By captain decision, Gemini is the only chat model for family questions, and ElevenLabs stays for speech. Grok is not used. The Gemini adapter and the question routes (`POST /ask`, `POST /ask/voice`) are described in [`ask.md`](ask.md). The provider-independent family tools belong to this area.
 
 - `familyTools(fetchAgent, familyId, now, timeZone?)` in `apps/server/src/family-tools.ts` gives the chat adapter `rules` (instructions that keep the answer tied to the records), `tools` (JSON Schema function specs from `@health/contracts/tools`), `run(name, args, signal?)`, and `cited()` (`CitedRecords` in `@health/contracts/chat`: each sample read with source and a `stale` flag, each alert read, and each metric with no records). Every `run` goes through Fetch.ai Agentverse with `callAgentTool` from PR #65. Bad arguments return `{ error }` to the model without a call. A Fetch.ai or server failure rejects with `ApiFailure`, so the answer stops instead of continuing without the data.
 - An answer gives each value with its source and source time, says when data is synthetic, unvalidated, or stale, and reports missing data as unavailable. NOOP stays not connected.

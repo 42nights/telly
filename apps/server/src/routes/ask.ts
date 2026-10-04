@@ -9,10 +9,10 @@ import {
 import { Cause, Effect, Exit, Schema } from "effect";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { familyQuestion } from "../family-agent";
+import { familyTools } from "../family-tools";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import { maxAudioBytes, type Voice } from "../integrations/elevenlabs";
-import { callAgentTool, type FetchAgentConfig } from "../integrations/fetch";
+import type { FetchAgentConfig } from "../integrations/fetch";
 import type { GeminiConfig } from "../integrations/gemini";
 import { askGemini } from "../integrations/gemini-chat";
 
@@ -51,27 +51,24 @@ const run = async <A>(
 const gone = () => new Response(null, { status: 499 });
 
 export const askRoutes = ({ gemini, fetchAgent, voice }: AskDeps) => {
-	const ask = (familyId: bigint, question: FamilyQuestion) => {
+	const ask = (familyId: bigint, { question, timeZone }: FamilyQuestion) => {
+		// Checked first, so Gemini never runs a question whose tools cannot read records.
 		if (fetchAgent === undefined)
 			throw new ApiFailure(
 				"unavailable",
 				"Fetch.ai tool routing is not configured",
 			);
-		const agent = familyQuestion(
-			(id, request) =>
-				Effect.tryPromise({
-					try: (signal) => callAgentTool(fetchAgent, id, request, signal),
-					catch: (error) =>
-						error instanceof ApiFailure
-							? error
-							: new ApiFailure("upstream_error", "The agent tool failed"),
+		const now = new Date();
+		const family = familyTools(fetchAgent, familyId, now, timeZone);
+		return askGemini(gemini, question, family).pipe(
+			Effect.map(
+				({ text, model }): FamilyAnswer => ({
+					answer: text,
+					...family.cited(),
+					model,
+					answeredAt: now.toISOString(),
 				}),
-			familyId,
-			question,
-			new Date(),
-		);
-		return askGemini(gemini, { ...agent, question: question.question }).pipe(
-			Effect.map(({ text, model }) => agent.answer(text, model)),
+			),
 		);
 	};
 	return new Hono<FamilyEnv>()

@@ -2,7 +2,7 @@
 
 Backend for family questions ([#86](https://github.com/ayaangazali/telly/issues/86), part of [#11](https://github.com/ayaangazali/telly/issues/11) and [#16](https://github.com/ayaangazali/telly/issues/16)). Gemini answers the question. Its data tools run through Fetch.ai Agentverse. ElevenLabs transcribes and speaks voice questions. Plan: [`docs/plan.md`](plan.md) (Family, Requests) and the board flow "How is Mom sleeping?".
 
-Schemas: `@health/contracts/ask` (`packages/contracts/src/ask.ts`). Routes: `apps/server/src/routes/ask.ts`. Gemini adapter: `apps/server/src/integrations/gemini-chat.ts`. Question logic (tools, evidence, freshness): `apps/server/src/family-agent.ts`.
+Schemas: `@health/contracts/ask` (`packages/contracts/src/ask.ts`). Routes: `apps/server/src/routes/ask.ts`. Gemini adapter: `apps/server/src/integrations/gemini-chat.ts`. Family tools (tool list, evidence, freshness): `familyTools` in `apps/server/src/family-tools.ts`, described in [`chat.md`](chat.md).
 
 ## Routes
 
@@ -33,7 +33,7 @@ When the client disconnects, the server aborts the provider request and answers 
 
 - Gemini Interactions API, `POST {GEMINI_BASE_URL}/v1beta/interactions`, model `gemini-3.8-flash`, with function calling ([documentation](https://ai.google.dev/gemini-api/docs/function-calling)).
 - Requests set `store: false`. The server sends the whole conversation each round, so Google keeps no copy for later retrieval.
-- The tools are the Fetch.ai tool set in `@health/contracts/tools`. Each call goes through `callAgentTool`: bridge, Agentverse, worker, then `POST /api/families/:familyId/tools`. There is no direct database fallback.
+- The tools come from `familyTools` (the Fetch.ai tool set in `@health/contracts/tools`). Each call goes through `callAgentTool`: bridge, Agentverse, worker, then `POST /api/families/:familyId/tools`. There is no direct database fallback.
 - One provider request is bounded at 30 s. The model gets at most 4 tool rounds. Calls are not retried, because each call is billed and has no idempotency key.
 - Every reply is validated. An empty, incomplete, or endless answer fails; the server never makes up an answer.
 - The server does not log questions, answers, audio, records, or keys. Error messages carry only the failed step and the HTTP status.
