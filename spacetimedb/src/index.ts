@@ -1333,18 +1333,23 @@ export const backfillFounderCareGrants = spacetimedb.reducer((ctx) => {
 	}
 });
 
+/** Adds `member` with no care grants, unless they already belong to the family. */
+const addMemberIfAbsent = (ctx: Ctx, familyId: bigint, member: Identity) => {
+	const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
+	if (!rows.next().done) return;
+	ctx.db.familyMember.insert({
+		id: 0n,
+		familyId,
+		member,
+		addedAt: ctx.timestamp,
+	});
+};
+
 export const addFamilyMember = spacetimedb.reducer(
 	{ familyId: t.u64(), member: t.identity() },
 	(ctx, { familyId, member }) => {
 		requireMember(ctx, familyId);
-		const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
-		if (!rows.next().done) return;
-		ctx.db.familyMember.insert({
-			id: 0n,
-			familyId,
-			member,
-			addedAt: ctx.timestamp,
-		});
+		addMemberIfAbsent(ctx, familyId, member);
 	},
 );
 
@@ -2716,11 +2721,16 @@ export const setSpeakerSettings = spacetimedb.reducer(
 	},
 );
 
+/** A care or cooking profile save: a `care_plan_edit` holder with non-empty text. */
+const requireProfileEdit = (ctx: Ctx, familyId: bigint, profile: string) => {
+	requireCareScope(ctx, familyId, "care_plan_edit");
+	requireText("profile", profile);
+};
+
 export const saveCareProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
-		requireCareScope(ctx, familyId, "care_plan_edit");
-		requireText("profile", profile);
+		requireProfileEdit(ctx, familyId, profile);
 		ctx.db.careProfileVersion.insert({
 			id: 0n,
 			familyId,
@@ -3199,8 +3209,7 @@ export const revokeClinicianShare = spacetimedb.reducer(
 export const saveCookingProfile = spacetimedb.reducer(
 	{ familyId: t.u64(), profile: t.string() },
 	(ctx, { familyId, profile }) => {
-		requireCareScope(ctx, familyId, "care_plan_edit");
-		requireText("profile", profile);
+		requireProfileEdit(ctx, familyId, profile);
 		const row = {
 			familyId,
 			profile,
@@ -3697,18 +3706,6 @@ export const settleReportEmail = spacetimedb.reducer(
 // Onboarding: one-time join codes and the family's WHOOP push token.
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const INVITE_MAX_MICROS = 7n * 24n * 3_600n * 1_000_000n;
-
-/** Adds `member` with no care grants, unless they already belong to the family. */
-const addMemberIfAbsent = (ctx: Ctx, familyId: bigint, member: Identity) => {
-	const rows = ctx.db.familyMember.byFamilyMember.filter([familyId, member]);
-	if (!rows.next().done) return;
-	ctx.db.familyMember.insert({
-		id: 0n,
-		familyId,
-		member,
-		addedAt: ctx.timestamp,
-	});
-};
 
 export const createFamilyInvite = spacetimedb.reducer(
 	{ familyId: t.u64(), codeHash: t.string(), expiresAt: t.timestamp() },

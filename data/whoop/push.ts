@@ -1,3 +1,4 @@
+// fallow-ignore-file unused-file -- run by hand (Usage below); no package script calls it.
 // Pushes the WHOOP history exported in this folder into one Telly family, through the same ingest
 // that NOOP's live push uses. Only real exported rows are sent; the server keeps one heart rate a
 // minute, wrist on/off events, and the daily scores, all marked "unvalidated".

@@ -3,7 +3,7 @@ import { CueRequest, type HealthCue } from "@health/contracts/cues";
 import { Cause, Effect, Exit } from "effect";
 import { Hono } from "hono";
 import { readFamilyRecords } from "../db";
-import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
+import { ApiFailure, decodeBody, type FamilyEnv, typedFailure } from "../http";
 import { type QwenConfig, requestCue } from "../integrations/qwen";
 
 /** The family's validated samples for the requested ids, in request order. */
@@ -73,9 +73,7 @@ export const cueRoutes = (qwen: QwenConfig | undefined) =>
 		// 499: the client closed the request; nobody reads this response.
 		if (Cause.hasInterruptsOnly(result.cause))
 			return new Response(null, { status: 499 });
-		const failure = Cause.findErrorOption(result.cause);
-		if (failure._tag === "None") throw Cause.squash(result.cause);
-		const { _tag, message } = failure.value;
+		const { _tag, message } = typedFailure(result.cause);
 		console.warn("qwen cue failed", { _tag, message });
 		throw new ApiFailure(
 			_tag === "QwenUnavailable" ? "unavailable" : "upstream_error",

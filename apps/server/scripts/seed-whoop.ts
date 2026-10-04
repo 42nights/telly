@@ -1,3 +1,4 @@
+// fallow-ignore-file unused-file -- run by hand (Usage below); no package script calls it.
 // Seeds one family with the real WHOOP readings in data/whoop/ (see its README) through the NOOP
 // relay contract: the same `recordSample` rows a live push writes, from the same mapping. That is
 // one heart rate per device-minute, wrist on/off events, and the app's computed daily scores. Values

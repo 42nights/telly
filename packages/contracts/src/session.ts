@@ -68,6 +68,19 @@ export const SignInRefresh = Schema.Struct({
 });
 export type SignInRefresh = typeof SignInRefresh.Type;
 
+const Discovery = Schema.Struct({ authorization_endpoint: Schema.String });
+
+/** The issuer's authorization endpoint, read from its OpenID discovery document. */
+export const discoverAuthorizationEndpoint = async (issuer: string) => {
+	const response = await fetch(
+		`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
+	);
+	if (!response.ok)
+		throw new Error(`The sign-in server replied HTTP ${response.status}.`);
+	return Schema.decodeUnknownSync(Discovery)(await response.json())
+		.authorization_endpoint;
+};
+
 /** The issuer's authorization URL for one sign-in attempt. `challenge` is the S256 PKCE challenge. */
 export const authorizationUrl = (
 	authorizationEndpoint: string,

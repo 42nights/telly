@@ -4,7 +4,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { ApiErrorCode } from "@health/contracts";
 import type { DbConnection } from "@health/db";
-import { Effect, Exit, Schema } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 import type { Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { callDb, DbRejected, type FamilyDb } from "./db";
@@ -105,6 +105,13 @@ export const callReducer = async (
 			);
 		throw error;
 	}
+};
+
+/** The typed failure in `cause`, which must hold more than interruptions; a defect is rethrown. */
+export const typedFailure = <E>(cause: Cause.Cause<E>): E => {
+	const failure = Cause.findErrorOption(cause);
+	if (failure._tag === "None") throw Cause.squash(cause);
+	return failure.value;
 };
 
 /** The SHA-256 of a code or token as lowercase hex: the only form the database keeps. */
