@@ -95,6 +95,14 @@ export const CareProfileVersion = __t.object("CareProfileVersion", {
 });
 export type CareProfileVersion = __Infer<typeof CareProfileVersion>;
 
+export const CookingProfile = __t.object("CookingProfile", {
+  familyId: __t.u64(),
+  profile: __t.string(),
+  editedBy: __t.identity(),
+  editedAt: __t.timestamp(),
+});
+export type CookingProfile = __Infer<typeof CookingProfile>;
+
 // The tagged union or sum type for the algebraic type `DeliveryStatus`.
 export const DeliveryStatus = __t.enum("DeliveryStatus", {
   Queued: __t.unit(),
@@ -186,6 +194,9 @@ export type MyCareInstructions = __Infer<typeof MyCareInstructions>;
 
 export const MyCareProfiles = __t.object("MyCareProfiles", {});
 export type MyCareProfiles = __Infer<typeof MyCareProfiles>;
+
+export const MyCookingProfiles = __t.object("MyCookingProfiles", {});
+export type MyCookingProfiles = __Infer<typeof MyCookingProfiles>;
 
 export const MyFamilies = __t.object("MyFamilies", {});
 export type MyFamilies = __Infer<typeof MyFamilies>;

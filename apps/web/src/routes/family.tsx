@@ -4,6 +4,7 @@ import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 
+import { CookingAbilities } from "@/components/cooking/abilities";
 import { type FamilyData, useFamilyData } from "@/components/family/data";
 import {
 	AlertSection,
@@ -92,6 +93,15 @@ function FamilyBody({ data, family }: { data: FamilyData; family: Family }) {
 					>
 						Open chat
 					</Link>
+				</div>
+			</section>
+
+			<section aria-labelledby="cooking" className="grid gap-2">
+				<h3 id="cooking" className="font-bold">
+					Cooking abilities
+				</h3>
+				<div className="win95-inset grid gap-2 bg-card p-2">
+					<CookingAbilities familyId={family.id} />
 				</div>
 			</section>
 		</div>

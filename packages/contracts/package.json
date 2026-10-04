@@ -15,7 +15,8 @@
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
 		"./care-profile": "./src/care-profile.ts",
-		"./meals": "./src/meals.ts"
+		"./meals": "./src/meals.ts",
+		"./cooking": "./src/cooking.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

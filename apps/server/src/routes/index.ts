@@ -6,6 +6,7 @@ import { alertRoutes } from "./alerts";
 import { askRoutes } from "./ask";
 import { careProfileRoutes } from "./care-profile";
 import { chatRoutes } from "./chat";
+import { cookingRoutes } from "./cooking";
 import { cueRoutes } from "./cues";
 import { familyRoutes } from "./families";
 import { finchnodeRoutes } from "./finchnode";
@@ -40,5 +41,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", toolRoutes())
 		.route("/", chatRoutes())
 		.route("/", cueRoutes(config.gemma))
-		.route("/", careProfileRoutes());
+		.route("/", careProfileRoutes())
+		.route("/", cookingRoutes());
 };

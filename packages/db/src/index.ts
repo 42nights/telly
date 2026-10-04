@@ -49,6 +49,7 @@ import RecordMealFactReducer from "./record_meal_fact_reducer";
 import RecordSampleReducer from "./record_sample_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
 import SaveCareProfileReducer from "./save_care_profile_reducer";
+import SaveCookingProfileReducer from "./save_cooking_profile_reducer";
 import SendMessageReducer from "./send_message_reducer";
 import SetAlertThresholdReducer from "./set_alert_threshold_reducer";
 import SetCareGrantReducer from "./set_care_grant_reducer";
@@ -65,6 +66,7 @@ import MyAlertsRow from "./my_alerts_table";
 import MyCareGrantsRow from "./my_care_grants_table";
 import MyCareInstructionsRow from "./my_care_instructions_table";
 import MyCareProfilesRow from "./my_care_profiles_table";
+import MyCookingProfilesRow from "./my_cooking_profiles_table";
 import MyFamiliesRow from "./my_families_table";
 import MyFinchnodeLinksRow from "./my_finchnode_links_table";
 import MyHealthSamplesRow from "./my_health_samples_table";
@@ -126,6 +128,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyCareProfilesRow),
+  myCookingProfiles: __table({
+    name: 'my_cooking_profiles',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyCookingProfilesRow),
   myFamilies: __table({
     name: 'my_families',
     indexes: [
@@ -194,6 +203,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_sample", RecordSampleReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
   __reducerSchema("save_care_profile", SaveCareProfileReducer),
+  __reducerSchema("save_cooking_profile", SaveCookingProfileReducer),
   __reducerSchema("send_message", SendMessageReducer),
   __reducerSchema("set_alert_threshold", SetAlertThresholdReducer),
   __reducerSchema("set_care_grant", SetCareGrantReducer),

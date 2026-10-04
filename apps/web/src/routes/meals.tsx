@@ -15,6 +15,9 @@ import { useMeal } from "@/components/meals/use-meal";
 import { useFamily } from "@/lib/family";
 
 export const Route = createFileRoute("/meals")({
+	// `dish`: a meal the wearer made with guided cooking (#42) and chose to record.
+	validateSearch: (search: Record<string, unknown>): { dish?: string } =>
+		typeof search.dish === "string" ? { dish: search.dish.slice(0, 2000) } : {},
 	component: MealsComponent,
 });
 
@@ -24,6 +27,7 @@ export const Route = createFileRoute("/meals")({
  */
 function MealsComponent() {
 	const { family } = useFamily();
+	const { dish } = Route.useSearch();
 	const familyId = family?.id ?? null;
 	const camera = useCamera(false);
 	const video = useRef<HTMLVideoElement | null>(null);
@@ -88,6 +92,7 @@ function MealsComponent() {
 						</p>
 						<DescribeMeal
 							familyId={familyId}
+							initialText={dish ?? ""}
 							onDescribe={(text) =>
 								void meal.estimateFrom({ source: "description", text })
 							}

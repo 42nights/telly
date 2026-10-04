@@ -8,7 +8,14 @@ import {
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import { CloudOff, Glasses, Home, RotateCw, Utensils } from "lucide-react";
+import {
+	ChefHat,
+	CloudOff,
+	Glasses,
+	Home,
+	RotateCw,
+	Utensils,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Window } from "@/components/hud/window";
@@ -259,6 +266,17 @@ function HudComponent() {
 						>
 							<Utensils aria-hidden />
 							Meal
+						</Link>
+						<Link
+							className={buttonVariants({
+								variant: "outline",
+								className: "h-14 w-full text-[20px] [&_svg]:size-6",
+							})}
+							data-slot="button"
+							to="/cooking"
+						>
+							<ChefHat aria-hidden />
+							Cook
 						</Link>
 					</div>
 
