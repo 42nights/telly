@@ -7,6 +7,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@health/ui/components/empty";
+import { Link } from "@tanstack/react-router";
 import { CloudOff, Info, Loader, LockKeyhole, ShieldOff } from "lucide-react";
 
 import type { ApiFailure } from "@/lib/api";
@@ -79,7 +80,7 @@ export function ApiNotice({
 		state.kind === "loading"
 			? "Waiting for the server."
 			: state.kind === "signed_out"
-				? `Sign in to see ${what}. Sign-in is not set up in this app yet (issue #4).`
+				? `Sign in to see ${what}.`
 				: state.message;
 	return (
 		<Empty className="p-4" role={problem ? "alert" : "status"}>
@@ -88,7 +89,15 @@ export function ApiNotice({
 					<Icon aria-hidden />
 				</EmptyMedia>
 				<EmptyTitle>{title(what)}</EmptyTitle>
-				<EmptyDescription>{description}</EmptyDescription>
+				<EmptyDescription>
+					{description}
+					{state.kind === "signed_out" && (
+						<>
+							{" "}
+							<Link to="/sign-in">Go to Sign in</Link>
+						</>
+					)}
+				</EmptyDescription>
 			</EmptyHeader>
 		</Empty>
 	);

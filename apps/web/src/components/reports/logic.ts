@@ -88,6 +88,18 @@ export const labRange = (lab: FinchnodeLab): string | null => {
 	return `${lab.referenceRange} (range from ${source})`;
 };
 
+/** FinchNode's demo text with the word "synthetic" (any case) said as "demo", in the same case. */
+export const demoText = (text: string): string =>
+	text === "synthetic_data"
+		? "Demo records, not real patient data"
+		: text.replace(/synthetic/gi, (word) =>
+				word === word.toUpperCase()
+					? "DEMO"
+					: word[0] === "S"
+						? "Demo"
+						: "demo",
+			);
+
 export const formatTime = (iso: string | number): string => {
 	const date = new Date(iso);
 	return Number.isNaN(date.getTime())

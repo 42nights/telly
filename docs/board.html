@@ -141,7 +141,7 @@
   <div>
     <h1>Health glasses <span class="chip acc">name later</span></h1>
     <p class="tag">Every feature without glasses. An optional display, not a dependency.</p>
-    <p class="tag" style="font-size:14px">Static archive of the approved planning board. Implementation is tracked in GitHub issues; see docs/plan.md.</p>
+    <p class="tag" style="font-size:14px">Approved plan, updated 2026-10-04 with the current providers, owners, and open decisions. GitHub issues track implementation; see docs/plan.md.</p>
   </div>
 </header>
 <nav>
@@ -247,11 +247,11 @@
       <text class="t" x="670" y="201">Threshold rules</text>
       <text class="s" x="670" y="220">fall · breath · heart</text>
     </g>
-    <g id="sys-muse"><title>Grokbot runs family agents and carries family messages; Fetch.ai routes agent requests</title>
+    <g id="sys-muse"><title>Gemini answers family questions with data tools through Fetch.ai; SpacetimeDB stores family messages</title>
       <rect class="n" x="652" y="270" width="256" height="76" rx="14"/>
-      <text class="t" x="670" y="296"><tspan class="sp">Grokbot</tspan> family agents</text>
+      <text class="t" x="670" y="296"><tspan class="sp">Gemini</tspan> family agents</text>
       <text class="s" x="670" y="316"><tspan class="sp">Fetch.ai</tspan> Agentverse · required</text>
-      <text class="s" x="670" y="334"><tspan class="sp">Grokbot</tspan> messages · replies</text>
+      <text class="s" x="670" y="334">Messages in <tspan class="sp">SpacetimeDB</tspan></text>
     </g>
     <g id="sys-lab"><title>Lab report generator</title>
       <rect class="n" x="652" y="372" width="256" height="66" rx="14"/>
@@ -267,7 +267,7 @@
     <g id="sys-training"><title>Train Gemma on River AI, then deploy the model to cloud inference</title>
       <rect class="n" x="652" y="618" width="256" height="70" rx="14"/>
       <text class="t" x="670" y="646"><tspan class="sp">River AI</tspan> training</text>
-      <text class="s" x="670" y="668">Gemma 3B post-train · J + A</text>
+      <text class="s" x="670" y="668">Gemma 3B post-train · J</text>
       <path class="e" d="M780 616 V564" marker-end="url(#ah)"/>
     </g>
 
@@ -279,14 +279,15 @@
       <text class="s" x="1008" y="138">web dashboard</text>
       <text class="s" x="1008" y="160">any time zone</text>
     </g>
-    <g id="sys-finch"><title>Proposed Finchnode report handoff; verify the API before using patient data</title>
+    <g id="sys-finch"><title>Finchnode reads lab results (keyless synthetic demo); it has no delivery API</title>
       <rect class="n" x="990" y="372" width="160" height="66" rx="14"/>
       <text class="t" x="1008" y="400"><tspan class="sp">Finchnode</tspan></text>
-      <text class="s" x="1008" y="420">report handoff</text>
+      <text class="s" x="1008" y="420">lab results · read only</text>
     </g>
-    <g id="sys-hospital"><title>Hospital</title>
+    <g id="sys-hospital"><title>Hospital: the report delivery path is a separate open decision</title>
       <rect class="n" x="990" y="476" width="160" height="66" rx="14"/>
-      <text class="t" x="1008" y="514">Hospital</text>
+      <text class="t" x="1008" y="502">Hospital</text>
+      <text class="s" x="1008" y="524">delivery not chosen</text>
     </g>
 
     <!-- edges -->
@@ -304,11 +305,11 @@
       <path class="e" d="M642 405 H650" marker-end="url(#ah)"/></g>
     <g id="edge-alert"><title>Alert pushed to family</title>
       <path class="ew" d="M910 205 H988" marker-end="url(#ahw)"/><text class="elw" x="949" y="197" text-anchor="middle">alert</text></g>
-    <g id="edge-ask"><title>Family asks Grokbot agents; agents use data tools through Fetch.ai</title>
+    <g id="edge-ask"><title>Family asks Gemini agents; agents use data tools through Fetch.ai</title>
       <path class="e" d="M910 303 H1070 V236" marker-start="url(#ah)" marker-end="url(#ah)"/><text class="el" x="985" y="295" text-anchor="middle">ask · answer</text></g>
-    <g id="edge-report"><title>Report to Finchnode</title>
-      <path class="e" d="M910 405 H988" marker-end="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">report</text></g>
-    <path id="edge-hospital" class="e" d="M1070 440 V474" marker-end="url(#ah)"><title>Finchnode to hospital</title></path>
+    <g id="edge-report"><title>Finchnode lab results feed the report generator (read only)</title>
+      <path class="e" d="M910 405 H988" marker-start="url(#ah)"/><text class="el" x="949" y="397" text-anchor="middle">labs</text></g>
+    <path id="edge-hospital" class="e" d="M910 425 H950 V509 H988" stroke-dasharray="5 5" marker-end="url(#ah)"><title>Report to hospital: delivery path not chosen; Finchnode cannot send</title></path>
   </svg>
   <div class="legend"><span><b>Blue</b> = sponsor / tool</span><span><i></i>data</span><span><i class="w"></i>alert</span><span>Proposed service boundaries; verify APIs and device access.</span></div>
   </div>
@@ -316,17 +317,18 @@
   <div class="integrations" id="integration-reasons">
     <div class="integration"><strong>River AI</strong><p>Train Gemma on health-cue examples. Deploy the resulting model for inference.</p></div>
     <div class="integration"><strong>Gemma 3B</strong><p>Turn health context into a bounded cue, such as a walk reminder.</p></div>
-    <div class="integration"><strong>Grokbot · agent runtime</strong><p>Answer family questions with data tools. Coordinate report and notification actions.</p></div>
-    <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Grokbot calls these tools for family questions.</p></div>
+    <div class="integration"><strong>Gemini · family chat</strong><p>Answer family questions with data tools and cite the records. ElevenLabs speaks the reply.</p></div>
+    <div class="integration"><strong>Fetch.ai · required</strong><p>Use Agentverse for health-data and report agents. Gemini calls these tools for family questions.</p></div>
     <div class="integration"><strong>Gemini vision</strong><p>Locate the medicine box in the current frame. Draw its marker without a 3D map.</p></div>
     <div class="integration"><strong>ElevenLabs · required</strong><p>Speak reminders and agent replies in the user's language.</p></div>
     <div class="integration"><strong>NOOP → server · stub only</strong><p>Preserve NOOP itself. Stub only the connection adapter on the server. Return “Not connected”; do not transport or ingest readings.</p></div>
     <div class="integration"><strong>HealthKit · conditional bridge</strong><p>Aggregate other phone health sources. Do not force WHOOP through this bridge.</p></div>
     <div class="integration"><strong>Tiger Data · not selected</strong><p>Alternative for historical health analytics. No second store in the selected demo.</p></div>
     <div class="integration"><strong>SpacetimeDB · selected</strong><p>Store health samples and sync alerts, messages, and acknowledgements.</p></div>
-    <div class="integration"><strong>Finchnode</strong><p>Hand an approved report to the hospital. Validate the API with synthetic data first.</p></div>
+    <div class="integration"><strong>Finchnode · read only</strong><p>Read lab results for the report; the keyless synthetic demo works. It cannot send reports. Hospital delivery is a separate decision.</p></div>
     <div class="integration"><strong>3D home map · not required</strong><p>Optional future room navigation. The current demo has no map dependency.</p></div>
     <div class="integration"><strong>Meta · optional adapter</strong><p>Mirror the phone session when glasses are available. No pairing, DAT permission, or glasses connection may gate another feature.</p></div>
+    <div class="integration"><strong>Photon iMessage · requested</strong><p>Family questions over iMessage through Photon Spectrum. The provider path and account access are not decided.</p></div>
   </div>
 </section>
 
@@ -444,7 +446,7 @@
           <rect class="wf-i" x="48" y="270" width="104" height="28" rx="14"/><text class="wf-inv" x="100" y="288" text-anchor="middle">Call</text>
           <rect class="wf-k" x="162" y="270" width="110" height="28" rx="14"/><text class="wf-t" x="217" y="288" text-anchor="middle">Seen</text>
         </g>
-        <g id="ph-chat"><title>Ask the Grokbot agent</title>
+        <g id="ph-chat"><title>Ask the Gemini family agent</title>
           <text class="wf-x" x="30" y="344">FAMILY CHAT</text>
           <rect class="wf-s" x="96" y="356" width="194" height="38" rx="16"/><text class="wf-t" x="193" y="380" text-anchor="middle">How is she sleeping?</text>
           <rect class="wf-l" x="30" y="406" width="206" height="56" rx="16"/><text class="wf-t" x="46" y="430">6h 40m · 2 wake-ups</text><text class="wf-x" x="46" y="450">better than Tuesday</text>
@@ -544,9 +546,9 @@
         <g id="lab-notes"><title>Notes field</title>
           <text class="wf-x" x="44" y="460">Notes</text><rect class="wf-l" x="44" y="466" width="356" height="46" rx="4"/>
         </g>
-        <g id="lab-send"><title>Sign and send to hospital via Finchnode</title>
+        <g id="lab-send"><title>Sign, then send to the hospital; the delivery path is a separate decision because Finchnode only reads records</title>
           <line class="wf-k" x1="44" y1="550" x2="200" y2="550"/><text class="wf-x" x="44" y="564">Signed</text>
-          <rect class="wf-i" x="244" y="528" width="156" height="32" rx="16"/><text class="wf-inv" x="322" y="548" text-anchor="middle">Send · Finchnode</text>
+          <rect class="wf-i" x="244" y="528" width="156" height="32" rx="16"/><text class="wf-inv" x="322" y="548" text-anchor="middle">Send to hospital</text>
         </g>
       </svg>
     </div>
@@ -582,9 +584,8 @@
   <div class="settled" id="github-owners" aria-label="Verified GitHub assignees">
     <span class="chip">J · undeemed</span>
     <span class="chip">A · ayaangazali</span>
-    <span class="chip">M · maheshwarmurugesan</span>
   </div>
-  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. Deployment needs an approved target and credentials.</p>
+  <p class="tag" style="font-size:13px">One GitHub issue per task, assigned to the accounts above. On 2026-10-04 every issue that Mahesh (maheshwarmurugesan) owned moved to undeemed. Mahesh wrote the October 3 backlog (#25–#51) and opened draft PR #90. The same day, Ayaan's scope narrowed to NOOP and the Meta glasses SDK; his other issues moved to undeemed. Deployment needs an approved target and credentials.</p>
 </section>
 
 <!-- 06 STACK -->
@@ -630,7 +631,7 @@
       <g id="stack-integrations">
         <rect class="n" x="360" y="320" width="620" height="100" rx="14"/>
         <text class="t" x="380" y="350">Required integrations, behind the service</text>
-        <text class="s" x="380" y="374">Grokbot · Gemini · ElevenLabs · Finchnode</text>
+        <text class="s" x="380" y="374">Gemini chat + vision · ElevenLabs · Finchnode (read only)</text>
         <text class="s" x="380" y="398">Fetch.ai: Python uAgents worker · River: Python Gemma training</text>
       </g>
       <rect class="cp" x="20" y="450" width="960" height="48" rx="12"/>
@@ -768,7 +769,7 @@
     <div class="integration"><strong>Shared code, not shared UI</strong><p>Web, native, and server import contracts. Only the server imports the database client. Keep web and native UI separate.</p></div>
     <div class="integration"><strong>One schema owner</strong><p>Database source lives in spacetimedb/. Generate packages/db from it. Commit both together; never edit generated files.</p></div>
     <div class="integration"><strong>No dependency cycles</strong><p>Contracts import no apps, database code, or secrets. Apps never import each other. Python workers use the API, not TypeScript internals.</p></div>
-    <div class="integration"><strong>Parallel ownership</strong><p>M owns HUD and reports. A owns data and Fetch.ai. J owns native, dashboard, and Gemma. Claim shared-file edits in an issue.</p></div>
+    <div class="integration"><strong>Parallel ownership</strong><p>J owns the web HUD, reports, native, dashboard, family chat, data, alerts, Fetch.ai, Finchnode, Gemma, and River. A owns NOOP and the optional Meta glasses SDK. Claim shared-file edits in an issue.</p></div>
   </div>
   <details class="stack-notes" id="repo-app-files">
     <summary>App files · shallow until the code grows</summary>
@@ -799,7 +800,7 @@ apps/server/
     config.ts       Validated, redacted runtime configuration
     db.ts           Server database connection
     integrations/   noop.ts (connection stub) · gemini.ts · elevenlabs.ts
-                    grokbot.ts · finchnode.ts
+                    gemini-chat.ts · finchnode.ts
                     fetch.ts · gemma.ts</pre>
     <p>These are planned paths. Implement the server and providers normally; only the NOOP-to-server connection adapter is stubbed.</p>
     <p>Keep HUD and reports under web routes. Keep the existing NOOP source in noop/; add the new app without connecting it.</p>
@@ -1039,14 +1040,15 @@ export const GeminiKey = Config.schema(
 <section id="decide">
   <div class="sh"><span class="no">09</span><h2>Confirmed direction</h2><p>Everything must work without glasses. NOOP stays with the friend. The name stays deferred.</p></div>
   <div class="settled" aria-label="Confirmed direction">
-    <span class="chip acc">River AI training</span><span class="chip acc">Grokbot agents</span>
+    <span class="chip acc">River AI training</span><span class="chip acc">Gemini family agents</span>
     <span class="chip acc">No 3D map dependency</span><span class="chip acc">Glasses optional</span>
     <span class="chip acc">NOOP server link stubbed</span><span class="chip acc">One repository</span><span class="chip acc">Stability first</span>
     <span class="chip acc">Fetch.ai Agentverse required</span><span class="chip acc">ElevenLabs required</span>
     <span class="chip acc">Phone + web first</span><span class="chip acc">SpacetimeDB selected</span>
-    <span class="chip acc">Alzheimer's first</span><span class="chip acc">Grokbot family chat</span>
+    <span class="chip acc">Alzheimer's first</span><span class="chip acc">Gemini chat · ElevenLabs voice</span>
   </div>
   <p class="tag" style="font-size:14px">No hardware answer is needed to start. Glasses verification applies only to the optional adapter.</p>
+  <p class="tag" style="font-size:14px">Still open, outside this plan: the production sign-in issuer, the deployment target, provider access, data retention, hospital delivery, Photon iMessage access, and public source or agent publication.</p>
 </section>
 
 </main>
@@ -1062,11 +1064,11 @@ const el = (tag, attrs, text) => {
 
 /* 03 flows */
 const flows = [
-  { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · M", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
-  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · A, J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
-  { id: "ask", title: '"How is Mom sleeping?"', own: "Grokbot → data tools · J", steps: ['Family asks', 'Grokbot agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
+  { id: "meds", title: "Where are my meds?", own: "phone / browser camera + cloud · J", steps: ['Voice or text', 'Camera frame', 'Gemini finds box', 'Marker on screen', 'Label + audio'] },
+  { id: "alert", title: "Fall or breathing alert", own: "validated non-glasses signals → family · J", warn: true, steps: ['Sensor input', 'Validated detector', 'Threshold rule', 'Alert to family', 'Acknowledge'] },
+  { id: "ask", title: '"How is Mom sleeping?"', own: "Gemini → data tools · J", steps: ['Family asks', 'Gemini agent', 'Fetch.ai → data', '"6h 40m · 2 wake-ups"'] },
   { id: "nudge", title: "WHOOP nudge · not connected", own: "Friend connects later · no live readings", steps: ['Request WHOOP data', 'Not connected', 'Show unavailable', 'No health nudge'] },
-  { id: "lab", title: "Lab report → hospital", own: "Grokbot → report tool · M, A", steps: ['Health markers', 'Report tool', 'Review report', 'Finchnode', 'Hospital'] },
+  { id: "lab", title: "Lab report → hospital", own: "report tool · Finchnode reads labs · J", steps: ['Markers + labs', 'Report tool', 'Review report', 'Delivery choice', 'Hospital'] },
 ];
 const list = document.getElementById("flow-list");
 for (const f of flows) {
@@ -1102,9 +1104,9 @@ for (const f of flows) {
 const team = document.getElementById("team-svg");
 const phases = [["1 · Phone + web", "no glasses required"], ["2 · Core flows", "camera + validated data"], ["3 · Family loop", "durable alert + ask"], ["4 · Recovery", "report + failure checks"]];
 const lanes = [
-  ["M", "Mahesh", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
-  ["A", "Ayaan", [["NOOP server link stub", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode handoff"]]],
-  ["J", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Grokbot family chat"], ["Dashboard + recovery"]]],
+  ["M", "J", "Jerry (M)", "Jerry · reassigned from Mahesh on 2026-10-04", [["Phone / web vision", "Alzheimer's research"], ["Screen markers"], ["ElevenLabs · languages"], ["Lab report"]]],
+  ["A", "J", "Jerry (A)", "Jerry · reassigned from Ayaan on 2026-10-04; Ayaan keeps NOOP and the Meta glasses SDK", [["NOOP link · Ayaan", "River AI setup"], ["Data quality + storage"], ["Fetch.ai Agentverse", "Durable alerts"], ["Finchnode labs"]]],
+  ["J", "J", "Jerry", "Jerry", [["Phone capture + Gemma"], ["Phone + cloud model"], ["Gemini family chat"], ["Dashboard + recovery"]]],
 ];
 const CX = 110, CW = 222, LY = 74, LH = 84;
 phases.forEach(([a, b], i) => {
@@ -1112,10 +1114,10 @@ phases.forEach(([a, b], i) => {
   team.appendChild(el("text", { x: x + 8, y: 26, class: "t" }, a));
   team.appendChild(el("text", { x: x + 8, y: 46, class: "s" }, b));
 });
-lanes.forEach(([k, name, cells], r) => {
+lanes.forEach(([id, k, name, full, cells], r) => {
   const y = LY + r * LH;
-  const g = el("g", { id: "lane-" + k });
-  g.appendChild(el("title", {}, name));
+  const g = el("g", { id: "lane-" + id });
+  g.appendChild(el("title", {}, full));
   g.appendChild(el("rect", { x: 0, y: y, width: 1000, height: LH - 10, rx: 14, class: "cp" }));
   g.appendChild(el("circle", { cx: 34, cy: y + 30, r: 17, style: "fill:var(--ink)" }));
   g.appendChild(el("text", { x: 34, y: y + 35, "text-anchor": "middle", class: "t", style: "fill:var(--card)" }, k));

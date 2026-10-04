@@ -81,21 +81,32 @@ const functionCall = {
 		},
 	],
 };
-const answer = (text: string) => ({
+// The final turn is the structured answer: JSON text with `answer` and `follow_ups`.
+const answer = (text: string, follow_ups: unknown = []) => ({
 	status: "completed",
 	model: "gemini-3.8-flash",
-	steps: [{ type: "model_output", content: [{ type: "text", text }] }],
+	steps: [
+		{
+			type: "model_output",
+			content: [
+				{ type: "text", text: JSON.stringify({ answer: text, follow_ups }) },
+			],
+		},
+	],
 });
-beforeEach(() => {
-	geminiBodies.length = 0;
-	bridgeCalls.length = 0;
-	samples = [sleepSample(new Date().toISOString())];
+const answerWith = (followUps: unknown) => {
 	gemini = (body) =>
 		Response.json(
 			body.input.length === 1
 				? functionCall
-				: answer("Mom slept 7.5 hours (synthetic)."),
+				: answer("Mom slept 7.5 hours (synthetic).", followUps),
 		);
+};
+beforeEach(() => {
+	geminiBodies.length = 0;
+	bridgeCalls.length = 0;
+	samples = [sleepSample(new Date().toISOString())];
+	answerWith(["Did Mom nap today?"]);
 	speech = () =>
 		new Response(new Uint8Array([0xff, 0xf3, 1, 2]), {
 			headers: { "content-type": "audio/mpeg" },
@@ -151,6 +162,7 @@ describe("POST /ask", () => {
 		expect(reply.answer).toBe("Mom slept 7.5 hours (synthetic).");
 		expect(reply.evidence.map((e) => [e.id, e.stale])).toEqual([["11", false]]);
 		expect(reply.unavailable).toEqual([]);
+		expect(reply.followUps).toEqual(["Did Mom nap today?"]);
 		expect(bridgeCalls).toEqual([
 			expect.objectContaining({
 				family_id: "7",
@@ -206,6 +218,17 @@ describe("POST /ask", () => {
 			() => new Response("not json"),
 			() => Response.json({ status: "completed", steps: "nope" }),
 			() => Response.json(answer("   ")),
+			// Plain text where the structured answer belongs.
+			() =>
+				Response.json({
+					status: "completed",
+					steps: [
+						{
+							type: "model_output",
+							content: [{ type: "text", text: "Fine." }],
+						},
+					],
+				}),
 			() => Response.json({ status: "failed", steps: [] }),
 			() => Response.json(functionCall),
 		];
@@ -225,6 +248,81 @@ describe("POST /ask", () => {
 			{ question: "Sleep?", extra: true },
 		])
 			expect((await ask(body)).status).toBe(400);
+		expect(geminiBodies).toHaveLength(0);
+	});
+
+	test("follow-ups are trimmed, 1 to 200 characters, distinct, and at most 3", async () => {
+		answerWith([
+			" Did Mom nap? ",
+			"",
+			"   ",
+			"x".repeat(201),
+			"y".repeat(200),
+			"Did Mom nap?",
+			"Bedtime?",
+			"Steps today?",
+		]);
+		const reply = Schema.decodeUnknownSync(FamilyAnswer)(
+			await (await ask({ question: "Sleep?" })).json(),
+		);
+		expect(reply.followUps).toEqual([
+			"Did Mom nap?",
+			"y".repeat(200),
+			"Bedtime?",
+		]);
+	});
+
+	test("follow-ups with a bad shape give none, and the answer stands", async () => {
+		for (const followUps of [
+			undefined,
+			null,
+			"Bedtime?",
+			[1, "Bedtime?"],
+			{ q: "Bedtime?" },
+		]) {
+			answerWith(followUps);
+			const response = await ask({ question: "Sleep?" });
+			expect(response.status).toBe(200);
+			const reply = Schema.decodeUnknownSync(FamilyAnswer)(
+				await response.json(),
+			);
+			expect(reply.answer).toBe("Mom slept 7.5 hours (synthetic).");
+			expect(reply.followUps).toEqual([]);
+		}
+	});
+
+	const MiB = 1024 * 1024;
+	const file = (bytes: number, mimeType = "application/pdf") => ({
+		name: "report.pdf",
+		mimeType,
+		data: Buffer.alloc(bytes, 97).toString("base64"),
+	});
+
+	test("files at the size limits are answered", async () => {
+		for (const attachments of [
+			[file(5 * MiB)],
+			[file(4 * MiB), file(4 * MiB, "text/plain")],
+		])
+			expect((await ask({ question: "Sleep?", attachments })).status).toBe(200);
+	});
+
+	test("files over the limits are rejected before any provider call", async () => {
+		const rejected: Array<[unknown[], string]> = [
+			[[file(5 * MiB + 1)], "File 1 is larger than 5 MiB"],
+			[[file(4 * MiB), file(4 * MiB + 1)], "8 MiB in total"],
+			[[file(4.5 * MiB), file(4.5 * MiB)], "8 MiB of files at most"],
+			[Array.from({ length: 5 }, () => file(1)), ""],
+			[[file(1, "image/gif")], ""],
+			[[{ ...file(1), data: "not base64!" }], ""],
+			[[{ ...file(1), name: "" }], ""],
+		];
+		for (const [attachments, message] of rejected) {
+			const response = await ask({ question: "Sleep?", attachments });
+			expect(response.status).toBe(400);
+			const error = await errorOf(response);
+			expect(error.error).toBe("invalid_request");
+			expect(error.message).toContain(message);
+		}
 		expect(geminiBodies).toHaveLength(0);
 	});
 
@@ -260,6 +358,7 @@ describe("POST /ask/voice", () => {
 		const reply = Schema.decodeUnknownSync(VoiceAnswer)(await response.json());
 		expect(reply.transcript.text).toBe("How did Mom sleep?");
 		expect(reply.answer.answer).toBe("Mom slept 7.5 hours (synthetic).");
+		expect(reply.answer.followUps).toEqual(["Did Mom nap today?"]);
 		expect(reply.speech).toEqual({
 			status: "ok",
 			languageCode: "en",
