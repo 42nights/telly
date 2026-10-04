@@ -82,6 +82,30 @@ export type ArReply =
 	| (ArEvent & { requestId: string })
 	| { type: "ar.error"; requestId: string; code: string; message: string };
 
+type PinRequest = Extract<ArRequest, { type: "ar.savePin" | "ar.findPin" }>;
+
+/** Opens the AR screen for a save or a find. The optional fields are missing from web apps before #351. */
+const openPin = (request: PinRequest, native: TellyArModule) => {
+	const session = request.session ?? null;
+	const others = [...(request.others ?? [])];
+	return request.type === "ar.savePin"
+		? native.savePin(
+				request.objectId,
+				request.label,
+				session,
+				others,
+				request.worldMap ?? null,
+			)
+		: native.findPin(
+				request.objectId,
+				request.label,
+				request.anchorId,
+				request.worldMap,
+				session,
+				others,
+			);
+};
+
 // `native` is null where the module is not built in; `os` is `Platform.OS`.
 export const answerArRequest = async (
 	request: ArRequest,
@@ -120,25 +144,7 @@ export const answerArRequest = async (
 			);
 			return { ...event, requestId };
 		}
-		const session = request.session ?? null;
-		const others = [...(request.others ?? [])];
-		const answer =
-			request.type === "ar.savePin"
-				? await native.savePin(
-						request.objectId,
-						request.label,
-						session,
-						others,
-						request.worldMap ?? null,
-					)
-				: await native.findPin(
-						request.objectId,
-						request.label,
-						request.anchorId,
-						request.worldMap,
-						session,
-						others,
-					);
+		const answer = await openPin(request, native);
 		return answer.type === "ar.error"
 			? { ...answer, requestId }
 			: { ...answer, requestId, objectId: request.objectId };
