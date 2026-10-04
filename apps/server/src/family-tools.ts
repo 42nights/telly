@@ -34,7 +34,7 @@ export type FamilyTools = {
 };
 
 // ponytail: one freshness window for every metric; per-metric windows when a metric needs one.
-const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 const specs: ReadonlyArray<FamilyToolSpec> = ToolRequest.members.map(
 	(member) => ({

@@ -13,7 +13,8 @@
 		"./tools": "./src/tools.ts",
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
-		"./ask": "./src/ask.ts"
+		"./ask": "./src/ask.ts",
+		"./healthkit": "./src/healthkit.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
