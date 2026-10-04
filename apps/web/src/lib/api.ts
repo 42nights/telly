@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { ENV } from "@/env";
 
-import { getSessionToken, onSessionChange } from "./session";
+import { getSessionToken, onSessionChange, setSessionToken } from "./session";
 
 export type ApiFailure =
 	/** No sign-in token, or the server rejected it (401). */
@@ -46,6 +46,16 @@ export const failureFor = (status: number, body: unknown): ApiFailure => {
 	if (status === 403) return { kind: "forbidden", message };
 	if (status === 503) return { kind: "unavailable", message };
 	return { kind: "error", message };
+};
+
+/** A non-2xx reply's failure. A 401 means the server rejected `token`, so it ends the session. */
+const replyFailure = async (response: Response, token: string) => {
+	if (response.status === 401 && getSessionToken() === token)
+		setSessionToken(null);
+	return failureFor(
+		response.status,
+		await response.json().catch(() => undefined),
+	);
 };
 
 type RequestOptions = {
@@ -92,11 +102,7 @@ export const apiRequest = async <T>(
 			unreachable: true,
 		};
 	}
-	if (!response.ok)
-		return failureFor(
-			response.status,
-			await response.json().catch(() => undefined),
-		);
+	if (!response.ok) return replyFailure(response, token);
 	if (schema === null) return { kind: "ready", value: undefined as T };
 	try {
 		return {
@@ -128,11 +134,7 @@ export const apiBlob = async (
 			body: JSON.stringify(options.body),
 			...(options.signal === undefined ? {} : { signal: options.signal }),
 		});
-		if (!response.ok)
-			return failureFor(
-				response.status,
-				await response.json().catch(() => undefined),
-			);
+		if (!response.ok) return replyFailure(response, token);
 		return { kind: "ready", value: await response.blob() };
 	} catch (error) {
 		if (options.signal?.aborted) throw error;
