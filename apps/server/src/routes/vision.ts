@@ -11,7 +11,6 @@ import { bodyLimit } from "hono/body-limit";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import {
 	createGeminiDetector,
-	GEMINI_VISION_MODEL,
 	type GeminiBox,
 	type GeminiConfig,
 } from "../integrations/gemini";
@@ -132,9 +131,9 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 			if (Exit.isSuccess(result))
 				return c.json({
 					frame: request.frame,
-					model: GEMINI_VISION_MODEL,
+					model: result.value.model,
 					analyzedAt: new Date().toISOString(),
-					detections: result.value.map(({ box, label, confidence }) => ({
+					detections: result.value.boxes.map(({ box, label, confidence }) => ({
 						label,
 						confidence,
 						needsVerification: label === null || confidence < VERIFY_BELOW,
