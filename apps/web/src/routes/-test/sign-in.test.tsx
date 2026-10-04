@@ -133,6 +133,19 @@ test("a member signing in is never sent to onboarding, even when it was the save
 	await waitFor(() => expect(router.state.location.pathname).toBe("/hud"));
 });
 
+test("a member signing in from the Connect step returns to it", async () => {
+	pending("/welcome?step=connect");
+	serve({
+		"POST /api/sign-in/token": later({
+			idToken: signedInToken({ nonce: "n-1" }),
+		}),
+		"GET /api/families": { families: [FAMILY] },
+	});
+	const { router } = renderRoute("/sign-in?code=c-1&state=s-1");
+	await waitFor(() => expect(router.state.location.pathname).toBe("/welcome"));
+	expect(router.state.location.search).toMatchObject({ step: "connect" });
+});
+
 test("a callback from another tab is refused without calling the server", async () => {
 	const calls = serve({});
 	const { router } = renderRoute("/sign-in?code=c-1&state=s-1");
