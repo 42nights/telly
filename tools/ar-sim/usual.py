@@ -115,6 +115,58 @@ def correct(guess, places, usual_i, named=False):
                                      for g in (guess[0] if named else guess[0][:1]))
 
 
+def score_habit(habit, habits, store, truth, examples):
+    """Top-place accuracy by day and the day-30 wording for every container with this habit; appends
+    example lines (3 from the first habit, then one that names two places) to examples."""
+    keys = [k for k in store if truth[k][0] == habit]
+    acc, worded, worded_ok = [], 0, 0
+    for day in range(1, DAYS + 1):
+        ok = 0
+        for k in keys:
+            S = [s for s in store[k] if s[0] <= day]
+            g = usual_place(S, day) if S else None
+            ok += correct(g, truth[k][1], truth[k][2][day - 1])
+            if day == DAYS and g is not None and g[1]:
+                worded += 1
+                worded_ok += correct(g, truth[k][1], truth[k][2][day - 1], named=True)
+                if (len(examples) < 3 and habit == habits[0]) or (len(examples) == 3 and len(g[0]) == 2):
+                    examples.append(f"{k[1]}, {k[2]} ({habit}): \"{g[1]}\"")
+        acc.append(ok / len(keys))
+    days_to_90 = next((d + 1 for d in range(DAYS) if min(acc[d:]) >= 0.9), None)
+    return {"containers": len(keys), "acc": acc, "days_to_90": days_to_90,
+            "worded": worded / len(keys), "worded_precision": worded_ok / max(worded, 1)}
+
+
+def habit_change():
+    """On day 15 the second place becomes the usual one: days until the learner follows, with and
+    without the recency weight."""
+    adapt = {}
+    for label, hl in (("half-life 7 days", HALF_LIFE), ("no recency weight", np.inf)):
+        r2, lag = np.random.default_rng(11), []
+        for _ in range(100):
+            sightings, places, _ = simulate(r2, HABITS["70/25/5"], change_day=15)
+            lag.append(next((d - 15 for d in range(15, DAYS + 1)
+                             if correct(usual_place([s for s in sightings if s[0] <= d], d, hl), places, 1)), None))
+        got = [x for x in lag if x is not None]
+        adapt[label] = {"followed_by_day_30": len(got) / len(lag), "days_median": float(np.median(got)) if got else float("nan")}
+    return adapt
+
+
+def table_lines(rows, adapt, pairs, per_member, pooled, examples):
+    lines = ["| habit (usual / second / third / random %) | containers | top place right, day 3 / 7 / 14 / 30 | days to 90% | \"usually\" wording shown on day 30 | wording right |",
+             "|---|---|---|---|---|---|"]
+    for habit, r in rows.items():
+        acc = r["acc"]
+        lines.append(f"| {habit} | {r['containers']} | {acc[2]:.0%} / {acc[6]:.0%} / {acc[13]:.0%} / {acc[29]:.0%}"
+                     f" | {r['days_to_90'] or 'not in 30'} | {r['worded']:.0%} | {r['worded_precision']:.0%} |")
+    lines += ["", "| usual place moves on day 15 | followed by day 30 | days to follow (median) |", "|---|---|---|"]
+    lines += [f"| {k} | {v['followed_by_day_30']:.0%} | {v['days_median']:.0f} |" for k, v in adapt.items()]
+    lines += ["", f"Same container name kept by both members ({pairs} pairs), day 30: top place right {per_member:.0%} per member,"
+              f" {pooled:.0%} if the family's sightings were pooled."]
+    return lines + ["", "Examples (day 30):"] + [f"- {e}" for e in examples]
+
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--families", type=int, default=100, help="families, each with 2 members and 3 containers per member")
@@ -138,34 +190,8 @@ def main():
 
     rows, examples = {}, []
     for habit in habits:
-        keys = [k for k in store if truth[k][0] == habit]
-        acc, worded, worded_ok = [], 0, 0
-        for day in range(1, DAYS + 1):
-            ok = 0
-            for k in keys:
-                S = [s for s in store[k] if s[0] <= day]
-                g = usual_place(S, day) if S else None
-                ok += correct(g, truth[k][1], truth[k][2][day - 1])
-                if day == DAYS and g is not None and g[1]:
-                    worded += 1
-                    worded_ok += correct(g, truth[k][1], truth[k][2][day - 1], named=True)
-                    if (len(examples) < 3 and habit == habits[0]) or (len(examples) == 3 and len(g[0]) == 2):
-                        examples.append(f"{k[1]}, {k[2]} ({habit}): \"{g[1]}\"")
-            acc.append(ok / len(keys))
-        days_to_90 = next((d + 1 for d in range(DAYS) if min(acc[d:]) >= 0.9), None)
-        rows[habit] = {"containers": len(keys), "acc": acc, "days_to_90": days_to_90,
-                       "worded": worded / len(keys), "worded_precision": worded_ok / max(worded, 1)}
-
-    # Habit change: on day 15 the second place becomes the usual one. Days until the learner follows.
-    adapt = {}
-    for label, hl in (("half-life 7 days", HALF_LIFE), ("no recency weight", np.inf)):
-        r2, lag = np.random.default_rng(11), []
-        for _ in range(100):
-            sightings, places, _ = simulate(r2, HABITS["70/25/5"], change_day=15)
-            lag.append(next((d - 15 for d in range(15, DAYS + 1)
-                             if correct(usual_place([s for s in sightings if s[0] <= d], d, hl), places, 1)), None))
-        got = [x for x in lag if x is not None]
-        adapt[label] = {"followed_by_day_30": len(got) / len(lag), "days_median": float(np.median(got)) if got else float("nan")}
+        rows[habit] = score_habit(habit, habits, store, truth, examples)
+    adapt = habit_change()
 
     # Sightings stay per member. Pooling a family's sightings of a same-name container (two members,
     # each with their own bottle of Vitamin D) would answer with the other member's place.
@@ -175,17 +201,7 @@ def main():
     per_member = sum(right(store[k], k) for p in pairs for k in p) / (2 * len(pairs))
     pooled = sum(right(store[p[0]] + store[p[1]], k) for p in pairs for k in p) / (2 * len(pairs))
 
-    lines = ["| habit (usual / second / third / random %) | containers | top place right, day 3 / 7 / 14 / 30 | days to 90% | \"usually\" wording shown on day 30 | wording right |",
-             "|---|---|---|---|---|---|"]
-    for habit, r in rows.items():
-        acc = r["acc"]
-        lines.append(f"| {habit} | {r['containers']} | {acc[2]:.0%} / {acc[6]:.0%} / {acc[13]:.0%} / {acc[29]:.0%}"
-                     f" | {r['days_to_90'] or 'not in 30'} | {r['worded']:.0%} | {r['worded_precision']:.0%} |")
-    lines += ["", "| usual place moves on day 15 | followed by day 30 | days to follow (median) |", "|---|---|---|"]
-    lines += [f"| {k} | {v['followed_by_day_30']:.0%} | {v['days_median']:.0f} |" for k, v in adapt.items()]
-    lines += ["", f"Same container name kept by both members ({len(pairs)} pairs), day 30: top place right {per_member:.0%} per member,"
-              f" {pooled:.0%} if the family's sightings were pooled."]
-    lines += ["", "Examples (day 30):"] + [f"- {e}" for e in examples]
+    lines = table_lines(rows, adapt, len(pairs), per_member, pooled, examples)
     worded_all = sum(r["worded"] * r["containers"] * r["worded_precision"] for r in rows.values()) / max(sum(r["worded"] * r["containers"] for r in rows.values()), 1)
     clear = rows["70/25/5"]
     passed = (clear["acc"][-1] >= PASS["clear_day30"] and (clear["days_to_90"] or 99) <= PASS["clear_days_to_90"]

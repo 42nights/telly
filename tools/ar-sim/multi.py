@@ -133,24 +133,14 @@ def depth_at(inv_z, tap, rng):
     return np.median(z) * (1 + rng.normal(0, 0.01)) + rng.normal(0, 0.003)
 
 
-def room(job):
-    n, seed, out_dir, map_drift, pin = job
-    cv2.setNumThreads(1)
-    rng = np.random.default_rng(1000 * n + seed)
-    orb, bf = cv2.ORB_create(nfeatures=2000), cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    faces, objs, boxes, surfaces = R.make_multi_scene(rng, n)
-    lo_b, hi_b = np.array([b[0] for b in boxes]), np.array([b[1] for b in boxes])
-    pins = np.array([o["pin"] for o in objs])
-    res = {"n": n, "seed": seed, "pinned": 0, "paired": False}
-
-    # Session 1: per furniture group, an arc over the group, then the person steps up to each container
-    # on it and taps it from 0.6 to 0.9 m ("Move closer so the medicine fills the circle"). From 2 m, a
-    # 20 px hit-test window is 6 cm wide and takes in the neighbours 10 cm away. The last 20 cm of the
-    # step is sideways (4 frames), so the tracker maps the container itself before the tap: one frame
-    # straight at it adds no map points. One map for the room.
-    groups = sorted({o["surface"] for o in objs})
+def scan_and_tap(rng, objs, pins, surfaces, lo_b, hi_b):
+    """Session 1 path: per furniture group, an arc over the group, then the person steps up to each
+    container on it and taps it from 0.6 to 0.9 m ("Move closer so the medicine fills the circle"). From
+    2 m, a 20 px hit-test window is 6 cm wide and takes in the neighbours 10 cm away. The last 20 cm of
+    the step is sideways (4 frames), so the tracker maps the container itself before the tap: one frame
+    straight at it adds no map points. Returns (true poses, frame slice per group, tap frame per container)."""
     true1, segs, taps = [], [], {}
-    for s in groups:
+    for s in sorted({o["surface"] for o in objs}):
         start, phi = len(true1), surfaces[s][5]
         true1 += S.scan_path(rng, pins[[o["surface"] == s for o in objs]].mean(0), 120, SCAN_FRAMES, phi=phi)
         side = np.array([-np.sin(phi), np.cos(phi), 0])
@@ -167,19 +157,19 @@ def room(job):
                     taps[i] = len(true1) - 1
                     break
         segs.append(slice(start, len(true1)))
-    est1 = vio_walk(rng, true1)
-    if not map_drift:  # the bound for a map whose drift global optimisation removed (same random draws)
-        est1 = [np.linalg.inv(true1[0]) @ T for T in true1]
-    imgs = [R.capture(R.render(faces, T), rng, light=rng.uniform(0.9, 1.1), gradient=0.1, blur_px=rng.uniform(0, 4)) for T in true1]
-    feats = [S.features(orb, im) for im in imgs]
-    del imgs
-    # SLAM, not dead reckoning: while the person steps up to a container, the tracker tracks against the
-    # arc that it just mapped. Each 4-frame step keeps its VIO motion but moves onto the arc map by the
-    # mean of its PnP fixes. Without this, the VIO drift of the walk from the arc to the container goes
-    # straight into the pin. This sim has no global bundle adjustment, so the parts of the map scanned
-    # from different furniture keep the drift of the walks between them: each point keeps its part
-    # (`seg`), and relocalization solves against one part at a time, as a tracker relocalizes against
-    # nearby keyframes.
+    return true1, segs, taps
+
+
+def room_map(bf, feats, est1, segs, taps):
+    """One feature map for the room; moves each tap step's VIO poses in est1 onto its arc map.
+
+    SLAM, not dead reckoning: while the person steps up to a container, the tracker tracks against the
+    arc that it just mapped. Each 4-frame step keeps its VIO motion but moves onto the arc map by the
+    mean of its PnP fixes. Without this, the VIO drift of the walk from the arc to the container goes
+    straight into the pin. This sim has no global bundle adjustment, so the parts of the map scanned
+    from different furniture keep the drift of the walks between them: each point keeps its part
+    (`seg`), and relocalization solves against one part at a time, as a tracker relocalizes against
+    nearby keyframes. Returns (points, descriptors, part per point)."""
     parts = []
     for g in segs:
         arc = slice(g.start, g.start + SCAN_FRAMES)
@@ -193,10 +183,14 @@ def room(job):
     pts, des = np.concatenate([p for p, _ in parts]), np.concatenate([d for _, d in parts])
     seg = np.concatenate([np.full(len(p), j, np.int8) for j, (p, _) in enumerate(parts)])
     _, keep = np.unique(np.round(pts / 0.01), axis=0, return_index=True)
-    pts, des, seg = pts[keep], des[keep], seg[keep]
-    # The pin: the tap ray at the LiDAR depth (`depth`, Pro iPhones), or at the median depth of the map
-    # points around the tap (`points`, the single-object hit test, every ARKit iPhone).
-    anchors, save_err = np.full((n, 3), np.nan), []
+    return pts[keep], des[keep], seg[keep]
+
+
+def pin_all(pin, seed, faces, true1, est1, taps, pins, pin_seg, pts, seg):
+    """The pins: the tap ray at the LiDAR depth (`depth`, Pro iPhones), or at the median depth of the
+    map points of the container's own part around the tap (`points`, the single-object hit test, every
+    ARKit iPhone). Returns (anchors, NaN where not pinned; pin errors at save in cm)."""
+    anchors, save_err = np.full((len(pins), 3), np.nan), []
     for i, k in taps.items():
         true_c = S.to_cam(true1[k], pins[i][None])
         tap = S.project(true_c)[0]
@@ -204,11 +198,51 @@ def room(job):
             z = depth_at(R.render(faces, true1[k], depth=True)[1], tap, np.random.default_rng((seed, i)))
             hit = None if z is None else est1[k][:3, :3] @ (np.linalg.inv(R.K) @ (*tap, 1.0) * z) + est1[k][:3, 3]
         else:
-            own = seg == groups.index(objs[i]["surface"])
+            own = seg == pin_seg[i]
             hit = S.raycast(est1[k], tap, pts[own]) if own.any() else None
         if hit is not None:
             anchors[i] = hit
             save_err.append(100 * float(np.linalg.norm(S.to_cam(est1[k], hit[None]) - true_c)))  # as the tap frame sees it
+    return anchors, save_err
+
+
+def score_markers(acc, marker, est_c, true_c, T, P, ids, lo_b, hi_b):
+    """Adds this frame's markers to acc: worst error per container, wrong markers, hidden containers."""
+    q = np.where(true_c[:, 2:] > 0.2, S.project(np.where(true_c[:, 2:] > 0.2, true_c, 1.0)), 1e6)  # behind: far off screen
+    for j in np.flatnonzero(marker):
+        p = S.project(est_c[j][None])[0]
+        acc["err_cm"][j] = max(acc["err_cm"][j], 100 * np.linalg.norm(est_c[j] - true_c[j]))
+        acc["err_px"][j] = max(acc["err_px"][j], np.linalg.norm(p - q[j]) if true_c[j, 2] > 0.2 else np.inf)  # inf: behind the camera
+        # Wrong marker: nearer another container in 3D, or on screen where the two are 20 px apart.
+        apart = (np.linalg.norm(q - q[j], axis=1) >= 20) | (np.arange(len(P)) == j)
+        d_px = np.where(apart, np.linalg.norm(q - p, axis=1), np.inf)
+        w = np.linalg.norm(true_c - est_c[j], axis=1).argmin() != j or d_px.argmin() != j
+        acc["wrong"] += int(w)
+        acc["bad"][j] |= w
+        acc["displays"] += 1
+        acc["hidden"] += hidden(T[:3, 3], P[j], lo_b, hi_b, FIRST_BOX + ids[j])
+
+
+def room(job):
+    n, seed, out_dir, map_drift, pin = job
+    cv2.setNumThreads(1)
+    rng = np.random.default_rng(1000 * n + seed)
+    orb, bf = cv2.ORB_create(nfeatures=2000), cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    faces, objs, boxes, surfaces = R.make_multi_scene(rng, n)
+    lo_b, hi_b = np.array([b[0] for b in boxes]), np.array([b[1] for b in boxes])
+    pins = np.array([o["pin"] for o in objs])
+    res = {"n": n, "seed": seed, "pinned": 0, "paired": False}
+
+    # Session 1: scan, tap, one map for the room, pins, save.
+    true1, segs, taps = scan_and_tap(rng, objs, pins, surfaces, lo_b, hi_b)
+    groups = sorted({o["surface"] for o in objs})
+    est1 = vio_walk(rng, true1)
+    if not map_drift:  # the bound for a map whose drift global optimisation removed (same random draws)
+        est1 = [np.linalg.inv(true1[0]) @ T for T in true1]
+    feats = [S.features(orb, R.capture(R.render(faces, T), rng, light=rng.uniform(0.9, 1.1), gradient=0.1, blur_px=rng.uniform(0, 4))) for T in true1]
+    pts, des, seg = room_map(bf, feats, est1, segs, taps)
+    pin_seg = [groups.index(o["surface"]) for o in objs]
+    anchors, save_err = pin_all(pin, seed, faces, true1, est1, taps, pins, pin_seg, pts, seg)
     pinned = ~np.isnan(anchors[:, 0])
     res.update(pinned=int(pinned.sum()), map_points=len(pts), save_err=save_err)
     if not pinned.any():
@@ -222,12 +256,17 @@ def room(job):
     res.update(map_bytes=len(blob), map_raw_bytes=len(buf.getvalue()))
     world_map = json.loads(json.dumps({"worldMap": base64.b64encode(blob).decode()}))["worldMap"]  # through the bridge
     m = np.load(io.BytesIO(zlib.decompress(base64.b64decode(world_map))))
-    mpts, mdes, mseg, A = m["points"], m["descriptors"], m["segments"], m["anchor_transforms"][:, :3, 3]
     ids = np.flatnonzero(pinned)
-    P = pins[ids]
+    res.update(find_all(rng, orb, bf, faces, (m["points"], m["descriptors"], m["segments"]), m["anchor_transforms"][:, :3, 3],
+                        pins[ids], ids, np.array(pin_seg)[ids], surfaces[objs[ids[0]]["surface"]][5], (lo_b, hi_b), out_dir if seed == 0 and map_drift and pin == "depth" else None, n))
+    res["peak_rss_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    return res
 
-    # Session 2: the person asks for the first pinned container and starts somewhere in front of it.
-    tp, phi_s = P[0], surfaces[objs[ids[0]]["surface"]][5]
+
+def find_all(rng, orb, bf, faces, world_map, A, P, ids, anchor_seg, phi_s, solid, out_dir, n):
+    """Session 2: the person asks for the first pinned container and starts somewhere in front of it,
+    then does only what the app shows. Returns the session-2 results."""
+    (mpts, mdes, mseg), (lo_b, hi_b), tp = world_map, solid, P[0]
     phi, r = phi_s + rng.uniform(-1.0, 1.0), rng.uniform(1.0, 2.6)
     eye = S.in_room(tp + (r * np.cos(phi), r * np.sin(phi), rng.uniform(1.0, 1.7) - tp[2]))
     yaw0 = rng.uniform(0, 2 * np.pi)
@@ -235,10 +274,11 @@ def room(job):
     remembered = tp + np.append(rng.normal(0, 0.5, 2), 0)
     T = S.pairing_pose(eye, 0, yaw0)
     origin, drift = np.linalg.inv(T), np.eye(4)
-    mm, anchor_seg = len(ids), np.array([groups.index(objs[i]["surface"]) for i in ids])
+    mm = len(ids)
     true2, fixes, fix_seg, paired, frames, stages, turn, last_fix = [], [], [], None, [], "", 0, None
-    seen, bad, err_cm, err_px = np.zeros(mm, bool), np.zeros(mm, bool), np.zeros(mm), np.zeros(mm)
-    first, every, wrong, displays, hid, arrows, most_arrows = None, None, 0, 0, 0, [], 0
+    seen = np.zeros(mm, bool)
+    acc = {"err_cm": np.zeros(mm), "err_px": np.zeros(mm), "bad": np.zeros(mm, bool), "wrong": 0, "displays": 0, "hidden": 0}
+    first, every, arrows, most_arrows = None, None, [], 0
     while True:
         k, est = len(true2), drift @ origin @ T
         true2.append(T)
@@ -262,18 +302,7 @@ def room(job):
             # A labelled marker only within MARKER_M: farther away, boxes 10 cm apart are under 40 px
             # apart on the screen, too close for a marker that may be 10 to 20 px off. The arrow stays.
             marker = conf & np.array([S.on_screen(x) and np.linalg.norm(x) <= MARKER_M for x in est_c])
-            q = np.where(true_c[:, 2:] > 0.2, S.project(np.where(true_c[:, 2:] > 0.2, true_c, 1.0)), 1e6)  # behind: far off screen
-            for j in np.flatnonzero(marker):
-                p = S.project(est_c[j][None])[0]
-                err_cm[j] = max(err_cm[j], 100 * np.linalg.norm(est_c[j] - true_c[j]))
-                err_px[j] = max(err_px[j], np.linalg.norm(p - q[j]) if true_c[j, 2] > 0.2 else np.inf)  # inf: the box is behind the camera
-                # Wrong marker: nearer another container in 3D, or on screen where the two are 20 px apart.
-                apart = (np.linalg.norm(q - q[j], axis=1) >= 20) | (np.arange(mm) == j)
-                d_px = np.where(apart, np.linalg.norm(q - p, axis=1), np.inf)
-                w = np.linalg.norm(true_c - est_c[j], axis=1).argmin() != j or d_px.argmin() != j
-                wrong, bad[j] = wrong + int(w), bad[j] or w
-                displays += 1
-                hid += hidden(T[:3, 3], P[j], lo_b, hi_b, FIRST_BOX + ids[j])
+            score_markers(acc, marker, est_c, true_c, T, P, ids, lo_b, hi_b)
             if marker.any() and first is None:
                 first = k
             seen |= marker
@@ -301,15 +330,14 @@ def room(job):
                 T_next = S.guided_pose(T, (T @ np.linalg.inv(est) @ np.append(guess[goal], 1))[:3])
         drift = S.vio_step(rng, drift, T, T_next)
         T = T_next
-    res.update(paired=paired is not None, relocalized=first is not None, shown=int(seen.sum()), stages=stages,
-               err_cm=err_cm[seen].tolist(), err_px=err_px[seen].tolist(), wrong=wrong, wrong_objects=int(bad.sum()), displays=displays,
-               hidden_displays=int(hid), arrows=arrows, most_arrows=most_arrows,
-               first_s=None if first is None else (first + 1) * SEC_PER_FRAME,
-               all_s=None if every is None else (every + 1) * SEC_PER_FRAME,
-               peak_rss_mb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
-    if out_dir and seed == 0 and frames and map_drift and pin == "depth":
+    if out_dir and frames:
         draw_frames(out_dir, n, faces, true2, frames, light, tint, ids)
-    return res
+    return dict(paired=paired is not None, relocalized=first is not None, shown=int(seen.sum()), stages=stages,
+                err_cm=acc["err_cm"][seen].tolist(), err_px=acc["err_px"][seen].tolist(), wrong=acc["wrong"],
+                wrong_objects=int(acc["bad"].sum()), displays=acc["displays"], hidden_displays=int(acc["hidden"]),
+                arrows=arrows, most_arrows=most_arrows,
+                first_s=None if first is None else (first + 1) * SEC_PER_FRAME,
+                all_s=None if every is None else (every + 1) * SEC_PER_FRAME)
 
 
 def draw_frames(out_dir, n, faces, true2, frames, light, tint, ids):
