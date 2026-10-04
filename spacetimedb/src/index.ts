@@ -236,6 +236,23 @@ const finchnodeLink = table(
 	},
 );
 
+// One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
+// report, or caregiver help. The photo itself is never stored. The server validates `fact` against
+// `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
+// Meal facts are health records (#26 `health_records`); photo facts also need `media`.
+const mealFact = table(
+	{ name: "meal_fact" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The client's id for one meal occasion; it groups the meal's facts.
+		mealId: t.string(),
+		fact: t.string(),
+		recordedBy: t.identity(),
+		recordedAt: t.timestamp(),
+	},
+);
+
 // The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
 // the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
 const NeedKind = t.enum("NeedKind", {
@@ -468,6 +485,7 @@ const spacetimedb = schema({
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	mealFact,
 	careProfileVersion,
 	careInstruction,
 	careGrantEvent,
@@ -1161,6 +1179,43 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+// Whether a fact comes from a photo: the photo was taken, or an estimate was made from it.
+const fromPhoto = (fact: string) => {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(fact);
+	} catch {
+		throw new SenderError("fact must be JSON");
+	}
+	if (typeof parsed !== "object" || parsed === null || !("type" in parsed))
+		throw new SenderError("fact must have a type");
+	if (parsed.type === "photo_taken") return true;
+	return (
+		parsed.type === "food_estimate" &&
+		"estimate" in parsed &&
+		typeof parsed.estimate === "object" &&
+		parsed.estimate !== null &&
+		"source" in parsed.estimate &&
+		parsed.estimate.source === "photo"
+	);
+};
+
+export const recordMealFact = spacetimedb.reducer(
+	{ familyId: t.u64(), mealId: t.string(), fact: t.string() },
+	(ctx, recorded) => {
+		requireCareScope(ctx, recorded.familyId, "health_records");
+		requireText("mealId", recorded.mealId);
+		if (fromPhoto(recorded.fact))
+			requireCareScope(ctx, recorded.familyId, "media");
+		ctx.db.mealFact.insert({
+			...recorded,
+			id: 0n,
+			recordedBy: ctx.sender,
+			recordedAt: ctx.timestamp,
+		});
+	},
+);
+
 const MAX_CONTACTS = 5;
 
 export const setContactLadder = spacetimedb.reducer(
@@ -1625,6 +1680,14 @@ export const myFinchnodeLinks = spacetimedb.view(
 			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
 				m.familyId.eq(l.familyId),
 			),
+);
+
+// Only for families where the caller holds `health_records` now (#26).
+export const myMealFacts = spacetimedb.view(
+	{ name: "my_meal_facts", public: true },
+	t.array(mealFact.rowType),
+	(ctx) =>
+		careReader(ctx, (familyId) => ctx.db.mealFact.familyId.filter(familyId)),
 );
 
 export const myContactLadders = spacetimedb.view(
