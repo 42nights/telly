@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import type { MedicineDetectionRequest } from "@health/contracts/vision";
 import { Data, Effect, Schema } from "effect";
 
@@ -5,28 +6,46 @@ import { Data, Effect, Schema } from "effect";
 export const GEMINI_VISION_MODEL = "gemini-3.8-flash";
 export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 
-const overloaded = (status: number) => status === 429 || status === 503;
+/** 429 and 503 are Google's "high demand" refusals: nothing ran, so a retry is safe and unbilled. */
+export const overloaded = (status: number) => status === 429 || status === 503;
 
+/**
+ * Sends one interaction. When the model is overloaded it tries the fallback model at once, then
+ * both again after each wait in `backoffMs`. Other replies, including errors, return at once. The
+ * last overloaded reply returns when every try was refused; `signal` also ends a wait.
+ */
 export const postInteraction = async (
 	{ apiKey, baseUrl }: Pick<GeminiConfig, "apiKey" | "baseUrl">,
 	body: Readonly<Record<string, unknown>> & { readonly model: string },
 	signal: AbortSignal,
+	backoffMs: readonly number[] = [],
 ): Promise<{ readonly response: Response; readonly model: string }> => {
-	const send = (model: string) =>
-		fetch(new URL("/v1beta/interactions", baseUrl), {
+	const send = async (model: string) => ({
+		model,
+		response: await fetch(new URL("/v1beta/interactions", baseUrl), {
 			method: "POST",
 			headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
 			body: JSON.stringify({ ...body, model }),
 			signal,
-		});
-	const response = await send(body.model);
-	if (!overloaded(response.status) || body.model === GEMINI_FALLBACK_MODEL)
-		return { response, model: body.model };
-	await response.body?.cancel();
-	return {
-		response: await send(GEMINI_FALLBACK_MODEL),
-		model: GEMINI_FALLBACK_MODEL,
-	};
+		}),
+	});
+	const models =
+		body.model === GEMINI_FALLBACK_MODEL
+			? [body.model]
+			: [body.model, GEMINI_FALLBACK_MODEL];
+	const retries = [0, ...backoffMs]
+		.flatMap((wait) =>
+			models.map((model, index) => ({ model, wait: index === 0 ? wait : 0 })),
+		)
+		.slice(1);
+	let reply = await send(body.model);
+	for (const { model, wait } of retries) {
+		if (!overloaded(reply.response.status)) break;
+		await reply.response.body?.cancel();
+		if (wait > 0) await sleep(wait, undefined, { signal });
+		reply = await send(model);
+	}
+	return reply;
 };
 
 export type GeminiConfig = {
@@ -35,6 +54,8 @@ export type GeminiConfig = {
 	readonly baseUrl: string;
 	/** Upper bound for one provider call, including reading its response. */
 	readonly timeout?: number;
+	/** Chat only: waits before each extra try of an overloaded call. Tests set short ones. */
+	readonly overloadBackoffMs?: readonly number[];
 };
 
 /** A provider failure. `reason` is for logs and status mapping only; it never carries provider text. */

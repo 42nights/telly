@@ -40,8 +40,13 @@ const decodeError = Schema.decodeUnknownOption(ApiError);
 /** Maps a non-2xx reply to its failure. Exported for tests. */
 export const failureFor = (status: number, body: unknown): ApiFailure => {
 	const error = decodeError(body);
+	// A 5xx without the typed body comes from a proxy or gateway, not from the API's own handlers.
 	const message =
-		error._tag === "Some" ? error.value.message : `HTTP ${status}`;
+		error._tag === "Some"
+			? error.value.message
+			: status >= 500
+				? `The server is busy or had a problem (HTTP ${status}). Try again in a minute.`
+				: `HTTP ${status}`;
 	if (status === 401) return { kind: "signed_out" };
 	if (status === 403) return { kind: "forbidden", message };
 	if (status === 503) return { kind: "unavailable", message };

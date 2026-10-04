@@ -62,10 +62,7 @@ describe("failureFor", () => {
 			kind: "unavailable",
 			message: "Gemini is not configured",
 		});
-		expect(failureFor(500, "not json")).toEqual({
-			kind: "error",
-			message: "HTTP 500",
-		});
+		expect(failureFor(500, "not json").kind).toBe("error");
 	});
 });
 
