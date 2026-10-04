@@ -64,6 +64,7 @@ import RecordSampleReducer from "./record_sample_reducer";
 import RecordTripEventReducer from "./record_trip_event_reducer";
 import RememberMedicineReducer from "./remember_medicine_reducer";
 import RemoveAlertThresholdReducer from "./remove_alert_threshold_reducer";
+import RenameFamilyReducer from "./rename_family_reducer";
 import ReportLocationReducer from "./report_location_reducer";
 import RequestAppointmentReducer from "./request_appointment_reducer";
 import RespondToCareNeedReducer from "./respond_to_care_need_reducer";
@@ -393,6 +394,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_trip_event", RecordTripEventReducer),
   __reducerSchema("remember_medicine", RememberMedicineReducer),
   __reducerSchema("remove_alert_threshold", RemoveAlertThresholdReducer),
+  __reducerSchema("rename_family", RenameFamilyReducer),
   __reducerSchema("report_location", ReportLocationReducer),
   __reducerSchema("request_appointment", RequestAppointmentReducer),
   __reducerSchema("respond_to_care_need", RespondToCareNeedReducer),

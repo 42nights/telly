@@ -90,16 +90,20 @@ const dailyValues = (rows: NonNullable<Tables["dailyMetric"]>): NoopSample[] =>
 			});
 		});
 
+/** The samples the NOOP contract keeps from a batch's tables; the relay push and the WHOOP seed share it. */
+export const noopTableSamples = (tables: Tables): NoopSample[] => [
+	...heartRate(tables.hrSample ?? []),
+	...onWrist(tables.event ?? []),
+	...dailyValues(tables.dailyMetric ?? []),
+];
+
 const noopSamples = (body: ArrayBuffer): NoopSample[] => {
 	const json = inflateRawSync(Buffer.from(body), {
 		maxOutputLength: 64 << 20,
 	}).toString("utf8");
-	const { tables } = Schema.decodeUnknownSync(NoopBatch)(JSON.parse(json));
-	return [
-		...heartRate(tables.hrSample ?? []),
-		...onWrist(tables.event ?? []),
-		...dailyValues(tables.dailyMetric ?? []),
-	];
+	return noopTableSamples(
+		Schema.decodeUnknownSync(NoopBatch)(JSON.parse(json)).tables,
+	);
 };
 
 const slot = (source: string, metric: string, time: number) =>

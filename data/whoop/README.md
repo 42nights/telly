@@ -11,6 +11,10 @@ band was paired.
 To refresh, run `sh data/whoop/export.sh`. It reads `~/telly-host/live.sqlite`, or the database
 path you pass as the first argument.
 
+To seed a family on the website, run `bun apps/server/scripts/seed-whoop.ts <familyId>` (the
+script header lists its settings). It writes the NOOP relay's samples: heart rate per minute,
+wrist on/off, and the daily scores. A re-run adds only rows that are not stored yet.
+
 ## Reading it
 
 - `ts`, `startTs` and `endTs` are Unix seconds (UTC). `day` is a local `YYYY-MM-DD`.
