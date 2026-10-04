@@ -28,6 +28,7 @@
 		"./trips": "./src/trips.ts",
 		"./delivery": "./src/delivery.ts",
 		"./healthkit": "./src/healthkit.ts",
+		"./whoop-catalog": "./src/whoop-catalog.ts",
 		"./location": "./src/location.ts",
 		"./cooking": "./src/cooking.ts"
 	},
