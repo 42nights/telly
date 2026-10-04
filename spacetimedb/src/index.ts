@@ -230,6 +230,38 @@ const finchnodeLink = table(
 	},
 );
 
+// A family's permission to remember where medicine containers were last seen (issue #29). Without
+// this row no sighting is stored, and removing it deletes the family's sightings.
+const medicineMemory = table(
+	{ name: "medicine_memory" },
+	{
+		familyId: t.u64().primaryKey(),
+		// Agreed familiar places to search when a container is not where it was last seen.
+		places: t.array(t.string()),
+		setBy: t.identity(),
+		setAt: t.timestamp(),
+	},
+);
+
+// Where a medicine container was last seen: one row per family and container description. Only a
+// newer camera observation that the person confirmed changes it; `notFoundAt` marks it outdated.
+const medicineSighting = table(
+	{ name: "medicine_sighting" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		container: t.string(),
+		place: t.string(),
+		// When the camera captured the frame the container was found in.
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+		savedBy: t.identity(),
+		notFoundAt: t.option(t.timestamp()),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -243,6 +275,8 @@ const spacetimedb = schema({
 	alertDelivery,
 	report,
 	finchnodeLink,
+	medicineMemory,
+	medicineSighting,
 });
 export default spacetimedb;
 
@@ -654,6 +688,74 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+export const setMedicineMemory = spacetimedb.reducer(
+	{ familyId: t.u64(), enabled: t.bool(), places: t.array(t.string()) },
+	(ctx, { familyId, enabled, places }) => {
+		requireMember(ctx, familyId);
+		if (!enabled) {
+			ctx.db.medicineMemory.familyId.delete(familyId);
+			ctx.db.medicineSighting.familyId.delete(familyId);
+			return;
+		}
+		for (const place of places) requireText("place", place);
+		const row = { familyId, places, setBy: ctx.sender, setAt: ctx.timestamp };
+		if (ctx.db.medicineMemory.familyId.find(familyId) === null)
+			ctx.db.medicineMemory.insert(row);
+		else ctx.db.medicineMemory.familyId.update(row);
+	},
+);
+
+// A remembered place must come from a recent frame, so an old picture cannot pass as a new sighting.
+const MAX_SIGHTING_AGE_MICROS = 15n * 60_000_000n;
+
+export const rememberMedicine = spacetimedb.reducer(
+	{
+		familyId: t.u64(),
+		container: t.string(),
+		place: t.string(),
+		seenAt: t.timestamp(),
+		source: t.string(),
+		confidence: t.f64(),
+		labelRead: t.bool(),
+	},
+	(ctx, seen) => {
+		requireMember(ctx, seen.familyId);
+		if (ctx.db.medicineMemory.familyId.find(seen.familyId) === null)
+			throw new SenderError("medicine memory is off for this family");
+		requireText("container", seen.container);
+		requireText("place", seen.place);
+		requireText("source", seen.source);
+		if (!(seen.confidence >= 0 && seen.confidence <= 1))
+			throw new SenderError("confidence must be between 0 and 1");
+		const age =
+			ctx.timestamp.microsSinceUnixEpoch - seen.seenAt.microsSinceUnixEpoch;
+		if (age < -MAX_CLOCK_AHEAD_MICROS || age > MAX_SIGHTING_AGE_MICROS)
+			throw new SenderError("seenAt must be a current observation");
+		const key = seen.container.trim().toLowerCase();
+		const row = { ...seen, savedBy: ctx.sender, notFoundAt: undefined };
+		for (const old of ctx.db.medicineSighting.familyId.filter(seen.familyId)) {
+			if (old.container.trim().toLowerCase() !== key) continue;
+			if (old.seenAt.microsSinceUnixEpoch > seen.seenAt.microsSinceUnixEpoch)
+				throw new SenderError("a newer sighting is already stored");
+			ctx.db.medicineSighting.id.update({ ...row, id: old.id });
+			return;
+		}
+		ctx.db.medicineSighting.insert({ ...row, id: 0n });
+	},
+);
+
+// The person looked at the remembered place and the container was not there. The place stays as
+// the last sighting, marked outdated, until a new sighting replaces it.
+export const markMedicineNotFound = spacetimedb.reducer(
+	{ id: t.u64() },
+	(ctx, { id }) => {
+		const found = ctx.db.medicineSighting.id.find(id);
+		if (found === null) throw new SenderError("not a member of this family");
+		requireMember(ctx, found.familyId);
+		ctx.db.medicineSighting.id.update({ ...found, notFoundAt: ctx.timestamp });
+	},
+);
+
 // Per-sender reads: each view returns only rows of families the caller belongs to.
 export const myFamilies = spacetimedb.view(
 	{ name: "my_families", public: true },
@@ -776,5 +878,27 @@ export const myFinchnodeLinks = spacetimedb.view(
 			.where((m) => m.member.eq(ctx.sender))
 			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
 				m.familyId.eq(l.familyId),
+			),
+);
+
+export const myMedicineMemory = spacetimedb.view(
+	{ name: "my_medicine_memory", public: true },
+	t.array(medicineMemory.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineMemory, (m, r) =>
+				m.familyId.eq(r.familyId),
+			),
+);
+
+export const myMedicineSightings = spacetimedb.view(
+	{ name: "my_medicine_sightings", public: true },
+	t.array(medicineSighting.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.medicineSighting, (m, s) =>
+				m.familyId.eq(s.familyId),
 			),
 );

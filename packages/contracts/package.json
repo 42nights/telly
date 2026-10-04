@@ -9,6 +9,7 @@
 		"./alerts": "./src/alerts.ts",
 		"./voice": "./src/voice.ts",
 		"./vision": "./src/vision.ts",
+		"./medicine-memory": "./src/medicine-memory.ts",
 		"./reports": "./src/reports.ts",
 		"./tools": "./src/tools.ts",
 		"./chat": "./src/chat.ts",

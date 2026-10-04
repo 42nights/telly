@@ -8,6 +8,8 @@ import {
 	isMedicineRequest,
 	itemFromRequest,
 	marker,
+	SIGHTING_OLD_MS,
+	sightingState,
 } from "./logic";
 
 const now = Date.parse("2026-10-04T12:00:00Z");
@@ -95,4 +97,27 @@ describe("marker", () => {
 		const low = marker({ x: 400, y: 380, width: 200, height: 100 }, frame);
 		expect(low.arrow.startsWith("M500 0")).toBe(true);
 	});
+});
+
+test("a remembered sighting is marked old, outdated, or unsure, never current", () => {
+	const seen = {
+		seenAt: new Date(now - 60_000).toISOString(),
+		notFoundAt: null,
+		confidence: 0.9,
+		labelRead: true,
+	};
+	expect(sightingState(seen, now)).toEqual({
+		outdated: false,
+		old: false,
+		unsure: false,
+	});
+	const stale = {
+		...seen,
+		seenAt: new Date(now - SIGHTING_OLD_MS - 1).toISOString(),
+	};
+	expect(sightingState(stale, now).old).toBe(true);
+	const moved = { ...seen, notFoundAt: new Date(now).toISOString() };
+	expect(sightingState(moved, now).outdated).toBe(true);
+	expect(sightingState({ ...seen, confidence: 0.5 }, now).unsure).toBe(true);
+	expect(sightingState({ ...seen, labelRead: false }, now).unsure).toBe(true);
 });
