@@ -22,7 +22,7 @@ export type NoopIngest = {
 
 const daily = [
 	["restingHr", "resting_heart_rate", "bpm", 1],
-	["avgHrv", "hrv_rmssd", "ms", 1],
+	["avgHrv", "hrv", "ms", 1],
 	["respRateBpm", "respiratory_rate", "breaths/min", 1],
 	["totalSleepMin", "sleep_duration", "min", 1],
 	["efficiency", "sleep_efficiency", "%", 100],
