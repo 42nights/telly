@@ -67,4 +67,4 @@ It gives each family's founder every care scope that the founder has no grant ev
 
 ## Rollback
 
-Re-run the deploy and smoke jobs of the last good workflow run. They redeploy that run's artifact, and the same artifact and base image give the same image tag. On the operator host, deploy a kept artifact: `sh deploy/cloudflare/deploy.sh ~/.local/state/telly-autodeploy/good.tar.gz` with the two secrets in your environment. A Worker rollback alone (`wrangler rollback`) does not change the container image.
+The CI deploy job rolls back on its own: when `deploy.sh` fails and `/health` is still not 200, it redeploys the artifact of the last fully successful `health-deploy` run, and the job stays failed. By hand: re-run the deploy and smoke jobs of the last good workflow run. They redeploy that run's artifact, and the same artifact and base image give the same image tag. On the operator host, deploy a kept artifact: `sh deploy/cloudflare/deploy.sh ~/.local/state/telly-autodeploy/good.tar.gz` with the two secrets in your environment. A Worker rollback alone (`wrangler rollback`) does not change the container image.
