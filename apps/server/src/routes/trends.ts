@@ -6,6 +6,7 @@ import { readFamilyRecords } from "../db";
 import { ApiFailure, decodeBody, type FamilyEnv } from "../http";
 import type { Finchnode } from "../integrations/finchnode";
 import { explainTrend } from "../trends";
+import { readCareFacts } from "./care-profile";
 import { familyLabs } from "./finchnode";
 
 export const trendRoutes = (finchnode: Finchnode | undefined) =>
@@ -32,6 +33,7 @@ export const trendRoutes = (finchnode: Finchnode | undefined) =>
 				),
 				labs,
 				asker: db.identity,
+				care: readCareFacts(c),
 			}) satisfies TrendExplanation,
 		);
 	});
