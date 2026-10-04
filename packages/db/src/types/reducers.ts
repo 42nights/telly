@@ -22,6 +22,7 @@ import CreateFamilyInviteReducer from "../create_family_invite_reducer";
 import CreateReminderReducer from "../create_reminder_reducer";
 import CreateReportReducer from "../create_report_reducer";
 import DeleteFamilyReducer from "../delete_family_reducer";
+import DeleteMedicineArPinReducer from "../delete_medicine_ar_pin_reducer";
 import DeleteReminderReducer from "../delete_reminder_reducer";
 import JoinFamilyByInviteReducer from "../join_family_by_invite_reducer";
 import LinkFinchnodeSubjectReducer from "../link_finchnode_subject_reducer";
@@ -29,6 +30,7 @@ import MarkAlertDeliveryFailedReducer from "../mark_alert_delivery_failed_reduce
 import MarkAlertDeliverySentReducer from "../mark_alert_delivery_sent_reducer";
 import MarkAlertDeliveryUnavailableReducer from "../mark_alert_delivery_unavailable_reducer";
 import MarkMedicineNotFoundReducer from "../mark_medicine_not_found_reducer";
+import MigrateMedicineMembersReducer from "../migrate_medicine_members_reducer";
 import OpenCareNeedReducer from "../open_care_need_reducer";
 import PostAlertMessageReducer from "../post_alert_message_reducer";
 import QueueReportEmailReducer from "../queue_report_email_reducer";
@@ -50,6 +52,7 @@ import RevokeClinicianShareReducer from "../revoke_clinician_share_reducer";
 import RevokeLocationShareReducer from "../revoke_location_share_reducer";
 import SaveCareProfileReducer from "../save_care_profile_reducer";
 import SaveCookingProfileReducer from "../save_cooking_profile_reducer";
+import SaveMedicineArPinReducer from "../save_medicine_ar_pin_reducer";
 import SendClinicianShareReducer from "../send_clinician_share_reducer";
 import SendMessageReducer from "../send_message_reducer";
 import SetAlertThresholdReducer from "../set_alert_threshold_reducer";
@@ -84,6 +87,7 @@ export type CreateFamilyInviteParams = __Infer<typeof CreateFamilyInviteReducer>
 export type CreateReminderParams = __Infer<typeof CreateReminderReducer>;
 export type CreateReportParams = __Infer<typeof CreateReportReducer>;
 export type DeleteFamilyParams = __Infer<typeof DeleteFamilyReducer>;
+export type DeleteMedicineArPinParams = __Infer<typeof DeleteMedicineArPinReducer>;
 export type DeleteReminderParams = __Infer<typeof DeleteReminderReducer>;
 export type JoinFamilyByInviteParams = __Infer<typeof JoinFamilyByInviteReducer>;
 export type LinkFinchnodeSubjectParams = __Infer<typeof LinkFinchnodeSubjectReducer>;
@@ -91,6 +95,7 @@ export type MarkAlertDeliveryFailedParams = __Infer<typeof MarkAlertDeliveryFail
 export type MarkAlertDeliverySentParams = __Infer<typeof MarkAlertDeliverySentReducer>;
 export type MarkAlertDeliveryUnavailableParams = __Infer<typeof MarkAlertDeliveryUnavailableReducer>;
 export type MarkMedicineNotFoundParams = __Infer<typeof MarkMedicineNotFoundReducer>;
+export type MigrateMedicineMembersParams = __Infer<typeof MigrateMedicineMembersReducer>;
 export type OpenCareNeedParams = __Infer<typeof OpenCareNeedReducer>;
 export type PostAlertMessageParams = __Infer<typeof PostAlertMessageReducer>;
 export type QueueReportEmailParams = __Infer<typeof QueueReportEmailReducer>;
@@ -112,6 +117,7 @@ export type RevokeClinicianShareParams = __Infer<typeof RevokeClinicianShareRedu
 export type RevokeLocationShareParams = __Infer<typeof RevokeLocationShareReducer>;
 export type SaveCareProfileParams = __Infer<typeof SaveCareProfileReducer>;
 export type SaveCookingProfileParams = __Infer<typeof SaveCookingProfileReducer>;
+export type SaveMedicineArPinParams = __Infer<typeof SaveMedicineArPinReducer>;
 export type SendClinicianShareParams = __Infer<typeof SendClinicianShareReducer>;
 export type SendMessageParams = __Infer<typeof SendMessageReducer>;
 export type SetAlertThresholdParams = __Infer<typeof SetAlertThresholdReducer>;

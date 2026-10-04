@@ -19,14 +19,21 @@ import { MedicineMemorySettings } from "./medicine-memory";
 installDom();
 
 const PATH = "/api/families/7/medicine-memory";
-const OFF: MedicineMemory = { permission: null, sightings: [] };
+const ME = "a".repeat(64);
+const MOM = "b".repeat(64);
+const OFF: MedicineMemory = {
+	personId: ME,
+	people: [ME],
+	permission: null,
+	sightings: [],
+};
 const ON: MedicineMemory = {
+	...OFF,
 	permission: {
 		places: ["Kitchen counter", "Bedside table"],
-		setBy: "a".repeat(64),
+		setBy: ME,
 		setAt: "2026-01-01T08:00:00.000Z",
 	},
-	sightings: [],
 };
 
 const show = (routes: Routes) => {
@@ -108,7 +115,7 @@ describe("MedicineMemorySettings", () => {
 		const form = await view.findByRole("form", { name: "Medicine places" });
 		fireEvent.click(within(form).getByRole("checkbox"));
 		expect(form.textContent).toContain(
-			"Turning this off deletes every saved place.",
+			"Turning this off deletes every saved place of this member.",
 		);
 		fireEvent.submit(form);
 		await waitFor(() =>
@@ -157,5 +164,79 @@ describe("MedicineMemorySettings", () => {
 			"Loading medicine places…",
 		);
 		expect(puts(calls)).toHaveLength(2);
+	});
+
+	test("shows only the chosen member's places, saves to that member, and remembers the choice", async () => {
+		localStorage.clear();
+		const mine = { ...ON, people: [ME, MOM] };
+		const hers: MedicineMemory = {
+			...mine,
+			personId: MOM,
+			permission: {
+				places: ["Bathroom shelf"],
+				setBy: ME,
+				setAt: "2026-01-01T08:00:00.000Z",
+			},
+		};
+		const { view, calls } = show({
+			[`GET ${PATH}`]: { json: mine },
+			[`GET ${PATH}?person=${MOM}`]: { json: hers },
+			[`PUT ${PATH}?person=${MOM}`]: { json: hers },
+		});
+		const picker = await view.findByLabelText("Whose medicines?");
+		expect(picker).toHaveProperty("value", ME);
+		expect(
+			within(picker)
+				.getAllByRole("option")
+				.map((o) => o.textContent),
+		).toEqual(["You", `Member ${"b".repeat(6)}`]);
+		expect(view.getByRole("textbox")).toHaveProperty(
+			"value",
+			"Kitchen counter\nBedside table",
+		);
+
+		fireEvent.change(picker, { target: { value: MOM } });
+		await waitFor(() =>
+			expect(view.getByRole("textbox")).toHaveProperty(
+				"value",
+				"Bathroom shelf",
+			),
+		);
+		expect(localStorage.getItem("telly.medicine-person.7")).toBe(MOM);
+		fireEvent.click(view.getByRole("button", { name: "Save" }));
+		await waitFor(() =>
+			expect(
+				calls.some(
+					(c) => c.path === `${PATH}?person=${MOM}` && c.method === "PUT",
+				),
+			).toBe(true),
+		);
+	});
+
+	test("a remembered member the caller may no longer open falls back to their own", async () => {
+		localStorage.setItem("telly.medicine-person.7", MOM);
+		const { view } = show({
+			[`GET ${PATH}`]: { json: ON },
+			[`GET ${PATH}?person=${MOM}`]: {
+				status: 403,
+				body: { error: "forbidden", message: "Only your own" },
+			},
+		});
+		const picker = await view.findByLabelText("Whose medicines?");
+		await waitFor(() => expect(picker).toHaveProperty("value", ME));
+		expect(localStorage.getItem("telly.medicine-person.7")).toBeNull();
+	});
+
+	test("the wearer view shows only the wearer's own, with no picker", async () => {
+		localStorage.setItem("telly.medicine-person.7", MOM);
+		localStorage.setItem("telly.view", "wearer");
+		const { view, calls } = show({
+			[`GET ${PATH}`]: { json: { ...ON, people: [ME, MOM] } },
+		});
+		await view.findByRole("form", { name: "Medicine places" });
+		expect(view.queryByLabelText("Whose medicines?")).toBeNull();
+		expect(
+			calls.filter((c) => c.path.startsWith(PATH)).map((c) => c.path),
+		).toEqual([PATH]);
 	});
 });

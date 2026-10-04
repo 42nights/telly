@@ -12,6 +12,7 @@ import {
 
 export default {
   familyId: __t.u64(),
+  personId: __t.identity(),
   container: __t.string(),
   place: __t.string(),
   seenAt: __t.timestamp(),

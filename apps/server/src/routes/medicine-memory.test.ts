@@ -3,9 +3,11 @@
 import { describe, expect, test } from "bun:test";
 import { MedicineMemory } from "@health/contracts/medicine-memory";
 import { Effect, Schema } from "effect";
-import { Timestamp } from "spacetimedb";
+import type { Hono } from "hono";
+import { Identity, Timestamp } from "spacetimedb";
 import { DbUnavailable, openFamilyDb } from "../db";
 import { dbProxy } from "../db-proxy";
+import type { FamilyEnv } from "../http";
 import { medicineMemoryRoutes } from "./medicine-memory";
 import {
 	dbConfig,
@@ -17,6 +19,20 @@ import {
 } from "./test-family";
 
 const decode = Schema.decodeUnknownSync(MedicineMemory);
+
+/** Another identity's views update asynchronously; polls `path` until `done` holds. */
+const until = (
+	app: Hono<FamilyEnv>,
+	path: string,
+	done: (response: { status: number; json: unknown }) => boolean,
+) =>
+	Effect.gen(function* () {
+		for (let tries = 0; ; tries++) {
+			const response = yield* send(app, "GET", path);
+			if (done(response) || tries === 100) return response;
+			yield* Effect.sleep("20 millis");
+		}
+	});
 const minutesAgo = (minutes: number) =>
 	new Date(Date.now() - minutes * 60_000).toISOString();
 const sighting = (place: string, seenAt: string) => ({
@@ -47,13 +63,14 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					db.connection.reducers
 						.rememberMedicine({
 							familyId: BigInt(familyId),
+							personId: Identity.fromString(db.identity),
 							...sighting("Kitchen", ""),
 							seenAt: Timestamp.now(),
 						})
 						.then(String, String),
 				);
 				expect(direct).toBe(
-					"SenderError: medicine memory is off for this family",
+					"SenderError: medicine memory is off for this member",
 				);
 
 				const places = ["Kitchen counter", "Bedside table"];
@@ -127,6 +144,8 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					places: [],
 				});
 				expect(decode(cleared.json)).toEqual({
+					personId: db.identity,
+					people: [db.identity],
 					permission: null,
 					sightings: [],
 				});
@@ -160,21 +179,44 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 					medicineMemoryRoutes(),
 				);
 				const read = yield* send(outsiderApp, "GET", "/medicine-memory");
-				expect(decode(read.json)).toEqual({ permission: null, sightings: [] });
+				expect(decode(read.json)).toEqual({
+					personId: outsider.identity,
+					people: [outsider.identity],
+					permission: null,
+					sightings: [],
+				});
+				const asked = yield* send(
+					outsiderApp,
+					"GET",
+					`/medicine-memory?person=${owner.identity}`,
+				);
+				expect(failure(asked)).toEqual([403, "forbidden"]);
 
 				const theirs = outsider.connection.reducers;
 				const writes = [
 					theirs.setMedicineMemory({
 						familyId: BigInt(familyId),
+						personId: Identity.fromString(owner.identity),
 						enabled: false,
 						places: [],
 					}),
 					theirs.rememberMedicine({
 						familyId: BigInt(familyId),
+						personId: Identity.fromString(owner.identity),
 						...sighting("Garage", ""),
 						seenAt: Timestamp.now(),
 					}),
 					theirs.markMedicineNotFound({ id: BigInt(stored?.id ?? "0") }),
+					theirs.saveMedicineArPin({
+						familyId: BigInt(familyId),
+						containerId: BigInt(stored?.id ?? "0"),
+						anchorId: "outsider-anchor",
+						mapBytes: 1,
+					}),
+					theirs.deleteMedicineArPin({
+						familyId: BigInt(familyId),
+						containerId: BigInt(stored?.id ?? "0"),
+					}),
 				];
 				const results = yield* Effect.promise(() => Promise.allSettled(writes));
 				expect(
@@ -185,6 +227,95 @@ describe.skipIf(dbConfig === undefined)("medicine memory", () => {
 
 				const after = yield* send(ownerApp, "GET", "/medicine-memory");
 				expect(after.json).toEqual(saved.json);
+			}),
+		));
+
+	test("each member has their own; a caregiver opens every member's; others get 403", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db: owner, familyId } = yield* openFamily(config, "Members");
+				const relative = yield* openFamilyDb(config);
+				yield* Effect.promise(() =>
+					owner.connection.reducers.addFamilyMember({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+					}),
+				);
+				const ownerApp = familyApp(owner, familyId, medicineMemoryRoutes());
+				const theirs = familyApp(relative, familyId, medicineMemoryRoutes());
+				const ofOwner = `/medicine-memory?person=${owner.identity}`;
+				const ofRelative = `/medicine-memory?person=${relative.identity}`;
+
+				// The relative keeps their own pills in their own places.
+				yield* send(theirs, "PUT", "/medicine-memory", {
+					enabled: true,
+					places: ["Bathroom shelf"],
+				});
+				const saved = yield* send(
+					theirs,
+					"POST",
+					"/medicine-memory/sightings",
+					sighting("Bathroom shelf", minutesAgo(1)),
+				);
+				expect(decode(saved.json)).toMatchObject({
+					personId: relative.identity,
+					people: [relative.identity],
+					sightings: [{ personId: relative.identity }],
+				});
+
+				// The founder (every scope, #188) sees only their own by default, and the relative's on
+				// request; the relative cannot open the founder's.
+				expect(
+					decode((yield* send(ownerApp, "GET", "/medicine-memory")).json),
+				).toMatchObject({
+					personId: owner.identity,
+					permission: null,
+					sightings: [],
+				});
+				const opened = decode(
+					(yield* until(
+						ownerApp,
+						ofRelative,
+						(r) => r.status === 200 && decode(r.json).sightings.length === 1,
+					)).json,
+				);
+				expect(opened.people).toEqual([owner.identity, relative.identity]);
+				expect(opened.permission?.places).toEqual(["Bathroom shelf"]);
+				for (const [method, body] of [
+					["GET", undefined],
+					["PUT", { enabled: false, places: [] }],
+				] as const)
+					expect(failure(yield* send(theirs, method, ofOwner, body))).toEqual([
+						403,
+						"forbidden",
+					]);
+				expect(
+					failure(yield* send(theirs, "GET", "/medicine-memory?person=me")),
+				).toEqual([400, "invalid_request"]);
+
+				// A caregiver scope opens the founder's too; the founder's own stays separate.
+				yield* Effect.promise(() =>
+					owner.connection.reducers.setCareGrant({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(relative.identity),
+						scope: "care_plan_edit",
+						granted: true,
+					}),
+				);
+				yield* until(theirs, ofOwner, (r) => r.status === 200);
+				yield* send(theirs, "PUT", ofOwner, {
+					enabled: true,
+					places: ["Desk"],
+				});
+				const own = decode(
+					(yield* until(
+						ownerApp,
+						"/medicine-memory",
+						(r) => decode(r.json).permission !== null,
+					)).json,
+				);
+				expect(own.permission?.places).toEqual(["Desk"]);
+				expect(own.sightings).toEqual([]);
 			}),
 		));
 

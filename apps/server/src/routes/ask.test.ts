@@ -11,6 +11,7 @@ import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import { Identity } from "spacetimedb";
 import { type FamilyDb, openFamilyDb } from "../db";
+import { redeem } from "../delegation";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import { elevenLabsVoice, maxAudioBytes } from "../integrations/elevenlabs";
 import { askRoutes } from "./ask";
@@ -52,16 +53,23 @@ const sleepSample = (sourceTime: string) => ({
 	quality: "unvalidated",
 	recordedBy: "c200".padEnd(64, "0"),
 });
-const bridgeCalls: Array<{ family_id: string; request: unknown }> = [];
+const bridgeCalls: Array<{
+	family_id: string;
+	request: unknown;
+	delegation?: string;
+}> = [];
+// Whether each call's delegation could be redeemed while the question was still running.
+const lentDuringCall: boolean[] = [];
 let samples: unknown[] = [];
 const bridge = Bun.serve({
 	port: 0,
 	fetch: async (request) => {
-		const call = (await request.json()) as {
-			family_id: string;
-			request: unknown;
-		};
+		const call = (await request.json()) as (typeof bridgeCalls)[number];
 		bridgeCalls.push(call);
+		if (call.delegation !== undefined)
+			lentDuringCall.push(
+				redeem(call.delegation, BigInt(call.family_id)) !== undefined,
+			);
 		return Response.json({
 			family_id: call.family_id,
 			status: 200,
@@ -184,6 +192,18 @@ const mount = (configured = { gemini: true, fetch: true }) =>
 			);
 		});
 const app = mount();
+// The signed-in member's connection, as `authenticate` sets it; only the delegation uses it here.
+const memberDb = {
+	connection: { isActive: true },
+	identity: "c200".padEnd(64, "0"),
+	token: "member-token",
+} as unknown as FamilyDb;
+const signedIn = new Hono<FamilyEnv>()
+	.use("/api/families/:familyId/*", async (c, next) => {
+		c.set("db", memberDb);
+		await next();
+	})
+	.route("/", app);
 const ask = (body: unknown, target = app, signal?: AbortSignal) =>
 	target.request("http://test/api/families/7/ask", {
 		method: "POST",
@@ -225,6 +245,17 @@ describe("POST /ask", () => {
 				],
 			},
 		]);
+	});
+
+	test("through Fetch.ai, the worker gets this family's delegation only while the question runs", async () => {
+		lentDuringCall.length = 0;
+		const response = await ask({ question: "How did Mom sleep?" }, signedIn);
+		expect(response.status).toBe(200);
+		const [call] = bridgeCalls;
+		expect(call?.family_id).toBe("7");
+		expect(lentDuringCall).toEqual([true]);
+		// Released with the answer: the worker can no longer read the family.
+		expect(redeem(call?.delegation ?? "", 7n)).toBeUndefined();
 	});
 
 	test("records that are missing or old stay explicit", async () => {

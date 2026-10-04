@@ -52,13 +52,14 @@ const specs: ReadonlyArray<FamilyToolSpec> = ToolRequest.members.map(
 /**
  * The family tools for one question. `source` is the Fetch.ai bridge when configured, otherwise
  * the asking member's database connection. `now` decides which records are stale; `timeZone`
- * (IANA) is the zone the answer writes times in.
+ * (IANA) is the zone the answer writes times in. `delegation` goes with each Fetch.ai call.
  */
 export const familyTools = (
 	source: FetchAgentConfig | FamilyDb | undefined,
 	familyId: bigint,
 	now: Date,
 	timeZone = "UTC",
+	delegation?: string,
 ): FamilyTools => {
 	const evidence = new Map<string, Evidence>();
 	const alerts = new Map<string, Alert>();
@@ -87,7 +88,13 @@ export const familyTools = (
 			const response =
 				source !== undefined && "connection" in source
 					? runTool(source, familyId.toString(), request.value)
-					: await callAgentTool(source, familyId, request.value, signal);
+					: await callAgentTool(
+							source,
+							familyId,
+							request.value,
+							signal,
+							delegation,
+						);
 			if (response.tool === "alerts") {
 				for (const alert of response.alerts) alerts.set(alert.id, alert);
 				return response;

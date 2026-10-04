@@ -15,7 +15,10 @@ import {
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
 import { Hint } from "@/components/win95";
 import { useFamily } from "@/lib/family";
-import { useMedicineMemory } from "@/lib/medicine-memory";
+import {
+	useChosenMedicineMemory,
+	WhoseMedicinesPicker,
+} from "@/lib/medicine-memory";
 
 export const Route = createFileRoute("/medicine")({
 	validateSearch: (search: Record<string, unknown>): { q?: string } =>
@@ -29,7 +32,7 @@ function MedicineComponent() {
 	const familyId = family?.id ?? null;
 	const camera = useCamera(true);
 	const { check, look, stop } = usePictureCheck(familyId, families);
-	const { memory, change } = useMedicineMemory(familyId);
+	const { memory, change, choose } = useChosenMedicineMemory(familyId);
 	const video = useRef<HTMLVideoElement | null>(null);
 	const lookNow = () => void look(video.current);
 
@@ -77,6 +80,11 @@ function MedicineComponent() {
 							<ArrowLeft aria-hidden />
 							Home
 						</Link>
+						<WhoseMedicinesPicker
+							choose={choose}
+							className="[&_select]:min-w-0 [&_select]:flex-1"
+							memory={memory}
+						/>
 						{asked && (
 							<p className="ml-auto grid min-w-0 justify-items-end text-right">
 								<span className="text-[16px] text-muted-foreground">

@@ -11,7 +11,6 @@
 			"supportsTablet": true,
 			"bundleIdentifier": "com.anonymous.health",
 			"infoPlist": {
-				"NSCameraUsageDescription": "The medicine finder looks for a medicine box in the camera frame.",
 				"NSMicrophoneUsageDescription": "Voice requests are spoken to the app."
 			}
 		},
@@ -31,6 +30,7 @@
 		},
 		"plugins": [
 			"expo-router",
+			"./modules/telly-ar/app.plugin.js",
 			[
 				"expo-splash-screen",
 				{

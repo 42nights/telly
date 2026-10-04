@@ -31,7 +31,13 @@ sh deploy/cloudflare/release.sh
 
 If the module change needs a data wipe or breaks clients, the publish stops at its prompt and the Worker is not deployed. Never add `--delete-data`.
 
-`deploy/cloudflare/deploy.sh` writes the image tag once, with the entrypoint set, and checks the entrypoint before it deploys. It then waits for the container rollout to finish and fails unless `/health` answers 200 within 2 minutes. Until the rollout finishes, the old instances still answer, so a check before that proves nothing.
+`deploy/cloudflare/deploy.sh` writes the image tag once, with the entrypoint set, and checks the entrypoint. Then it verifies the build before users see it:
+
+1. It deploys the build to the candidate Worker `telly-candidate` (its own container application, only at `https://telly-candidate.jerry-2c0.workers.dev`), with the production settings and keys.
+2. It waits for the candidate's container rollout, then requires the signed-out smoke within 2 minutes: `/health` is `ok`, `/api/sources` is 200, `/api/me` without a token is 401, and `/` serves the web app.
+3. Only then does it deploy the same image to `telly`, and the live Worker must pass the same check after its own rollout.
+
+A build that fails the candidate check never reaches `telly`, so live traffic stays on the current version and nothing needs a rollback. `wrangler versions upload` cannot do this here: it publishes no container image, and Workers with containers get no version URLs. The rollbacks below stay as a last-resort guard for a build that passes the candidate and fails live.
 
 `https://app.saintess.tech/version.txt` shows the live commit. Each deploy restarts the container with the new image and settings, and the container pulls its keys again. The first request after a deploy can take about 35 seconds.
 
