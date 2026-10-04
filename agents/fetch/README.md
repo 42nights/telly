@@ -98,7 +98,16 @@ Then do these steps one time for each agent:
 
 In mailbox mode, each agent polls Agentverse for its messages every second. A call takes at least two polls. Agentverse applies its own message and data quotas to mailboxes.
 
-In mailbox mode, the worker also publishes the chat protocol manifest. ASI:One discovery and use also need these steps, which are not done: approval to publish the agent on Agentverse, ASI:One access, and a grant of the synthetic demo family to the ASI:One sender address from the worker log.
+### Publish for ASI:One
+
+When its mailbox connects, the worker sends `agentverse.md` as its public Agentverse README, with a short description. It also publishes the chat protocol manifest. Publish only with a synthetic demo family.
+
+1. Start the worker with the mailbox on, and connect the mailbox as above.
+2. On Agentverse, check that the agent profile shows the README and the `AgentChatProtocol` protocol.
+3. Send a first chat from ASI:One. Read the sender address from the worker log (`chat sender=...`). Add it to `TELLY_FETCH_GRANTS` with only the synthetic demo family, then restart the worker.
+4. Ask the question again in ASI:One.
+
+Keep `agentverse.md` free of real data, addresses of private hosts, and secrets.
 
 ## Run locally without Agentverse
 
