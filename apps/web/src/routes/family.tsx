@@ -9,11 +9,7 @@ import { Users } from "lucide-react";
 import { CookingAbilities } from "@/components/cooking/abilities";
 import { ExerciseSection } from "@/components/exercise/plans";
 import { type FamilyData, useFamilyData } from "@/components/family/data";
-import {
-	KeyNumbers,
-	RecentMessages,
-	SourceList,
-} from "@/components/family/overview";
+import { KeyNumbers, RecentMessages } from "@/components/family/overview";
 import {
 	AlertSection,
 	FamilyGate,
@@ -77,7 +73,6 @@ function Overview({ data, family }: { data: FamilyData; family: Family }) {
 				</h3>
 				<KeyNumbers data={data} family={family} />
 				<ReadingsGlance data={data} familyId={family.id} now={now} />
-				<SourceList />
 			</section>
 
 			<section aria-labelledby="monitoring" className="grid gap-2">

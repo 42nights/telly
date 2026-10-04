@@ -19,7 +19,7 @@ function FamilyThresholds() {
 				title={`Alert thresholds · ${data.family?.name ?? "No person"}`}
 				icon={SlidersHorizontal}
 				className="mx-auto w-full max-w-4xl"
-				status="Read-only here. A rule without a fresh validated reading shows as unavailable, never as passing."
+				status="Read-only"
 			>
 				<FamilyGate data={data} emptyClassName="p-3 text-sm">
 					{() => (

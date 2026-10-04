@@ -7,8 +7,10 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@health/ui/components/empty";
+import { cn } from "@health/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { CloudOff, Info, Loader, LockKeyhole, ShieldOff } from "lucide-react";
+import { type ReactNode, useId } from "react";
 
 import type { ApiFailure } from "@/lib/api";
 
@@ -33,6 +35,38 @@ export function Tip({
 			aria-label={text}
 		>
 			<Info aria-hidden className="size-4" />
+		</button>
+	);
+}
+
+/**
+ * Visible content with its details in a Win95 yellow tooltip. The content is a button, so the
+ * tooltip opens on hover, tap, and keyboard focus; screen readers read it as the description.
+ */
+export function Hint({
+	text,
+	align = "start",
+	className,
+	children,
+}: {
+	text: string;
+	/** `end` keeps the tooltip inside the window when the content sits at a right edge. */
+	align?: "start" | "end";
+	className?: string;
+	children: ReactNode;
+}) {
+	const id = useId();
+	return (
+		<button
+			type="button"
+			className={cn("win95-hint", className)}
+			data-align={align}
+			aria-describedby={id}
+		>
+			{children}
+			<span id={id} role="tooltip" className="win95-hint-body">
+				{text}
+			</span>
 		</button>
 	);
 }

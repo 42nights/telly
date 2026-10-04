@@ -11,9 +11,9 @@ import {
 } from "@health/contracts/appointments";
 import { Button } from "@health/ui/components/button";
 import { useState } from "react";
-
 import { failureText } from "@/components/reports/use-report-sheet";
 import { type ApiFailure, apiRequest, useApi } from "@/lib/api";
+import { metricLabel, readingValue } from "@/lib/readings";
 
 import { buttonClass, fieldClass, type RunAction, useAction } from "./action";
 import { formatVisitTime, LIST_FIELDS } from "./logic";
@@ -67,10 +67,10 @@ function SummaryView({ summary }: { summary: PrepSummary }) {
 					<ul className="list-disc pl-5">
 						{summary.observations.markers.map(({ metric, sample }) => (
 							<li key={metric}>
-								{metric}:{" "}
+								{metricLabel(metric)}:{" "}
 								{sample === null
 									? "unavailable"
-									: `${sample.value} ${sample.unit} · ${sample.sourceTime} · ${sample.quality}`}
+									: `${readingValue(sample)} · ${sample.sourceTime}`}
 							</li>
 						))}
 					</ul>

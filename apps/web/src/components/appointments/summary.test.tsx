@@ -227,8 +227,8 @@ test("dated labs and report markers show their values, gaps, and sources; Close 
 			"HbA1c: 48 mmol/mol · 2026-08-01 · Lab Co",
 			"Ferritin: no value  · undated · clinic",
 			"B12: low  · undated · source unknown",
-			"steps: unavailable",
-			"heart_rate: 62 bpm · 2026-08-01T07:00:00.000Z · validated",
+			"Steps: unavailable",
+			"Heart rate: 62 bpm · 2026-08-01T07:00:00.000Z",
 		],
 	);
 

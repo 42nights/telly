@@ -63,9 +63,6 @@ export function WhoopStatus({ records }: { records: ApiState<FamilyRecords> }) {
 			>
 				{age.text}
 			</span>
-			<small>
-				WHOOP (via NOOP){heart.quality === "unvalidated" && " · unvalidated"}
-			</small>
 		</span>
 	);
 }

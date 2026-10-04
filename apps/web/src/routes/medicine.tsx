@@ -13,7 +13,7 @@ import {
 	usePictureCheck,
 } from "@/components/wearer/medicine-check";
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
-import { Tip } from "@/components/win95";
+import { Hint } from "@/components/win95";
 import { useFamily } from "@/lib/family";
 import { useMedicineMemory } from "@/lib/medicine-memory";
 
@@ -46,16 +46,15 @@ function MedicineComponent() {
 	const asked = q.trim() !== "";
 	const item = itemFromRequest(q);
 	const name = (
-		<>
+		<Hint
+			text={
+				asked
+					? `From your request “${q}”.`
+					: "No request was given, so I look for any medicine container."
+			}
+		>
 			<b>{item}</b>
-			<Tip
-				text={
-					asked
-						? `From your request “${q}”.`
-						: "No request was given, so I look for any medicine container."
-				}
-			/>
-		</>
+		</Hint>
 	);
 	const best =
 		check?.result.kind === "done"

@@ -39,23 +39,11 @@ export function ReportScreen() {
 			</Frame>
 		);
 	// A new key per person drops the picked report and any error from the previous person.
-	return (
-		<FamilyReports
-			key={family.id}
-			familyId={family.id}
-			familyName={family.name}
-		/>
-	);
+	return <FamilyReports key={family.id} familyId={family.id} />;
 }
 
 /** The selected family's reports: the newest, or the one picked, and a way to create one. */
-function FamilyReports({
-	familyId,
-	familyName,
-}: {
-	familyId: string;
-	familyName: string;
-}) {
+function FamilyReports({ familyId }: { familyId: string }) {
 	const [refreshKey, setRefreshKey] = useState(0);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -102,10 +90,7 @@ function FamilyReports({
 				status={failure === null ? "No reports yet" : failureText(failure)}
 			>
 				<div className="grid justify-items-start gap-3 p-3 text-sm">
-					<p>
-						No reports yet. A new report collects the latest reading of each
-						measure saved for {familyName}.
-					</p>
+					<p>No reports yet.</p>
 					{createButton(true)}
 				</div>
 			</Frame>

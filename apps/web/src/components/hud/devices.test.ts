@@ -4,13 +4,18 @@ import type { HealthSample } from "@health/contracts";
 import { phoneLine, wearableLine } from "./devices";
 
 test("an unknown battery is not 0 %, and offline names what waits", () => {
-	expect(phoneLine(true, null)).toBe("This phone · online · battery unknown");
-	expect(phoneLine(true, { level: 0, charging: true })).toBe(
-		"This phone · online · battery 0 % · charging",
-	);
-	expect(phoneLine(false, undefined)).toBe(
-		"This phone · offline · answers, directions, and messages wait · battery: checking…",
-	);
+	expect(phoneLine(true, null)).toEqual({
+		text: "Phone online",
+		detail: "Battery unknown",
+	});
+	expect(phoneLine(true, { level: 0, charging: true })).toEqual({
+		text: "Phone online",
+		detail: "Battery 0 %, charging",
+	});
+	expect(phoneLine(false, undefined)).toEqual({
+		text: "Phone offline",
+		detail: "Answers, directions, and messages wait. Battery: checking…",
+	});
 });
 
 const now = Date.parse("2026-10-04T12:00:00Z");
@@ -28,13 +33,20 @@ const sample = (source: string, synthetic: boolean, hoursAgo: number) =>
 		quality: "unvalidated",
 	}) satisfies HealthSample;
 
+const connected = {
+	sources: [
+		{ source: "noop", status: "connected", lastSeenAt: "2026-10-04T11:00:00Z" },
+	],
+} as const;
+
 test("a disconnected wearable shows only its last real reading, as saved", () => {
 	const noop = {
 		sources: [{ source: "noop", status: "not_connected", lastSeenAt: null }],
 	} as const;
-	expect(wearableLine(noop, [], now)).toBe(
-		"WHOOP · not connected · no new readings · wear unknown · last contact unknown",
-	);
+	expect(wearableLine(noop, [], now)).toEqual({
+		text: "WHOOP not connected",
+		detail: "No new readings; wear unknown.",
+	});
 	expect(
 		wearableLine(
 			noop,
@@ -45,25 +57,26 @@ test("a disconnected wearable shows only its last real reading, as saved", () =>
 			],
 			now,
 		),
-	).toBe(
-		"WHOOP · not connected · no new readings · wear unknown · last reading 3 h ago · saved, not current",
-	);
-	expect(wearableLine(null, null, now)).toBe(
-		"WHOOP · status unknown · last contact unknown",
-	);
+	).toEqual({
+		text: "WHOOP not connected",
+		detail:
+			"No new readings; wear unknown. Last reading 3 h ago. Saved, not current.",
+	});
+	expect(wearableLine(null, null, now)).toEqual({
+		text: "WHOOP",
+		detail: "Status unknown.",
+	});
+});
+
+test("a connected wearable shows its reading age only once it is over an hour old", () => {
 	expect(
-		wearableLine(
-			{
-				sources: [
-					{
-						source: "noop",
-						status: "connected",
-						lastSeenAt: "2026-10-04T11:00:00Z",
-					},
-				],
-			},
-			[sample("noop:strap", false, 1)],
-			now,
-		),
-	).toBe("WHOOP · connected · unvalidated · last reading 1 h ago");
+		wearableLine(connected, [sample("noop:strap", false, 0.5)], now),
+	).toEqual({ text: "WHOOP connected", detail: "Last reading 30 min ago." });
+	expect(
+		wearableLine(connected, [sample("noop:strap", false, 4)], now),
+	).toEqual({ text: "WHOOP · 4 h ago", detail: "Last reading 4 h ago." });
+	expect(wearableLine(connected, [], now)).toEqual({
+		text: "WHOOP connected",
+		detail: "No reading yet.",
+	});
 });

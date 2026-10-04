@@ -131,7 +131,6 @@ test("shows empty states for a family with no data", async () => {
 	).toBeTruthy();
 	expect(router.state.location.pathname).toBe("/family");
 	expect(await screen.findByText("No messages yet.")).toBeTruthy();
-	expect(await screen.findByText("No health source configured.")).toBeTruthy();
 	const numbers = await glance();
 	expect(numbers.getByText("HRV").nextSibling?.textContent).toBe("Unavailable");
 	expect(numbers.getByText("Open alerts").nextSibling?.textContent).toBe("0");
@@ -144,7 +143,7 @@ test("shows empty states for a family with no data", async () => {
 			.getByRole("link", { name: "Chat" })
 			.getAttribute("href"),
 	).toBe("/chat");
-	expect(calls.map((c) => `${c.method} ${c.path}`)).toContain(
+	expect(calls.map((c) => `${c.method} ${c.path}`)).not.toContain(
 		"GET /api/sources",
 	);
 
@@ -158,7 +157,7 @@ test("shows empty states for a family with no data", async () => {
 	).toBeTruthy();
 });
 
-test("shows loaded alerts, thresholds, messages, and sources", async () => {
+test("shows loaded alerts, thresholds, and messages", async () => {
 	signIn();
 	serve(
 		routes({
@@ -234,17 +233,10 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 	);
 	renderRoute("/family");
 
-	const sources = await screen.findByRole("list", { name: "Health sources" });
-	expect(within(sources).getByText("WHOOP via NOOP")).toBeTruthy();
-	expect(
-		within(sources).getByText("Connected · readings unvalidated"),
-	).toBeTruthy();
-
 	const numbers = await glance();
 	await waitFor(() =>
 		expect(numbers.getByText("Open alerts").nextSibling?.textContent).toBe("2"),
 	);
-	expect(numbers.queryByText("No real reading stored")).toBeNull();
 
 	const messages = await section("Recent messages");
 	const bodies = (await messages.findAllByText(/^Body /)).map(
@@ -284,29 +276,14 @@ test("shows loaded alerts, thresholds, messages, and sources", async () => {
 		rules.getByText("Heart rate below 100 bpm").nextSibling?.textContent,
 	).toBe("Out of range");
 	expect(rules.getByText("Steps above 100 bpm").nextSibling?.textContent).toBe(
-		"Unavailable: stale reading",
+		"Unavailable: no recent reading",
 	);
-	expect(rules.getByText("Spo2 below 100 bpm").nextSibling?.textContent).toBe(
-		"Unavailable: no validated reading",
+	expect(rules.getByText("SpO2 below 100 bpm").nextSibling?.textContent).toBe(
+		"Unavailable: no reading",
 	);
 	expect(rules.getByText("Temp above 100 bpm").nextSibling?.textContent).toBe(
 		"State unknown",
 	);
-});
-
-test("shows a source that is not connected", async () => {
-	signIn();
-	serve(
-		routes({
-			"GET /api/sources": {
-				sources: [
-					{ source: "noop", status: "not_connected", lastSeenAt: null },
-				],
-			},
-		}),
-	);
-	renderRoute("/family");
-	expect(await screen.findByText("Unavailable: not connected")).toBeTruthy();
 });
 
 test("keeps HRV unavailable when only demo or other readings exist", async () => {
@@ -324,6 +301,7 @@ test("keeps HRV unavailable when only demo or other readings exist", async () =>
 	renderRoute("/family");
 	await screen.findByText("No messages yet.");
 	const numbers = await glance();
+	expect(numbers.getAllByText("HRV")).toHaveLength(1);
 	expect(numbers.getByText("HRV").nextSibling?.textContent).toBe("Unavailable");
 });
 
@@ -353,7 +331,6 @@ test("shows each section's failure when the server refuses or fails", async () =
 	expect(
 		(await numbers.findByText("Open alerts")).nextSibling?.textContent,
 	).toBe("Unavailable");
-	expect(await numbers.findByText("Could not load sources")).toBeTruthy();
 	const messages = await section("Recent messages");
 	expect(await messages.findByText("Could not load messages")).toBeTruthy();
 	expect(messages.getByText(/The server is not reachable/)).toBeTruthy();
@@ -380,7 +357,7 @@ test("shows the loading notices before replies arrive", async () => {
 		}),
 	);
 	renderRoute("/family");
-	expect(await screen.findByText("Loading sources…")).toBeTruthy();
+	expect(await (await glance()).findByText("Loading readings…")).toBeTruthy();
 	expect(
 		(await section("Recent messages")).getByText("Loading messages…"),
 	).toBeTruthy();

@@ -59,9 +59,7 @@ test("no alerts for this family is never shown as an all-clear", () => {
 			}}
 		/>,
 	);
-	expect(view.getByRole("status").textContent).toBe(
-		"No alerts recorded. This is not an all-clear: see Monitoring below.",
-	);
+	expect(view.getByRole("status").textContent).toBe("No alerts recorded.");
 	expect(view.queryByText("Alert a1")).toBeNull();
 });
 

@@ -33,7 +33,7 @@ export function Alerts({
 	if (alerts.length === 0)
 		return (
 			<p className="win95-inset bg-card p-3 text-[18px]" role="status">
-				No alerts recorded. This is not an all-clear: see Monitoring below.
+				No alerts recorded.
 			</p>
 		);
 	return (

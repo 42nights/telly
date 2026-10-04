@@ -107,7 +107,8 @@ hr {
 .win95-tip:focus-visible {
 	outline: 2px dotted #000000;
 }
-.win95-tip::after {
+.win95-tip::after,
+.win95-hint-body {
 	content: attr(data-tip);
 	position: absolute;
 	z-index: 20;
@@ -136,6 +137,30 @@ hr {
 }
 .win95-tip:hover::after,
 .win95-tip:focus-visible::after {
+	display: block;
+}
+/* Text with a hint (`Hint`): the yellow tip sits under the text, opened by hover, tap, or focus. */
+.win95-hint {
+	position: relative;
+	text-align: inherit;
+	cursor: help;
+}
+.win95-hint:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: 1px;
+}
+.win95-hint-body {
+	top: calc(100% + 4px);
+	left: 0;
+	max-width: max(100%, 10rem);
+	transform: none;
+}
+.win95-hint[data-align="end"] > .win95-hint-body {
+	left: auto;
+	right: 0;
+}
+.win95-hint:hover > .win95-hint-body,
+.win95-hint:focus > .win95-hint-body {
 	display: block;
 }
 /* Text fields and selects sit in a sunken well; the focus ring stays visible on the white face. */

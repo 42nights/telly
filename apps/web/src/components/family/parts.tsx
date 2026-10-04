@@ -8,9 +8,10 @@ import { Link } from "@tanstack/react-router";
 import { Check, Phone, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { ApiNotice, Tip } from "@/components/win95";
+import { ApiNotice, Hint, Tip } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
 import { telHref, useContacts } from "@/lib/contacts";
+import { metricLabel, readingValue, sourceName } from "@/lib/readings";
 
 import { type FamilyData, useShownAlert } from "./data";
 import {
@@ -19,10 +20,10 @@ import {
 	deliveryText,
 	type Glance,
 	type MonitoringLevel,
-	metricLabel,
 	monitoringLevel,
 	newestNoopSample,
 	newestPerMetric,
+	oldAge,
 	seenText,
 } from "./logic";
 
@@ -85,7 +86,7 @@ export function ReadingsGlance({
 	familyId: string;
 	now: number;
 }) {
-	const { records, thresholds } = data;
+	const { records } = data;
 	if (records.kind !== "ready")
 		return <ApiNotice state={records} what="readings" />;
 	return (
@@ -93,8 +94,6 @@ export function ReadingsGlance({
 			now={now}
 			glance={newestPerMetric(
 				records.value.samples.filter((s) => s.familyId === familyId),
-				thresholds.kind === "ready" ? thresholds.value.thresholds : [],
-				now,
 			)}
 		/>
 	);
@@ -118,7 +117,7 @@ export function MonitoringBadge({ state }: { state: ApiState<Monitoring> }) {
 const signal = (sample: HealthSample | null) =>
 	sample === null
 		? "Manual alert"
-		: `${metricLabel(sample.metric)} ${sample.value} ${sample.unit} · ${sample.source}`;
+		: `${metricLabel(sample.metric)} ${readingValue(sample)}`;
 
 /**
  * One alert with "Mark as seen", "Call Mom", and "Call 911". Seen and unseen use the same rows and
@@ -251,10 +250,8 @@ function AlertActions({
 				role={error === null ? undefined : "alert"}
 			>
 				{error ??
-					(contacts.momPhone === null ? (
+					(contacts.momPhone === null && (
 						<>Call Mom is off: no number saved. {settings}.</>
-					) : (
-						<>Calls use the numbers in {settings}.</>
 					))}
 			</p>
 		</>
@@ -272,26 +269,26 @@ function NoAlert({ monitoring }: { monitoring: ApiState<Monitoring> }) {
 				{level === null
 					? "Monitoring state is unknown, so an alert could be missed."
 					: level === "on"
-						? "Every threshold has a fresh validated or WHOOP reading."
+						? "Every threshold has a fresh reading."
 						: level === "partial"
-							? "Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed."
-							: "Monitoring is stopped: no threshold has a fresh validated or WHOOP reading."}
+							? "Some thresholds have no fresh reading, so an alert could be missed."
+							: "Monitoring is stopped: no threshold has a fresh reading."}
 			</p>
 		</div>
 	);
 }
 
-/** Newest reading per metric, with source and age. Stale and unvalidated readings are marked. */
+/** Newest reading per metric. Its source and time are in a tooltip; an old reading shows its age. */
 function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 	if (glance.length === 0)
 		return (
 			<p className="win95-inset bg-card p-2 text-sm">
-				Unavailable: no readings stored for this person.
+				No readings stored for this person.
 			</p>
 		);
 	return (
 		<ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-			{glance.map(({ metric, sample, stale }) => {
+			{glance.map(({ metric, sample }) => {
 				if (sample === null)
 					return (
 						<li key={metric} className="win95-inset grid gap-0.5 bg-card p-2">
@@ -299,34 +296,21 @@ function GlanceList({ glance, now }: { glance: Glance[]; now: number }) {
 							<b className="text-muted-foreground text-xl leading-tight">
 								Unavailable
 							</b>
-							<span className="text-muted-foreground text-xs">
-								No real reading stored
-							</span>
 						</li>
 					);
-				const flag =
-					sample.quality === "unvalidated"
-						? "Unvalidated"
-						: stale
-							? "Stale"
-							: null;
+				const age = oldAge(sample.sourceTime, now);
 				return (
-					<li
-						key={metric}
-						className={cn(
-							"win95-inset grid gap-0.5 p-2",
-							flag === null ? "bg-card" : "bg-[#ffffe1]",
-						)}
-					>
-						<span className="text-sm">{metricLabel(metric)}</span>
-						<b className="text-2xl leading-tight">
-							{sample.value}{" "}
-							<span className="font-normal text-sm">{sample.unit}</span>
-						</b>
-						<span className="text-muted-foreground text-xs">
-							{sample.source} · {ago(sample.sourceTime, now)}
-						</span>
-						{flag !== null && <span className="font-bold text-xs">{flag}</span>}
+					<li key={metric} className="win95-inset grid bg-card">
+						<Hint
+							text={`${sourceName(sample.source)} · ${clock(sample.sourceTime)}`}
+							className="grid content-start gap-0.5 p-2"
+						>
+							<span className="text-sm">{metricLabel(metric)}</span>
+							<b className="text-2xl leading-tight">{readingValue(sample)}</b>
+							{age !== null && (
+								<span className="text-muted-foreground text-xs">{age}</span>
+							)}
+						</Hint>
 					</li>
 				);
 			})}
@@ -373,7 +357,7 @@ export function MonitoringList({
 							)}
 						>
 							{rowState === "unavailable"
-								? `Unavailable: ${reason === "stale" ? "reading is stale" : "no validated reading"}`
+								? `Unavailable: ${reason === "stale" ? "no recent reading" : "no reading"}`
 								: rowState === "in_range"
 									? "In range"
 									: "Out of range"}
@@ -383,11 +367,13 @@ export function MonitoringList({
 			)}
 			<li className="flex justify-between gap-2 p-2">
 				<span>WHOOP</span>
-				<span>
-					{whoop === null
-						? "NOOP not connected"
-						: `Connected · ${ago(whoop.sourceTime, now)} · unvalidated`}
-				</span>
+				{whoop === null ? (
+					<span>No readings</span>
+				) : (
+					<Hint text={`Newest reading ${clock(whoop.sourceTime)}`}>
+						{oldAge(whoop.sourceTime, now) ?? "Connected"}
+					</Hint>
+				)}
 			</li>
 		</ul>
 	);

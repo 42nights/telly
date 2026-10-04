@@ -36,7 +36,7 @@ const ready = (samples: HealthSample[]) =>
 	}) satisfies { kind: "ready"; at: number; value: FamilyRecords };
 
 describe("HeartReading", () => {
-	test("shows the newest validated reading, its place on the bar, its age, and its source", () => {
+	test("shows the newest validated reading and its place on the bar, with its source and age in a tooltip", () => {
 		const view = render(
 			<HeartReading
 				familyId="1"
@@ -52,13 +52,13 @@ describe("HeartReading", () => {
 			"72 beats per minute. The band shows the usual range, 60 to 100.",
 		);
 		expect(view.container.textContent).toContain("72 bpm");
-		expect(view.getByText("2 min ago · apple_watch")).toBeDefined();
+		expect(view.getByText("apple_watch · 2 min ago")).toBeDefined();
 		const [band, mark] = bar.children;
 		expect(band?.getAttribute("style")).toContain("left: 20%");
 		expect(mark?.getAttribute("style")).toContain("left: 28.2");
 	});
 
-	test("without a validated reading, a fresh watch reading shows and says it is unvalidated", () => {
+	test("without a validated reading, a fresh WHOOP reading shows with no quality mark", () => {
 		const view = render(
 			<HeartReading
 				familyId="1"
@@ -71,9 +71,8 @@ describe("HeartReading", () => {
 		expect(view.getByRole("img").getAttribute("aria-label")).toStartWith(
 			"90 beats per minute.",
 		);
-		expect(view.container.textContent).toContain(
-			"2 min ago · noop:whoop · unvalidated",
-		);
+		expect(view.getByText("WHOOP · 2 min ago")).toBeDefined();
+		expect(view.container.textContent).not.toContain("validated");
 	});
 
 	test("an old or another family's reading is not shown as current", () => {

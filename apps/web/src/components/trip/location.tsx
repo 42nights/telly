@@ -12,7 +12,7 @@ import { Schema } from "effect";
 import { useState } from "react";
 
 import { clock } from "@/components/family/logic";
-import { ApiNotice } from "@/components/win95";
+import { ApiNotice, Tip } from "@/components/win95";
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
 import { memberLabel } from "@/lib/members";
 
@@ -221,9 +221,9 @@ export function FamilyLocationSection({
 			{state.kind !== "ready" ? (
 				<ApiNotice state={state} what="location" />
 			) : !state.value.seesShared ? (
-				<p role="status">
-					Location sharing is off for you. Someone with family access can turn
-					on Location for you in Sharing.
+				<p role="status" className="flex items-center gap-1">
+					Location sharing is off for you.
+					<Tip text="Someone with family access can turn on Location for you in Sharing." />
 				</p>
 			) : shared.length === 0 ? (
 				<p>Nobody shares a location with you.</p>
@@ -251,12 +251,13 @@ export function FamilyLocationSection({
 					>
 						Copy my sharing ID
 					</Button>
+					<Tip text="A family member pastes it in Going out to share their location with you." />
 					<span aria-live="polite" className="min-w-0 flex-1 text-xs">
 						{copy === "copied"
 							? "Copied. Send it to the family member who will share their location with you."
 							: copy === "failed"
 								? "This browser did not allow copying. Try again."
-								: "A family member pastes it in Going out to share their location with you."}
+								: ""}
 					</span>
 				</p>
 			)}

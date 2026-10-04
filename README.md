@@ -183,7 +183,7 @@ flowchart LR
     ckpt --> cue["One health cue<br/>advice only, no alert change"]
 ```
 
-- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns health samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. A cue from unvalidated samples, such as WHOOP readings, carries a `notice` that says so. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
+- **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns health samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. A real WHOOP reading counts as accurate. A cue from other unchecked samples carries a `notice` that says so. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
 - **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_BASE_MODEL`, `QWEN_CHECKPOINT`.
 - **Proof:** training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452), and the server adapter gets cues from the checkpoint through River queued inference ([#177](https://github.com/ayaangazali/telly/pull/177)).
 - **Limits:** River approved no dedicated deployment for the base model, so each cue waits in River's queue (3 to 12 s).
@@ -304,11 +304,11 @@ flowchart LR
     strap["WHOOP strap"] --> noop["NOOP app<br/>iPhone or Mac"]
     noop -->|"new rows · Bearer ingest key"| api["POST /api/noop/ingest"]
     api --> db[("Sample, quality<br/>unvalidated")]
-    db --> show["Screens and answers:<br/>WHOOP (via NOOP) · unvalidated"]
-    db -.->|"never"| alert["Alerts"]
+    db --> show["Screens and answers:<br/>WHOOP"]
+    db --> alert["Alerts"]
 ```
 
-- **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. Unvalidated samples never raise an alert. Screens and answers label them "WHOOP (via NOOP) · unvalidated".
+- **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. A real WHOOP reading still drives monitoring and alerts (`drivesMonitoring`). Screens and answers call it a WHOOP reading and treat it as accurate, with no quality label.
 - **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family push tokens: `POST /api/families/:familyId/whoop-token` makes one, and NOOP pushes to `/api/noop/ingest?k=<token>`. `NOOP_INGEST_KEY` with `NOOP_FAMILY_ID` keeps the single-family key. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
 - **Proof:** on a team Mac mini, a family question answered "Your most recent heart rate reading is 58 bpm · WHOOP (via NOOP) · unvalidated" ([#174](https://github.com/ayaangazali/telly/pull/174), with [#80](https://github.com/ayaangazali/telly/pull/80), [#81](https://github.com/ayaangazali/telly/pull/81), [#97](https://github.com/ayaangazali/telly/pull/97)).
 - **Limits:** the deployed API does not have NOOP ingest set up, so its `/api/sources` reports `not_connected`.

@@ -97,7 +97,7 @@ describe("CorrectionForm", () => {
 		const options = view
 			.getAllByRole("option")
 			.map((option) => option.textContent);
-		expect(options).toEqual(["Heart rate · 72 bpm", "Hrv · 40 ms"]);
+		expect(options).toEqual(["Heart rate · 72 bpm", "HRV · 40 ms"]);
 		expect(view.getByText("Correct value (bpm)")).toBeDefined();
 	});
 
@@ -148,7 +148,7 @@ describe("CorrectionForm", () => {
 		);
 		expect(
 			view.getAllByRole("option").map((option) => option.textContent),
-		).toEqual(["Hrv · 40 ms"]);
+		).toEqual(["HRV · 40 ms"]);
 		fill("42", "Wrong strap");
 		expect(saved.at(-1)?.corrections).toEqual([
 			earlier,

@@ -206,17 +206,17 @@ describe("AlertSection without an alert to show", () => {
 		[
 			"every threshold live",
 			monitoring(row("in_range")),
-			"Every threshold has a fresh validated or WHOOP reading.",
+			"Every threshold has a fresh reading.",
 		],
 		[
 			"some thresholds unavailable",
 			monitoring(row("in_range"), row("unavailable")),
-			"Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed.",
+			"Some thresholds have no fresh reading, so an alert could be missed.",
 		],
 		[
 			"no live threshold",
 			monitoring(),
-			"Monitoring is stopped: no threshold has a fresh validated or WHOOP reading.",
+			"Monitoring is stopped: no threshold has a fresh reading.",
 		],
 	])(
 		"with %s, it says what is watched, never 'all clear'",
@@ -283,7 +283,7 @@ describe("AlertSection with an alert", () => {
 		expect(
 			inCard.getByText(`${clock(minutesAgo(5))} · 5 min ago`),
 		).toBeDefined();
-		expect(inCard.getByText("Heart rate 130 bpm · watch")).toBeDefined();
+		expect(inCard.getByText("Heart rate 130 bpm")).toBeDefined();
 		const delivery = inCard.getByText("Failed after 2 tries (timeout)");
 		expect(delivery.className).toContain("text-destructive");
 		expect(inCard.getByText("Not yet")).toBeDefined();
@@ -322,8 +322,7 @@ describe("AlertSection with an alert", () => {
 		expect(
 			view.getByRole("link", { name: "Call 112" }).getAttribute("href"),
 		).toBe("tel:112");
-		expect(view.getByText(/Calls use the numbers in/)).toBeDefined();
-		expect(view.getByRole("link", { name: "Settings" })).toBeDefined();
+		expect(view.queryByText(/Call Mom is off/)).toBeNull();
 	});
 
 	test("a manual alert with no delivery record says so", async () => {
@@ -380,12 +379,10 @@ describe("ReadingsGlance", () => {
 				now={NOW}
 			/>,
 		);
-		expect(
-			view.getByText("Unavailable: no readings stored for this person."),
-		).toBeDefined();
+		expect(view.getByText("No readings stored for this person.")).toBeDefined();
 	});
 
-	test("shows the newest reading per metric and marks stale, unvalidated, and demo-only ones", () => {
+	test("shows the newest reading per metric, its age only when old, no quality mark, and demo-only ones as unavailable", () => {
 		const view = render(
 			<ReadingsGlance
 				data={data({
@@ -396,7 +393,7 @@ describe("ReadingsGlance", () => {
 							metric: "spo2",
 							value: 97,
 							unit: "%",
-							sourceTime: minutesAgo(30),
+							sourceTime: minutesAgo(130),
 						}),
 						sample({
 							id: "steps",
@@ -407,9 +404,6 @@ describe("ReadingsGlance", () => {
 						}),
 						sample({ id: "hrv", metric: "hrv", synthetic: true }),
 					]),
-					thresholds: ready({
-						thresholds: [threshold({ metric: "spo2", unit: "%" })],
-					}),
 				})}
 				familyId="f1"
 				now={NOW}
@@ -417,11 +411,18 @@ describe("ReadingsGlance", () => {
 		);
 		const items = view.getAllByRole("listitem").map((li) => li.textContent);
 		expect(items).toEqual([
-			"Heart rate72 bpmwatch · 3 min ago",
-			"HrvUnavailableNo real reading stored",
-			"Spo297 %watch · 30 min agoStale",
-			"Steps900 stepswatch · 5 min agoUnvalidated",
+			`Heart rate72 bpmwatch · ${clock(minutesAgo(3))}`,
+			"HRVUnavailable",
+			`SpO297 %2 h agowatch · ${clock(minutesAgo(130))}`,
+			`Steps900watch · ${clock(minutesAgo(5))}`,
 		]);
+		// The source and time are the card's description, so keyboard and screen readers reach them.
+		const card = view.getByText("72 bpm").parentElement;
+		expect(card?.tabIndex).toBe(0);
+		expect(
+			document.getElementById(card?.getAttribute("aria-describedby") ?? "")
+				?.textContent,
+		).toBe(`watch · ${clock(minutesAgo(3))}`);
 	});
 });
 
@@ -453,7 +454,7 @@ describe("MonitoringList", () => {
 		expect(view.getByRole("status").textContent).toContain(
 			"Loading monitoring…",
 		);
-		expect(view.getByText("NOOP not connected")).toBeDefined();
+		expect(view.getByText("No readings")).toBeDefined();
 	});
 
 	test("no thresholds means nothing is monitored", () => {
@@ -468,7 +469,7 @@ describe("MonitoringList", () => {
 		expect(
 			view.getByText("No thresholds set: nothing is monitored."),
 		).toBeDefined();
-		expect(view.getByText("NOOP not connected")).toBeDefined();
+		expect(view.getByText("No readings")).toBeDefined();
 	});
 
 	test("each threshold shows its state, and a NOOP sample shows WHOOP connected", () => {
@@ -519,9 +520,9 @@ describe("MonitoringList", () => {
 		expect(items).toEqual([
 			"Heart rate above 110 bpmIn range",
 			"Heart rate below 40 bpmOut of range",
-			"Spo2 below 90 %Unavailable: reading is stale",
-			"Steps above 110 stepsUnavailable: no validated reading",
-			"WHOOPConnected · 5 min ago · unvalidated",
+			"SpO2 below 90 %Unavailable: no recent reading",
+			"Steps above 110 stepsUnavailable: no reading",
+			`WHOOPConnectedNewest reading ${clock(minutesAgo(5))}`,
 		]);
 		expect(view.getByText("Out of range").className).toContain(
 			"text-destructive",

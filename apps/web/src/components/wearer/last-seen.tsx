@@ -167,9 +167,8 @@ export function LastSeen({
 	if (permission === null)
 		return (
 			<p className="text-[16px] text-muted-foreground">
-				I don't keep notes on where medicine was last seen.{" "}
 				<Link className="underline" to="/settings/places">
-					Turn this on in Settings
+					Remember where medicine was seen
 				</Link>
 			</p>
 		);

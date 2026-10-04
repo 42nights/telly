@@ -141,10 +141,9 @@ describe("LastSeen", () => {
 		});
 		const view = render(<RouterProvider router={router} />);
 		const link = await view.findByRole("link", {
-			name: "Turn this on in Settings",
+			name: "Remember where medicine was seen",
 		});
 		expect(link.getAttribute("href")).toBe("/settings/places");
-		view.getByText(/I don't keep notes on where medicine was last seen\./);
 	});
 
 	test("with no sighting yet it names the item", () => {

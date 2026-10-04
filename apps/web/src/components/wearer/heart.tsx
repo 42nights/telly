@@ -1,7 +1,8 @@
 import type { FamilyRecords } from "@health/contracts";
 import { Heart } from "lucide-react";
-
+import { Hint } from "@/components/win95";
 import type { ApiState } from "@/lib/api";
+import { sourceName } from "@/lib/readings";
 
 import {
 	ago,
@@ -64,10 +65,14 @@ export function HeartReading({
 				</>
 			) : (
 				<>
-					<b className="text-[26px] leading-tight">
+					<Hint
+						text={`${sourceName(sample.source)} · ${ago(now - Date.parse(sample.sourceTime))}`}
+						align="end"
+						className="font-bold text-[26px] leading-tight"
+					>
 						{Math.round(sample.value)}{" "}
 						<small className="font-normal text-[16px]">bpm</small>
-					</b>
+					</Hint>
 					<div
 						aria-label={`${Math.round(sample.value)} beats per minute. The band shows the usual range, ${USUAL_BPM.low} to ${USUAL_BPM.high}.`}
 						className="win95-inset relative h-[18px] w-38 bg-white"
@@ -85,10 +90,6 @@ export function HeartReading({
 							style={{ left: `${barPercent(sample.value)}%` }}
 						/>
 					</div>
-					<span className="text-muted-foreground">
-						{ago(now - Date.parse(sample.sourceTime))} · {sample.source}
-						{sample.quality === "unvalidated" ? " · unvalidated" : ""}
-					</span>
 				</>
 			)}
 		</div>
