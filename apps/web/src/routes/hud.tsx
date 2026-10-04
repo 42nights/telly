@@ -5,15 +5,17 @@ import {
 	loadDecoded,
 	Sources,
 } from "@health/contracts";
-import { Button } from "@health/ui/components/button";
-import { createFileRoute } from "@tanstack/react-router";
+import { Button, buttonVariants } from "@health/ui/components/button";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import { CloudOff, Home, RotateCw } from "lucide-react";
+import { CloudOff, Home, RotateCw, Utensils } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ExerciseInvite } from "@/components/exercise/session";
 import { Alerts } from "@/components/hud/alerts";
 import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
+import { Emergency, useEmergency } from "@/components/wearer/emergency";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
@@ -210,6 +212,7 @@ function useWearerRecords() {
 function HudComponent() {
 	const now = useNow();
 	const { familyId, familiesKind, records, retry } = useWearerRecords();
+	const emergency = useEmergency(familyId);
 	const clock = new Date(now).toLocaleTimeString([], {
 		hour: "numeric",
 		minute: "2-digit",
@@ -238,13 +241,32 @@ function HudComponent() {
 						<HeartReading familyId={familyId} now={now} records={records} />
 					</div>
 
-					<div className="grid min-w-0 content-start gap-4">
+					<div className="grid min-w-0 content-start gap-3">
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
-							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
+							<Request
+								familyId={familyId}
+								onEmergency={emergency.start}
+								talkNote={talkNote[familiesKind]}
+							/>
 						)}
 						<TripCheckInCard familyId={familyId} />
+						<Link
+							className={buttonVariants({
+								variant: "outline",
+								className: "h-14 w-full text-[20px] [&_svg]:size-6",
+							})}
+							data-slot="button"
+							to="/meal"
+						>
+							<Utensils aria-hidden />
+							Meal
+						</Link>
+						{familyId !== null && (
+							<ExerciseInvite familyId={familyId} now={now} />
+						)}
+						<Emergency emergency={emergency} familyId={familyId} />
 					</div>
 
 					<section

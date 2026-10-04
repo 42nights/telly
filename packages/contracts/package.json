@@ -16,8 +16,11 @@
 		"./ask": "./src/ask.ts",
 		"./session": "./src/session.ts",
 		"./care": "./src/care.ts",
+		"./meal-facts": "./src/meal-facts.ts",
 		"./care-profile": "./src/care-profile.ts",
+		"./exercise": "./src/exercise.ts",
 		"./trends": "./src/trends.ts",
+		"./emergency": "./src/emergency.ts",
 		"./trips": "./src/trips.ts"
 	},
 	"scripts": {

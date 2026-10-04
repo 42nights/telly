@@ -88,7 +88,7 @@ uAgents listens on all interfaces. Do not expose either agent port to the intern
 You need:
 
 - An Agentverse account (https://agentverse.ai). The agents need no Agentverse API key, and mailbox registration needs no FET tokens.
-- A sign-in identity for the worker from the server's OIDC issuer (issue #4), which a family member adds to each granted family. OIDC tokens expire, so the worker needs a new `TELLY_FETCH_SERVER_TOKEN` before expiry. The issuer for this is not chosen yet.
+- A sign-in identity for the worker from the server's OIDC issuer (issue #4), which a family member adds to each granted family. The issuer is Google: the identity is the Google Cloud service account `telly-fetch-worker`, in the same project as the OAuth client. `TELLY_FETCH_SERVER_TOKEN` is that account's Google ID token with the audience set to the OAuth web client ID (`TELLY_OIDC_CLIENT_ID`), for example from the IAM Credentials `generateIdToken` method. Google ID tokens expire after one hour, so the worker needs a new `TELLY_FETCH_SERVER_TOKEN` before expiry. `GET /api/me` with the token gives the identity to add.
 
 Then do these steps one time for each agent:
 

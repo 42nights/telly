@@ -1,8 +1,4 @@
-import {
-	FamilyAnswer,
-	urgentRequest,
-	VoiceAnswer,
-} from "@health/contracts/ask";
+import { FamilyAnswer, VoiceAnswer } from "@health/contracts/ask";
 import { Button } from "@health/ui/components/button";
 import { useNavigate } from "@tanstack/react-router";
 import { Loader2, Mic, Send, Square } from "lucide-react";
@@ -12,7 +8,11 @@ import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
 import { AnswerFailed, AnswerPanel, type Reply, xl } from "./answer";
 import { HelpPanel, SupportActions } from "./help";
-import { isMedicineRequest } from "./logic";
+import {
+	type EmergencyIntent,
+	emergencyIntent,
+	isMedicineRequest,
+} from "./logic";
 
 // ponytail: fixed cap keeps a forgotten recording under the 10 MiB upload limit.
 const MAX_RECORDING_MS = 60_000;
@@ -54,7 +54,7 @@ const failureTitle = {
 type Recording = { readonly stop: () => void; readonly cancel: () => void };
 
 /** Records the microphone until stop (or the cap), then hands over the audio. A string is a problem. */
-const startRecording = async (
+export const startRecording = async (
 	onAudio: (audio: Blob) => void,
 ): Promise<Recording | string> => {
 	let stream: MediaStream;
@@ -195,17 +195,20 @@ function AskForm({
 
 /**
  * The wearer's request: Talk or a typed question. An urgent request opens the help panel first,
- * before any model; a medicine request opens the medicine finder; any other question goes to
- * Gemini with the calm-support rules (`POST /ask`, or `POST /ask/voice` for Talk). A failure
- * shows as a failure, never as an answer, and keeps the request for Try again.
+ * before any model, and starts the simulated emergency dispatch; an "ouch" starts the emergency
+ * check-in. A medicine request opens the medicine finder; any other question goes to Gemini with
+ * the calm-support rules (`POST /ask`, or `POST /ask/voice` for Talk). A failure shows as a
+ * failure, never as an answer, and keeps the request for Try again.
  */
 export function Request({
 	familyId,
 	talkNote,
+	onEmergency,
 }: {
 	familyId: string | null;
 	/** Why Talk is off while there is no family: loading, signed out, or none paired. */
 	talkNote: string;
+	onEmergency: (intent: EmergencyIntent, report: string) => void;
 }) {
 	const navigate = useNavigate();
 	const [step, setStep] = useState<Step>({ kind: "ready" });
@@ -237,8 +240,12 @@ export function Request({
 	const ask = async (text: string) => {
 		const question = text.trim();
 		if (question === "") return;
-		if (urgentRequest(question) !== null)
-			return setStep({ kind: "help", asked: question });
+		const urgent = emergencyIntent(question);
+		if (urgent !== null) {
+			onEmergency(urgent, question);
+			if (urgent === "help") return setStep({ kind: "help", asked: question });
+			return;
+		}
 		if (isMedicineRequest(question)) return openMedicine(question);
 		const request = { kind: "text", text: question } as const;
 		if (familyId === null)
@@ -305,10 +312,15 @@ export function Request({
 				request: { kind: "voice", audio },
 			});
 		const { transcript, answer, speech } = result.value;
-		if (answer.urgent)
-			return setStep({ kind: "help", asked: transcript.text.trim() });
-		if (isMedicineRequest(transcript.text))
-			return openMedicine(transcript.text.trim());
+		const said = transcript.text.trim();
+		const urgent = answer.urgent ? "help" : emergencyIntent(said);
+		if (urgent !== null) {
+			onEmergency(urgent, said);
+			return setStep(
+				urgent === "help" ? { kind: "help", asked: said } : { kind: "ready" },
+			);
+		}
+		if (isMedicineRequest(said)) return openMedicine(said);
 		setStep({
 			kind: "answer",
 			reply: {

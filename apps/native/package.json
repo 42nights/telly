@@ -19,7 +19,6 @@
 		"@varlock/expo-integration": "1.2.1",
 		"effect": "catalog:",
 		"expo": "~57.0.20",
-		"expo-auth-session": "~57.0.13",
 		"expo-constants": "~57.0.17",
 		"expo-crypto": "~57.0.3",
 		"expo-font": "~57.0.3",

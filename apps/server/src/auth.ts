@@ -19,12 +19,15 @@ export type AuthConfig = {
 	readonly issuer: string;
 	/** This API's client id; tokens must list it in `aud`. */
 	readonly audience: string;
+	/** The client secret for the code exchange (Google web clients need one). Never sent to a client. */
+	readonly clientSecret?: string | undefined;
 	readonly db: Omit<DbConfig, "token">;
 };
 
 const Discovery = Schema.Struct({
 	issuer: Schema.String,
 	jwks_uri: Schema.String,
+	token_endpoint: Schema.optional(Schema.String),
 });
 const Jwks = Schema.Struct({
 	keys: Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
@@ -49,17 +52,23 @@ const getJson = async <T>(url: string, schema: Schema.Decoder<T>) => {
 	return Schema.decodeUnknownPromise(schema)(await response.json());
 };
 
+/** The issuer's discovery document. It must name the same issuer, so its keys and endpoints are its own. */
+export const discover = async (issuer: string) => {
+	const discovery = await getJson(
+		`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
+		Discovery,
+	);
+	if (discovery.issuer !== issuer)
+		throw new Error("discovery names a different issuer");
+	return discovery;
+};
+
 /** Verifies OIDC tokens against the issuer's published keys, cached in memory. */
 const oidcVerifier = (issuer: string, audience: string) => {
 	let cache: { keys: HonoJsonWebKey[]; at: number } | undefined;
 
 	const loadKeys = async () => {
-		const discovery = await getJson(
-			`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`,
-			Discovery,
-		);
-		if (discovery.issuer !== issuer)
-			throw new Error("discovery names a different issuer");
+		const discovery = await discover(issuer);
 		const { keys } = await getJson(discovery.jwks_uri, Jwks);
 		cache = { keys: [...keys] as HonoJsonWebKey[], at: Date.now() };
 		return cache.keys;
