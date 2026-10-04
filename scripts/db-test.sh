@@ -35,7 +35,10 @@ spacetime --config-path "$data/cli.toml" login --token "$token" >/dev/null
 spacetime build --module-path spacetimedb
 # reliability.test.ts runs the built server under Node.
 bun run --filter server build >/dev/null
+# Each file writes coverage/db/<n>/lcov.info; they are joined into coverage/db/lcov.info, which
+# `bun run coverage` merges with the unit tests' report.
 run_all() {
+	rm -rf coverage/db
 	n=0
 	pids=
 	for file in "$@"; do
@@ -44,7 +47,8 @@ run_all() {
 			spacetime --config-path "$data/cli.toml" publish --server "$server" \
 				--js-path spacetimedb/dist/bundle.js --yes "health-test-$n" &&
 				SPACETIMEDB_URI="ws://127.0.0.1:$port" SPACETIMEDB_DATABASE="health-test-$n" \
-					SPACETIMEDB_OPERATOR_TOKEN="$token" bun test "$file"
+					SPACETIMEDB_OPERATOR_TOKEN="$token" bun test --coverage --coverage-reporter=lcov \
+					--coverage-dir="coverage/db/$n" "$file"
 		} >"$data/$n.log" 2>&1 || echo "$file" >>"$data/failed" &
 		pids="$pids $!"
 	done
@@ -59,6 +63,7 @@ run_all() {
 		cat "$data/failed" >&2
 		return 1
 	fi
+	cat coverage/db/*/lcov.info >coverage/db/lcov.info
 	echo "db:test: all $# files passed"
 }
 run_all apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/alerts/outbox.test.ts \
@@ -78,4 +83,5 @@ run_all apps/server/src/db.test.ts apps/server/src/auth.test.ts apps/server/src/
 	apps/server/src/routes/location.test.ts \
 	apps/server/src/routes/ask.test.ts \
 	apps/server/src/routes/cooking.test.ts \
-	apps/server/src/routes/meal-check-ins.test.ts
+	apps/server/src/routes/meal-check-ins.test.ts \
+	apps/server/src/integration/

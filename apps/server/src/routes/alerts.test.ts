@@ -2,13 +2,15 @@
 // 127.0.0.1 whose key exists for this run only. The outbox transport is a local test double, so
 // "sent" here proves the outbox protocol, not delivery by a family provider.
 import { afterAll, describe, expect, test } from "bun:test";
-import { ApiError, Family } from "@health/contracts";
+import { ApiError, Family, FamilyRecords } from "@health/contracts";
 import {
 	AcknowledgedAlert,
 	AlertThreshold,
+	AlertThresholds,
 	FamilyAlerts,
 	Monitoring,
 } from "@health/contracts/alerts";
+import { FamilyList } from "@health/contracts/families";
 import { Effect, Fiber, Schema } from "effect";
 import { sign } from "hono/jwt";
 import { runAlertOutbox } from "../alerts/outbox";
@@ -132,6 +134,15 @@ describe.skipIf(app === undefined)("alert routes", () => {
 			AlertThreshold,
 			await alice("PUT", `${family}/alert-thresholds`, heartRule),
 		);
+		expect(
+			await decoded(
+				AlertThresholds,
+				await alice("GET", `${family}/alert-thresholds`),
+			),
+		).toEqual({ thresholds: [rule] });
+		expect(
+			await errorOf(await bob("GET", `${family}/alert-thresholds`)),
+		).toEqual([403, "forbidden"]);
 		const before = await decoded(
 			Monitoring,
 			await alice("GET", `${family}/monitoring`),
@@ -235,6 +246,25 @@ describe.skipIf(app === undefined)("alert routes", () => {
 		);
 		expect(final.alerts[0]?.delivery?.status).toBe("sent");
 		expect(final.alerts[0]?.acknowledgements).toEqual([first.acknowledgement]);
+
+		// The family view and the family list hold Alice's rows only, never Bob's family or message.
+		const note = { clientId: "alerts-note", body: "Saw the alert" };
+		expect((await alice("POST", `${family}/messages`, note)).status).toBe(201);
+		expect((await bob("POST", `${bobFamily}/messages`, note)).status).toBe(201);
+		const familyId = raised.alert.familyId;
+		const records = await decoded(FamilyRecords, await alice("GET", family));
+		expect(records.families.map((f) => f.id)).toEqual([familyId]);
+		expect(records.samples.map((s) => s.familyId)).toEqual([familyId]);
+		expect(records.alerts.map((a) => a.id)).toEqual([raised.alert.id]);
+		expect(records.acknowledgements).toEqual([first.acknowledgement]);
+		expect(records.messages.map((m) => [m.familyId, m.body])).toEqual([
+			[familyId, note.body],
+		]);
+		expect(
+			(
+				await decoded(FamilyList, await alice("GET", "/api/families"))
+			).families.map((f) => f.id),
+		).toEqual([familyId]);
 
 		expect(
 			(await alice("DELETE", `${family}/alert-thresholds/${rule.id}`)).status,

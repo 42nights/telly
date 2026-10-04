@@ -38,9 +38,9 @@ export const HealthCue = Schema.Struct({
 	format: Schema.Literal("health-cue-v1"),
 	model: Schema.Struct({
 		provider: Schema.Literal("river"),
-		/** River deployment id that served the request. */
-		deployment: Schema.NonEmptyString,
-		/** `river://` checkpoint the deployment serves; the trained model version. */
+		/** River base model of the checkpoint, such as `Qwen/Qwen3.5-9B`. */
+		baseModel: Schema.NonEmptyString,
+		/** `river://` checkpoint that answered; the trained model version. */
 		checkpoint: Schema.NonEmptyString,
 	}),
 	input: Schema.Struct({

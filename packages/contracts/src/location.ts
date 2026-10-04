@@ -50,10 +50,15 @@ export const LocationShare = Schema.Struct({
 });
 export type LocationShare = typeof LocationShare.Type;
 
-/** `GET /location`: the caller's own location and those shared with the caller, and the caller's shares. */
+/**
+ * `GET /location`: the caller's own location and those shared with the caller, and the caller's
+ * shares. Another person's location needs both their share and the caller's `location` care scope
+ * (#26); `seesShared` is false when the caller lacks that scope, so `locations` holds only their own.
+ */
 export const FamilyLocations = Schema.Struct({
 	locations: Schema.Array(SharedLocation),
 	shares: Schema.Array(LocationShare),
+	seesShared: Schema.Boolean,
 });
 export type FamilyLocations = typeof FamilyLocations.Type;
 

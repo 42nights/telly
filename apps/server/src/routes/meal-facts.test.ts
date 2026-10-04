@@ -1,7 +1,12 @@
 // Runs against a real local SpacetimeDB with the module published (`bun run db:test`) and a local
 // protocol server in place of the Gemini Interactions API. All records and images are synthetic.
 import { afterAll, describe, expect, test } from "bun:test";
-import { Meal, MealEstimate, Meals } from "@health/contracts/meal-facts";
+import {
+	MAX_MEAL_IMAGE_BYTES,
+	Meal,
+	MealEstimate,
+	Meals,
+} from "@health/contracts/meal-facts";
 import { ReminderHistory } from "@health/contracts/reminders";
 import { Effect, Schema } from "effect";
 import { mealRoutes } from "./meal-facts";
@@ -60,6 +65,12 @@ const gemini = Bun.serve({
 });
 afterAll(() => gemini.stop(true));
 const config = { apiKey: "test-key-not-a-secret", baseUrl: gemini.url.href };
+// A Gemini that is down: every call fails with HTTP 503.
+const down = Bun.serve({
+	port: 0,
+	fetch: () => new Response("busy", { status: 503 }),
+});
+afterAll(() => down.stop(true));
 
 describe.skipIf(dbConfig === undefined)("meals", () => {
 	test("a photo and its estimate never report intake or complete the meal reminder; only an intake report does", () =>
@@ -303,6 +314,91 @@ describe.skipIf(dbConfig === undefined)("meals", () => {
 				).meals;
 				expect(meals[0]?.facts.map(({ fact }) => fact.type)).toEqual([
 					"food_estimate",
+				]);
+			}),
+		));
+
+	test("an oversized photo reaches no one, a Gemini failure keeps only the photo, and the newest meal lists first", () =>
+		withDb((db) =>
+			Effect.gen(function* () {
+				const family = yield* openFamily(db, "Busy kitchen family");
+				const app = familyApp(family.db, family.familyId, mealRoutes(config));
+				const before = estimates;
+				const photoOf = (data: string) => ({
+					source: "photo",
+					capturedAt: "2026-10-04T08:00:00.000Z",
+					image: { type: "image/png", data },
+				});
+
+				// One byte over the image limit still fits the body limit; the route checks the bytes.
+				const large = yield* send(
+					app,
+					"POST",
+					"/meals/big-1/estimates",
+					photoOf(Buffer.alloc(MAX_MEAL_IMAGE_BYTES + 1).toString("base64")),
+				);
+				expect(failure(large)).toEqual([400, "invalid_request"]);
+				expect(large.json).toMatchObject({
+					message: `image is larger than ${MAX_MEAL_IMAGE_BYTES} bytes`,
+				});
+				const huge = yield* send(
+					app,
+					"POST",
+					"/meals/big-1/estimates",
+					photoOf(
+						Buffer.alloc(MAX_MEAL_IMAGE_BYTES + 32 * 1024).toString("base64"),
+					),
+				);
+				expect(failure(huge)).toEqual([400, "invalid_request"]);
+				expect(huge.json).toMatchObject({ message: "The body is too large" });
+				expect(estimates).toBe(before);
+				expect((yield* send(app, "GET", "/meals")).json).toEqual({
+					meals: [],
+				});
+
+				// Gemini fails after the photo is recorded: the photo stays, no estimate is kept.
+				const failing = familyApp(
+					family.db,
+					family.familyId,
+					mealRoutes({ ...config, baseUrl: down.url.href }),
+				);
+				const upstream = yield* send(
+					failing,
+					"POST",
+					"/meals/breakfast-1/estimates",
+					photoOf(photo.data),
+				);
+				expect(failure(upstream)).toEqual([502, "upstream_error"]);
+				expect(upstream.json).toMatchObject({
+					message: "The meal estimator failed with HTTP 503",
+				});
+				yield* send(app, "POST", "/meals/lunch-1/estimates", {
+					source: "description",
+					text: "Soup and bread",
+				});
+				const order = Effect.map(send(app, "GET", "/meals"), (r) =>
+					Schema.decodeUnknownSync(Meals)(r.json).meals.map((m) => [
+						m.mealId,
+						m.facts.map(({ fact }) => fact.type),
+					]),
+				);
+				expect(yield* order).toEqual([
+					["lunch-1", ["food_estimate"]],
+					["breakfast-1", ["photo_taken"]],
+				]);
+
+				// A later report moves its meal to the top.
+				yield* send(app, "POST", "/meals/breakfast-1/intake", {
+					type: "intake_report",
+					kind: "meal",
+					amount: "all",
+					words: null,
+					reportedBy: "caregiver",
+					via: "tap",
+				});
+				expect(yield* order).toEqual([
+					["breakfast-1", ["photo_taken", "intake_report"]],
+					["lunch-1", ["food_estimate"]],
 				]);
 			}),
 		));

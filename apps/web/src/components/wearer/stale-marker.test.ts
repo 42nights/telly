@@ -1,12 +1,18 @@
-import { expect, test } from "bun:test";
+import "../test/setup";
+
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { installDom } from "../test/dom";
 
 import {
 	clearedReason,
 	difference,
 	MARKER_TTL_MS,
 	MOVED_ABOVE,
+	sample,
 	signature,
 } from "./stale-marker";
+
+installDom();
 
 /** A 32×24 RGBA frame of 4-pixel vertical stripes shifted by `offset`, plus `light` on each channel. */
 const stripes = (offset: number, light = 0) => {
@@ -35,4 +41,107 @@ test("markers clear on motion or age, and stay while the scene holds", () => {
 	// No live video (camera off): only age clears the marker.
 	expect(clearedReason(at, at + MARKER_TTL_MS, null)).toBeNull();
 	expect(clearedReason(at, at + MARKER_TTL_MS + 1, null)).toBe("old");
+});
+
+describe("sample", () => {
+	type Draw = { source: unknown; width: number; height: number };
+	let draws: Draw[];
+	/** What the stub 2D context reads back; `null` makes `getContext` fail like a browser can. */
+	let pixels: Uint8ClampedArray | null;
+	let original: PropertyDescriptor | undefined;
+	beforeEach(() => {
+		draws = [];
+		pixels = stripes(0);
+		original = Object.getOwnPropertyDescriptor(
+			HTMLCanvasElement.prototype,
+			"getContext",
+		);
+		Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+			configurable: true,
+			value: () =>
+				pixels === null
+					? null
+					: {
+							drawImage: (
+								source: unknown,
+								_x: number,
+								_y: number,
+								width: number,
+								height: number,
+							) => draws.push({ source, width, height }),
+							getImageData: () => ({ data: pixels }),
+						},
+		});
+		Object.defineProperty(HTMLMediaElement, "HAVE_CURRENT_DATA", {
+			configurable: true,
+			value: 2,
+		});
+	});
+
+	afterEach(() => {
+		if (original)
+			Object.defineProperty(
+				HTMLCanvasElement.prototype,
+				"getContext",
+				original,
+			);
+		Reflect.deleteProperty(HTMLMediaElement, "HAVE_CURRENT_DATA");
+	});
+
+	const canvasOf = (width: number) => {
+		const canvas = document.createElement("canvas");
+		canvas.width = width;
+		canvas.height = 480;
+		return canvas;
+	};
+
+	const videoOf = (readyState: number, width = 640) => {
+		const video = document.createElement("video");
+		Object.defineProperty(video, "readyState", { value: readyState });
+		Object.defineProperty(video, "videoWidth", { value: width });
+		Object.defineProperty(video, "videoHeight", { value: 480 });
+		document.body.append(video);
+		return video;
+	};
+
+	test("a checked frame is shrunk to 32×24 and compared without its brightness", () => {
+		const canvas = canvasOf(640);
+		const signed = sample(canvas);
+		expect(draws).toEqual([{ source: canvas, width: 32, height: 24 }]);
+		expect(signed).toEqual(signature(stripes(0)));
+	});
+
+	test("a video frame is drawn full size first, then shrunk", () => {
+		const video = videoOf(2);
+		const signed = sample(video);
+		expect(draws.map(({ width, height }) => [width, height])).toEqual([
+			[640, 480],
+			[32, 24],
+		]);
+		expect(draws[0]?.source).toBe(video);
+		expect(draws[1]?.source).toBeInstanceOf(HTMLCanvasElement);
+		expect(signed).toEqual(signature(stripes(0)));
+	});
+
+	test("no frame gives no signature", () => {
+		expect(sample(null)).toBeNull();
+		// A video that is not on the page, or has no current frame yet.
+		const detached = document.createElement("video");
+		expect(sample(detached)).toBeNull();
+		expect(sample(videoOf(1))).toBeNull();
+		// A video with no size yet, and an empty canvas.
+		expect(sample(videoOf(2, 0))).toBeNull();
+		expect(sample(canvasOf(0))).toBeNull();
+	});
+
+	test("a transparent frame (not drawable yet) gives no signature", () => {
+		pixels = new Uint8ClampedArray(32 * 24 * 4);
+		expect(sample(canvasOf(640))).toBeNull();
+	});
+
+	test("no 2D context gives no signature", () => {
+		pixels = null;
+		expect(sample(canvasOf(640))).toBeNull();
+		expect(sample(videoOf(2))).toBeNull();
+	});
 });

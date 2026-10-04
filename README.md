@@ -178,16 +178,15 @@ flowchart LR
 flowchart LR
     data["datasets.py<br/>synthetic cues + open data"] --> train["train.py<br/>LoRA on River"]
     train --> ckpt[("river:// checkpoint<br/>Qwen/Qwen3.5-9B")]
-    ckpt --> serve["serve.py<br/>chat-completions, local"]
     samples["Validated samples"] -->|"POST …/cues"| api["Telly API<br/>qwen.ts"]
-    api --> serve
-    serve --> cue["One health cue<br/>advice only, no alert change"]
+    api -->|"gRPC queued chat"| ckpt
+    ckpt --> cue["One health cue<br/>advice only, no alert change"]
 ```
 
 - **Use:** a `Qwen/Qwen3.5-9B` LoRA, trained on River, turns validated samples into one short health cue (`POST …/cues`). Cues are advice only; they never change thresholds or alerts. River offers no Gemma model for this key, so the plan's Gemma step uses Qwen.
-- **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_DEPLOYMENT`, `QWEN_CHECKPOINT`.
-- **Proof:** training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452), and `serve.py` served cues to the server adapter ([#177](https://github.com/ayaangazali/telly/pull/177)).
-- **Limits:** no hosted deployment serves the model yet.
+- **Code:** `training/qwen/` ([README](training/qwen/README.md)), `apps/server/src/integrations/qwen.ts`. **Keys:** `RIVER_API_KEY`, `QWEN_BASE_URL`, `QWEN_BASE_MODEL`, `QWEN_CHECKPOINT`.
+- **Proof:** training run `2058ed15-9c11-4d2f-9307-ae0c25113f7a` finished on River (loss 1.381 → 0.452), and the server adapter gets cues from the checkpoint through River queued inference ([#177](https://github.com/ayaangazali/telly/pull/177)).
+- **Limits:** River approved no dedicated deployment for the base model, so each cue waits in River's queue (3 to 12 s).
 
 - **Screenshots:** No screenshot yet: the River console needs the account owner's login. The proof is the PR record.
 
@@ -199,7 +198,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     phone["iMessage sender"] --> spectrum["Photon Spectrum Cloud"]
-    spectrum --> agent["Telly API<br/>imessage agent"]
+    spectrum -->|"signed webhook POST"| agent["Telly API<br/>/api/imessage/webhook"]
     agent -->|"sender allowlist → family"| ask["Question flow<br/>urgent path · Gemini · tools"]
     agent -.->|"not allowlisted"| drop["No answer"]
     ask --> spectrum
@@ -207,7 +206,7 @@ flowchart LR
 ```
 
 - **Use:** an allowed iMessage sender, mapped to one family, asks a question. The server answers through the same question flow as the app, including the urgent-help path.
-- **Code:** `apps/server/src/imessage/`. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `TELLY_IMESSAGE_SENDERS`.
+- **Code:** `apps/server/src/imessage/`. Spectrum Cloud POSTs each message to `https://api.saintess.tech/api/imessage/webhook`, so the agent works while the API container sleeps between requests. **Keys:** `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` (returned once when the webhook is registered), `TELLY_IMESSAGE_SENDERS`.
 - **Proof:** a live round trip on 2026-10-04 at 06:38 UTC. "I need help" got the urgent reply. "How did I sleep last night?" got the designed "cannot answer" fallback, because Fetch.ai was off in that run ([#175](https://github.com/ayaangazali/telly/pull/175)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.
 
@@ -310,7 +309,7 @@ flowchart LR
 ```
 
 - **Use:** the NOOP iPhone app pushes new strap rows to `POST /api/noop/ingest`, and the server records them as `unvalidated` samples. Unvalidated samples never raise an alert. Screens and answers label them "WHOOP (via NOOP) · unvalidated".
-- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_INGEST_KEY`, `NOOP_FAMILY_ID`, `NOOP_SPACETIMEDB_TOKEN`.
+- **Code:** `apps/server/src/integrations/noop-ingest.ts`, [`noop/`](noop). **Keys:** `NOOP_SPACETIMEDB_TOKEN` (with `SPACETIMEDB_URI` and `SPACETIMEDB_DATABASE`) turns on per-family push tokens: `POST /api/families/:familyId/whoop-token` makes one, and NOOP pushes to `/api/noop/ingest?k=<token>`. `NOOP_INGEST_KEY` with `NOOP_FAMILY_ID` keeps the single-family key. The ingest answers `200` on success, because NOOP moves its cursor only on `200`.
 - **Proof:** on a team Mac mini, a family question answered "Your most recent heart rate reading is 58 bpm · WHOOP (via NOOP) · unvalidated" ([#174](https://github.com/ayaangazali/telly/pull/174), with [#80](https://github.com/ayaangazali/telly/pull/80), [#81](https://github.com/ayaangazali/telly/pull/81), [#97](https://github.com/ayaangazali/telly/pull/97)).
 - **Limits:** the deployed API does not have NOOP ingest set up, so its `/api/sources` reports `not_connected`.
 
@@ -387,7 +386,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 
 | Area | Routes (relative to `/api/families/:familyId`) |
 | --- | --- |
-| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `GET /`, `POST /members`, `POST /samples` |
+| Account and family | `GET /api/me`, `GET`/`POST /api/families`, `POST /api/invites/:code/join`, `GET /`, `POST /members`, `POST /invites`, `POST /whoop-token`, `POST /samples` |
 | Alerts | `/alerts`, `/alerts/:id/acknowledgements`, `/alert-thresholds`, `/monitoring` |
 | Questions, voice, chat | `/ask`, `/ask/voice`, `/voice/transcriptions`, `/voice/speech`, `/messages`, `/tools` ([docs/ask.md](docs/ask.md), [docs/chat.md](docs/chat.md)) |
 | Medicine and meals | `/vision/medicine-detections`, `/medicine-memory`, `/meals`, `/cooking/…`, `/delivery/…` |
@@ -397,7 +396,7 @@ Every route below `/api/families/:familyId` needs `Authorization: Bearer <ID tok
 | Reports and appointments | `/reports/…`, `/report-pdfs/…`, `/appointments/…` |
 | Location and trips | `/location`, `/location/shares/:identity`, `/trips/…` |
 
-Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
+Public routes: `GET /health`, `GET /api/sources`, `POST /api/noop/ingest` (ingest key or family push token), and `/api/sign-in/*`. The source of truth is `apps/server/src/routes/`.
 
 </details>
 

@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Container } from "@/components/container";
 import { NAV_THEME } from "@/lib/constants";
-import { readSessionToken, writeSessionToken } from "@/lib/session";
+import { readSession, writeSession } from "@/lib/session";
 import { useColorScheme } from "@/lib/use-color-scheme";
 import { ENV } from "@/src/env";
 
@@ -79,15 +79,15 @@ function FamilyCard({ theme }: { readonly theme: Theme }) {
 		useCallback(() => {
 			let cancel = () => {};
 			let stopped = false;
-			void readSessionToken().then((token) => {
+			void readSession().then((session) => {
 				if (stopped) return;
-				if (token === null) setFamilies({ kind: "signed_out" });
+				if (session === null) setFamilies({ kind: "signed_out" });
 				else
 					cancel = loadDecoded(
 						FamilyList,
 						`${ENV.EXPO_PUBLIC_SERVER_URL}/api/families`,
 						setFamilies,
-						{ Authorization: `Bearer ${token}` },
+						{ Authorization: `Bearer ${session.idToken}` },
 					);
 			});
 			return () => {
@@ -98,9 +98,7 @@ function FamilyCard({ theme }: { readonly theme: Theme }) {
 	);
 
 	const signOut = () =>
-		void writeSessionToken(null).then(() =>
-			setFamilies({ kind: "signed_out" }),
-		);
+		void writeSession(null).then(() => setFamilies({ kind: "signed_out" }));
 
 	return (
 		<View
