@@ -9,7 +9,7 @@ setupDom();
 const { act, renderHook, waitFor } = await import("@testing-library/react");
 const { FAMILY, json, serve, signIn } = await import("@/lib/test/app");
 const { apiRequest, familyPath, useApi } = await import("./api");
-const { queryClient } = await import("./query");
+const { apiKey, queryClient } = await import("./query");
 
 const OTHER = { ...FAMILY, id: "fam-2", name: "Grandpa Joe" };
 
@@ -101,20 +101,75 @@ test("a reply that breaks the contract is an error, never data", async () => {
 	await waitFor(() => expect(result.current.kind).toBe("error"));
 });
 
-test("a network failure is an unreachable error", async () => {
+test("a network failure past the start window is an unreachable error", async () => {
 	signIn();
 	serve({
 		"GET /api/families": () => {
 			throw new TypeError("Failed to fetch");
 		},
 	});
-	const { result } = renderHook(() => useApi(FamilyList, "/api/families"));
+	const { result } = renderHook(() =>
+		useApi(FamilyList, "/api/families", { connectMs: 0 }),
+	);
 	await waitFor(() =>
 		expect(result.current).toEqual({
 			kind: "error",
 			message: "The server is not reachable: TypeError: Failed to fetch",
 			unreachable: true,
 		}),
+	);
+});
+
+test("while the API starts, the read shows loading and retries until it answers", async () => {
+	signIn();
+	let call = 0;
+	const calls = serve({
+		"GET /api/families": () => {
+			call += 1;
+			if (call === 1) throw new TypeError("Failed to fetch");
+			if (call === 2)
+				return json(503, {
+					error: "unavailable",
+					message: "The API did not start",
+				});
+			return { families: [FAMILY] };
+		},
+	});
+	const seen: string[] = [];
+	const { result } = renderHook(() => {
+		const state = useApi(FamilyList, "/api/families", { connectMs: 60_000 });
+		seen.push(state.kind);
+		return state;
+	});
+	await waitFor(() => expect(result.current.kind).toBe("ready"), {
+		timeout: 5000,
+	});
+	expect(calls).toHaveLength(3);
+	// No failure showed while the server was starting.
+	expect(seen.filter((kind) => kind !== "loading" && kind !== "ready")).toEqual(
+		[],
+	);
+});
+
+test("a server that is still down after the start window shows its failure", async () => {
+	signIn();
+	serve({
+		"GET /api/families": json(503, {
+			error: "unavailable",
+			message: "The API did not start",
+		}),
+	});
+	const { result } = renderHook(() =>
+		useApi(FamilyList, "/api/families", { connectMs: 1500 }),
+	);
+	expect(result.current.kind).toBe("loading");
+	await waitFor(
+		() =>
+			expect(result.current).toEqual({
+				kind: "unavailable",
+				message: "The API did not start",
+			}),
+		{ timeout: 5000 },
 	);
 });
 
@@ -236,9 +291,26 @@ test("signing out removes every cached reply", async () => {
 	);
 	await waitFor(() => expect(result.current.kind).toBe("ready"));
 	unmount();
-	expect(queryClient.getQueryData(["api", "families"])).toBeDefined();
+	expect(queryClient.getQueryData(apiKey("/api/families"))).toBeDefined();
 	setSessionToken(null);
 	expect(queryClient.getQueryCache().getAll()).toEqual([]);
+});
+
+test("a reply on its way for one account never shows for the next account", async () => {
+	signIn({ sub: "user-1" });
+	const held = hold({ ignoreAbort: true });
+	const { result } = renderHook(() => useApi(FamilyList, "/api/families"));
+	await waitFor(() => expect(held).toHaveLength(1));
+	act(() => signIn({ sub: "user-2" }));
+	await waitFor(() => expect(held).toHaveLength(2));
+	// The first account's reply arrives after the switch.
+	await act(async () => held[0]?.answer(families(FAMILY)));
+	await Bun.sleep(20);
+	expect(result.current).toEqual({ kind: "loading" });
+	await act(async () => held[1]?.answer(families(OTHER)));
+	await waitFor(() =>
+		expect(result.current).toMatchObject({ value: { families: [OTHER] } }),
+	);
 });
 
 test("a session change reads again, and signing out shows signed out", async () => {
@@ -271,7 +343,7 @@ test("a polled read with no answer in pollMs fails, and the next poll recovers",
 	signIn();
 	const held = hold();
 	const { result } = renderHook(() =>
-		useApi(FamilyList, "/api/families", { pollMs: 50 }),
+		useApi(FamilyList, "/api/families", { pollMs: 50, connectMs: 0 }),
 	);
 	await waitFor(() =>
 		expect(result.current).toEqual({
@@ -314,7 +386,7 @@ test("coming back to the screen does not read a value that is not polled again",
 	await waitFor(() => expect(result.current.kind).toBe("ready"));
 	setSystemTime(new Date(Date.now() + 10 * 60_000));
 	act(() => {
-		document.dispatchEvent(new Event("visibilitychange"));
+		document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
 	});
 	await Bun.sleep(20);
 	expect(calls).toHaveLength(1);
@@ -324,14 +396,15 @@ test("coming back to the screen does not read a value that is not polled again",
 test("a value older than two polls is not shown after coming back", async () => {
 	signIn();
 	serve({ "GET /api/families": { families: [FAMILY] } });
+	// A poll far off, so only the return to the screen reads again.
 	const { result } = renderHook(() =>
-		useApi(FamilyList, "/api/families", { pollMs: 1000 }),
+		useApi(FamilyList, "/api/families", { pollMs: 60_000 }),
 	);
 	await waitFor(() => expect(result.current.kind).toBe("ready"));
 	const held = hold();
-	setSystemTime(new Date(Date.now() + 5000));
+	setSystemTime(new Date(Date.now() + 5 * 60_000));
 	act(() => {
-		document.dispatchEvent(new Event("visibilitychange"));
+		document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
 	});
 	await waitFor(() =>
 		expect(result.current).toEqual({

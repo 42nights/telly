@@ -13,6 +13,7 @@ import {
 	invalidateAfterWrite,
 	queryClient,
 	staleTimeFor,
+	useAccount,
 } from "./query";
 import { freshSessionToken, getSessionToken, setSessionToken } from "./session";
 
@@ -23,11 +24,12 @@ export type ApiFailure =
 	| { readonly kind: "forbidden"; readonly message: string }
 	/** A provider or the database is not configured or not reachable (503). */
 	| { readonly kind: "unavailable"; readonly message: string }
-	/** The server could not be reached (`unreachable`), or it replied with something else. */
+	/** The server could not be reached (`unreachable`), or it replied with something else (`status`). */
 	| {
 			readonly kind: "error";
 			readonly message: string;
 			readonly unreachable?: true;
+			readonly status?: number;
 	  };
 
 export type ApiResult<T> =
@@ -57,7 +59,7 @@ export const failureFor = (status: number, body: unknown): ApiFailure => {
 	if (status === 401) return { kind: "signed_out" };
 	if (status === 403) return { kind: "forbidden", message };
 	if (status === 503) return { kind: "unavailable", message };
-	return { kind: "error", message };
+	return { kind: "error", message, status };
 };
 
 /** A non-2xx reply's failure. A 401 means the server rejected `token`, so it ends the session. */
@@ -174,14 +176,35 @@ export const failureOf = (error: unknown): ApiFailure =>
 		: { kind: "error", message: String(error) };
 
 /**
+ * How long a starting API gets before its failure shows: a cold container start takes about 35 s,
+ * and the Worker gives up after 60 s. Screen tests that check failure notices set it to 0.
+ */
+export const apiStart = { windowMs: 60_000 };
+
+/** A failure that means the API may still be starting, not that it refused or broke. */
+const coldStart = (failure: ApiFailure) =>
+	(failure.kind === "error" && failure.unreachable === true) ||
+	(failure.kind === "unavailable" &&
+		failure.message === "The API did not start");
+
+/** The wait before retry `attempt` while the API starts: 1, 2, 4, then every 8 s. */
+const startDelay = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000);
+
+/**
  * The cached read of `path` with `schema`: one query per path, current for `staleTimeFor`, and
  * read again every `pollMs` when given. A polled read that takes longer than `pollMs` fails. Route
  * loaders pass it to `ensureQueryData`; screens read it with `useApi`.
+ *
+ * The API container starts in about 35 s after a deploy or an idle period (the Worker waits up to
+ * 60 s, then answers 503 "The API did not start"). So a read that times out, cannot reach the
+ * server, or gets that 503 is retried with backoff, and stays loading, for up to `connectMs`; only
+ * then does the failure show.
  */
 export const apiQuery = <T>(
 	schema: Schema.Decoder<T>,
 	path: string,
 	pollMs?: number,
+	connectMs = apiStart.windowMs,
 ) => {
 	const queryKey = apiKey(path);
 	return queryOptions({
@@ -207,6 +230,13 @@ export const apiQuery = <T>(
 			if (result.kind !== "ready") throw new ApiReadError(result);
 			return result.value;
 		},
+		// Retries only while the API may be starting, until the waits so far fill `connectMs`.
+		retry: (attempt, error) => {
+			let waited = 0;
+			for (let i = 0; i < attempt; i += 1) waited += startDelay(i);
+			return coldStart(failureOf(error)) && waited < connectMs;
+		},
+		retryDelay: startDelay,
 		staleTime: staleTimeFor(queryKey, pollMs),
 		refetchInterval: pollMs ?? false,
 		refetchOnWindowFocus: pollMs !== undefined,
@@ -231,14 +261,23 @@ const subscribeOnline = (listener: () => void) =>
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
 	path: string | null,
-	options: { readonly pollMs?: number } = {},
+	options: {
+		readonly pollMs?: number;
+		/** How long a server that is starting gets before its failure shows. Tests shorten it. */
+		readonly connectMs?: number;
+	} = {},
 ): ApiState<T> {
-	const { pollMs } = options;
+	const { pollMs, connectMs } = options;
+	// A sign-in or sign-out renders again, so the read moves to the new account's key.
+	useAccount();
 	const online = useSyncExternalStore(subscribeOnline, () =>
 		onlineManager.isOnline(),
 	);
 	const query = useQuery(
-		{ ...apiQuery(schema, path ?? "", pollMs), enabled: path !== null },
+		{
+			...apiQuery(schema, path ?? "", pollMs, connectMs),
+			enabled: path !== null,
+		},
 		queryClient,
 	);
 	if (path === null || query.status === "pending") return { kind: "loading" };

@@ -41,10 +41,13 @@ export function installDom() {
 		const { prepareQueryCache } = await import("@/lib/test/query");
 		prepareQueryCache();
 	});
-	afterEach(() => {
+	afterEach(async () => {
 		cleanup();
 		setSessionToken(null);
 		localStorage.clear();
+		// Public reads (server status) outlive a sign-out; each test starts with an empty cache.
+		const { queryClient } = await import("@/lib/query");
+		queryClient.clear();
 	});
 	afterAll(async () => {
 		// React's scheduler runs work queued by the last test (such as effects after an update) on

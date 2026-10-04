@@ -57,14 +57,26 @@ export const serverLayer = (config: ServerConfig, env: ListenEnv) => {
 		gemini: config.gemini,
 		fetchAgent: config.fetchAgent,
 	});
+	// A failed start (Photon outage, wrong secret, missing gRPC peers) must not take the API down:
+	// it is logged, and the webhook route answers `unavailable`.
 	const startIMessage = (settings: NonNullable<typeof imessage>) =>
 		Effect.acquireRelease(
-			Effect.promise(() =>
+			Effect.tryPromise(() =>
 				startCloudIMessage(settings, (familyId, question) =>
 					Effect.runPromise(Effect.suspend(() => ask(familyId, question))),
 				),
 			),
 			(agent) => Effect.promise(() => agent.stop()),
+		).pipe(
+			Effect.catch((error) =>
+				Effect.as(
+					Effect.logError(
+						"imessage agent did not start; iMessage is unavailable",
+						error.cause,
+					),
+					undefined,
+				),
+			),
 		);
 
 	// The listener closes before the iMessage agent stops.

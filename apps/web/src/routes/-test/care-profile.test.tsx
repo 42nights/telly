@@ -7,6 +7,9 @@ const { fireEvent, waitFor, within } = await import("@testing-library/react");
 const { FAMILY, json, renderRoute, screen, serve, signIn } = await import(
 	"@/lib/test/app"
 );
+const { apiStart } = await import("@/lib/api");
+// The failure notices show at once here, not after the window a starting API gets.
+apiStart.windowMs = 0;
 
 const ME = "a".repeat(64);
 const AT = "2026-10-04T10:00:00.000Z";

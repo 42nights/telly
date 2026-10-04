@@ -25,7 +25,6 @@ import { medicineMemoryRoutes } from "./medicine-memory";
 import { reminderRoutes } from "./reminders";
 import { reportRoutes } from "./reports";
 import { speakerRoutes } from "./speaker";
-import { toolRoutes } from "./tools";
 import { trendRoutes } from "./trends";
 import { tripRoutes } from "./trips";
 import { visionRoutes } from "./vision";
@@ -38,7 +37,10 @@ import { voiceRoutes } from "./voice";
 export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 	const voice = elevenLabsVoice(config.voice);
 	return new Hono<FamilyEnv>()
-		.route("/", familyRoutes())
+		.route(
+			"/",
+			familyRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+		)
 		.route("/", alertRoutes())
 		.route("/", voiceRoutes(voice))
 		.route(
@@ -50,7 +52,12 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 			}),
 		)
 		.route("/vision", visionRoutes(config.gemini))
-		.route("/", medicineMemoryRoutes())
+		.route(
+			"/",
+			medicineMemoryRoutes(
+				config.r2 === undefined ? undefined : r2Bucket(config.r2),
+			),
+		)
 		.route("/", mealRoutes(config.gemini))
 		.route(
 			"/",
@@ -65,7 +72,6 @@ export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 		.route("/", speakerRoutes())
 		.route("/", finchnodeRoutes(config.finchnode))
 		.route("/", appointmentRoutes(config.finchnode))
-		.route("/", toolRoutes())
 		.route("/", trendRoutes(config.finchnode))
 		.route("/", chatRoutes())
 		.route("/care", careRoutes())

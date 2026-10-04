@@ -1,7 +1,9 @@
 // Family and health-data routes. Every write goes through a module reducer that checks membership
-// for the caller's database identity again, so these handlers add no access rule of their own.
+// for the caller's database identity again. Only the family delete checks access here as well, so a
+// refused caller never deletes stored files.
 import type { Family, FamilyRecords, HealthSample } from "@health/contracts";
 import {
+	DeleteFamily,
 	type FamilyInvite,
 	type FamilyList,
 	type JoinedFamily,
@@ -14,6 +16,7 @@ import { Hono } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
 import { readFamilyRecords } from "../db";
 import {
+	ApiFailure,
 	type AuthEnv,
 	callReducer,
 	decodeBody,
@@ -21,6 +24,10 @@ import {
 	newSecret,
 	sha256Hex,
 } from "../http";
+import type { R2Bucket } from "../integrations/r2";
+import { requireScope } from "./care-profile";
+import { deleteFamilyArPins } from "./medicine-ar-pin";
+import { familyPdfPrefix } from "./reports";
 
 const INVITE_TTL_MS = 7 * 24 * 3_600_000;
 
@@ -43,11 +50,19 @@ export const accountRoutes = () =>
 		.get("/me", (c) =>
 			c.json({ ...c.var.identity, identity: c.var.db.identity } satisfies Me),
 		)
-		.get("/families", (c) =>
-			c.json({
-				families: readFamilyRecords(c.var.db).families,
-			} satisfies FamilyList),
-		)
+		.get("/families", (c) => {
+			const { families, samples } = readFamilyRecords(c.var.db);
+			const newest = new Map<string, string>();
+			for (const { familyId, sourceTime, synthetic } of samples)
+				if (!synthetic && sourceTime > (newest.get(familyId) ?? ""))
+					newest.set(familyId, sourceTime);
+			return c.json({
+				families: families.map((family) => ({
+					...family,
+					newestSampleAt: newest.get(family.id) ?? null,
+				})),
+			} satisfies FamilyList);
+		})
 		.post("/families", async (c) => {
 			const { name } = await decodeBody(c, NewFamily);
 			const before = readFamilyRecords(c.var.db).families;
@@ -77,7 +92,7 @@ export const accountRoutes = () =>
 		});
 
 /** One family's routes, mounted at `/api/families/:familyId` behind the membership check. */
-export const familyRoutes = () =>
+export const familyRoutes = (storage?: R2Bucket) =>
 	new Hono<FamilyEnv>()
 		.get("/", (c) => {
 			const id = c.var.familyId.toString();
@@ -91,6 +106,30 @@ export const familyRoutes = () =>
 					(row) => row.familyId === id,
 				),
 			} satisfies FamilyRecords);
+		})
+		// Checks access and the name before it touches storage, deletes the stored PDFs and AR world
+		// maps, then the records. The module checks both again. A failure after the files leaves the
+		// records, so a retry finishes the job.
+		.delete("/", async (c) => {
+			const { name } = await decodeBody(c, DeleteFamily);
+			const { db, familyId } = c.var;
+			requireScope(c, "family_access");
+			const family = readFamilyRecords(db).families.find(
+				(row) => row.id === familyId.toString(),
+			);
+			if (family?.name !== name)
+				throw new ApiFailure(
+					"invalid_request",
+					"the name does not match this family",
+				);
+			if (storage !== undefined)
+				for (const { key } of await storage.list(familyPdfPrefix(familyId)))
+					await storage.remove(key);
+			await deleteFamilyArPins(storage, familyId);
+			await callReducer(db, (connection) =>
+				connection.reducers.deleteFamily({ familyId, name }),
+			);
+			return c.body(null, 204);
 		})
 		.post("/members", async (c) => {
 			const { identity } = await decodeBody(c, NewFamilyMember);

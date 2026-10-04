@@ -15,6 +15,7 @@ import { type NoopIngest, noopRoutes } from "./integrations/noop-ingest";
 import { accountRoutes } from "./routes/families";
 import { familyDomainRoutes } from "./routes/index";
 import { signInRoutes } from "./routes/sign-in";
+import { toolRoutes } from "./routes/tools";
 
 export const createApp = (
 	config: ServerConfig,
@@ -54,10 +55,10 @@ export const createApp = (
 				? imessageWebhook(c.req.raw)
 				: c.json(
 						{
-							error: "not_found",
-							message: "iMessage is not configured",
+							error: "unavailable",
+							message: "iMessage is not running",
 						} satisfies ApiError,
-						404,
+						503,
 					),
 		)
 		// Sign-in itself cannot require sign-in.
@@ -65,6 +66,8 @@ export const createApp = (
 		// Every other `/api` route requires sign-in, including routes that do not exist.
 		.use("/api/*", authenticate(config.auth))
 		.route("/api", accountRoutes())
+		// Before the membership check: a delegated Fetch.ai tool call comes from a non-member.
+		.route("/api/families/:familyId", toolRoutes())
 		.route("/api/families/:familyId", family);
 
 	app.notFound((c) =>

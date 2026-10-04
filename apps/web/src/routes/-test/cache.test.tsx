@@ -71,3 +71,55 @@ test("a screen opens with its cached data at once, without its loading state", a
 	await act(() => router.navigate({ to: "/reports" }));
 	expect(screen.queryByText(/Loading/)).toBeNull();
 });
+
+test("a switch back to a person reads their data again, never showing an earlier visit's", async () => {
+	signIn();
+	const OTHER = { ...FAMILY, id: "fam-2", name: "Grandpa Joe" };
+	let reads = 0;
+	const calls = serve({
+		...routes,
+		"GET /api/families": { families: [FAMILY, OTHER] },
+		// The first read has an alert; the read after the switch back has not answered yet.
+		"GET /api/families/fam-1/alerts": () => {
+			reads += 1;
+			return reads === 1
+				? {
+						alerts: [
+							{
+								alert: {
+									id: "a-1",
+									familyId: "fam-1",
+									sampleId: null,
+									summary: "Heart rate high",
+									raisedBy: "server",
+									createdAt: T,
+								},
+								sample: null,
+								delivery: null,
+								acknowledgements: [],
+							},
+						],
+					}
+				: Promise.withResolvers().promise;
+		},
+		"GET /api/families/fam-2": { ...routes["GET /api/families/fam-1"] },
+		"GET /api/families/fam-2/alerts": { alerts: [] },
+		"GET /api/families/fam-2/monitoring": { checkedAt: T, thresholds: [] },
+		"GET /api/families/fam-2/alert-thresholds": { thresholds: [] },
+	});
+	const { router } = renderRoute("/family/alerts?person=fam-1");
+	expect(await screen.findAllByText("Heart rate high")).not.toHaveLength(0);
+	await act(() => router.navigate({ href: "/family/alerts?person=fam-2" }));
+	expect(await screen.findAllByText("Alerts · Grandpa Joe")).not.toHaveLength(
+		0,
+	);
+	await act(() => router.navigate({ href: "/family/alerts?person=fam-1" }));
+	expect(await screen.findAllByText("Alerts · Grandma Rose")).not.toHaveLength(
+		0,
+	);
+	await Bun.sleep(50);
+	expect(screen.queryByText("Heart rate high")).toBeNull();
+	expect(
+		calls.filter((call) => call.path === "/api/families/fam-1/alerts"),
+	).toHaveLength(2);
+});

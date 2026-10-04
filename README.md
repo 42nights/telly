@@ -5,7 +5,7 @@
 **A care assistant for a person with memory loss and their family.**<br>
 Alzheimer's care first. Phone and web first. Glasses optional.
 
-[Live app](https://telly.jerry-2c0.workers.dev) · [Approved plan](docs/board.html) · [Plan summary](docs/plan.md) · [Coordination board](https://github.com/ayaangazali/telly/issues/53) · [Contributing](CONTRIBUTING.md)
+[Live app](https://app.saintess.tech) · [Approved plan](docs/board.html) · [Plan summary](docs/plan.md) · [Coordination board](https://github.com/ayaangazali/telly/issues/53) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -65,6 +65,30 @@ flowchart LR
     classDef dashed stroke-dasharray: 5 5
     class glasses,qwen,noop,hk,sim dashed
 ```
+
+## Live proof
+
+Each row is a check on production (<https://app.saintess.tech>, <https://api.saintess.tech>) on 2026-10-04, with a signed-in Google account through the real app, unless the row says otherwise. Times are UTC. Screenshots are cropped, and personal details are blacked out.
+
+| Provider | Telly uses it for | Proof observed live | Evidence |
+| --- | --- | --- | --- |
+| Google sign-in | Sign-in on the web and iOS | 09:30: Google Auth Platform shows the publishing status **In production**, user type External. A real Google sign-in on `app.saintess.tech` gave `/api/me` 200 and `/api/families` 200. | [#212](https://github.com/ayaangazali/telly/pull/212), [screenshot](docs/proof/google-oauth-in-production.webp) |
+| Gemini | Family questions, medicine boxes in a camera frame, meal estimates | 09:33: **Meal** → "Rice, dal, and a glass of milk" → **Estimate** returned three items with portions and kcal (`gemini-3.8-flash`). 12:07: a typed question answered 200 in 6.6 s with the newest WHOOP heart rate, and a medicine check (`POST …/vision/medicine-detections`) answered 200 in 2.9 s. | [#187 comment](https://github.com/ayaangazali/telly/issues/187#issuecomment-5979753457), [screenshot](docs/proof/gemini-meal-estimate.webp) |
+| ElevenLabs | Speech to text and read-aloud answers | 09:35: `POST …/voice/speech` returned 200 `audio/mpeg` (39750 bytes). `POST …/voice/transcriptions` with that MP3 returned 200 with the same sentence, language `en`. | [#251 report](data/telly-provider-pass/report.md), [screenshot](docs/proof/elevenlabs-tts-stt.webp) |
+| Fetch.ai Agentverse | Family data tools for Gemini answers, through the bridge and worker uAgents | 12:58, live commit `5675e6a2`: a new family 4, where the worker is not a member, asked a question. `POST /ask` answered 200 in 12.6 s, and the worker log shows `alerts` 200 and `health_samples` 200 for family 4. | [#293 comment](https://github.com/ayaangazali/telly/issues/293#issuecomment-5980182311), [#295](https://github.com/ayaangazali/telly/pull/295) |
+| River | Health cues from a `Qwen/Qwen3.5-9B` LoRA checkpoint | 13:14, live commit `ca768e51`: `POST …/cues` with the three newest WHOOP heart-rate samples answered 200 in 5.4 s: "No cue right now.", with the River checkpoint and the advice-only notice. | [#312](https://github.com/ayaangazali/telly/issues/312), [#265](https://github.com/ayaangazali/telly/pull/265) |
+| Photon Spectrum | Family questions over iMessage | 11:59:59: the captain sent "What medicines are due today?" to the Telly line. Production (`e6275e3`) replied at 12:00:18 through the signed webhook. | [#285](https://github.com/ayaangazali/telly/pull/285), [#267](https://github.com/ayaangazali/telly/pull/267), [screenshot](docs/proof/photon-imessage-reply.webp) |
+| Resend | Email of reviewed lab reports | 13:10, Resend dashboard: the domain `saintess.tech` is **Verified**. The newest email, "Reviewed lab report from Telly" from `reports@saintess.tech` with the PDF attached, was Delivered at 12:00. No email was sent for this check. | [#312](https://github.com/ayaangazali/telly/issues/312), [#201](https://github.com/ayaangazali/telly/pull/201), [screenshot](docs/proof/resend-domain-verified.webp) |
+| FinchNode | Lab results for reports and trends | FinchNode Connect was completed for family 3 with the Epic sandbox test patient (synthetic records). The Reports panel showed 25 lab results. At 12:13, `GET …/finchnode/labs` answered 200 with 40 results for 14 tests. | [#269](https://github.com/ayaangazali/telly/pull/269), [#261 comment](https://github.com/ayaangazali/telly/issues/261#issuecomment-5979804898), [screenshot](docs/proof/finchnode-labs.webp) |
+| Cloudflare R2 | Private report PDFs | 09:35: **Reports** → **Save as PDF** → **Past PDFs** → **Download** gave a presigned `r2.cloudflarestorage.com` link (300 s). The file is a 2-page PDF. | [#251 report](data/telly-provider-pass/report.md), [screenshot](docs/proof/r2-report-pdf.webp) |
+| WHOOP via NOOP | Heart rate, sleep, recovery, and other strap readings | The real WHOOP export was written to production through the NOOP contract: 2,223 samples (2,143 heart-rate minutes, 43 wrist events, 37 daily scores) in family 3, now named "Telly". The family dashboard shows them. | [#244](https://github.com/ayaangazali/telly/pull/244), [screenshot](docs/proof/whoop-dashboard.webp) |
+| SpacetimeDB Maincloud | Family records, alerts, and the delivery outbox (database `telly`) | Every signed-in check above reads or writes Maincloud. 08:00: the live module of database `telly` had 38 private tables and 55 reducers. | [#212](https://github.com/ayaangazali/telly/pull/212), [#244](https://github.com/ayaangazali/telly/pull/244), [screenshot](docs/readme/spacetimedb-schema.webp) |
+| Cloudflare Workers and Containers | Web hosting, the API container, the secrets store, and deploys | The Worker serves `app.saintess.tech`, and `/version.txt` gives the live commit. A deploy waits for `/health` 200 and rolls back to the last healthy build when it fails. 09:40: every key in `TELLY_PULL_KEYS` is Active in the secrets store. | [#212](https://github.com/ayaangazali/telly/pull/212), [#292](https://github.com/ayaangazali/telly/pull/292), [#251 report](data/telly-provider-pass/report.md) |
+
+Other proof, not on production:
+
+- **AR medicine pin, simulation.** The headless simulation `tools/ar-sim/run.py --quick` passes: pairing 100 %, marker 100 %, p95 error 1.78 cm and 9.3 px. It is in an open PR: [#303](https://github.com/ayaangazali/telly/pull/303).
+- **iOS build.** The self-hosted MacBook runner `telly-mac-xiao` built the unsigned `health-ios.ipa` (15.8 MB) in [this run](https://github.com/undeemed/telly/actions/runs/37201518308) ([#300](https://github.com/ayaangazali/telly/pull/300)).
 
 ## Providers
 
@@ -132,7 +156,7 @@ flowchart LR
 - **Use:** Gemini calls family data tools (`health_samples`, `alerts`) through a bridge uAgent and a worker uAgent. The worker checks its grants and calls the signed-in tool route. It also speaks the Agent Chat Protocol, so ASI:One can ask about the synthetic demo family.
 - **Code:** `agents/fetch/` ([README](agents/fetch/README.md), [public profile](agents/fetch/agentverse.md)), `apps/server/src/integrations/fetch.ts`, `family-tools.ts`. **Keys:** `TELLY_FETCH_BRIDGE_TOKEN`, `TELLY_FETCH_AGENT_SEED`, `TELLY_FETCH_BRIDGE_SEED` ([agents/fetch/.env.schema](agents/fetch/.env.schema)).
 - **Proof:** the worker `telly-fetch` (`agent1qvz4qf64ulzrvgrr0hd7mqrsr3y5t7rgnz6yp2qdrc6jkru2e8mz7x3dql6`) registered on Agentverse, and ASI:One received answers from the synthetic family ([#173](https://github.com/ayaangazali/telly/pull/173)). Local end-to-end routing: [#65](https://github.com/ayaangazali/telly/pull/65), [#92](https://github.com/ayaangazali/telly/pull/92).
-- **Limits:** the agent answers only while its worker runs on the team host, against a local demo backend. The deployed API is not connected to the agent yet ([#7](https://github.com/ayaangazali/telly/issues/7)).
+- **Limits:** the worker and the bridge run on the team host, so answers that use family data need that host up. The deployed API routes its tool calls through the bridge ([#263](https://github.com/ayaangazali/telly/pull/263), [#295](https://github.com/ayaangazali/telly/pull/295)).
 
 
 **Screenshots** (captured 2026-10-04 about 08:00 UTC):
@@ -210,7 +234,7 @@ flowchart LR
 - **Proof:** a live round trip on 2026-10-04 at 06:38 UTC. "I need help" got the urgent reply. "How did I sleep last night?" got the designed "cannot answer" fallback, because Fetch.ai was off in that run ([#175](https://github.com/ayaangazali/telly/pull/175)).
 - **Limits:** a records-backed iMessage answer needs the Fetch.ai bridge and Gemini running at the same time.
 
-- **Screenshots:** No screenshot yet: the reply is on the captain's phone. The proof is the PR record.
+- **Screenshots:** the production reply of 2026-10-04 12:00 UTC is in [Live proof](#live-proof) ([image](docs/proof/photon-imessage-reply.webp)).
 
 </details>
 
@@ -282,7 +306,7 @@ flowchart LR
     api --> db[("SpacetimeDB Maincloud")]
 ```
 
-- **Use:** the Worker `telly` serves the web app and sends `/health` and `/api/*` to the Node API in a Cloudflare Container. The container pulls its keys from the secrets store at start. Report PDFs go to the private R2 bucket `telly-reports`.
+- **Use:** the Worker `telly` serves the web app and sends `/health` and `/api/*` to the Node API in a Cloudflare Container. The container pulls its keys from the secrets store at start. Report PDFs and AR medicine-pin world maps (`ar-pins/<familyId>/<containerId>.worldmap`) go to the private R2 bucket `telly-reports`.
 - **Code:** `deploy/cloudflare/`, [docs/deploy.md](docs/deploy.md), [docs/cloudflare-keys.md](docs/cloudflare-keys.md), `apps/server/src/integrations/r2.ts`. **Keys:** `TELLY_R2_*`.
 - **Proof:** `/health` and the deployed smoke passed, and the R2 token could write, read, and delete only in its bucket ([#126](https://github.com/ayaangazali/telly/pull/126)). Private PDFs: [#154](https://github.com/ayaangazali/telly/pull/154).
 - **Limits:** the CI deploy workflow is skipped until the repository variables `HEALTH_SERVER_URL` and `HEALTH_WEB_URL` are set, so deploys run from an operator machine ([#2](https://github.com/ayaangazali/telly/issues/2)).
@@ -358,8 +382,8 @@ Phone calls and SMS in the contact ladder, emergency dispatch, food orders, and 
 | Web app | Merged and deployed at <https://app.saintess.tech>. Sign-in uses Google; the consent screen is in production |
 | Server API and database | Deployed on Cloudflare with SpacetimeDB Maincloud |
 | Phone app | iOS shell: the web app <https://app.saintess.tech> full screen in a WebView, with native Google sign-in. CI builds an unsigned `.ipa` for SideStore (`.github/workflows/health-ios.yml`). No device test yet ([#176](https://github.com/ayaangazali/telly/issues/176)) |
-| Providers | See [Providers](#providers): each one lists its live proof and limits |
-| Hospital report delivery | Not available: Finchnode only reads records. An email option is in progress ([#8](https://github.com/ayaangazali/telly/issues/8)) |
+| Providers | See [Live proof](#live-proof) for the production check of each provider, and [Providers](#providers) for how each one is used and its limits |
+| Hospital report delivery | Finchnode only reads records, so it cannot deliver a report. A reviewed report goes by email through Resend instead ([#201](https://github.com/ayaangazali/telly/pull/201)) |
 | Meta glasses | Optional; needs hardware ([#18](https://github.com/ayaangazali/telly/issues/18), [#19](https://github.com/ayaangazali/telly/issues/19)) |
 
 Open work is in the [issues](https://github.com/ayaangazali/telly/issues). The pinned [coordination board](https://github.com/ayaangazali/telly/issues/53) shows who works on what.

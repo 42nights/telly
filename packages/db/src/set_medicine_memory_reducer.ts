@@ -12,6 +12,7 @@ import {
 
 export default {
   familyId: __t.u64(),
+  personId: __t.identity(),
   enabled: __t.bool(),
   places: __t.array(__t.string()),
 };

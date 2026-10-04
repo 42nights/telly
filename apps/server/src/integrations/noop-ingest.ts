@@ -5,7 +5,7 @@ import type { WhoopPushToken } from "@health/contracts/families";
 import { Schema } from "effect";
 import type { Context } from "hono";
 import { Identity, Timestamp } from "spacetimedb";
-import { type FamilyDb, pushTokenFamily } from "../db";
+import { type FamilyDb, pushTokenFamily, readFamilyRecords } from "../db";
 import {
 	ApiFailure,
 	callReducer,
@@ -33,6 +33,8 @@ export type NoopIngest = {
 		familyId: bigint,
 		samples: readonly NoopSample[],
 	) => Promise<void>;
+	/** When the newest stored NOOP sample arrived (ms), so a restarted server still knows. */
+	readonly lastReceivedAt?: () => number | undefined;
 };
 
 const daily = [
@@ -191,21 +193,39 @@ export const noopIngest = (
 	...(legacy === undefined ? {} : { legacy }),
 	tokenFamily: (tokenHash) => pushTokenFamily(db, tokenHash),
 	record: (familyId, samples) => recordNoopSamples(db, familyId)(samples),
+	lastReceivedAt: () => {
+		try {
+			const times = readFamilyRecords(db)
+				.samples.filter((s) => s.source.startsWith("noop:"))
+				.map((s) => Date.parse(s.receivedAt));
+			return times.length === 0 ? undefined : Math.max(...times);
+		} catch {
+			// The ingest connection dropped: its cached rows are stale, so they say nothing.
+			return undefined;
+		}
+	},
 });
 
 const NOOP_FRESH_MS = 10 * 60_000;
 
 export const noopRoutes = (noop: NoopIngest | undefined) => {
 	let lastSeenAt: number | undefined;
-	const status = (now: number): NoopConnection => ({
-		source: "noop",
-		status:
-			lastSeenAt !== undefined && now - lastSeenAt < NOOP_FRESH_MS
-				? "connected"
-				: "not_connected",
-		lastSeenAt:
-			lastSeenAt === undefined ? null : new Date(lastSeenAt).toISOString(),
-	});
+	const status = (now: number): NoopConnection => {
+		// The process forgets its last push on every restart; the database does not.
+		const stored = noop?.lastReceivedAt?.();
+		const seen =
+			stored === undefined || (lastSeenAt !== undefined && lastSeenAt > stored)
+				? lastSeenAt
+				: stored;
+		return {
+			source: "noop",
+			status:
+				seen !== undefined && now - seen < NOOP_FRESH_MS
+					? "connected"
+					: "not_connected",
+			lastSeenAt: seen === undefined ? null : new Date(seen).toISOString(),
+		};
+	};
 	const ingest = async (c: Context) => {
 		if (noop === undefined)
 			throw new ApiFailure("unavailable", "NOOP ingest is not configured");

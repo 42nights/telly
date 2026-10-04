@@ -1,9 +1,12 @@
-// The one TanStack Query cache for server data. A key is the API path split at `/`, so
-// `/api/families/fam-1/alerts` is `["api", "families", "fam-1", "alerts"]`: one key per family and
-// resource, and a key prefix names a family or a resource subtree.
+// The one TanStack Query cache for server data. A key is the signed-in account, then the API path
+// split at `/`, then its query string when it has one: `/api/families/fam-1/alerts` is
+// `[account, "api", "families", "fam-1", "alerts"]`. So there is one key per account, family,
+// resource, and member (`?person=`), and a key prefix names a family or a resource subtree.
+import { tokenClaims } from "@health/contracts/session";
 import { QueryClient } from "@tanstack/react-query";
+import { useSyncExternalStore } from "react";
 
-import { onSessionChange } from "./session";
+import { getSessionToken, onSessionChange } from "./session";
 
 const MINUTE = 60_000;
 
@@ -27,8 +30,38 @@ export const queryClient = new QueryClient({
 // too, but screens and tests read the cache without one.
 queryClient.mount();
 
-export const apiKey = (path: string): string[] =>
-	path.split("?")[0]?.split("/").filter(Boolean) ?? [];
+let decoded: { readonly token: string | null; readonly account: string } = {
+	token: null,
+	account: "signed-out",
+};
+
+/**
+ * The account a reply belongs to: the issuer and subject of the session token, which stay the same
+ * when the token is renewed. A reply can only ever be read back by the account that read it.
+ */
+const account = () => {
+	const token = getSessionToken();
+	if (token === decoded.token) return decoded.account;
+	const claims = token === null ? null : tokenClaims(token);
+	const claim = (name: string) =>
+		typeof claims === "object" && claims !== null && name in claims
+			? String(Reflect.get(claims, name))
+			: "";
+	decoded = {
+		token,
+		account: token === null ? "signed-out" : `${claim("iss")} ${claim("sub")}`,
+	};
+	return decoded.account;
+};
+
+export const apiKey = (path: string): string[] => {
+	const [pathname = "", search] = path.split("?");
+	return [
+		account(),
+		...pathname.split("/").filter(Boolean),
+		...(search === undefined ? [] : [`?${search}`]),
+	];
+};
 
 /** Profile and settings data that rarely changes, read again after minutes. */
 const SLOW: Readonly<Record<string, true>> = {
@@ -51,7 +84,7 @@ const SLOW: Readonly<Record<string, true>> = {
  */
 export const staleTimeFor = (key: readonly string[], pollMs?: number) =>
 	pollMs ??
-	(SLOW[(key[1] === "families" && key.length > 2 ? key[3] : key[1]) ?? ""]
+	(SLOW[(key[2] === "families" && key.length > 3 ? key[4] : key[2]) ?? ""]
 		? 5 * MINUTE
 		: 30_000);
 
@@ -85,22 +118,25 @@ const STORES_NOTHING: Readonly<Record<string, true>> = {
  * shows loading until its new reply, so the new family is never missing from the selection.
  */
 export const invalidateAfterWrite = (path: string) => {
-	const key = apiKey(path);
-	const familyId = key[2];
-	const resource = key[3];
+	const [scope = "", , collection, familyId, resource] = apiKey(path);
 	if (
-		key[1] !== "families" ||
+		collection !== "families" ||
 		familyId === undefined ||
 		resource === undefined
 	) {
+		// A deleted family's replies go with it.
+		if (collection === "families" && familyId !== undefined)
+			queryClient.removeQueries({
+				queryKey: [scope, "api", "families", familyId],
+			});
 		void queryClient.resetQueries({
-			queryKey: ["api", "families"],
+			queryKey: [scope, "api", "families"],
 			exact: true,
 		});
 		return;
 	}
 	if (STORES_NOTHING[resource]) return;
-	const family = ["api", "families", familyId];
+	const family = [scope, "api", "families", familyId];
 	for (const changed of [resource, ...(ALSO_CHANGES[resource] ?? [])])
 		void queryClient.invalidateQueries(
 			changed === ""
@@ -109,9 +145,23 @@ export const invalidateAfterWrite = (path: string) => {
 		);
 };
 
-// One person's data never shows to the next. A sign-in or sign-out drops every cached reply: the
-// reads off screen go, and the reads on screen start again, so after a sign-out they show signed out.
-onSessionChange(() => {
-	queryClient.removeQueries({ type: "inactive" });
-	void queryClient.resetQueries();
-});
+/**
+ * Drops the cached replies under `path` (a person's family, or one member's data) and reads the
+ * ones on screen again. A switch to another person or member calls it first, so the screen shows
+ * loading until that person's current data arrives, never a reply from an earlier visit.
+ */
+export const freshRead = (path: string) =>
+	void queryClient.resetQueries({ queryKey: apiKey(path) });
+
+// One account's data never shows to the next. Keys carry the account, and a sign-in or sign-out
+// removes every account's cached reply and cancels its reads in flight, so a reply on its way for
+// the last account is dropped. Each reader follows the session (`useAccount`) and reads again
+// under the new account's key; after a sign-out that read shows signed out.
+onSessionChange(() =>
+	queryClient.removeQueries({
+		predicate: (query) => query.queryKey[0] !== "public",
+	}),
+);
+
+/** The signed-in account; a reader that calls it renders again, with new keys, when it changes. */
+export const useAccount = () => useSyncExternalStore(onSessionChange, account);

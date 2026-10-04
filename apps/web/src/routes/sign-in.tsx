@@ -48,17 +48,18 @@ const failure = (error: unknown): Step => {
 
 /**
  * A first-time user with no family starts onboarding, unless they came to join a family by invite.
+ * A member of a family never lands on onboarding: they go to the page they asked for, or Home.
  * The list it reads stays cached for the first screen.
  */
 const landing = async (returnTo: string) => {
 	const path = returnPath(returnTo);
-	const none = await queryClient
+	const families = await queryClient
 		.fetchQuery(apiQuery(FamilyList, "/api/families"))
-		.then(
-			(list) => list.families.length === 0,
-			() => false,
-		);
-	return none && !path.startsWith("/join/") ? "/welcome" : path;
+		.catch(() => null);
+	if (families === null) return path;
+	if (families.families.length > 0)
+		return path.startsWith("/welcome") ? "/hud" : path;
+	return path.startsWith("/join/") ? path : "/welcome";
 };
 
 function SignIn() {

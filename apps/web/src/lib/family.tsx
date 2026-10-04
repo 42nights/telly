@@ -1,5 +1,7 @@
-// The family the screens show. The server returns the caller's families; the app selects one and
-// remembers it on this device. A new person gets their own family through onboarding (/welcome).
+// The family the screens show. The server returns the caller's families; the app selects one. The
+// person picked in this tab is in the address (`?person=<family id>`, kept by the root route), so
+// tabs do not change each other's person and a link opens the same person. The last pick is also
+// remembered on this device as the default. A new person gets their own family through onboarding.
 import type { Family } from "@health/contracts";
 import { FamilyList } from "@health/contracts/families";
 import type { QueryClient } from "@tanstack/react-query";
@@ -10,14 +12,44 @@ import {
 	type ReactNode,
 	useContext,
 	useEffect,
+	useRef,
 	useState,
 } from "react";
 
 import { Tip } from "@/components/win95";
 
-import { type ApiState, apiQuery, useApi } from "./api";
+import { type ApiState, apiQuery, familyPath, useApi } from "./api";
+import { freshRead } from "./query";
 
 const KEY = "telly.family";
+
+type Listed = FamilyList["families"][number];
+
+/**
+ * The family to show: one picked in this tab; else the one remembered on this device, unless it has
+ * no real data while another family does; else the family with the newest real data; else the first.
+ */
+export const chooseFamily = (
+	families: readonly Listed[],
+	picked: string | null,
+	remembered: string | null,
+): Listed | null => {
+	const live = families
+		.filter((f) => f.newestSampleAt)
+		.sort((a, b) =>
+			(b.newestSampleAt ?? "").localeCompare(a.newestSampleAt ?? ""),
+		)[0];
+	const kept = families.find((f) => f.id === remembered);
+	return (
+		families.find((f) => f.id === picked) ??
+		(kept !== undefined && (kept.newestSampleAt || live === undefined)
+			? kept
+			: undefined) ??
+		live ??
+		families[0] ??
+		null
+	);
+};
 
 type FamilyContext = {
 	readonly state: ApiState<FamilyList>;
@@ -28,20 +60,43 @@ type FamilyContext = {
 
 const Context = createContext<FamilyContext | null>(null);
 
-/** The remembered family while it is still listed, otherwise the first. */
-const pick = (list: FamilyList, remembered: string | null) =>
-	list.families.find((option) => option.id === remembered) ??
-	list.families[0] ??
-	null;
+/** The person picked in this tab and how to pick another. The root route keeps it in the address. */
+export type PersonPick = {
+	readonly picked: string | null;
+	readonly pick: (familyId: string) => void;
+};
 
-export function FamilyProvider({ children }: { children: ReactNode }) {
+export function FamilyProvider({
+	children,
+	person,
+}: {
+	children: ReactNode;
+	/** Without it (tests outside a router), the pick lives in this provider only. */
+	person?: PersonPick;
+}) {
+	// A new family or a joined one resets this list (`invalidateAfterWrite`): it shows loading until
+	// the new reply, so a new family is never missing.
 	const state = useApi(FamilyList, "/api/families");
 	const [remembered, setRemembered] = useState<string | null>(null);
+	const [localPick, setLocalPick] = useState<string | null>(null);
 	useEffect(() => setRemembered(localStorage.getItem(KEY)), []);
-	const family = state.kind === "ready" ? pick(state.value, remembered) : null;
+	const picked = person ? person.picked : localPick;
+	const family =
+		state.kind === "ready"
+			? chooseFamily(state.value.families, picked, remembered)
+			: null;
+	// A switch to another person drops that person's cached replies before the screens render, so
+	// they show loading until the person's current data arrives, never data from an earlier visit.
+	// It runs during render, not in an effect: an effect would paint the old data first.
+	const shown = useRef<string | null>(null);
+	if (family !== null && family.id !== shown.current) {
+		if (shown.current !== null) freshRead(familyPath(family.id));
+		shown.current = family.id;
+	}
 	const select = (familyId: string) => {
 		localStorage.setItem(KEY, familyId);
 		setRemembered(familyId);
+		(person?.pick ?? setLocalPick)(familyId);
 	};
 	return (
 		<Context.Provider value={{ state, family, select }}>
@@ -55,12 +110,13 @@ type Read = readonly [schema: Schema.Decoder<unknown>, path: string];
 
 const warm = async (
 	queryClient: QueryClient,
+	picked: string | null,
 	reads: (familyId: string) => readonly Read[],
 ) => {
 	const list = await queryClient.ensureQueryData(
 		apiQuery(FamilyList, "/api/families"),
 	);
-	const family = pick(list, localStorage.getItem(KEY));
+	const family = chooseFamily(list.families, picked, localStorage.getItem(KEY));
 	if (family === null) return;
 	await Promise.all(
 		reads(family.id).map(([schema, path]) =>
@@ -70,15 +126,22 @@ const warm = async (
 };
 
 /**
- * A route loader that starts a screen's `reads` for the selected family. The router preloads on
- * intent, so a hover or tap on a menu item starts the reads before the screen opens. The loader
- * does not wait for them: the screen opens at once, with cached data or its loading state, and it
- * shows any failure itself.
+ * A route loader that starts a screen's `reads` for the person the screen will show (`?person=`, or
+ * the default). The router preloads on intent, so a hover or tap on a menu item starts the reads
+ * before the screen opens. The loader does not wait for them: the screen opens at once, with cached
+ * data or its loading state, and it shows any failure itself.
  */
 export const loadFamilyReads =
 	(reads: (familyId: string) => readonly Read[]) =>
-	({ context }: { context: { queryClient: QueryClient } }) => {
-		warm(context.queryClient, reads).catch(() => {});
+	({
+		context,
+		location,
+	}: {
+		context: { queryClient: QueryClient };
+		location: { search: { person?: string | undefined } };
+	}) => {
+		const picked = location.search.person ?? null;
+		warm(context.queryClient, picked, reads).catch(() => {});
 	};
 
 export function useFamily(): FamilyContext {

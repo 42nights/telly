@@ -12,7 +12,7 @@ import {
 	reread,
 } from "@/lib/api";
 import { type Outcome, submitAction } from "@/lib/pending";
-import { apiKey, queryClient } from "@/lib/query";
+import { apiKey, queryClient, useAccount } from "@/lib/query";
 
 import { mergeMessages } from "./logic";
 
@@ -29,6 +29,7 @@ type ReadState = { readonly kind: "loading" | "ready" } | ApiFailure;
  */
 export function useChat(familyId: string) {
 	const path = familyPath(familyId, "/messages");
+	useAccount();
 	const queryKey = apiKey(path);
 	const query = useQuery(
 		{

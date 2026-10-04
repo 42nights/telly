@@ -145,8 +145,10 @@ const findReport = (c: Context<FamilyEnv>, id = c.req.param("reportId")) => {
 // Report PDFs live under a key that the server builds from the verified caller, never from the
 // request: `report-pdfs/<familyId>/<caller identity>/<reportId>.<uuid>.pdf`. The family middleware
 // has already checked membership, so a caller reaches only their own PDFs in their own families.
+/** Every report PDF of one family, whoever saved it. Deleting the family deletes these. */
+export const familyPdfPrefix = (familyId: bigint) => `report-pdfs/${familyId}/`;
 const pdfPrefix = (c: Context<FamilyEnv>) =>
-	`report-pdfs/${c.var.familyId}/${c.var.db.identity}/`;
+	`${familyPdfPrefix(c.var.familyId)}${c.var.db.identity}/`;
 const PDF_ID = /^[0-9a-f-]{36}\.[0-9a-f-]{36}$/;
 
 const needStorage = (storage: R2Bucket | undefined) => {

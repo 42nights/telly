@@ -307,13 +307,22 @@ describe("SharingControls", () => {
 describe("FamilyLocationSection", () => {
 	const path = "GET /api/families/1/location";
 
-	test("shows the locations shared with me, not my own, and my sharing ID", async () => {
+	test("shows the locations shared with me, not my own, and copies my sharing ID without showing it", async () => {
 		serve({
 			[path]: {
 				json: {
 					locations: [location({ sharer: me }), location({})],
 					shares: [],
 					seesShared: true,
+				},
+			},
+		});
+		const copied: string[] = [];
+		Object.defineProperty(navigator, "clipboard", {
+			configurable: true,
+			value: {
+				writeText: async (text: string) => {
+					copied.push(text);
 				},
 			},
 		});
@@ -327,7 +336,12 @@ describe("FamilyLocationSection", () => {
 		expect(within(section).getByRole("heading", { level: 4 }).textContent).toBe(
 			"Member bbbbbb",
 		);
-		expect(section.textContent).toContain(`Your sharing ID: ${me}`);
+		expect(section.textContent).not.toContain(me);
+		fireEvent.click(
+			within(section).getByRole("button", { name: "Copy my sharing ID" }),
+		);
+		await waitFor(() => expect(copied).toEqual([me]));
+		await waitFor(() => expect(section.textContent).toContain("Copied."));
 	});
 
 	test("says when nobody shares a location, and shows no ID before I am known", async () => {
@@ -345,7 +359,9 @@ describe("FamilyLocationSection", () => {
 			),
 		);
 		view.rerender(<FamilyLocationSection familyId="1" me={null} now={now} />);
-		expect(view.container.textContent).not.toContain("Your sharing ID");
+		expect(view.queryByRole("button", { name: "Copy my sharing ID" })).toBe(
+			null,
+		);
 		expect(view.getAllByRole("article")).toHaveLength(1);
 	});
 
