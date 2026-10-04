@@ -12,7 +12,7 @@ export type ServerConfig = {
 	readonly auth: AuthConfig | undefined;
 	/** Without `apiKey`, voice routes answer `unavailable`. */
 	readonly voice: ElevenLabsConfig;
-	/** Undefined without `GEMINI_API_KEY`: vision and question routes then answer `unavailable`. */
+	/** Undefined without `GEMINI_API_KEY`: vision, meal estimate, and question routes answer `unavailable`. */
 	readonly gemini?: GeminiConfig | undefined;
 	/** Undefined when FinchNode is off: its routes then answer `unavailable`. */
 	readonly finchnode?: Finchnode;

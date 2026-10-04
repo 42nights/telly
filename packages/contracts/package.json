@@ -16,6 +16,7 @@
 		"./ask": "./src/ask.ts",
 		"./session": "./src/session.ts",
 		"./care": "./src/care.ts",
+		"./meal-facts": "./src/meal-facts.ts",
 		"./care-profile": "./src/care-profile.ts",
 		"./trends": "./src/trends.ts"
 	},
