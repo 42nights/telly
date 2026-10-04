@@ -37,6 +37,11 @@
 	--ring: #000000;
 	--radius: 0;
 }
+/* Teal behind everything, so overscroll and any gap at the top show the desktop, never gray. */
+html,
+body {
+	background-color: var(--win95-desktop);
+}
 
 @theme inline {
 	--font-sans: Tahoma, "Segoe UI", Arial, sans-serif;

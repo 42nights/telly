@@ -46,7 +46,10 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				<FamilyProvider>
-					<div className="win95-desktop grid h-svh grid-rows-[auto_1fr]">
+					<div className="win95-desktop grid h-svh grid-rows-[auto_auto_1fr]">
+						<header className="win95-titlebar px-2 py-1 text-[0.9375rem]">
+							Telly
+						</header>
 						<Header />
 						<div className="min-h-0 overflow-y-auto">
 							<Outlet />
