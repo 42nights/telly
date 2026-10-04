@@ -15,6 +15,11 @@ import { fireEvent, installDom, render, serve, waitFor } from "../test/dom";
 import type { EmergencyIntent } from "./logic";
 import { Request, startRecording } from "./request";
 
+// A `lib` test that ran earlier in this process may have mocked `@/env` with sign-in set up.
+mock.module("@/env", () => ({
+	ENV: { VITE_SERVER_URL: "http://server.test" },
+}));
+
 installDom();
 
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
