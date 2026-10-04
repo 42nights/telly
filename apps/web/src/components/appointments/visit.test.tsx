@@ -16,7 +16,10 @@ import {
 	waitFor,
 	within,
 } from "../test/dom-routed";
+import { formatVisitTime } from "./logic";
 import { VisitCard } from "./visit";
+
+const at = (iso: string) => formatVisitTime(iso, "Europe/London");
 
 setupDom();
 
@@ -71,7 +74,7 @@ test("a new suggestion shows what is not recorded and offers only a request", as
 	expect(view.getByRole("heading", { name: "Eye check" })).toBeDefined();
 	expect(view.getByText("Suggested · not booked")).toBeDefined();
 	expect(facts(view)).toEqual({
-		When: "Sun, 20 Oct 2030, 10:30 BST",
+		When: at("2030-10-20T09:30:00Z"),
 		"Time zone": "Europe/London",
 		Clinician: "Not recorded",
 		Where: "Not recorded",
@@ -135,7 +138,7 @@ test("a booked visit shows its preparation, every step, and reminder times in th
 	expect(shown.Where).toBe("Ward 4");
 	expect(shown.Transportation).toBe("Bus 12");
 	expect(shown.Reminders).toBe(
-		"Sat, 19 Oct 2030, 10:30 BST; Sun, 20 Oct 2030, 08:30 BST",
+		`${at("2030-10-19T09:30:00Z")}; ${at("2030-10-20T07:30:00Z")}`,
 	);
 	expect(view.getByText("Tired")).toBeDefined();
 	expect(view.getByText("Dizzy")).toBeDefined();
@@ -143,12 +146,12 @@ test("a booked visit shows its preparation, every step, and reminder times in th
 	expect(view.getByText(/^Suggested by the assistant · /)).toBeDefined();
 	expect(
 		view.getByText(
-			"Requested · Wed, 2 Sept 2026, 09:00 BST · simulated: nothing was sent to the provider",
+			`Requested · ${at("2026-09-02T08:00:00Z")} · simulated: nothing was sent to the provider`,
 		),
 	).toBeDefined();
 	expect(
 		view.getByText(
-			"Provider confirmed · reference REF-9 · by phone · recorded Thu, 3 Sept 2026, 09:00 BST",
+			`Provider confirmed · reference REF-9 · by phone · recorded ${at("2026-09-03T08:00:00Z")}`,
 		),
 	).toBeDefined();
 	expect(view.queryByRole("button", { name: /Request this visit/ })).toBeNull();
@@ -169,7 +172,7 @@ test("a cancelled visit offers no actions and no clinician updates", () => {
 	);
 	expect(view.getByText("Cancelled")).toBeDefined();
 	expect(
-		view.getByText("Cancelled · Fri, 4 Sept 2026, 09:00 BST"),
+		view.getByText(`Cancelled · ${at("2026-09-04T08:00:00Z")}`),
 	).toBeDefined();
 	expect(view.queryAllByRole("button")).toHaveLength(0);
 	expect(view.queryByText("Visit summary and clinician updates")).toBeNull();
