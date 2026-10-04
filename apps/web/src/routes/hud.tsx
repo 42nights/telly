@@ -8,9 +8,11 @@ import {
 import { Button } from "@health/ui/components/button";
 import { createFileRoute } from "@tanstack/react-router";
 import type { Schema } from "effect";
-import { CloudOff, Glasses, Home, RotateCw } from "lucide-react";
+import { CloudOff, Home, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Alerts } from "@/components/hud/alerts";
+import { DeviceChips } from "@/components/hud/device-chips";
 import { Window } from "@/components/hud/window";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
@@ -102,34 +104,26 @@ function monitoringStatus(sources: Polled<Sources>) {
 	return "Monitoring: stopped";
 }
 
-/** The WHOOP chip: WHOOP data arrives only through the NOOP bridge, so it shows NOOP's status. */
-function whoopStatus(sources: Polled<Sources>) {
-	if (sources.latest === undefined) return "WHOOP · checking NOOP…";
-	if (sources.latest.kind === "error") return "WHOOP · NOOP status unknown";
-	return `WHOOP · ${
-		sources.latest.value.sources
-			.map(
-				({ source, status }) =>
-					`${source.toUpperCase()} ${status.replace("_", " ")}`,
-			)
-			.join(" · ") || "no source configured"
-	}`;
-}
-
 const chip = "win95-inset bg-card px-2 py-1 text-[15px]";
 
-/** Footer chips: optional glasses, the WHOOP/NOOP source, monitoring, and the server line. */
-function StatusFooter({ now }: { now: number }) {
+/** Footer chips: phone, glasses, and wearable apart, then monitoring and the server line. */
+function StatusFooter({
+	now,
+	records,
+}: {
+	now: number;
+	records: ApiState<FamilyRecords> | null;
+}) {
 	const health = usePolled(Health, "/health");
 	const sources = usePolled(Sources, "/api/sources");
 	const server = serverStatus(health, now);
 	return (
 		<footer className="flex flex-wrap gap-1.5 self-end md:col-span-2">
-			<span className={`${chip} flex items-center gap-1.5`}>
-				<Glasses aria-hidden className="size-4" />
-				Glasses not paired · optional
-			</span>
-			<span className={chip}>{whoopStatus(sources)}</span>
+			<DeviceChips
+				sources={sources.latest?.kind === "ready" ? sources.latest.value : null}
+				samples={records?.kind === "ready" ? records.value.samples : null}
+				now={now}
+			/>
 			<span className={chip}>{monitoringStatus(sources)}</span>
 			<span
 				className={`${chip} flex items-center gap-1.5 ${server.live ? "" : "text-destructive"}`}
@@ -252,9 +246,17 @@ function HudComponent() {
 					</div>
 
 					<section
-						aria-label="Messages"
+						aria-label="Messages and alerts"
 						className="grid min-w-0 content-start gap-2 md:row-span-2"
 					>
+						<h2 className="font-bold text-[16px]">Alerts</h2>
+						{records === null ? (
+							<p className="win95-inset bg-card p-3 text-[18px]">
+								No person is paired yet, so there are no alerts.
+							</p>
+						) : (
+							<Alerts familyId={familyId} now={now} records={records} />
+						)}
 						<h2 className="font-bold text-[16px]">Messages</h2>
 						{records === null ? (
 							<p className="win95-inset bg-card p-3 text-[18px]">
@@ -265,7 +267,7 @@ function HudComponent() {
 						)}
 					</section>
 
-					<StatusFooter now={now} />
+					<StatusFooter now={now} records={records} />
 				</div>
 			</Window>
 		</main>

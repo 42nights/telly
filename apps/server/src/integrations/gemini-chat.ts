@@ -1,6 +1,9 @@
 // Gemini chat with function calling through the Interactions API, stateless (`store: false`): the
 // server sends the whole history each turn, so Google keeps no copy of the family's records.
 // https://ai.google.dev/gemini-api/docs/function-calling (Stateless function calling)
+// The final answer is structured output, so the follow-ups come in the same reply as the answer.
+// https://ai.google.dev/gemini-api/docs/structured-output (Structured outputs with tools)
+import type { FamilyQuestion, QuestionAttachment } from "@health/contracts/ask";
 import { Data, Effect, Schema } from "effect";
 import type { FamilyTools } from "../family-tools";
 import { ApiFailure } from "../http";
@@ -12,6 +15,35 @@ const GEMINI_CHAT_MODEL = "gemini-3.8-flash";
 const requestTimeoutMs = 30_000;
 // Each round runs the tools the model called; the answer must come within this many rounds.
 const maxRounds = 4;
+const maxFollowUps = 3;
+const maxFollowUpLength = 200;
+
+// The model fills this on its last turn, after the tool calls.
+const answerFormat = {
+	type: "text",
+	mime_type: "application/json",
+	schema: {
+		type: "object",
+		properties: {
+			answer: { type: "string", description: "The answer to the question." },
+			follow_ups: {
+				type: "array",
+				maxItems: maxFollowUps,
+				items: { type: "string" },
+				description:
+					"Up to 3 short questions that the asker can ask next, each based on this answer. Empty when no question fits.",
+			},
+		},
+		required: ["answer", "follow_ups"],
+	},
+};
+const FinalAnswer = Schema.fromJsonString(
+	Schema.Struct({
+		answer: Schema.String,
+		follow_ups: Schema.optionalKey(Schema.Unknown),
+	}),
+);
+const FollowUps = Schema.Array(Schema.String);
 
 /** Messages name only the step that failed: never provider text, keys, or records. */
 class GeminiChatError extends Data.TaggedError("GeminiChatError")<{
@@ -71,6 +103,44 @@ const parseReply = (json: unknown) => {
 			.join("")
 			.trim(),
 	};
+};
+
+/** Keeps up to 3 distinct trimmed questions of 1 to 200 characters. Any other shape gives none. */
+const followUpsFrom = (value: unknown): string[] => {
+	const items = Schema.decodeUnknownOption(FollowUps)(value);
+	if (items._tag === "None") return [];
+	const kept = items.value
+		.map((item) => item.trim())
+		.filter((item) => item !== "" && item.length <= maxFollowUpLength);
+	return [...new Set(kept)].slice(0, maxFollowUps);
+};
+
+/** The answer must be valid; bad follow-ups never fail it, they only give an empty list. */
+const finalAnswer = (text: string, model: string) => {
+	const final = Schema.decodeUnknownOption(FinalAnswer)(text);
+	if (final._tag === "None")
+		return Effect.fail(upstream("Gemini sent an invalid answer"));
+	const answer = final.value.answer.trim();
+	if (answer === "")
+		return Effect.fail(upstream("Gemini sent an empty answer"));
+	return Effect.succeed({
+		text: answer,
+		model,
+		followUps: followUpsFrom(final.value.follow_ups),
+	});
+};
+
+// Inline content for this question only. The Interactions API takes PDFs as `document` and
+// images as `image`; plain text goes as a text part, because `document` takes only PDF and CSV.
+const attachmentContent = ({ name, mimeType, data }: QuestionAttachment) => {
+	if (mimeType === "application/pdf")
+		return { type: "document", mime_type: mimeType, data };
+	if (mimeType === "text/plain")
+		return {
+			type: "text",
+			text: `File "${name}":\n${Buffer.from(data, "base64").toString("utf8")}`,
+		};
+	return { type: "image", mime_type: mimeType, data };
 };
 
 const interact = (config: GeminiConfig, body: unknown) =>
@@ -133,16 +203,19 @@ const functionResults = (
 	);
 
 /**
- * Asks Gemini one question and runs the tools it calls until it answers in text. Fails when the
- * reply is empty, incomplete, or still calling tools after the round limit; it never makes up an
- * answer. Interrupting it aborts the provider call.
+ * Asks Gemini one question, with its attached files, and runs the tools it calls until it answers.
+ * Fails when the reply is empty, invalid, incomplete, or still calling tools after the round limit;
+ * it never makes up an answer or follow-ups. Interrupting it aborts the provider call.
  */
 export const askGemini = (
 	config: GeminiConfig | undefined,
-	question: string,
+	{
+		question,
+		attachments = [],
+	}: Pick<FamilyQuestion, "question" | "attachments">,
 	family: Pick<FamilyTools, "rules" | "tools" | "run">,
 ): Effect.Effect<
-	{ text: string; model: string },
+	{ text: string; model: string; followUps: string[] },
 	GeminiChatError | ApiFailure
 > =>
 	Effect.gen(function* () {
@@ -157,10 +230,14 @@ export const askGemini = (
 			description,
 			parameters,
 		}));
+		// Sent again each round (stateless); never logged or stored by the server.
 		const history: unknown[] = [
 			{
 				type: "user_input",
-				content: [{ type: "text", text: question }],
+				content: [
+					...attachments.map(attachmentContent),
+					{ type: "text", text: question },
+				],
 			},
 		];
 		for (let round = 0; round <= maxRounds; round++) {
@@ -170,15 +247,14 @@ export const askGemini = (
 				system_instruction: family.rules,
 				input: history,
 				tools,
-				// About 2000 characters: short enough to read on a phone and to speak.
-				generation_config: { thinking_level: "low", max_output_tokens: 1024 },
+				response_format: answerFormat,
+				// About 2000 characters of answer plus 3 short follow-ups: short enough to read on a
+				// phone and to speak.
+				generation_config: { thinking_level: "low", max_output_tokens: 1280 },
 			});
 			const { calls } = reply;
-			if (reply.status === "completed" && calls.length === 0) {
-				if (reply.text === "")
-					return yield* upstream("Gemini sent an empty answer");
-				return { text: reply.text, model: reply.model };
-			}
+			if (reply.status === "completed" && calls.length === 0)
+				return yield* finalAnswer(reply.text, reply.model);
 			if (reply.status !== "requires_action" || calls.length === 0)
 				return yield* upstream("Gemini did not complete the answer");
 			history.push(

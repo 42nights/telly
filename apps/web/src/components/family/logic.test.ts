@@ -5,6 +5,8 @@ import type {
 	ThresholdMonitoring,
 } from "@health/contracts/alerts";
 
+import { demoSampleSummary } from "@/lib/demo";
+
 import { deliveryText, monitoringLevel, newestPerMetric } from "./logic";
 
 const threshold: AlertThreshold = {
@@ -67,7 +69,7 @@ describe("newestPerMetric", () => {
 			[threshold],
 			now,
 		);
-		expect(glance.map((g) => [g.sample.id, g.stale])).toEqual([
+		expect(glance.map((g) => [g.sample?.id, g.stale])).toEqual([
 			["new", false],
 			["steps", false],
 		]);
@@ -79,6 +81,29 @@ describe("newestPerMetric", () => {
 			now,
 		);
 		expect(hr?.stale).toBe(true);
+	});
+	test("synthetic samples never count as a reading", () => {
+		const samples = [
+			{
+				...sample("fake", "heart_rate", "2026-01-01T11:59:00Z"),
+				synthetic: true,
+			},
+			sample("real", "heart_rate", "2026-01-01T11:58:00Z"),
+			{ ...sample("hrv", "hrv", "2026-01-01T11:59:00Z"), synthetic: true },
+		];
+		expect(
+			newestPerMetric(samples, [threshold], now).map((g) => [
+				g.metric,
+				g.sample?.id ?? null,
+			]),
+		).toEqual([
+			["heart_rate", "real"],
+			["hrv", null],
+		]);
+		expect(demoSampleSummary(samples)).toBe(
+			"2 demo samples that are not real readings (heart_rate, hrv)",
+		);
+		expect(demoSampleSummary([sample("r", "hrv", now.toString())])).toBeNull();
 	});
 });
 

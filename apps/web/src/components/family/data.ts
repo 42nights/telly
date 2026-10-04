@@ -11,6 +11,7 @@ import { type FamilyList, Me } from "@health/contracts/families";
 import { useEffect, useState } from "react";
 
 import { type ApiState, apiRequest, familyPath, useApi } from "@/lib/api";
+import { useDemoWarning } from "@/lib/demo";
 import { useFamily } from "@/lib/family";
 
 import { newestUnseen } from "./logic";
@@ -50,6 +51,16 @@ export function useFamilyData(): FamilyData {
 	);
 	const records = useApi(FamilyRecords, path(""), options);
 	const me = useApi(Me, "/api/me");
+	useDemoWarning(
+		records.kind === "ready" ? records.value.samples : null,
+		"Demo samples are not shown. The family records contain",
+	);
+	// A "Mark as seen" failure belongs to the person it was for.
+	const familyId = family?.id;
+	useEffect(() => {
+		void familyId;
+		setSeenError(null);
+	}, [familyId]);
 
 	const markSeen = async (alertId: string) => {
 		const alertsPath = path(
