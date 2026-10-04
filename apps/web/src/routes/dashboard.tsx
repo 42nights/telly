@@ -10,6 +10,7 @@ import type {
 	FamilyAlert,
 	Monitoring,
 } from "@health/contracts/alerts";
+import { whoopCatalog } from "@health/contracts/whoop-catalog";
 import { buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -75,6 +76,7 @@ function Dashboard() {
 								<DashboardBody key={family.id} data={data} family={family} />
 							)}
 						</FamilyGate>
+						<WhoopCatalog />
 					</div>
 				</div>
 			</Window>
@@ -260,6 +262,72 @@ function SourceList({ sources }: { sources: Loaded<Sources> | undefined }) {
 				</li>
 			))}
 		</ul>
+	);
+}
+
+function WhoopCatalog() {
+	return (
+		<details className="win95-inset bg-card">
+			<summary className="min-h-11 cursor-pointer p-2 font-bold">
+				WHOOP fields from Healer S.I. · placeholders, not readings
+			</summary>
+			<p className="px-2 pb-2 text-muted-foreground text-xs">
+				Value shows {"{type}"} then the unit, or why the field is unavailable.
+				Kind gives each field's status and validation.
+			</p>
+			<div className="h-96 overflow-auto">
+				<table className="w-full min-w-[64rem] border-collapse text-left">
+					<thead className="sticky top-0 bg-background">
+						<tr>
+							{[
+								"Field",
+								"Value",
+								"Kind",
+								"Cadence",
+								"Delivery",
+								"Device",
+								"Recorded as",
+							].map((h) => (
+								<th key={h} className="win95-raised px-2 py-1 font-normal">
+									{h}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{whoopCatalog.map((f) => (
+							<tr
+								key={`${f.table}.${f.column}`}
+								className="border-border border-b align-top"
+							>
+								<td className="break-all px-2 py-1.5">
+									<code>
+										{f.table}.{f.column}
+									</code>
+								</td>
+								<td
+									className={cn(
+										"px-2 py-1.5",
+										f.unavailable !== null && "bg-[#ffffe1]",
+									)}
+								>
+									{f.unavailable === null
+										? `{${f.type}}${f.unit === null ? "" : ` ${f.unit}`}`
+										: `unavailable: ${f.unavailable}`}
+								</td>
+								<td className="px-2 py-1.5">
+									{f.status} · {f.validation.replaceAll("_", " ")}
+								</td>
+								<td className="px-2 py-1.5">{f.cadence}</td>
+								<td className="px-2 py-1.5">{f.delay}</td>
+								<td className="px-2 py-1.5">{f.device}</td>
+								<td className="px-2 py-1.5">{f.metric ?? "not recorded"}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</details>
 	);
 }
 
