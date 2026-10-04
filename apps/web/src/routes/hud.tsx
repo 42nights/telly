@@ -15,6 +15,7 @@ import { Window } from "@/components/hud/window";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
+import { TripCheckInCard } from "@/components/wearer/trip";
 import { useNow } from "@/components/wearer/use-now";
 import { ENV } from "@/env";
 import { type ApiState, familyPath, useApi } from "@/lib/api";
@@ -243,12 +244,13 @@ function HudComponent() {
 						<HeartReading familyId={familyId} now={now} records={records} />
 					</div>
 
-					<div className="min-w-0">
+					<div className="grid min-w-0 content-start gap-4">
 						{records?.kind === "unavailable" || records?.kind === "error" ? (
 							<OfflineBanner message={records.message} onRetry={retry} />
 						) : (
 							<Request familyId={familyId} talkNote={talkNote[familiesKind]} />
 						)}
+						<TripCheckInCard familyId={familyId} />
 					</div>
 
 					<section
