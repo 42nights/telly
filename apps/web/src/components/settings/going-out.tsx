@@ -117,20 +117,10 @@ function GoingOutForm({ watch }: { watch: HomeWatch }) {
 				<legend className="px-1">Home</legend>
 				<p>
 					{watch.home === null
-						? "No home is saved. Press the button while at home."
-						: "Home is saved as a position. Only this person can see it."}
+						? "Telly saves home from this phone's first position. Press the button to save it now."
+						: "Home is saved as a position. Only this person can see it. If it is wrong, press the button while at home."}
 				</p>
 				<ThisIsHome className="h-11 justify-self-start" />
-				{watch.home !== null && (
-					<Button
-						className="h-11 justify-self-start"
-						onClick={() => save(null)}
-						type="button"
-						variant="outline"
-					>
-						Forget home
-					</Button>
-				)}
 			</fieldset>
 		</form>
 	);
