@@ -1,16 +1,19 @@
-import type { Report } from "@health/contracts/reports";
+import type { Report, ReportMarker } from "@health/contracts/reports";
 import { Button } from "@health/ui/components/button";
 
+import { CorrectionForm } from "./corrections";
 import { DataTable } from "./data-table";
 import { FinchnodeLabsPanel } from "./finchnode-labs";
 import {
+	demoText,
 	FIELD_LABELS,
 	FIELD_LIMITS,
-	type FieldDraft,
+	type FieldName,
 	formatTime,
 	markerValue,
 	metricLabel,
 } from "./logic";
+import { PdfActions } from "./pdfs";
 import { failureText, type ReportSheetState } from "./use-report-sheet";
 
 const PATIENT_FIELDS = [
@@ -26,7 +29,7 @@ function FieldInput({
 	name,
 }: {
 	sheet: ReportSheetState;
-	name: keyof FieldDraft;
+	name: FieldName;
 }) {
 	const error = sheet.errors[name];
 	return (
@@ -90,15 +93,86 @@ export function PatientTab({
 	);
 }
 
+/** One generated marker. A demo value is labeled; a correction sits beside the original. */
+function MarkerRow({
+	marker,
+	sheet,
+}: {
+	marker: ReportMarker;
+	sheet: ReportSheetState;
+}) {
+	const { metric, sample } = marker;
+	const correction = sheet.draft.corrections.find((c) => c.metric === metric);
+	return (
+		<tr className="border-border border-t align-top">
+			<td className="p-1.5">{metricLabel(metric)}</td>
+			<td className="p-1.5">
+				{markerValue(marker)}
+				{sample?.synthetic && (
+					<small className="block font-bold">Demo value, not measured</small>
+				)}
+				{correction !== undefined && (
+					<small className="block">
+						Corrected to {correction.value} {sample?.unit}: {correction.reason}.
+						The value above is the original.
+						{!sheet.reviewed && (
+							<Button
+								type="button"
+								className="ml-2 h-11 px-3 text-sm"
+								onClick={() =>
+									sheet.setDraft({
+										...sheet.draft,
+										corrections: sheet.draft.corrections.filter(
+											(c) => c !== correction,
+										),
+									})
+								}
+							>
+								Remove
+							</Button>
+						)}
+					</small>
+				)}
+			</td>
+			<td className="p-1.5">
+				{sample === null
+					? "No source"
+					: sample.synthetic
+						? demoText(sample.source)
+						: sample.source}
+			</td>
+			<td className="p-1.5">
+				{sample === null ? "—" : formatTime(sample.sourceTime)}
+			</td>
+			<td className="p-1.5">
+				{sample === null
+					? "—"
+					: sample.quality === "validated"
+						? "Validated"
+						: "Not validated"}
+			</td>
+		</tr>
+	);
+}
+
 export function MarkersTab({
 	report,
 	familyId,
+	sheet,
 }: {
 	report: Report;
 	familyId: string;
+	sheet: ReportSheetState;
 }) {
+	const demo = report.markers.filter((m) => m.sample?.synthetic).length;
 	return (
 		<>
+			{demo > 0 && (
+				<p role="note" className="win95-inset bg-card p-2 font-bold">
+					Demo data: {demo} of these markers hold demo values, not real
+					measurements.
+				</p>
+			)}
 			{report.markers.length === 0 ? (
 				<p className="win95-inset bg-card p-2">
 					No measures were saved for this person when the report was made.
@@ -113,56 +187,62 @@ export function MarkersTab({
 						"Quality",
 					]}
 				>
-					{report.markers.map(({ metric, sample }) => (
-						<tr key={metric} className="border-border border-t">
-							<td className="p-1.5">{metricLabel(metric)}</td>
-							<td className="p-1.5">{markerValue({ metric, sample })}</td>
-							<td className="p-1.5">{sample?.source ?? "No source"}</td>
-							<td className="p-1.5">
-								{sample === null ? "—" : formatTime(sample.sourceTime)}
-							</td>
-							<td className="p-1.5">
-								{sample === null
-									? "—"
-									: sample.quality === "validated"
-										? "Validated"
-										: "Not validated"}
-							</td>
-						</tr>
+					{report.markers.map((marker) => (
+						<MarkerRow key={marker.metric} marker={marker} sheet={sheet} />
 					))}
 				</DataTable>
 			)}
 			<p>
 				Markers have no ranges or flags. Unavailable markers are kept in the
-				report as unavailable.
+				report as unavailable. This report lists readings that were already
+				saved: it is not a new lab test and not medical advice, and making it
+				does not make an old reading current.
 			</p>
+			<CorrectionForm sheet={sheet} markers={report.markers} />
+			<SaveBar sheet={sheet} />
 			<FinchnodeLabsPanel familyId={familyId} />
 		</>
 	);
 }
 
+const NOTE_FIELDS = ["observations", "questions", "notes"] as const;
+
+function LongField({
+	sheet,
+	name,
+}: {
+	sheet: ReportSheetState;
+	name: (typeof NOTE_FIELDS)[number];
+}) {
+	const error = sheet.errors[name];
+	return (
+		<label className="grid gap-1">
+			{FIELD_LABELS[name]}
+			<textarea
+				className="win95-inset win95-field h-28 w-full resize-none overflow-auto bg-card p-2 text-sm"
+				placeholder="Optional"
+				value={sheet.draft[name]}
+				maxLength={FIELD_LIMITS[name] + 1}
+				readOnly={sheet.reviewed}
+				aria-invalid={error !== undefined}
+				onChange={(event) =>
+					sheet.setDraft({ ...sheet.draft, [name]: event.target.value })
+				}
+			/>
+			<span className={error === undefined ? "" : "text-destructive"}>
+				{error ??
+					`${sheet.draft[name].trim().length} of ${FIELD_LIMITS[name]} characters`}
+			</span>
+		</label>
+	);
+}
+
 export function NotesTab({ sheet }: { sheet: ReportSheetState }) {
-	const error = sheet.errors.notes;
 	return (
 		<>
-			<label className="grid gap-1">
-				{FIELD_LABELS.notes}
-				<textarea
-					className="win95-inset win95-field h-40 w-full resize-none overflow-auto bg-card p-2 text-sm"
-					placeholder="Optional"
-					value={sheet.draft.notes}
-					maxLength={FIELD_LIMITS.notes + 1}
-					readOnly={sheet.reviewed}
-					aria-invalid={error !== undefined}
-					onChange={(event) =>
-						sheet.setDraft({ ...sheet.draft, notes: event.target.value })
-					}
-				/>
-				<span className={error === undefined ? "" : "text-destructive"}>
-					{error ??
-						`${sheet.draft.notes.trim().length} of ${FIELD_LIMITS.notes} characters`}
-				</span>
-			</label>
+			{NOTE_FIELDS.map((name) => (
+				<LongField key={name} sheet={sheet} name={name} />
+			))}
 			<SaveBar sheet={sheet} />
 		</>
 	);
@@ -214,10 +294,14 @@ function ReviewGroup({
 export function SendTab({
 	sheet,
 	report,
+	reports,
+	familyId,
 	onAsk,
 }: {
 	sheet: ReportSheetState;
 	report: Report;
+	reports: readonly Report[];
+	familyId: string;
 	onAsk: () => void;
 }) {
 	const { reviewed, sendFailure } = sheet;
@@ -225,7 +309,7 @@ export function SendTab({
 		<>
 			<ReviewGroup sheet={sheet} report={report} />
 			<fieldset className="grid gap-2 border border-border p-2">
-				<legend className="px-1">Send to hospital</legend>
+				<legend className="px-1">Send and PDF</legend>
 				{sendFailure === null ? (
 					<p>
 						Not sent.
@@ -238,14 +322,25 @@ export function SendTab({
 							: `Not sent: ${failureText(sendFailure)}`}
 					</p>
 				)}
-				<Button
-					type="button"
-					className={`h-11 justify-self-start px-4 text-sm ${reviewed && sendFailure === null ? "win95-primary" : ""}`}
-					disabled={!reviewed || sheet.busy !== null}
-					onClick={onAsk}
-				>
-					Send to hospital…
-				</Button>
+				<p>
+					A family review is not a clinician review. Sending a report does not
+					mean that a clinician has read it.
+				</p>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						type="button"
+						className={`h-11 px-4 text-sm ${reviewed && sendFailure === null ? "win95-primary" : ""}`}
+						disabled={!reviewed || sheet.busy !== null}
+						onClick={onAsk}
+					>
+						Send to hospital…
+					</Button>
+					<PdfActions
+						familyId={familyId}
+						reportId={report.id}
+						reports={reports}
+					/>
+				</div>
 			</fieldset>
 		</>
 	);
