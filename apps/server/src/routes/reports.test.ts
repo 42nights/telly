@@ -20,6 +20,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 
@@ -150,15 +151,9 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 					);
 
 				// Meal facts are health records: without the scope they are left out, not shown as none.
+				yield* setOwnScopes(db, familyId, ["health_records"], false);
 				expect((yield* generate).meals).toBeNull();
-				yield* Effect.promise(() =>
-					db.connection.reducers.setCareGrant({
-						familyId: BigInt(familyId),
-						member: Identity.fromString(db.identity),
-						scope: "health_records",
-						granted: true,
-					}),
-				);
+				yield* setOwnScopes(db, familyId, ["health_records"], true);
 				yield* intake("lunch-1", "I ate about half");
 				const report = yield* generate;
 				expect(
