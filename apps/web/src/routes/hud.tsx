@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 
 import { Alerts } from "@/components/hud/alerts";
 import { Window } from "@/components/hud/window";
+import { DueReminders } from "@/components/reminders/due-reminders";
 import { HeartReading } from "@/components/wearer/heart";
 import { Messages } from "@/components/wearer/messages";
 import { Request } from "@/components/wearer/request";
@@ -253,9 +254,10 @@ function HudComponent() {
 					</div>
 
 					<section
-						aria-label="Messages and alerts"
+						aria-label="Reminders, alerts, and messages"
 						className="grid min-w-0 content-start gap-2 md:row-span-2"
 					>
+						<DueReminders familyId={familyId} />
 						<h2 className="font-bold text-[16px]">Alerts</h2>
 						{records === null ? (
 							<p className="win95-inset bg-card p-3 text-[18px]">
