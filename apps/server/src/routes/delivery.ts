@@ -2,7 +2,8 @@
 // proposal keeps to the needs a family member confirmed, and nothing is ordered without an
 // explicit approval of its exact total. The proposal id is the provider's idempotency key: a retry
 // after an uncertain placement first asks the provider whether the order exists, so it never buys
-// twice. The only provider is a simulator (integrations/delivery.ts).
+// twice. The only provider is a simulator (integrations/delivery.ts). Approving and ordering spend
+// money, so both need the caller's #26 `purchases` scope now: a revoke stops the next order.
 import {
 	DeliveryApproval,
 	type DeliveryMenu,
@@ -19,6 +20,7 @@ import { Schema } from "effect";
 import { type Context, Hono } from "hono";
 import { ApiFailure, callReducer, decodeBody, type FamilyEnv } from "../http";
 import type { DeliveryProvider } from "../integrations/delivery";
+import { requireScope } from "./care-profile";
 
 type Ctx = Context<FamilyEnv>;
 
@@ -316,6 +318,7 @@ export const deliveryRoutes = (
 			return reply(c, id, 201);
 		})
 		.post("/delivery/proposals/:proposalId/approval", async (c) => {
+			requireScope(c, "purchases");
 			const { totalCents } = await decodeBody(c, DeliveryApproval);
 			const proposal = find(c);
 			if (proposal.status !== "proposed")
@@ -334,6 +337,7 @@ export const deliveryRoutes = (
 			return reply(c, proposal.id);
 		})
 		.post("/delivery/proposals/:proposalId/order", async (c) => {
+			requireScope(c, "purchases");
 			const proposal = find(c);
 			await order(c, deps, proposal);
 			return reply(c, proposal.id);

@@ -73,12 +73,30 @@ export const TrendExplanation = Schema.Struct({
 	/** Sources that disagree about the same thing in this period. */
 	conflicts: Schema.Array(Schema.String),
 	/**
-	 * Routines come only from a saved, verified care plan. None exists yet (issue #26), so the
-	 * explanation offers no routine.
+	 * The saved care plan (#26). `not_shared`: the caller has no `health_records` access, so nothing
+	 * is read. Only the profile's routines and verified, in-effect `care` instructions are offered;
+	 * medication instructions never are. `notes` says what is unknown or not verified.
 	 */
 	carePlan: Schema.Struct({
-		status: Schema.Literal("unavailable"),
-		message: Schema.String,
+		status: Schema.Literals(["shared", "not_shared"]),
+		routines: Schema.Array(
+			Schema.Struct({
+				name: Schema.String,
+				time: Schema.NullOr(Schema.String),
+				timeZone: Schema.NullOr(Schema.String),
+			}),
+		),
+		instructions: Schema.Array(
+			Schema.Struct({
+				name: Schema.String,
+				instruction: Schema.String,
+				times: Schema.Array(Schema.String),
+				timeZone: Schema.NullOr(Schema.String),
+				source: Schema.String,
+				effectiveDate: Schema.String,
+			}),
+		),
+		notes: Schema.Array(Schema.String),
 	}),
 	/** Only a check-in or a review. Never diet, medicine, fluid, or exercise advice. */
 	nextSteps: Schema.Array(

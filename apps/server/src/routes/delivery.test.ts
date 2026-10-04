@@ -3,7 +3,8 @@
 import { describe, expect, test } from "bun:test";
 import { DeliveryProposal } from "@health/contracts/delivery";
 import { Effect, Schema } from "effect";
-import { openFamilyDb } from "../db";
+import { Identity } from "spacetimedb";
+import { type FamilyDb, openFamilyDb } from "../db";
 import {
 	type DeliveryProvider,
 	simulatedDelivery,
@@ -38,6 +39,17 @@ const order = (menuItemId: string, quantity = 1) => ({
 });
 const decode = (response: { json: unknown }) =>
 	Schema.decodeUnknownSync(DeliveryProposal)(response.json);
+
+/** Grants or revokes `purchases` (#26) for the caller; a family's founder may set up sharing. */
+const purchases = (db: FamilyDb, familyId: string, granted: boolean) =>
+	Effect.promise(() =>
+		db.connection.reducers.setCareGrant({
+			familyId: BigInt(familyId),
+			member: Identity.fromString(db.identity),
+			scope: "purchases",
+			granted,
+		}),
+	);
 
 describe.skipIf(dbConfig === undefined)("food delivery", () => {
 	test("needs, budget, approval, and a substitution guard the purchase", () =>
@@ -87,6 +99,12 @@ describe.skipIf(dbConfig === undefined)("food delivery", () => {
 				});
 				const path = `/delivery/proposals/${first.id}`;
 
+				// Membership alone cannot approve a purchase: it needs the #26 `purchases` scope.
+				const exact = { purchase: true, totalCents: 1823 };
+				const noAccess = yield* send(app, "POST", `${path}/approval`, exact);
+				expect(failure(noAccess)).toEqual([403, "forbidden"]);
+				expect(JSON.stringify(noAccess.json)).toContain("purchases");
+				yield* purchases(db, familyId, true);
 				// Nothing is ordered without an approval of the exact total.
 				expect(failure(yield* send(app, "POST", `${path}/order`))).toEqual([
 					409,
@@ -140,6 +158,14 @@ describe.skipIf(dbConfig === undefined)("food delivery", () => {
 					"conflict",
 				]);
 				yield* approve(next, 1652);
+				// A revoke after the approval stops the order; nothing is bought until it is granted again.
+				yield* purchases(db, familyId, false);
+				expect(failure(yield* send(app, "POST", `${next}/order`))).toEqual([
+					403,
+					"forbidden",
+				]);
+				expect(fake.orderCount()).toBe(0);
+				yield* purchases(db, familyId, true);
 				expect(decode(yield* send(app, "POST", `${next}/order`)).status).toBe(
 					"placed",
 				);
@@ -172,6 +198,7 @@ describe.skipIf(dbConfig === undefined)("food delivery", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db, familyId } = yield* openFamily(config, "Retry family");
+				yield* purchases(db, familyId, true);
 				const fake = simulatedDelivery();
 				// The first attempt places the order but its reply is lost; the second reply is lost before placing.
 				let attempts = 0;

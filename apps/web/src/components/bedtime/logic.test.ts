@@ -6,6 +6,7 @@ import {
 	awaitsAnswer,
 	chargeLine,
 	connectionLine,
+	speakerLine,
 	timerLeft,
 	tonight,
 } from "./logic";
@@ -90,6 +91,16 @@ describe("overnight readiness", () => {
 			text: "Network on, but the server does not answer.",
 		});
 		expect(connectionLine(true, true).ok).toBe(true);
+	});
+
+	test("the home speaker is ready only when it is on and online", () => {
+		expect(speakerLine(null, "online").ok).toBe(false);
+		expect(speakerLine(false, "online").ok).toBe(false);
+		expect(speakerLine(true, null).ok).toBe(false);
+		expect(speakerLine(true, "offline").text).toBe(
+			"Home speaker offline · prompts show on this phone.",
+		);
+		expect(speakerLine(true, "online").ok).toBe(true);
 	});
 
 	test("the sleep timer counts down to zero and never below", () => {

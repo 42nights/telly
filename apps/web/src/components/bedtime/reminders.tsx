@@ -8,6 +8,7 @@ import {
 	type ReminderResponse,
 	SavedReminderSettings,
 } from "@health/contracts/reminders";
+import { SpeakerHandoff } from "@health/contracts/speaker";
 import { Button } from "@health/ui/components/button";
 import { BellRing } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -148,21 +149,32 @@ export function OvernightReminders({
 	const freshKey =
 		showing?.promptDue === true ? `${showing.id}-${showing.prompts}` : null;
 
-	// A new prompt: sound it, then record that this device showed it. The id is the same on a resend,
-	// so a retried delivery records one event.
+	// A new prompt: sound it, then record who gave it. The glasses are off at bedtime, so the home
+	// speaker (#46) says it first when it is on; otherwise this device records that it showed it.
+	// The id is the same on a resend, so a retried delivery records one event.
 	useEffect(() => {
 		if (freshKey === null || familyId === null) return;
 		const [occurrenceId] = freshKey.split("-");
+		const path = familyPath(familyId, `/reminder-occurrences/${occurrenceId}`);
+		const body = { clientId: `bedtime-${freshKey}` };
 		onPrompt();
 		setAnswered(null);
-		void apiRequest(
-			ReminderOccurrenceDetail,
-			familyPath(familyId, `/reminder-occurrences/${occurrenceId}/deliveries`),
-			{
-				method: "POST",
-				body: { clientId: `bedtime-${freshKey}`, source: "web" },
-			},
-		).then(() => setRefresh((n) => n + 1));
+		void (async () => {
+			const handoff = await apiRequest(
+				SpeakerHandoff,
+				`${path}/speaker-handoffs`,
+				{
+					method: "POST",
+					body,
+				},
+			);
+			if (handoff.kind !== "ready" || handoff.value.outcome === "use_phone")
+				await apiRequest(ReminderOccurrenceDetail, `${path}/deliveries`, {
+					method: "POST",
+					body: { ...body, source: "web" },
+				});
+			setRefresh((n) => n + 1);
+		})();
 	}, [freshKey, familyId, onPrompt]);
 
 	if (familyId === null)
