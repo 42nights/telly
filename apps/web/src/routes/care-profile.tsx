@@ -89,16 +89,18 @@ function CarePlan({ familyId }: { familyId: string }) {
 					)}
 				</Part>
 			</div>
-			<Part state={care.profile} what="the care profile">
-				{(record) => (
-					<ProfileWindow
-						key={`${record.editedAt}:${canEdit}`}
-						record={record}
-						canEdit={canEdit}
-						care={care}
-					/>
-				)}
-			</Part>
+			<div className="grid gap-3">
+				<Part state={care.profile} what="the care profile">
+					{(record) => (
+						<ProfileWindow
+							key={`${record.editedAt}:${canEdit}`}
+							record={record}
+							canEdit={canEdit}
+							care={care}
+						/>
+					)}
+				</Part>
+			</div>
 		</div>
 	);
 }
