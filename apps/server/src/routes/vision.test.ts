@@ -216,36 +216,11 @@ describe("medicine detection route", () => {
 		expect(lastRequest?.json).toMatchObject({ model: GEMINI_FALLBACK_MODEL });
 	});
 
-	test("falls back when the primary model is too slow, within the same budget", async () => {
-		const primaryCut = Promise.withResolvers<void>();
-		const Sent = Schema.Struct({ model: Schema.String });
-		reply = async (request) => {
-			const { model } = Schema.decodeUnknownSync(Sent)(await request.json());
-			if (model === GEMINI_FALLBACK_MODEL)
-				return interaction(JSON.stringify({ detections: [] }));
-			request.signal.addEventListener("abort", () => primaryCut.resolve());
-			return new Promise<Response>(() => {});
-		};
-		const response = await post(body());
-		expect(response.status).toBe(200);
-		expect(
-			Schema.decodeUnknownSync(MedicineDetections)(await response.json()).model,
-		).toBe(GEMINI_FALLBACK_MODEL);
-		// The slow primary request was closed, not left running.
-		await primaryCut.promise;
-	});
-
 	const failed = "Medicine detection failed";
-	const busy = "The picture checker is busy right now";
 	test.each<[string, Reply, string]>([
 		[
-			"an overloaded provider",
-			() => new Response("quota exceeded for key AIza-secret", { status: 429 }),
-			busy,
-		],
-		[
 			"an HTTP error",
-			() => new Response("internal detail AIza-secret", { status: 500 }),
+			() => new Response("quota exceeded for key AIza-secret", { status: 429 }),
 			failed,
 		],
 		["a failed interaction", () => interaction("{}", "failed"), failed],
@@ -270,7 +245,7 @@ describe("medicine detection route", () => {
 		[
 			"a slow provider",
 			() => new Promise<Response>(() => {}),
-			"The picture checker is busy right now and did not answer in time",
+			"Medicine detection timed out",
 		],
 	])(
 		"reports %s as upstream_error without provider text",
@@ -278,10 +253,10 @@ describe("medicine detection route", () => {
 			reply = next;
 			const response = await post(body());
 			expect(response.status).toBe(502);
-			const error = await errorOf(response);
-			expect(error.error).toBe("upstream_error");
-			expect(error.message).toStartWith(message);
-			expect(error.message).not.toContain("AIza");
+			expect(await errorOf(response)).toEqual({
+				error: "upstream_error",
+				message,
+			});
 		},
 	);
 

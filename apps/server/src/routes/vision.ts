@@ -13,7 +13,6 @@ import {
 	createGeminiDetector,
 	type GeminiBox,
 	type GeminiConfig,
-	overloaded,
 } from "../integrations/gemini";
 
 /** Below this model confidence a marker asks the user to check the label. */
@@ -148,14 +147,11 @@ export const visionRoutes = (gemini: GeminiConfig | undefined) => {
 			if (failure._tag === "None") throw Cause.squash(result.cause);
 			const { reason, status } = failure.value;
 			console.warn("gemini vision failed", { reason, status });
-			// The web screen shows this after "Something went wrong while checking the picture."
 			throw new ApiFailure(
 				"upstream_error",
 				reason === "timeout"
-					? "The picture checker is busy right now and did not answer in time. Try again in a minute."
-					: status !== undefined && overloaded(status)
-						? `The picture checker is busy right now (Gemini HTTP ${status}). Try again in a minute.`
-						: "Medicine detection failed",
+					? "Medicine detection timed out"
+					: "Medicine detection failed",
 			);
 		},
 	);

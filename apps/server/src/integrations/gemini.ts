@@ -9,69 +9,42 @@ export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 /** 429 and 503 are Google's "high demand" refusals: nothing ran, so a retry is safe and unbilled. */
 export const overloaded = (status: number) => status === 429 || status === 503;
 
-type Reply = { readonly response: Response; readonly model: string };
-
 /**
  * Sends one interaction. When the model is overloaded it tries the fallback model at once, then
- * both again after each wait in `backoffMs`. With `primaryTimeoutMs`, a primary model that has not
- * answered by then is cut off and counts as overloaded, so a slow primary leaves time for the
- * fallback. Other replies, including errors, return at once. The last overloaded reply returns
- * when every try was refused; `signal` also ends a wait.
+ * both again after each wait in `backoffMs`. Other replies, including errors, return at once. The
+ * last overloaded reply returns when every try was refused; `signal` also ends a wait.
  */
 export const postInteraction = async (
 	{ apiKey, baseUrl }: Pick<GeminiConfig, "apiKey" | "baseUrl">,
 	body: Readonly<Record<string, unknown>> & { readonly model: string },
 	signal: AbortSignal,
-	{
-		backoffMs = [],
-		primaryTimeoutMs,
-	}: {
-		readonly backoffMs?: readonly number[];
-		readonly primaryTimeoutMs?: number;
-	} = {},
-): Promise<Reply> => {
-	const send = async (model: string): Promise<Reply | undefined> => {
-		const limit = new AbortController();
-		// The fallback has no own limit, so the last try always gets a reply or fails for real.
-		const timer =
-			primaryTimeoutMs === undefined || model === GEMINI_FALLBACK_MODEL
-				? undefined
-				: setTimeout(() => limit.abort(), primaryTimeoutMs);
-		try {
-			return {
-				model,
-				response: await fetch(new URL("/v1beta/interactions", baseUrl), {
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-						"x-goog-api-key": apiKey,
-					},
-					body: JSON.stringify({ ...body, model }),
-					signal: AbortSignal.any([signal, limit.signal]),
-				}),
-			};
-		} catch (error) {
-			if (limit.signal.aborted && !signal.aborted) return undefined;
-			throw error;
-		} finally {
-			clearTimeout(timer);
-		}
-	};
+	backoffMs: readonly number[] = [],
+): Promise<{ readonly response: Response; readonly model: string }> => {
+	const send = async (model: string) => ({
+		model,
+		response: await fetch(new URL("/v1beta/interactions", baseUrl), {
+			method: "POST",
+			headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+			body: JSON.stringify({ ...body, model }),
+			signal,
+		}),
+	});
 	const models =
 		body.model === GEMINI_FALLBACK_MODEL
 			? [body.model]
 			: [body.model, GEMINI_FALLBACK_MODEL];
-	let reply: Reply | undefined;
-	for (const wait of [0, ...backoffMs])
-		for (const [index, model] of models.entries()) {
-			if (reply !== undefined && !overloaded(reply.response.status))
-				return reply;
-			await reply?.response.body?.cancel();
-			if (index === 0 && wait > 0) await sleep(wait, undefined, { signal });
-			reply = await send(model);
-		}
-	// Unreachable: the last try is the fallback, or the only model, and neither has a limit.
-	if (reply === undefined) throw new Error("Gemini gave no reply");
+	const retries = [0, ...backoffMs]
+		.flatMap((wait) =>
+			models.map((model, index) => ({ model, wait: index === 0 ? wait : 0 })),
+		)
+		.slice(1);
+	let reply = await send(body.model);
+	for (const { model, wait } of retries) {
+		if (!overloaded(reply.response.status)) break;
+		await reply.response.body?.cancel();
+		if (wait > 0) await sleep(wait, undefined, { signal });
+		reply = await send(model);
+	}
 	return reply;
 };
 
@@ -209,18 +182,13 @@ const parseDetections = (body: unknown) =>
 		return boxes;
 	});
 
-// ponytail: fixed split from one load probe on 2026-10-04 (3.8 Flash 9.5–14 s, 3.5 Flash 16.5–17.5 s
-// for one word); tune when timings are measured again.
-const primaryShare = 0.4;
-
 /**
  * Gemini object detection through the Interactions API (`POST /v1beta/interactions`). The request
  * sets `store: false`, so Google keeps no copy for server-side state. The key stays on the server,
- * and the effect aborts the HTTP call when interrupted or after `timeout` milliseconds. The primary
- * model gets 40% of `timeout`; when it is slow or overloaded, the fallback gets the rest.
+ * and the effect aborts the HTTP call when interrupted or after `timeout` milliseconds.
  */
 export const createGeminiDetector =
-	({ apiKey, baseUrl, timeout = 30_000 }: GeminiConfig): MedicineDetector =>
+	({ apiKey, baseUrl, timeout = 20_000 }: GeminiConfig): MedicineDetector =>
 	(image) =>
 		Effect.tryPromise({
 			try: (signal) =>
@@ -244,7 +212,6 @@ export const createGeminiDetector =
 						},
 					},
 					signal,
-					{ primaryTimeoutMs: timeout * primaryShare },
 				),
 			catch: () => new VisionUpstreamError({ reason: "network" }),
 		}).pipe(
