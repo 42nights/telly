@@ -76,6 +76,9 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   // Find mode: pairing progress before the first fix.
   private var pairingTurn: Float = 0
   private var lastYaw: Float?
+  // The one voice (#384): the guide card's words while it shows, else the hint.
+  private var voice = Voice()
+  private var guideSpeech: String?
 
   init(
     mode: Mode,
@@ -151,7 +154,6 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     hint.adjustsFontForContentSizeCategory = true
     hint.adjustsFontSizeToFitWidth = true
     hint.minimumScaleFactor = 0.7
-    hint.accessibilityTraits = .updatesFrequently
     hint.translatesAutoresizingMaskIntoConstraints = false
     bar.addSubview(hint)
 
@@ -276,10 +278,20 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     onClose = nil
   }
 
+  // Shows the hint. Only `say` speaks, so the voice follows the drawn guide.
   private func setHint(_ text: String) {
     guard hint.text != text else { return }
     hint.text = text
-    UIAccessibility.post(notification: .announcement, argument: text)
+  }
+
+  // Speaks the words of what is drawn now once they hold for 0.8 s, interrupting older speech.
+  private func say(at now: TimeInterval) {
+    let text = guideCard.isHidden ? hint.text : guideSpeech
+    guard let words = voice.update(text, at: now) else { return }
+    UIAccessibility.post(
+      notification: .announcement,
+      argument: NSAttributedString(string: words, attributes: [.accessibilitySpeechQueueAnnouncement: false])
+    )
   }
 
   // MARK: - Answers
@@ -388,6 +400,7 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   // MARK: - ARSessionDelegate (main queue)
 
   func session(_ session: ARSession, didUpdate frame: ARFrame) {
+    defer { say(at: frame.timestamp) }
     let tracking = frame.camera.trackingState
     if !relocalized {
       guard case .normal = tracking else {
@@ -550,7 +563,9 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       return
     }
     let reached = target.distance <= Tracking.reachDistance
-    guideCard.show(look: target.onScreen ? nil : target.look, distance: target.distance, reached: reached)
+    let look = target.onScreen ? nil : target.look
+    guideCard.show(look: look, distance: target.distance, reached: reached)
+    guideSpeech = Tracking.spokenGuide(look: look, distance: target.distance, reached: reached)
     if target.onScreen { updateLock(frame, target) } else { unlock() }
     let locked = !lockBox.isHidden
     switch target.state {
@@ -845,7 +860,6 @@ private final class GuideView: UIView {
     layer.borderWidth = 3
     isUserInteractionEnabled = false
     isAccessibilityElement = true
-    accessibilityTraits = .updatesFrequently
 
     lookIcon.tintColor = .systemYellow
     lookIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 60, weight: .heavy)
@@ -889,24 +903,17 @@ private final class GuideView: UIView {
   /// `look` is nil when the object is on the screen.
   func show(look: Tracking.Look?, distance: Float, reached: Bool) {
     isHidden = false
-    let symbol: String, title: String
-    if reached {
-      (symbol, title) = ("checkmark.circle.fill", "You're there")
-    } else if let look {
-      title = look.words
-      switch look {
-      case .up: symbol = "arrow.up"
-      case .right: symbol = "arrow.turn.up.right"
-      case .down: symbol = "arrow.down"
-      case .left: symbol = "arrow.turn.up.left"
-      case .behind: symbol = "arrow.uturn.down"
-      }
-    } else {
-      (symbol, title) = ("scope", "In view")
-    }
-    let meters = String(format: "%.1f", distance)
-    let walk = reached ? "\(meters) m away" : "Walk \(meters) m"
+    let (title, walk) = Tracking.guideWords(look: look, distance: distance, reached: reached)
     guard lookText.text != title || walkText.text != walk else { return }
+    let symbol: String
+    switch reached ? nil : look {
+    case nil: symbol = reached ? "checkmark.circle.fill" : "scope"
+    case .up?: symbol = "arrow.up"
+    case .right?: symbol = "arrow.turn.up.right"
+    case .down?: symbol = "arrow.down"
+    case .left?: symbol = "arrow.turn.up.left"
+    case .behind?: symbol = "arrow.uturn.down"
+    }
     lookIcon.image = UIImage(systemName: symbol)
     lookText.text = title
     walkText.text = walk
