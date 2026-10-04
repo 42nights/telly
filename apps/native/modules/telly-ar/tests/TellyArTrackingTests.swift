@@ -95,6 +95,30 @@ private func rayMath() {
   check(ray.direction.y > 0, "top row looks up: \(ray)")
 }
 
+private func lookAndLock() {
+  let origin = camera(at: simd_float3(0, 1.5, 0), yaw: 0)
+  let v = view(origin)
+  check(Tracking.look(view: v, to: simd_float3(2, 1.5, -1)) == .right, "right")
+  check(Tracking.look(view: v, to: simd_float3(-2, 1.5, -1)) == .left, "left")
+  check(Tracking.look(view: v, to: simd_float3(0, 3, -1)) == .up, "up")
+  check(Tracking.look(view: v, to: simd_float3(0.2, 0.2, -1)) == .down, "down, on the floor in front")
+  check(Tracking.look(view: v, to: simd_float3(0.5, 1.5, 2)) == .behind, "behind, a little right")
+  // Behind but far to the side: turning right is the short way.
+  check(Tracking.look(view: v, to: simd_float3(3, 1.5, 1)) == .right, "behind right")
+  check(Tracking.look(view: v, to: simd_float3(0, 1.5, 2)).words == "Turn around", "words")
+
+  // A 1920 × 1440 image: a box in pixels to Vision's flipped normalized box, and back.
+  let image = simd_float2(1920, 1440)
+  let box = Tracking.visionBox(min: simd_float2(480, 360), max: simd_float2(960, 1080), image: image)
+  check(near(box.origin.x, 0.25) && near(box.origin.y, 0.25) && near(box.size.x, 0.25) && near(box.size.y, 0.5), "vision box: \(box)")
+  let corners = Tracking.imageCorners(visionOrigin: box.origin, size: box.size)
+  check(near(corners.min.x * image.x, 480) && near(corners.min.y * image.y, 360), "back min: \(corners)")
+  check(near(corners.max.x * image.x, 960) && near(corners.max.y * image.y, 1080), "back max: \(corners)")
+  // A box at the top of the image sits at the top of Vision's space (y near 1).
+  let top = Tracking.visionBox(min: simd_float2(0, 0), max: simd_float2(192, 144), image: image)
+  check(near(top.origin.y, 0.9) && near(top.origin.y + top.size.y, 1), "top box: \(top)")
+}
+
 private func moveThreshold() {
   let anchor = simd_float3(1, 0.8, -2)
   check(!Tracking.moved(from: anchor, to: anchor + simd_float3(0.3, 0, 0.3)), "0.42 m is the same spot")
@@ -150,6 +174,7 @@ struct TellyArTrackingTests {
     arrowMath()
     rayMath()
     moveThreshold()
+    lookAndLock()
     bookkeeping()
     if failures > 0 {
       print("\(failures) failed")

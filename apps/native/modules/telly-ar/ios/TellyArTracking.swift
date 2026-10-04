@@ -13,6 +13,49 @@ enum Tracking {
   static let moveThreshold: Float = 0.5
   /// At most one vision check per object in this many seconds.
   static let checkInterval: TimeInterval = 10
+  /// Closer than this, the person reached the object: the guide stops asking them to walk.
+  static let reachDistance: Float = 0.5
+  /// A Vision lock below this confidence is lost; the world anchor guides alone until it locks again.
+  static let lockConfidence: Float = 0.3
+
+  /// Where to look for an object that is not on the screen.
+  enum Look: Equatable {
+    case up, right, down, left, behind
+
+    var words: String {
+      switch self {
+      case .up: return "Look up"
+      case .right: return "Turn right"
+      case .down: return "Look down"
+      case .left: return "Turn left"
+      case .behind: return "Turn around"
+      }
+    }
+  }
+
+  /// The way to turn toward `point`: around when it is within 45 degrees of straight behind,
+  /// else the screen side its `bearing` angle falls in.
+  static func look(view: simd_float4x4, to point: simd_float3) -> Look {
+    let local = view * simd_float4(point, 1)
+    if local.z > 0, abs(local.x) < local.z { return .behind }
+    let angle = atan2(local.x, local.y)
+    switch abs(angle) {
+    case ..<(Float.pi / 4): return .up
+    case (3 * Float.pi / 4)...: return .down
+    default: return angle > 0 ? .right : .left
+    }
+  }
+
+  /// A box in camera-image pixels (origin top-left) as Vision's normalized box (origin bottom-left).
+  static func visionBox(min low: simd_float2, max high: simd_float2, image: simd_float2) -> (origin: simd_float2, size: simd_float2) {
+    let size = (high - low) / image
+    return (simd_float2(low.x / image.x, 1 - high.y / image.y), size)
+  }
+
+  /// The corners of Vision's normalized box as normalized camera-image points (origin top-left).
+  static func imageCorners(visionOrigin origin: simd_float2, size: simd_float2) -> (min: simd_float2, max: simd_float2) {
+    (simd_float2(origin.x, 1 - origin.y - size.y), simd_float2(origin.x + size.x, 1 - origin.y))
+  }
 
   static func anchorName(_ objectId: String) -> String { "telly-pin-\(objectId)" }
 

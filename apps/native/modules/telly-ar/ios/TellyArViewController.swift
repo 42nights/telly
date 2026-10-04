@@ -7,10 +7,15 @@
 // a marker with its name once it holds still, and an edge arrow with the distance while it is off
 // screen. A vision check of the camera frame that sees an object more than 0.5 m from its anchor
 // moves the anchor, and the web app saves the new sighting and room map.
+// The searched object gets a large guide that always shows (#351, captain: "a guide that guides u
+// to the object"): where to look and how far to walk, on or off camera, until the person reaches
+// it. Once the object is on screen, Vision's object tracker locks on to it in the live camera
+// frames and draws a box around it; the world anchor guides whenever the lock is lost.
 import ARKit
 import CoreImage
 import SceneKit
 import UIKit
+import Vision
 
 final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessionDelegate {
   enum Mode {
@@ -27,6 +32,8 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   // A vision check that gets no answer in this time is dropped.
   private static let checkTimeout: TimeInterval = 30
   private static let imageContext = CIContext()
+  // The size of the box that seeds the lock: most saved things are about this wide.
+  private static let lockSeedMeters: Float = 0.2
 
   private struct PendingCheck {
     let id: String
@@ -48,11 +55,18 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
   private var tracker: Tracker
   private let sceneView = ARSCNView()
   private let hint = UILabel()
-  private let hintBox = UIView()
+  private let bar = UIView()
   private let closeButton = UIButton(type: .system)
   private let pinButton = UIButton(type: .system)
   private let crosshair = UIView()
+  private let guideCard = GuideView()
+  private let lockBox = UIView()
   private var arrows: [String: ArrowView] = [:]
+  // The Vision lock on the searched object: one request at a time, on `lockQueue`.
+  private var lock: VNTrackObjectRequest?
+  private var locking = false
+  private let lockHandler = VNSequenceRequestHandler()
+  private let lockQueue = DispatchQueue(label: "telly.ar.lock", qos: .userInteractive)
   private var saving = false
   private var timeout: Timer?
   // The session had its first normal fix: on the saved room map, when it runs with one.
@@ -127,27 +141,42 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     sceneView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(sceneView)
 
-    hint.numberOfLines = 0
-    hint.textAlignment = .center
+    // A slim bar at the bottom: what to do, and Cancel or Done. The camera fills the rest.
+    bar.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+    bar.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(bar)
+    hint.numberOfLines = 3
     hint.textColor = .white
     hint.font = UIFont.preferredFont(forTextStyle: .headline)
     hint.adjustsFontForContentSizeCategory = true
+    hint.adjustsFontSizeToFitWidth = true
+    hint.minimumScaleFactor = 0.7
     hint.accessibilityTraits = .updatesFrequently
     hint.translatesAutoresizingMaskIntoConstraints = false
-    hintBox.backgroundColor = UIColor.black.withAlphaComponent(0.7)
-    hintBox.layer.cornerRadius = 12
-    hintBox.translatesAutoresizingMaskIntoConstraints = false
-    hintBox.addSubview(hint)
-    view.addSubview(hintBox)
+    bar.addSubview(hint)
 
     var close = UIButton.Configuration.filled()
-    close.baseBackgroundColor = UIColor.black.withAlphaComponent(0.7)
-    close.baseForegroundColor = .white
+    close.baseBackgroundColor = .white
+    close.baseForegroundColor = .black
     close.title = "Cancel"
     closeButton.configuration = close
     closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+    closeButton.setContentHuggingPriority(.required, for: .horizontal)
+    closeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
     closeButton.translatesAutoresizingMaskIntoConstraints = false
-    view.addSubview(closeButton)
+    bar.addSubview(closeButton)
+
+    // The locked box around the searched object, drawn on the camera view.
+    lockBox.layer.borderColor = UIColor.systemYellow.cgColor
+    lockBox.layer.borderWidth = 5
+    lockBox.layer.cornerRadius = 8
+    lockBox.isHidden = true
+    lockBox.isUserInteractionEnabled = false
+    view.addSubview(lockBox)
+
+    guideCard.isHidden = true
+    guideCard.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(guideCard)
 
     let guide = view.safeAreaLayoutGuide
     NSLayoutConstraint.activate([
@@ -155,15 +184,18 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       sceneView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       sceneView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       sceneView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      closeButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 12),
-      closeButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
-      hintBox.topAnchor.constraint(equalTo: closeButton.bottomAnchor, constant: 12),
-      hintBox.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
-      hintBox.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
-      hint.topAnchor.constraint(equalTo: hintBox.topAnchor, constant: 12),
-      hint.bottomAnchor.constraint(equalTo: hintBox.bottomAnchor, constant: -12),
-      hint.leadingAnchor.constraint(equalTo: hintBox.leadingAnchor, constant: 16),
-      hint.trailingAnchor.constraint(equalTo: hintBox.trailingAnchor, constant: -16),
+      bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      bar.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+      hint.topAnchor.constraint(equalTo: bar.topAnchor, constant: 10),
+      hint.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -6),
+      hint.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
+      closeButton.leadingAnchor.constraint(equalTo: hint.trailingAnchor, constant: 12),
+      closeButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
+      closeButton.centerYAnchor.constraint(equalTo: hint.centerYAnchor),
+      guideCard.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 12),
+      guideCard.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -12),
+      guideCard.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -12),
     ])
 
     if isSave {
@@ -193,7 +225,7 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
         crosshair.widthAnchor.constraint(equalToConstant: 28),
         crosshair.heightAnchor.constraint(equalToConstant: 28),
         pinButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-        pinButton.bottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -24),
+        pinButton.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -16),
         pinButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
       ])
       setHint("Move your phone slowly around the room so it can learn the space.")
@@ -382,12 +414,7 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
         ? "Point the dot at the \(label), then tap Pin here."
         : "Move your phone slowly around the room so it can learn the space.")
     } else {
-      switch target {
-      case nil: setHint("Turn slowly and look around the room.")
-      case .marker?: setHint("Your \(label) is at the red dot.")
-      case .steady?: setHint("Walk toward the arrow and hold your phone steady.")
-      case .turn?: setHint("Turn toward the arrow to see your \(label).")
-      }
+      guide(to: target, frame)
     }
     startCheck(frame)
   }
@@ -409,7 +436,8 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     }
   }
 
-  // Relocalization was lost: markers and arrows hide until the room is found again. The anchors stay.
+  // Relocalization was lost: markers, arrows, the guide, and the lock hide until the room is found
+  // again. The anchors stay.
   private func lose(_ frame: ARFrame) {
     pinButton.isEnabled = false
     setHint("Hold on, finding the room again.")
@@ -420,12 +448,24 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       sceneView.node(for: anchor)?.isHidden = true
     }
     for arrow in arrows.values { arrow.isHidden = true }
+    guideCard.isHidden = true
+    unlock()
   }
 
   private enum Guide { case marker, steady, turn }
 
-  /// Updates every followed object's marker and arrow; returns the searched object's state.
-  private func follow(_ frame: ARFrame) -> Guide? {
+  /// The searched object as this frame sees it.
+  private struct Target {
+    let state: Guide
+    let position: simd_float3
+    let distance: Float
+    let look: Tracking.Look
+    let onScreen: Bool
+    let settled: Bool
+  }
+
+  /// Updates every followed object's marker and arrow; returns the searched object.
+  private func follow(_ frame: ARFrame) -> Target? {
     var anchors: [String: ARAnchor] = [:]
     for anchor in frame.anchors {
       if let name = anchor.name, labels[name] != nil { anchors[name] = anchor }
@@ -433,8 +473,10 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
     tracker.update(anchors.mapValues { simd_make_float3($0.transform.columns.3) })
     let view = frame.camera.viewMatrix(for: .portrait)
     let bounds = sceneView.bounds
-    let size = simd_float2(Float(bounds.width), Float(bounds.height))
-    var target: Guide?
+    // Arrows stay above the guide card and the bar.
+    let floor = min(guideCard.isHidden ? bar.frame.minY : guideCard.frame.minY, bounds.maxY)
+    let area = simd_float2(Float(bounds.width), Float(floor))
+    var target: Target?
     for id in tracker.objects.keys {
       guard let position = tracker.objects[id]?.position else {
         arrows[id]?.isHidden = true
@@ -465,26 +507,129 @@ final class TellyArViewController: UIViewController, ARSCNViewDelegate, ARSessio
       } else if onScreen {
         // Not stable yet: the arrow sits under the pin and points up at it.
         arrow.show(
-          at: CGPoint(x: point.x, y: min(point.y + 72, bounds.maxY - 56)),
+          at: CGPoint(x: point.x, y: min(point.y + 72, CGFloat(floor) - 56)),
           angle: 0,
           text: text
         )
         state = .steady
       } else {
-        let edge = Tracking.edgePoint(size: size, inset: ArrowView.inset, angle: bearing.angle)
+        let edge = Tracking.edgePoint(size: area, inset: ArrowView.inset, angle: bearing.angle)
         arrow.show(at: CGPoint(x: CGFloat(edge.x), y: CGFloat(edge.y)), angle: CGFloat(bearing.angle), text: text)
         state = .turn
       }
-      if id == objectId { target = state }
+      if id == objectId {
+        target = Target(
+          state: state,
+          position: position,
+          distance: bearing.distance,
+          look: Tracking.look(view: view, to: position),
+          onScreen: onScreen,
+          settled: object.settled
+        )
+      }
     }
     return target
   }
 
   private func makeArrow(_ id: String) -> ArrowView {
     let arrow = ArrowView()
-    view.insertSubview(arrow, belowSubview: hintBox)
+    view.insertSubview(arrow, belowSubview: guideCard)
     arrows[id] = arrow
     return arrow
+  }
+
+  // MARK: - Guide and lock
+
+  /// The large guide for the searched object: where to look and how far to walk, on or off camera,
+  /// until the person reaches it. On screen, Vision locks on to it in the live frames.
+  private func guide(to target: Target?, _ frame: ARFrame) {
+    guard let target else {
+      guideCard.isHidden = true
+      unlock()
+      setHint("Turn slowly and look around the room.")
+      return
+    }
+    let reached = target.distance <= Tracking.reachDistance
+    guideCard.show(look: target.onScreen ? nil : target.look, distance: target.distance, reached: reached)
+    if target.onScreen { updateLock(frame, target) } else { unlock() }
+    let locked = !lockBox.isHidden
+    switch target.state {
+    case .turn:
+      setHint("\(target.look.words) to see your \(label).")
+    case .steady:
+      setHint(locked ? "Locked on your \(label). Walk to it." : "Hold your phone steady on the arrow.")
+    case .marker:
+      let place = locked ? "in the yellow box" : "at the red dot"
+      setHint(reached ? "You're there. Your \(label) is \(place)." : "Your \(label) is \(place). Walk to it.")
+    }
+  }
+
+  private func unlock() {
+    lock = nil
+    lockBox.isHidden = true
+  }
+
+  // Seeds the lock from the anchor once the marker holds still, then follows the object with
+  // Vision's tracker on every live camera frame it can keep up with (one request at a time).
+  private func updateLock(_ frame: ARFrame, _ target: Target) {
+    let buffer = frame.capturedImage
+    let image = simd_float2(Float(CVPixelBufferGetWidth(buffer)), Float(CVPixelBufferGetHeight(buffer)))
+    if lock == nil, target.settled {
+      let projected = frame.camera.projectPoint(
+        target.position,
+        orientation: .landscapeRight,
+        viewportSize: CGSize(width: CGFloat(image.x), height: CGFloat(image.y))
+      )
+      let center = simd_float2(Float(projected.x), Float(projected.y))
+      let half = min(
+        max(frame.camera.intrinsics[0][0] * Self.lockSeedMeters / max(target.distance, 0.2) / 2, 24),
+        image.y / 3
+      )
+      let low = simd_clamp(center - half, .zero, image), high = simd_clamp(center + half, .zero, image)
+      guard high.x - low.x > 8, high.y - low.y > 8 else { return }
+      let box = Tracking.visionBox(min: low, max: high, image: image)
+      let seed = VNDetectedObjectObservation(boundingBox: CGRect(
+        x: CGFloat(box.origin.x), y: CGFloat(box.origin.y), width: CGFloat(box.size.x), height: CGFloat(box.size.y)
+      ))
+      let request = VNTrackObjectRequest(detectedObjectObservation: seed)
+      request.trackingLevel = .accurate
+      lock = request
+    }
+    guard let request = lock, !locking else { return }
+    locking = true
+    let size = sceneView.bounds.size
+    let display = frame.displayTransform(for: .portrait, viewportSize: size)
+    let handler = lockHandler
+    lockQueue.async { [weak self] in
+      try? handler.perform([request], on: buffer, orientation: .up)
+      let result = request.results?.first as? VNDetectedObjectObservation
+      DispatchQueue.main.async { self?.locked(request, result, display: display, size: size) }
+    }
+  }
+
+  private func locked(_ request: VNTrackObjectRequest, _ result: VNDetectedObjectObservation?, display: CGAffineTransform, size: CGSize) {
+    locking = false
+    guard request === lock else { return }
+    guard let result, result.confidence >= Tracking.lockConfidence else {
+      // Lost: the anchor guides alone, and the lock seeds again from it.
+      unlock()
+      return
+    }
+    request.inputObservation = result
+    let box = result.boundingBox
+    let corners = Tracking.imageCorners(
+      visionOrigin: simd_float2(Float(box.minX), Float(box.minY)),
+      size: simd_float2(Float(box.width), Float(box.height))
+    )
+    let shown = CGRect(
+      x: CGFloat(corners.min.x), y: CGFloat(corners.min.y),
+      width: CGFloat(corners.max.x - corners.min.x), height: CGFloat(corners.max.y - corners.min.y)
+    ).applying(display)
+    lockBox.frame = CGRect(
+      x: shown.minX * size.width, y: shown.minY * size.height,
+      width: shown.width * size.width, height: shown.height * size.height
+    ).insetBy(dx: -6, dy: -6)
+    lockBox.isHidden = false
   }
 
   // MARK: - Passive update
@@ -681,5 +826,90 @@ private final class ArrowView: UIView {
       text.text = value
       accessibilityLabel = value
     }
+  }
+}
+
+/// The large guide card over the camera: where to look ("Turn right", or "In view") with a big
+/// arrow, and how far to walk ("Walk 2.1 m"), in high contrast. It updates on every frame.
+private final class GuideView: UIView {
+  private let lookIcon = UIImageView()
+  private let lookText = UILabel()
+  private let walkIcon = UIImageView(image: UIImage(systemName: "figure.walk"))
+  private let walkText = UILabel()
+
+  init() {
+    super.init(frame: .zero)
+    backgroundColor = UIColor.black.withAlphaComponent(0.85)
+    layer.cornerRadius = 16
+    layer.borderColor = UIColor.systemYellow.cgColor
+    layer.borderWidth = 3
+    isUserInteractionEnabled = false
+    isAccessibilityElement = true
+    accessibilityTraits = .updatesFrequently
+
+    lookIcon.tintColor = .systemYellow
+    lookIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 60, weight: .heavy)
+    lookIcon.contentMode = .scaleAspectFit
+    lookIcon.setContentHuggingPriority(.required, for: .horizontal)
+    lookText.textColor = .white
+    lookText.font = UIFont.systemFont(ofSize: 32, weight: .heavy)
+    lookText.adjustsFontSizeToFitWidth = true
+    lookText.minimumScaleFactor = 0.6
+    walkIcon.tintColor = .white
+    walkIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 26, weight: .bold)
+    walkIcon.setContentHuggingPriority(.required, for: .horizontal)
+    walkText.textColor = .white
+    walkText.font = UIFont.systemFont(ofSize: 26, weight: .bold)
+    walkText.adjustsFontSizeToFitWidth = true
+    walkText.minimumScaleFactor = 0.6
+
+    let walk = UIStackView(arrangedSubviews: [walkIcon, walkText])
+    walk.spacing = 8
+    let words = UIStackView(arrangedSubviews: [lookText, walk])
+    words.axis = .vertical
+    words.spacing = 4
+    let row = UIStackView(arrangedSubviews: [lookIcon, words])
+    row.spacing = 16
+    row.alignment = .center
+    row.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(row)
+    NSLayoutConstraint.activate([
+      row.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+      row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+      row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      row.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+      lookIcon.widthAnchor.constraint(equalToConstant: 72),
+    ])
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not supported")
+  }
+
+  /// `look` is nil when the object is on the screen.
+  func show(look: Tracking.Look?, distance: Float, reached: Bool) {
+    isHidden = false
+    let symbol: String, title: String
+    if reached {
+      (symbol, title) = ("checkmark.circle.fill", "You're there")
+    } else if let look {
+      title = look.words
+      switch look {
+      case .up: symbol = "arrow.up"
+      case .right: symbol = "arrow.turn.up.right"
+      case .down: symbol = "arrow.down"
+      case .left: symbol = "arrow.turn.up.left"
+      case .behind: symbol = "arrow.uturn.down"
+      }
+    } else {
+      (symbol, title) = ("scope", "In view")
+    }
+    let meters = String(format: "%.1f", distance)
+    let walk = reached ? "\(meters) m away" : "Walk \(meters) m"
+    guard lookText.text != title || walkText.text != walk else { return }
+    lookIcon.image = UIImage(systemName: symbol)
+    lookText.text = title
+    walkText.text = walk
+    accessibilityLabel = "\(title). \(walk)."
   }
 }
