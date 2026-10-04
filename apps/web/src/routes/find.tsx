@@ -2,7 +2,14 @@ import type { ObjectDetection } from "@health/contracts/vision";
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ScanSearch, X } from "lucide-react";
-import { type RefObject, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	type RefObject,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
 import { Page } from "@/components/hud/window";
@@ -134,7 +141,7 @@ function FindThingsPage({
 			icon={ScanSearch}
 			title={mode === "add" ? "Add a thing" : "Find things"}
 		>
-			<div {...screen.frame}>
+			<FinderFrame portal={screen.phone} {...screen.frame}>
 				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
 					<Link
 						className={buttonVariants({
@@ -209,7 +216,7 @@ function FindThingsPage({
 						open={object ?? null}
 					/>
 				</div>
-			</div>
+			</FinderFrame>
 		</Page>
 	);
 }
@@ -221,14 +228,34 @@ function FindThingsPage({
 function useFinderScreen() {
 	const screen = useFullScreen<HTMLDivElement>();
 	const phone = usePhone();
-	const layout = phone || screen.full ? LAYOUT.overlay : LAYOUT.page;
+	const overlay = phone || screen.full;
+	const layout = overlay ? LAYOUT.overlay : LAYOUT.page;
 	const voiceRoom = phone ? "" : "[--voice-right:4rem]";
+	// The app's status bar and taskbar go while the finder covers the screen (index.css).
+	useEffect(() => {
+		if (!overlay) return;
+		document.documentElement.setAttribute("data-finder-full", "");
+		return () => document.documentElement.removeAttribute("data-finder-full");
+	}, [overlay]);
 	return {
 		...screen,
 		phone,
 		layout,
 		frame: { ...screen.frame, className: `${layout.frame} ${voiceRoom}` },
 	};
+}
+
+/**
+ * The finder's frame. On a phone it renders at the end of `body`, outside the app's scrolling
+ * box, so no later part of the app can draw over it.
+ */
+function FinderFrame({
+	portal,
+	children,
+	...props
+}: ComponentProps<"div"> & { portal: boolean }) {
+	const frame = <div {...props}>{children}</div>;
+	return portal ? createPortal(frame, document.body) : frame;
 }
 
 /** Top corner: a close button on a phone (the finder is the whole screen), else full screen. */

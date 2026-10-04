@@ -208,7 +208,7 @@ export function StatusBar({ familyId }: { familyId: string | null }) {
 	const health = usePolled(Health, "/health");
 	const sources = usePolled(Sources, "/api/sources");
 	return (
-		<footer className="flex shrink-0 flex-wrap gap-1 max-[899px]:justify-around">
+		<footer className="app-status flex shrink-0 flex-wrap gap-1 max-[899px]:justify-around">
 			<StatusPane icon={Smartphone} pane={phoneLine(online, battery)} />
 			<StatusPane
 				icon={Watch}

@@ -545,3 +545,14 @@ body {
 	color: rgb(255 255 255 / 0.5);
 	text-shadow: none;
 }
+/* While the finder covers the screen, the app's status bar and taskbar do not render at all: iOS
+   WebKit can draw a later sibling over a fixed element inside a scrolling box. */
+html[data-finder-full] .app-status,
+html[data-finder-full] .win95-taskbar {
+	display: none;
+}
+/* On the camera, the button says what to do; the long hint and its (i) tips would cover it. */
+.finder-panel .finder-hint,
+.finder-panel .win95-tip {
+	display: none;
+}

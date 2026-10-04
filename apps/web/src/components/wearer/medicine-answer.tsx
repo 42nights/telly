@@ -244,7 +244,7 @@ export function ObjectAnswer({
 	if (check === null)
 		return live ? (
 			<>
-				<p className="text-[22px]">
+				<p className="finder-hint text-[22px]">
 					Point the camera at where {name} might be.
 				</p>
 				<Button className={`win95-primary ${xl}`} onClick={look}>
