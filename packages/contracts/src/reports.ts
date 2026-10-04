@@ -1,5 +1,7 @@
 import { Effect, Schema } from "effect";
 import { HealthSample } from "./index";
+import { Meal, type MealRecord } from "./meal-facts";
+import { ReminderOccurrenceDetail } from "./reminders";
 
 // Lab reports (docs/board.html#wf-lab). A report holds generated markers, which are evidence and
 // never change, and fillable fields that a family member completes before the review. There are no
@@ -86,6 +88,16 @@ export const Report = Schema.Struct({
 	/** When the markers were generated. Generation never makes an old sample current. */
 	createdAt: Schema.String,
 	markers: Schema.Array(ReportMarker),
+	/**
+	 * Meal estimates and intake reports as they stood when the report was made. `null` when the
+	 * report does not include them: it predates this section, or its maker had no `health_records`.
+	 */
+	meals: added(Schema.NullOr(Schema.Array(Meal)), null),
+	/** Reminder occurrences still unresolved when the report was made; `null` in older reports. */
+	unresolved: added(
+		Schema.NullOr(Schema.Array(ReminderOccurrenceDetail)),
+		null,
+	),
 	fields: ReportFields,
 	/** `null` while the report is a draft. A reviewed report no longer changes. */
 	review: Schema.NullOr(ReportReview),
@@ -115,6 +127,40 @@ export const ReportEmailSettings = Schema.Struct({
 	),
 );
 export type ReportEmailSettings = typeof ReportEmailSettings.Type;
+
+/** One meal fact in plain words for the report screen and PDF. An estimate stays an estimate. */
+export const mealFactText = ({ fact, recordedAt }: MealRecord): string => {
+	switch (fact.type) {
+		case "photo_taken":
+			return `Photo taken at ${fact.capturedAt}. The photo is not kept.`;
+		case "food_estimate": {
+			const { source, estimator, estimatedAt, items } = fact.estimate;
+			const foods =
+				items.length === 0
+					? "no food found"
+					: items
+							.map(
+								(i) =>
+									`${i.name}, ${i.portion}, ${i.energyKcal.low}-${i.energyKcal.high} kcal`,
+							)
+							.join("; ");
+			return `Estimate from a ${source} by ${estimator} at ${estimatedAt}, not a measurement: ${foods}.`;
+		}
+		case "intake_report":
+			return `The ${fact.reportedBy} reported the ${fact.kind} amount as ${fact.amount}${fact.words === null ? "" : `, saying "${fact.words}"`} at ${recordedAt}.`;
+		case "caregiver_assistance":
+			return `A caregiver helped: ${fact.help}, at ${recordedAt}.`;
+	}
+};
+
+/** One unresolved reminder occurrence in plain words, with the last words anyone gave. */
+export const unresolvedText = ({
+	occurrence,
+	events,
+}: ReminderOccurrenceDetail): string => {
+	const words = events.filter((e) => e.wording !== null).at(-1)?.wording;
+	return `${occurrence.title} (${occurrence.kind} reminder for ${occurrence.scheduledFor}): unresolved${words ? `. Last words: "${words}"` : ""}.`;
+};
 
 /** `GET /api/families/:familyId/reports`, newest first. */
 export const Reports = Schema.Struct({ reports: Schema.Array(Report) });

@@ -128,6 +128,54 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 			}),
 		));
 
+	test("a report keeps the meals of its time, and only with health records", () =>
+		withDb((config) =>
+			Effect.gen(function* () {
+				const { db, familyId } = yield* openFamily(config, "Meal report");
+				const app = familyApp(db, familyId, reportRoutes());
+				const generate = Effect.map(send(app, "POST", "/reports"), (r) =>
+					Schema.decodeUnknownSync(Report)(r.json),
+				);
+				const intake = (mealId: string, words: string) =>
+					Effect.promise(() =>
+						db.connection.reducers.recordMealFact({
+							familyId: BigInt(familyId),
+							mealId,
+							fact: JSON.stringify({
+								type: "intake_report",
+								kind: "meal",
+								amount: "some",
+								reportedBy: "wearer",
+								words,
+								via: "voice",
+							}),
+						}),
+					);
+
+				// Meal facts are health records: without the scope they are left out, not shown as none.
+				expect((yield* generate).meals).toBeNull();
+				yield* Effect.promise(() =>
+					db.connection.reducers.setCareGrant({
+						familyId: BigInt(familyId),
+						member: Identity.fromString(db.identity),
+						scope: "health_records",
+						granted: true,
+					}),
+				);
+				yield* intake("lunch-1", "I ate about half");
+				const report = yield* generate;
+				expect(
+					report.meals?.flatMap((m) => m.facts.map(({ fact }) => fact)),
+				).toMatchObject([{ type: "intake_report", words: "I ate about half" }]);
+				expect(report.unresolved).toEqual([]);
+
+				// A later meal never enters a report that was already made.
+				yield* intake("dinner-1", "All of it");
+				const again = yield* send(app, "GET", `/reports/${report.id}`);
+				expect(Schema.decodeUnknownSync(Report)(again.json)).toEqual(report);
+			}),
+		));
+
 	test("another family's identity cannot read or change a report", () =>
 		withDb((config) =>
 			Effect.gen(function* () {
@@ -213,7 +261,7 @@ describe.skipIf(dbConfig === undefined)("lab reports", () => {
 				);
 				const text = new TextDecoder("latin1").decode(objects.get(key));
 				expect(text.startsWith("%PDF-1.4")).toBe(true);
-				expect(text).toContain(`(Layout version 1 - report ${report.id})`);
+				expect(text).toContain(`(Layout version 2 - report ${report.id})`);
 
 				// Another member of the same family sees none of it, even with the exact id.
 				const relativeApp = familyApp(relative, familyId, reportRoutes(bucket));

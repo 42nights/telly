@@ -1,4 +1,9 @@
-import type { Report, ReportMarker } from "@health/contracts/reports";
+import {
+	mealFactText,
+	type Report,
+	type ReportMarker,
+	unresolvedText,
+} from "@health/contracts/reports";
 import { Button } from "@health/ui/components/button";
 
 import { CorrectionForm } from "./corrections";
@@ -201,6 +206,68 @@ export function MarkersTab({
 			<CorrectionForm sheet={sheet} markers={report.markers} />
 			<SaveBar sheet={sheet} />
 			<FinchnodeLabsPanel familyId={familyId} />
+		</>
+	);
+}
+
+/** Saved lines of one report section; `null` when the report does not include the section. */
+function SavedList({
+	title,
+	items,
+	empty,
+}: {
+	title: string;
+	items: readonly { readonly id: string; readonly text: string }[] | null;
+	empty: string;
+}) {
+	return (
+		<fieldset className="grid gap-1 border border-border p-2">
+			<legend className="px-1">{title}</legend>
+			{items === null ? (
+				<p>Not included in this report.</p>
+			) : items.length === 0 ? (
+				<p>{empty}</p>
+			) : (
+				<ul className="grid gap-1">
+					{items.map(({ id, text }) => (
+						<li key={id}>{text}</li>
+					))}
+				</ul>
+			)}
+		</fieldset>
+	);
+}
+
+/** Meal estimates, intake reports, and unresolved reminders as they stood at generation. */
+export function DailyTab({ report }: { report: Report }) {
+	return (
+		<>
+			<SavedList
+				title="Nutrition estimates and intake reports"
+				items={
+					report.meals?.flatMap((meal) =>
+						meal.facts.map((record) => ({
+							id: record.id,
+							text: mealFactText(record),
+						})),
+					) ?? null
+				}
+				empty="None saved."
+			/>
+			<SavedList
+				title="Unresolved events"
+				items={
+					report.unresolved?.map((detail) => ({
+						id: detail.occurrence.id,
+						text: unresolvedText(detail),
+					})) ?? null
+				}
+				empty="None."
+			/>
+			<p>
+				These were saved before the report was made. A food estimate is not a
+				measurement, and an unresolved reminder is neither done nor missed.
+			</p>
 		</>
 	);
 }
