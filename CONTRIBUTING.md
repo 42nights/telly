@@ -56,7 +56,8 @@ CI (`.github/workflows/health.yml`) runs these as parallel jobs. The single requ
   Delete what you do not use; do not add suppressions to make the check pass.
 - **Sentrux baseline:** `bun run check:structure` fails when the structure gets worse than
   `.sentrux/baseline.json`. Sentrux cannot exclude paths, so `scripts/check-structure.sh` copies the
-  files outside `noop/` to a temporary directory and runs there. If a change makes the structure
+  files outside `noop/`, except the generated `packages/db/src/types/reducers.ts` (one import per
+  reducer), to a temporary directory and runs there. If a change makes the structure
   legitimately different, run `sh scripts/check-structure.sh --save` and commit the new baseline in
   the same pull request, with the reason in the description. Never move the baseline only to turn a
   red check green. The script reads tracked and untracked, not ignored, files.
