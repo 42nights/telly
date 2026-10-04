@@ -22,11 +22,10 @@ import { registerDom } from "./register";
 // static imports, before `./register` runs, and React DOM checks for `document` once, when it loads
 // (without it, `onChange` never fires for text inputs). Bun shares that module across test files,
 // so a static import in any test file breaks every later one. Import these from here only.
-const rtl = await import("@testing-library/react");
-export const { act, cleanup, fireEvent, render, renderHook, waitFor, within } =
-	rtl;
+const { cleanup, ...rtl } = await import("@testing-library/react");
+export const { act, fireEvent, render, renderHook, waitFor, within } = rtl;
 
-export const SERVER = "http://server.test";
+const SERVER = "http://server.test";
 
 export type Call = {
 	readonly method: string;
