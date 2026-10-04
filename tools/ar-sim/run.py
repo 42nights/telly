@@ -10,7 +10,7 @@ VIO to the frame that looks at the box, and projects the anchor there.
 ARKit is not simulated: this proves the pipeline and its limits, not Apple's tracker.
 
     python tools/ar-sim/run.py              # 50 baseline trials + 20 per failure case; exit 1 below the bar
-    python tools/ar-sim/run.py --quick      # CI: 30 baseline + 4 per failure case, same gate
+    python tools/ar-sim/run.py --quick      # CI: 24 baseline trials only, same gate
 """
 
 import argparse
@@ -32,11 +32,15 @@ import render as R
 CONTAINER_ID = "box-1"
 MIN_INLIERS = 50
 AGREE_M = 0.05  # two relocalization fixes agree when they put the anchor within 5 cm of each other
-PASS = {"reloc_rate": 0.90, "err_cm": 5.0, "err_px": 20.0, "arrow_deg": 45.0}  # arrow: points into the right 90-degree sector
+MIN_SPREAD_PX = 50  # inliers in a thin strip (one shelf edge, one line of text) let PnP rotate about it
+PAIR_STEP_DEG = 15  # pairing mode: a slow turn on the spot, about 0.5 s per frame at 30 degrees per second
+PAIR_MAX = 48  # two full turns; pairing that has not completed by then keeps asking (the trial stops counting)
+GUIDE_FRAMES = 10  # frames after pairing, following the arrow to the marker
+PASS = {"paired": 0.95, "reloc_rate": 0.90, "err_cm": 5.0, "err_px": 20.0, "arrow_deg": 15.0}  # arrow: view-ray error to the box
 BASE = {
     "span": 120, "scan_frames": 24, "plain": False,  # session 1: arc in degrees around the box
     "light": (0.6, 1.4), "gradient": 0.4, "tint": 0.1,  # session 2 lighting relative to session 1
-    "find_frames": 12, "find_r": (1.0, 2.6),  # session 2 start distance from the box, metres
+    "find_r": (1.0, 2.6),  # session 2 start distance from the box, metres
 }
 CASES = {
     "baseline": {},
@@ -62,16 +66,21 @@ def in_room(p):
     return np.clip(p, (0.6, 0.3, 0.9), (4.2, 3.7, 1.9))
 
 
+def vio_step(rng, drift, T_prev, T):
+    """One VIO update. Assumed drift, typical of phone VIO: a random walk of 1 percent of the distance
+    walked and 0.05 degrees per frame. The estimate in session coordinates is drift @ inv(T0) @ T."""
+    step = np.eye(4)
+    step[:3, :3] = cv2.Rodrigues(rng.normal(0, np.radians(0.05), 3))[0]
+    step[:3, 3] = rng.normal(0, 0.01 * np.linalg.norm(T[:3, 3] - T_prev[:3, 3]) + 1e-4, 3)
+    return step @ drift
+
+
 def vio(rng, true_poses):
-    """VIO estimate in session coordinates (origin = first frame). Assumed drift, typical of phone VIO:
-    a random walk of 1 percent of the distance walked and 0.05 degrees per frame."""
+    """VIO estimates in session coordinates (origin = first frame) for a fixed path."""
     origin, drift, out = np.linalg.inv(true_poses[0]), np.eye(4), []
     for i, T in enumerate(true_poses):
         if i:
-            step = np.eye(4)
-            step[:3, :3] = cv2.Rodrigues(rng.normal(0, np.radians(0.05), 3))[0]
-            step[:3, 3] = rng.normal(0, 0.01 * np.linalg.norm(T[:3, 3] - true_poses[i - 1][:3, 3]) + 1e-4, 3)
-            drift = step @ drift
+            drift = vio_step(rng, drift, true_poses[i - 1], T)
         out.append(drift @ origin @ T)
     return out
 
@@ -88,13 +97,34 @@ def scan_path(rng, pin, span, n):
     return poses
 
 
-def find_path(rng, pin, n, r_range):
-    """Session 2: start elsewhere, looking elsewhere, and turn toward the box while walking a little."""
-    phi, r, h = np.pi + rng.uniform(-1.0, 1.0), rng.uniform(*r_range), rng.uniform(1.0, 1.7)
-    start = in_room(pin + (r * np.cos(phi), r * np.sin(phi), h - pin[2]))
-    walk, look0 = rng.normal(0, (0.3, 0.3, 0.05)), pin + rng.normal(0, (0.3, 0.9, 0.4))
-    look1 = pin + rng.normal(0, 0.05, 3)
-    return [look_at(in_room(start + s * walk), (1 - s) * look0 + s * look1) for s in np.linspace(0, 1, n)]
+def pairing_pose(eye, k, yaw0):
+    """Pairing mode: the person turns slowly on the spot (15 degrees per frame), tilting the phone up and down."""
+    yaw, pitch = yaw0 + np.radians(PAIR_STEP_DEG) * k, np.radians(-15 + 10 * np.sin(0.7 * k))
+    return look_at(eye, eye + (np.cos(yaw) * np.cos(pitch), np.sin(yaw) * np.cos(pitch), np.sin(pitch)))
+
+
+def walk_closer(eye, remembered):
+    """Pairing after one full turn without a match: "Walk closer to where you pinned the medicine and look
+    around." The person walks 30 cm per frame toward the spot they remember, stopping about 1.2 m short."""
+    d = (remembered - eye)[:2]
+    if np.linalg.norm(d) <= 1.2:
+        return eye
+    return in_room(eye + 0.3 * np.append(d / np.linalg.norm(d), 0))
+
+
+def guided_pose(T, goal):
+    """The person follows the app's arrow: turn toward the app's guess (at most 30 degrees of yaw and 15 of
+    pitch per frame) and walk 15 cm toward it until about 1.2 m away."""
+    eye, d = T[:3, 3].copy(), T[:3, 2]
+    to_goal = goal - eye
+    if np.linalg.norm(to_goal[:2]) > 1.2:
+        eye = in_room(eye + 0.15 * np.append(to_goal[:2] / np.linalg.norm(to_goal[:2]), 0))
+    want = goal - eye
+    yaw0, pitch0 = np.arctan2(d[1], d[0]), np.arcsin(np.clip(d[2], -1, 1))
+    yaw1, pitch1 = np.arctan2(want[1], want[0]), np.arctan2(want[2], np.linalg.norm(want[:2]))
+    yaw = yaw0 + np.clip((yaw1 - yaw0 + np.pi) % (2 * np.pi) - np.pi, -np.radians(30), np.radians(30))
+    pitch = pitch0 + np.clip(pitch1 - pitch0, -np.radians(15), np.radians(15))
+    return look_at(eye, eye + (np.cos(yaw) * np.cos(pitch), np.sin(yaw) * np.cos(pitch), np.sin(pitch)))
 
 
 def features(orb, img):
@@ -189,6 +219,8 @@ def relocalize(orb, bf, img, pts, des):
     if not ok or inl is None or len(inl) < MIN_INLIERS:
         return None
     inl = inl[:, 0]
+    if np.sqrt(np.linalg.eigvalsh(np.cov(uv[inl].T))[0]) < MIN_SPREAD_PX:  # smallest principal spread
+        return None
     rvec, tvec = cv2.solvePnPRefineLM(obj[inl], uv[inl], R.K, None, rvec, tvec)
     T_cm = np.eye(4)
     T_cm[:3, :3], T_cm[:3, 3] = cv2.Rodrigues(rvec)[0], tvec[:, 0]
@@ -218,41 +250,60 @@ def trial(job):
     saved = json.loads(json.dumps(save_pin(pts, des, anchor)))  # through the bridge as JSON
     res.update(saved=True, map_bytes=saved["mapBytes"])
 
-    # Session 2: new origin, light, occluder; relocalize, then follow VIO to the last frame and project.
+    # Session 2: new origin, light, occluder. The person only does what the app shows them, so the path
+    # depends on the app's own estimates:
+    #   "P" pairing mode: no fix yet. "Turn slowly and look around the room" until the first fix; this
+    #       must complete, because before it the app has no idea where the box is.
+    #   "A" arrow: at least one fix. The person turns and walks toward the app's best guess.
+    #   "M" marker: two fixes agree within AGREE_M (one PnP fix on distant, near-planar points can be
+    #       confidently wrong) and the guess is on screen.
     request = {"type": "ar.findPin", "requestId": "sim", "containerId": CONTAINER_ID, "label": "Pills",
                "anchorId": saved["anchorId"], "worldMap": saved["worldMap"]}
     mpts, mdes, manchor = load_pin(request)
-    true2 = find_path(rng, pin, cfg["find_frames"], cfg["find_r"])
-    est2 = vio(rng, true2)
+    phi, r = np.pi + rng.uniform(-1.0, 1.0), rng.uniform(*cfg["find_r"])
+    eye = in_room(pin + (r * np.cos(phi), r * np.sin(phi), rng.uniform(1.0, 1.7) - pin[2]))
+    yaw0 = rng.uniform(0, 2 * np.pi)  # facing any direction, not necessarily toward the box
     light, tint = rng.uniform(*cfg["light"]), 1 + rng.uniform(-cfg["tint"], cfg["tint"], 3)
-    # ARKit keeps matching the map while it tracks. A single PnP fix on distant, near-planar points can
-    # be confidently wrong, so the marker shows only once two fixes agree on where the anchor is. Until
-    # then, and while the anchor is off screen, the app shows an arrow toward the best guess so far.
-    # Stages per frame: "-" no fix yet ("move your phone slowly"), "A" arrow, "M" marker.
-    fixes, first, stages, arrow_err, arrow_k = [], None, "", [], None
-    for k, T in enumerate(true2):
+    remembered = pin + np.append(rng.normal(0, 0.5, 2), 0)  # where the person thinks they pinned it
+    T = pairing_pose(eye, 0, yaw0)
+    origin, drift = np.linalg.inv(T), np.eye(4)
+    true2, fixes, first, paired, stages, arrow_err, arrow_k = [], [], None, None, "", [], None
+    while True:
+        k, est = len(true2), drift @ origin @ T
+        true2.append(T)
         img = R.capture(R.render(faces, T), rng, light, cfg["gradient"], tint, rng.uniform(0, 6), occluder=True)
         T_mc = relocalize(orb, bf, img, mpts, mdes)
         if T_mc is not None:
-            fixes.append(to_cam(T_mc @ np.linalg.inv(est2[k]), manchor[None])[0])
+            fixes.append(to_cam(T_mc @ np.linalg.inv(est), manchor[None])[0])
+            paired = k if paired is None else paired
             if first is None and sum(np.linalg.norm(f - fixes[-1]) < AGREE_M for f in fixes) >= 2:
                 first = k
         if not fixes:
-            stages += "-"
-            continue
-        guess = best_guess(fixes)
-        est_c, true_c = to_cam(est2[k], guess[None])[0], to_cam(T, pin[None])[0]
-        if first is not None and on_screen(est_c):
-            stages += "M"
-            continue
-        stages += "A"
-        arrow_err.append(angle_deg(arrow(est_c), arrow(true_c)))
-        arrow_k = (k, true_c, est_c) if arrow_k is None else arrow_k
-    res.update(fixes=len(fixes), stages=stages, arrow_err=arrow_err)
+            stages += "P"
+            if k + 1 >= PAIR_MAX:
+                break
+            if k + 1 >= 360 // PAIR_STEP_DEG:
+                eye = walk_closer(eye, remembered)
+            T_next = pairing_pose(eye, k + 1, yaw0)
+        else:
+            guess = best_guess(fixes)
+            est_c, true_c = to_cam(est, guess[None])[0], to_cam(T, pin[None])[0]
+            if first is not None and on_screen(est_c):
+                stages += "M"
+            else:
+                stages += "A"
+                arrow_err.append(ray_angle_deg(est_c, true_c))
+                arrow_k = (k, true_c, est_c) if arrow_k is None else arrow_k
+            if k - paired >= GUIDE_FRAMES:
+                break
+            T_next = guided_pose(T, (T @ np.linalg.inv(est) @ np.append(guess, 1))[:3])  # the arrow, seen in the room
+        drift = vio_step(rng, drift, T, T_next)
+        T = T_next
+    res.update(fixes=len(fixes), stages=stages, arrow_err=arrow_err, paired=paired is not None,
+               pair_frames=len(stages) if paired is None else paired + 1)
     if first is None:
         return res
-    anchor2 = best_guess(fixes)
-    est_c, true_c = to_cam(est2[-1], anchor2[None]), to_cam(true2[-1], pin[None])
+    est_c, true_c = to_cam(est, best_guess(fixes)[None]), to_cam(T, pin[None])
     est_px, true_px = project(est_c)[0], project(true_c)[0]
     res.update(relocalized=True, reloc_frame=first, err_cm=100 * float(np.linalg.norm(est_c - true_c)),
                err_px=float(np.linalg.norm(est_px - true_px)))
@@ -297,22 +348,25 @@ def arrow(Xc):
     return np.arctan2(Xc[1], Xc[0])
 
 
-def angle_deg(a, b):
-    return float(np.degrees(abs((a - b + np.pi) % (2 * np.pi) - np.pi)))
+def ray_angle_deg(a, b):
+    """How far off the arrow sends the person: the angle between the view rays to a and to b."""
+    return float(np.degrees(np.arccos(np.clip(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)), -1, 1))))
 
 
 def summarize(rows):
     ok = [r for r in rows if r["relocalized"]]
     cm, px = np.array([r["err_cm"] for r in ok]), np.array([r["err_px"] for r in ok])
     arrows = np.array([e for r in rows for e in r.get("arrow_err", [])])
+    turn = np.array([PAIR_STEP_DEG * (r["pair_frames"] - 1) for r in rows if r.get("paired")])
     pct = lambda a, q: float(np.percentile(a, q)) if len(a) else float("nan")
     return {
         "trials": len(rows), "saved": sum(r["saved"] for r in rows), "reloc_rate": len(ok) / len(rows),
+        "paired": sum(r.get("paired", False) for r in rows) / len(rows),
+        "pair_turn_median": pct(turn, 50), "pair_turn_p95": pct(turn, 95),
         "err_cm_median": pct(cm, 50), "err_cm_p95": pct(cm, 95), "err_cm_max": pct(cm, 100),
         "err_px_median": pct(px, 50), "err_px_p95": pct(px, 95), "err_px_max": pct(px, 100),
         "within_bar": sum(r["err_cm"] <= PASS["err_cm"] and r["err_px"] <= PASS["err_px"] for r in ok) / len(rows),
         "arrow_frames": len(arrows), "arrow_deg_median": pct(arrows, 50), "arrow_deg_p95": pct(arrows, 95),
-        "arrow_within_45": float((arrows <= 45).mean()) if len(arrows) else float("nan"),
     }
 
 
@@ -320,33 +374,35 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--trials", type=int, default=50, help="baseline trials (default 50)")
     ap.add_argument("--failure-trials", type=int, default=20, help="trials per failure case (default 20)")
-    ap.add_argument("--quick", action="store_true", help="CI size: 30 baseline, 4 per failure case")
+    ap.add_argument("--quick", action="store_true", help="CI size: 24 baseline trials, no failure cases")
     ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
     ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
     a = ap.parse_args()
     if a.quick:
-        a.trials, a.failure_trials = 30, 4
+        a.trials, a.failure_trials = 24, 0  # failure trials spend all 48 pairing frames; the full run covers them
     os.makedirs(a.out, exist_ok=True)
     jobs = [("baseline", s, a.out) for s in range(a.trials)]
     jobs += [(c, s, a.out) for c in CASES if c != "baseline" for s in range(a.failure_trials)]
     t0 = time.time()
     with Pool(a.workers) as pool:
         rows = pool.map(trial, jobs, chunksize=1)
-    summary = {c: summarize([r for r in rows if r["case"] == c]) for c in CASES}
-    lines = [("| case | trials | map saved | relocalized | 3D error cm (median / p95 / max) | screen error px (median / p95 / max)"
+    summary = {c: summarize([r for r in rows if r["case"] == c]) for c in CASES if any(r["case"] == c for r in rows)}
+    lines = [("| case | trials | map saved | pairing done | pairing turn deg (median / p95) | marker shown"
+              " | 3D error cm (median / p95 / max) | screen error px (median / p95 / max)"
               " | within 5 cm and 20 px | arrow frames | arrow error deg (median / p95) |"),
-             "|---|---|---|---|---|---|---|---|---|"]
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
     for c, s in summary.items():
-        lines.append(f"| {c} | {s['trials']} | {s['saved'] / s['trials']:.0%} | {s['reloc_rate']:.0%}"
+        lines.append(f"| {c} | {s['trials']} | {s['saved'] / s['trials']:.0%} | {s['paired']:.0%}"
+                     f" | {s['pair_turn_median']:.0f} / {s['pair_turn_p95']:.0f} | {s['reloc_rate']:.0%}"
                      f" | {s['err_cm_median']:.2f} / {s['err_cm_p95']:.2f} / {s['err_cm_max']:.2f}"
                      f" | {s['err_px_median']:.1f} / {s['err_px_p95']:.1f} / {s['err_px_max']:.1f} | {s['within_bar']:.0%}"
                      f" | {s['arrow_frames']} | {s['arrow_deg_median']:.1f} / {s['arrow_deg_p95']:.1f} |")
     b = summary["baseline"]
-    passed = (b["reloc_rate"] >= PASS["reloc_rate"] and b["err_cm_p95"] <= PASS["err_cm"] and b["err_px_p95"] <= PASS["err_px"]
-              and b["arrow_deg_p95"] <= PASS["arrow_deg"])
+    passed = (b["paired"] >= PASS["paired"] and b["reloc_rate"] >= PASS["reloc_rate"] and b["err_cm_p95"] <= PASS["err_cm"]
+              and b["err_px_p95"] <= PASS["err_px"] and b["arrow_deg_p95"] <= PASS["arrow_deg"])
     table = "\n".join(lines)
     print(table)
-    print(f"\nbaseline gate (reloc >= 90%, p95 <= 5 cm and <= 20 px, arrow p95 <= {PASS['arrow_deg']:.0f} deg):"
+    print(f"\nbaseline gate (pairing >= 95%, marker >= 90%, p95 <= 5 cm and <= 20 px, arrow p95 <= {PASS['arrow_deg']:.0f} deg):"
           f" {'PASS' if passed else 'FAIL'}  ({time.time() - t0:.0f} s)")
     with open(os.path.join(a.out, "results.json"), "w") as f:
         json.dump({"pass": passed, "summary": summary, "trials": rows}, f, indent=1)
