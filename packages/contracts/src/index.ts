@@ -147,9 +147,22 @@ export const Family = Schema.Struct({
 });
 export type Family = typeof Family.Type;
 
-/** Only `validated` samples may drive monitoring; `unvalidated` ones stay visibly unvalidated. */
+/** Only `validated` samples may drive monitoring (see `drivesMonitoring`); `unvalidated` ones stay visibly unvalidated. */
 export const SampleQuality = Schema.Literals(["validated", "unvalidated"]);
 export type SampleQuality = typeof SampleQuality.Type;
+
+/**
+ * Whether a sample may drive monitoring and alerts: a validated sample, or a real WHOOP reading
+ * through NOOP (a `noop:` source), a captain decision for the demo. Such a reading still shows as
+ * unvalidated. The database module applies the same rule when it raises an alert.
+ */
+export const drivesMonitoring = (sample: {
+	readonly quality: SampleQuality;
+	readonly synthetic: boolean;
+	readonly source: string;
+}) =>
+	sample.quality === "validated" ||
+	(!sample.synthetic && sample.source.startsWith("noop:"));
 
 /** One stored reading. It always carries its source time, receive time, unit, provenance, and quality. */
 export const HealthSample = Schema.Struct({

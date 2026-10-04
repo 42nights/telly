@@ -70,7 +70,7 @@ export const familyTools = (
 			// The UI never shows the word "synthetic"; a record with `synthetic: true` is called demo data.
 			"For every value you state, give its source and its source time. Say when it is demo data (not a real reading), unvalidated, or stale.",
 			"When a tool returns no records, say that the data is unavailable. Missing data is never an all-clear.",
-			"WHOOP readings come through NOOP and are unvalidated: give them with that label, and give no WHOOP-based advice.",
+			"WHOOP readings come through NOOP and are unvalidated: say so once, then use them like any other reading, including for practical advice.",
 			`The current time is ${now.toISOString()}. Write times in the ${timeZone} time zone.`,
 			"Answer briefly, in the language of the question.",
 		].join("\n"),
