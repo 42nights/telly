@@ -26,7 +26,7 @@ export type ServerConfig = {
 	readonly finchnode?: Finchnode;
 	/** Undefined when the Fetch.ai bridge is not configured: agent tool calls then answer `unavailable`. */
 	readonly fetchAgent?: FetchAgentConfig | undefined;
-	/** Undefined when no Qwen deployment is configured: the cue route then answers `unavailable`. */
+	/** Undefined when no River checkpoint is configured: the cue route then answers `unavailable`. */
 	readonly qwen?: QwenConfig | undefined;
 	/** Undefined when R2 is not configured: the report PDF routes then answer `unavailable`. */
 	readonly r2?: R2Config | undefined;
