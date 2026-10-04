@@ -1,4 +1,4 @@
-// Pure rules for onboarding and the Home setup checklist. No fetches, no React.
+// Pure rules for onboarding. No fetches, no React.
 import type { HealthSample } from "@health/contracts";
 
 import type { ApiFailure } from "@/lib/api";

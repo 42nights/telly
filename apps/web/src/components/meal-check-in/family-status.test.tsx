@@ -19,6 +19,7 @@ import {
 	RouterProvider,
 } from "@tanstack/react-router";
 import {
+	fireEvent,
 	installDom,
 	render,
 	type ServerReply,
@@ -31,6 +32,13 @@ import { MealStatusSection } from "./family-status";
 installDom();
 
 const HISTORY = "GET /api/families/7/reminder-occurrences";
+const REMINDERS = "/api/families/7/reminders";
+const SETTINGS = "/api/families/7/reminder-settings";
+// The reminder editor's reads: no reminders and no saved settings yet.
+const EDITOR = {
+	[`GET ${REMINDERS}`]: { json: { reminders: [] } },
+	[`GET ${SETTINGS}`]: { json: { settings: null } },
+};
 
 const occurrence = (
 	o: Partial<ReminderOccurrence> = {},
@@ -87,7 +95,10 @@ describe("MealStatusSection", () => {
 	afterEach(() => setSystemTime());
 
 	test("waits for the server while the history loads", async () => {
-		serve({ [HISTORY]: () => Promise.withResolvers<ServerReply>().promise });
+		serve({
+			...EDITOR,
+			[HISTORY]: () => Promise.withResolvers<ServerReply>().promise,
+		});
 		const view = show();
 		expect(
 			(await view.findByRole("heading", { name: "Meals and drinks" }))
@@ -100,6 +111,7 @@ describe("MealStatusSection", () => {
 
 	test("a failed read shows the failure, not an empty list", async () => {
 		serve({
+			...EDITOR,
 			[HISTORY]: { status: 500, body: { error: "internal", message: "Boom." } },
 		});
 		const view = show();
@@ -110,15 +122,19 @@ describe("MealStatusSection", () => {
 	});
 
 	test("signed out links to Sign in", async () => {
-		serve({ [HISTORY]: { status: 401 } });
+		serve({
+			...EDITOR,
+			[HISTORY]: { status: 401 },
+		});
 		const view = show();
 		expect(
-			await view.findByRole("link", { name: "Go to Sign in" }),
-		).toBeDefined();
+			(await view.findAllByRole("link", { name: "Go to Sign in" })).length,
+		).toBeGreaterThan(0);
 	});
 
 	test("future check-ins and other reminder kinds are not shown as due", async () => {
 		serve({
+			...EDITOR,
 			[HISTORY]: history(
 				[occurrence({ scheduledFor: "2026-10-04T13:00:00.000Z" }), []],
 				[occurrence({ id: "2", kind: "medication", title: "Pills" }), []],
@@ -133,6 +149,7 @@ describe("MealStatusSection", () => {
 
 	test("each due check-in shows shown, self-report, and unresolved as separate facts", async () => {
 		serve({
+			...EDITOR,
 			[HISTORY]: history(
 				[
 					occurrence({ title: "Lunch" }),
@@ -198,6 +215,7 @@ describe("MealStatusSection", () => {
 
 	test("shows at most six due check-ins", async () => {
 		serve({
+			...EDITOR,
 			[HISTORY]: history(
 				...Array.from(
 					{ length: 8 },
@@ -213,5 +231,73 @@ describe("MealStatusSection", () => {
 				.getAllByRole("article")
 				.map((a) => a.querySelector("h4")?.firstChild?.textContent),
 		).toEqual(["Meal 0", "Meal 1", "Meal 2", "Meal 3", "Meal 4", "Meal 5"]);
+	});
+
+	test("saving a reminder saves this browser's time zone first, then the reminder", async () => {
+		const calls = serve({
+			...EDITOR,
+			[HISTORY]: history(),
+			[`PUT ${SETTINGS}`]: { status: 204 },
+			[`POST ${REMINDERS}`]: {
+				json: {
+					id: "5",
+					familyId: "7",
+					kind: "hydration",
+					subjectId: null,
+					title: "Drink water",
+					times: ["09:00", "15:30"],
+					createdBy: "a",
+					createdAt: "2026-10-04T12:00:00.000Z",
+				},
+			},
+		});
+		const view = show();
+		const form = await view.findByRole("form", {
+			name: "Meal and drink reminders",
+		});
+		const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		await view.findByText(`Uses this browser's time zone, ${zone}.`);
+		fireEvent.change(within(form).getByLabelText("What"), {
+			target: { value: " Drink water " },
+		});
+		fireEvent.change(within(form).getByLabelText("Kind"), {
+			target: { value: "hydration" },
+		});
+		fireEvent.change(within(form).getByLabelText("Time 1"), {
+			target: { value: "15:30" },
+		});
+		fireEvent.click(within(form).getByText("Add another time"));
+		fireEvent.change(within(form).getByLabelText("Time 2"), {
+			target: { value: "09:00" },
+		});
+		fireEvent.submit(form);
+
+		expect((await view.findByText("Saved: Drink water.")).textContent).toBe(
+			"Saved: Drink water.",
+		);
+		const writes = calls.filter((c) => c.method !== "GET");
+		expect(writes).toEqual([
+			{
+				method: "PUT",
+				path: SETTINGS,
+				body: {
+					timeZone: zone,
+					quietHours: null,
+					repeatEveryMinutes: 10,
+					maxPrompts: 3,
+					snoozeMinutes: 15,
+				},
+			},
+			{
+				method: "POST",
+				path: REMINDERS,
+				body: {
+					kind: "hydration",
+					subjectId: null,
+					title: "Drink water",
+					times: ["09:00", "15:30"],
+				},
+			},
+		]);
 	});
 });

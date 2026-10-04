@@ -150,7 +150,7 @@ function NumbersForm({
 					/>
 					<p className="flex items-center gap-1">
 						Calls start from your phone's dialer.
-						<Tip text="The app never calls or texts by itself." />
+						<Tip text="The call buttons never call by themselves." />
 					</p>
 				</fieldset>
 

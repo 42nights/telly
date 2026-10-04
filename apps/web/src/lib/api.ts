@@ -46,7 +46,7 @@ export type ApiState<T> =
 
 const decodeError = Schema.decodeUnknownOption(ApiError);
 
-/** Maps a non-2xx reply to its failure. Exported for tests. */
+/** Maps a non-2xx reply to its failure. */
 export const failureFor = (status: number, body: unknown): ApiFailure => {
 	const error = decodeError(body);
 	// A 5xx without the typed body comes from a proxy or gateway, not from the API's own handlers.
