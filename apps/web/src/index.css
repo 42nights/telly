@@ -52,20 +52,37 @@
 	/* Win95 chrome switches state instantly; an animated bevel reads as a broken edge. */
 	transition: none;
 	box-shadow:
-		inset -1px -1px 0 var(--win95-dark-shadow),
-		inset 1px 1px 0 var(--win95-highlight),
-		inset -2px -2px 0 var(--win95-shadow),
-		inset 2px 2px 0 var(--win95-light);
+		inset -2px -2px 0 var(--win95-dark-shadow),
+		inset 2px 2px 0 var(--win95-highlight),
+		inset -4px -4px 0 var(--win95-shadow),
+		inset 4px 4px 0 var(--win95-light);
 }
 [data-slot="button"]:active:not(:disabled) {
 	box-shadow:
-		inset 1px 1px 0 var(--win95-dark-shadow),
-		inset -1px -1px 0 var(--win95-highlight),
-		inset 2px 2px 0 var(--win95-shadow);
+		inset 2px 2px 0 var(--win95-dark-shadow),
+		inset -2px -2px 0 var(--win95-highlight),
+		inset 4px 4px 0 var(--win95-shadow),
+		inset -4px -4px 0 var(--win95-light);
 }
 [data-slot="button"]:focus-visible {
-	outline: 1px dotted #000000;
-	outline-offset: -4px;
+	outline: 2px dotted currentColor;
+	outline-offset: -7px;
+}
+[data-slot="button"]:disabled {
+	opacity: 1;
+	color: var(--win95-shadow);
+	text-shadow: 1px 1px 0 var(--win95-highlight);
+}
+/* The one primary action of a state: a navy face, bold white text, and a black default ring. */
+[data-slot="button"].win95-primary:not(:disabled) {
+	background-color: var(--win95-title);
+	color: #ffffff;
+	font-weight: 700;
+	outline: 2px solid var(--win95-dark-shadow);
+}
+[data-slot="button"].win95-primary:focus-visible {
+	outline: 2px dotted #ffffff;
+	outline-offset: -7px;
 }
 
 /* Etched separator: a shadow line over a highlight line, never a flat one-pixel border. */
@@ -75,27 +92,140 @@ hr {
 	border-bottom: 1px solid var(--win95-highlight);
 }
 
+/* Tooltip hint for secondary text: an info button with a yellow Win95 tip on hover and focus. */
+.win95-tip {
+	position: relative;
+	display: inline-grid;
+	place-items: center;
+	width: 2rem;
+	height: 2rem;
+	flex: none;
+	color: var(--win95-title);
+	cursor: help;
+}
+.win95-tip:focus-visible {
+	outline: 2px dotted #000000;
+}
+.win95-tip::after {
+	content: attr(data-tip);
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 6px);
+	left: 50%;
+	transform: translateX(-50%);
+	width: max-content;
+	max-width: 16rem;
+	padding: 0.4rem 0.6rem;
+	background: #ffffe1;
+	color: #000000;
+	border: 1px solid #000000;
+	box-shadow: 2px 2px 0 var(--win95-shadow);
+	font-size: 0.8125rem;
+	font-weight: 400;
+	line-height: 1.4;
+	text-align: left;
+	white-space: normal;
+	display: none;
+	pointer-events: none;
+}
+.win95-tip[data-align="end"]::after {
+	left: auto;
+	right: 0;
+	transform: none;
+}
+.win95-tip:hover::after,
+.win95-tip:focus-visible::after {
+	display: block;
+}
+/* Text fields and selects sit in a sunken well; the focus ring stays visible on the white face. */
+.win95-field:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: -5px;
+}
+
+/* Win95 check box: a sunken white well with a black check mark. */
+input[type="checkbox"] {
+	appearance: none;
+	display: inline-grid;
+	place-content: center;
+	width: 1.25rem;
+	height: 1.25rem;
+	flex: none;
+	background-color: #ffffff;
+	box-shadow:
+		inset 2px 2px 0 var(--win95-shadow),
+		inset -2px -2px 0 var(--win95-highlight),
+		inset 4px 4px 0 var(--win95-dark-shadow),
+		inset -4px -4px 0 var(--win95-light);
+}
+input[type="checkbox"]:checked::before {
+	content: "";
+	width: 0.7rem;
+	height: 0.4rem;
+	border-bottom: 3px solid #000000;
+	border-left: 3px solid #000000;
+	transform: translateY(-2px) rotate(-45deg);
+}
+input[type="checkbox"]:disabled {
+	background-color: var(--win95-face);
+}
+input[type="checkbox"]:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: 2px;
+}
+
+/* Taskbar buttons for the screens. The current screen shows pressed in, with bold text. */
+.win95-tab {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0 0.9rem;
+	background-color: var(--win95-face);
+	color: #000000;
+	font-size: 0.9375rem;
+	white-space: nowrap;
+	box-shadow:
+		inset -2px -2px 0 var(--win95-dark-shadow),
+		inset 2px 2px 0 var(--win95-highlight),
+		inset -4px -4px 0 var(--win95-shadow),
+		inset 4px 4px 0 var(--win95-light);
+}
+.win95-tab[aria-current="page"] {
+	background-color: var(--win95-light);
+	font-weight: 700;
+	box-shadow:
+		inset 2px 2px 0 var(--win95-dark-shadow),
+		inset -2px -2px 0 var(--win95-highlight),
+		inset 4px 4px 0 var(--win95-shadow),
+		inset -4px -4px 0 var(--win95-light);
+}
+.win95-tab:focus-visible {
+	outline: 2px dotted #000000;
+	outline-offset: -7px;
+}
+
 @layer components {
-	/* Raised 3D chrome for window frames. Hard pixel bevels, never blurred. */
+	/* Raised 3D chrome for window frames: two-pixel bevels, light top-left, dark bottom-right. */
 	.win95-raised {
 		background-color: var(--win95-face);
 		box-shadow:
-			inset -1px -1px 0 var(--win95-dark-shadow),
-			inset 1px 1px 0 var(--win95-highlight),
-			inset -2px -2px 0 var(--win95-shadow),
+			inset -2px -2px 0 var(--win95-dark-shadow),
 			inset 2px 2px 0 var(--win95-light),
-			2px 2px 0 var(--win95-dark-shadow);
+			inset -4px -4px 0 var(--win95-shadow),
+			inset 4px 4px 0 var(--win95-highlight),
+			3px 3px 0 var(--win95-dark-shadow);
 	}
-	/* Sunken wells: inputs, lists, and the camera viewport. */
+	/* Sunken wells: inputs, lists, queues, and the camera viewport. */
 	.win95-inset {
 		box-shadow:
-			inset 1px 1px 0 var(--win95-shadow),
-			inset -1px -1px 0 var(--win95-highlight),
-			inset 2px 2px 0 var(--win95-dark-shadow),
-			inset -2px -2px 0 var(--win95-light);
+			inset 2px 2px 0 var(--win95-shadow),
+			inset -2px -2px 0 var(--win95-highlight),
+			inset 4px 4px 0 var(--win95-dark-shadow),
+			inset -4px -4px 0 var(--win95-light);
 	}
 	.win95-window {
-		padding: 3px;
+		padding: 6px;
 	}
 	.win95-titlebar {
 		background: linear-gradient(
