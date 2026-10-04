@@ -1,8 +1,21 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { tokenClaims, tokenExpired } from "@health/contracts/session";
+import {
+	type AnyRouter,
+	isRedirect,
+	type ParsedLocation,
+} from "@tanstack/react-router";
+
 import { setupDom } from "@/lib/test/dom";
 
-import { getSessionToken, onSessionChange, setSessionToken } from "./session";
+import {
+	followSession,
+	getSessionToken,
+	onSessionChange,
+	requireSession,
+	returnPath,
+	setSessionToken,
+} from "./session";
 
 // happy-dom provides sessionStorage and clears it after each test.
 setupDom();
@@ -76,5 +89,84 @@ describe("session token", () => {
 		} finally {
 			Object.defineProperty(globalThis, "sessionStorage", real);
 		}
+	});
+});
+
+describe("sign-in gate", () => {
+	const signIn = () =>
+		setSessionToken(
+			`h.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 + 3600 })).toString("base64url")}.s`,
+		);
+
+	// The guard as the root route runs it, for the address the visitor opened.
+	const open = (href: string) => {
+		const location = {
+			href,
+			pathname: new URL(href, "http://app.test").pathname,
+		} as ParsedLocation;
+		try {
+			requireSession({ location });
+			return "page";
+		} catch (thrown) {
+			if (!isRedirect(thrown)) throw thrown;
+			return thrown.options;
+		}
+	};
+	const toSignIn = (redirect: string) => ({
+		to: "/sign-in",
+		search: { redirect },
+		replace: true,
+	});
+
+	afterEach(() => setSessionToken(null));
+
+	test("signed out, every deep link shows sign-in and remembers the page", () => {
+		expect(open("/medicine?day=today")).toMatchObject(
+			toSignIn("/medicine?day=today"),
+		);
+		expect(open("/family")).toMatchObject(toSignIn("/family"));
+		expect(open("/")).toMatchObject(toSignIn("/"));
+		// The sign-in screen and the issuer's return to it stay open.
+		expect(open("/sign-in?code=c&state=s")).toBe("page");
+	});
+
+	test("signed in, the page opens", () => {
+		signIn();
+		expect(open("/medicine")).toBe("page");
+	});
+
+	test("an expired token counts as signed out", () => {
+		setSessionToken(
+			`h.${Buffer.from(JSON.stringify({ exp: Date.now() / 1000 - 1 })).toString("base64url")}.s`,
+		);
+		expect(open("/care")).toMatchObject(toSignIn("/care"));
+	});
+
+	test("signing out runs the gate again, so the page shows sign-in", () => {
+		signIn();
+		let checks = 0;
+		const stop = followSession({
+			invalidate: async () => {
+				checks++;
+			},
+		} as unknown as AnyRouter);
+		signIn();
+		expect(checks).toBe(0);
+		setSessionToken(null);
+		stop();
+		expect(checks).toBe(1);
+		expect(open("/family")).toMatchObject(toSignIn("/family"));
+	});
+
+	test("sign-in returns only to a page of this app", () => {
+		expect(returnPath("/trip?leg=2")).toBe("/trip?leg=2");
+		for (const unsafe of [
+			undefined,
+			"https://evil.test/",
+			"//evil.test/",
+			"/\\evil.test/",
+			"/sign-in?redirect=/hud",
+		])
+			expect(returnPath(unsafe)).toBe("/hud");
 	});
 });

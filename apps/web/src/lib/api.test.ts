@@ -5,7 +5,7 @@ import { setupDom } from "@/lib/test/dom";
 // `setupDom` mocks `@/env` and provides sessionStorage; `./api` must load after it.
 setupDom();
 const { apiBlob, apiRequest, failureFor, familyPath } = await import("./api");
-const { setSessionToken } = await import("./session");
+const { getSessionToken, setSessionToken } = await import("./session");
 
 const realFetch = globalThis.fetch;
 type Sent = { url: string; init: RequestInit | undefined };
@@ -170,6 +170,16 @@ describe("apiRequest", () => {
 		await expect(
 			apiRequest(Health, "/health", { signal: controller.signal }),
 		).rejects.toThrow();
+	});
+
+	test("a token the server rejects ends the session; a 403 does not", async () => {
+		setSessionToken("token");
+		reply(403, { error: "forbidden", message: "not a member" });
+		await apiRequest(Health, "/health");
+		expect(getSessionToken()).toBe("token");
+		reply(401, { error: "unauthorized", message: "bad token" });
+		expect(await apiRequest(Health, "/health")).toEqual({ kind: "signed_out" });
+		expect(getSessionToken()).toBeNull();
 	});
 });
 
