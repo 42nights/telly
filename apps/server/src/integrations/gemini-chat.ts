@@ -7,12 +7,18 @@ import type { FamilyQuestion, QuestionAttachment } from "@health/contracts/ask";
 import { Data, Effect, Schema } from "effect";
 import type { FamilyTools } from "../family-tools";
 import { ApiFailure } from "../http";
-import { type GeminiConfig, postInteraction } from "./gemini";
+import { type GeminiConfig, overloaded, postInteraction } from "./gemini";
 
 /** Pinned so a provider alias change cannot silently change answers. */
 const GEMINI_CHAT_MODEL = "gemini-3.8-flash";
 
 const requestTimeoutMs = 30_000;
+// One question, all rounds and retries together, ends within this. A voice question also waits
+// for transcription and speech, and the whole request must answer before a phone gives up (60 s).
+const answerBudgetMs = 45_000;
+// Overloaded calls (429/503) are tried again on both models after each wait.
+const overloadBackoffMs = [1_000, 3_000];
+const busy = "The assistant is busy right now. Try again in a minute";
 // Each round runs the tools the model called; the answer must come within this many rounds.
 const maxRounds = 4;
 const maxFollowUps = 3;
@@ -143,31 +149,46 @@ const attachmentContent = ({ name, mimeType, data }: QuestionAttachment) => {
 	return { type: "image", mime_type: mimeType, data };
 };
 
+/** One call, with its overload retries. Completed rounds stay in the history, so none is redone. */
 const interact = (
 	config: GeminiConfig,
 	body: Readonly<Record<string, unknown>> & { readonly model: string },
+	deadline: AbortSignal,
 ) =>
 	Effect.tryPromise({
 		try: async (signal) => {
 			const { response } = await postInteraction(
 				config,
 				body,
-				AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
+				AbortSignal.any([
+					signal,
+					deadline,
+					AbortSignal.timeout(requestTimeoutMs),
+				]),
+				config.overloadBackoffMs ?? overloadBackoffMs,
 			);
 			if (!response.ok) {
 				await response.body?.cancel();
-				throw upstream(`Gemini chat failed with HTTP ${response.status}`);
+				throw upstream(
+					overloaded(response.status)
+						? `${busy} (Gemini HTTP ${response.status}).`
+						: `Gemini chat failed with HTTP ${response.status}`,
+				);
 			}
 			return parseReply(await response.json().catch(() => undefined));
 		},
-		catch: (cause) =>
-			cause instanceof GeminiChatError
-				? cause
-				: upstream(
-						cause instanceof DOMException && cause.name === "TimeoutError"
-							? `Gemini chat timed out after ${requestTimeoutMs / 1000} s`
-							: "Gemini could not be reached",
-					),
+		catch: (cause) => {
+			if (cause instanceof GeminiChatError) return cause;
+			if (deadline.aborted)
+				return upstream(
+					`${busy} (no answer within ${answerBudgetMs / 1000} s).`,
+				);
+			return upstream(
+				cause instanceof DOMException && cause.name === "TimeoutError"
+					? `Gemini chat timed out after ${requestTimeoutMs / 1000} s`
+					: "Gemini could not be reached",
+			);
+		},
 	});
 
 /**
@@ -233,18 +254,23 @@ export const askGemini = (
 				],
 			},
 		];
+		const deadline = AbortSignal.timeout(answerBudgetMs);
 		for (let round = 0; round <= maxRounds; round++) {
-			const reply = yield* interact(config, {
-				model: GEMINI_CHAT_MODEL,
-				store: false,
-				system_instruction: family.rules,
-				input: history,
-				tools,
-				response_format: answerFormat,
-				// About 2000 characters of answer plus 3 short follow-ups: short enough to read on a
-				// phone and to speak.
-				generation_config: { thinking_level: "low", max_output_tokens: 1280 },
-			});
+			const reply = yield* interact(
+				config,
+				{
+					model: GEMINI_CHAT_MODEL,
+					store: false,
+					system_instruction: family.rules,
+					input: history,
+					tools,
+					response_format: answerFormat,
+					// About 2000 characters of answer plus 3 short follow-ups: short enough to read on a
+					// phone and to speak.
+					generation_config: { thinking_level: "low", max_output_tokens: 1280 },
+				},
+				deadline,
+			);
 			const { calls } = reply;
 			if (reply.status === "completed" && calls.length === 0)
 				return yield* finalAnswer(reply.text, reply.model);

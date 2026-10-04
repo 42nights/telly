@@ -56,6 +56,7 @@ describe.skipIf(dbConfig === undefined)("food delivery", () => {
 		withDb((config) =>
 			Effect.gen(function* () {
 				const { db, familyId } = yield* openFamily(config, "Delivery family");
+				yield* purchases(db, familyId, false);
 				const fake = simulatedDelivery();
 				let soldOut = true;
 				const provider: DeliveryProvider = {

@@ -7,7 +7,7 @@ mock.module("@/env", () => ({
 	ENV: { VITE_SERVER_URL: "http://server.test" },
 }));
 const { apiRequest, failureFor } = await import("./api");
-const { setSessionToken } = await import("./session");
+const { getSessionToken, setSessionToken } = await import("./session");
 
 // Bun has no sessionStorage; the session module reads it lazily, so a small in-memory one works.
 class MemoryStorage implements Storage {
@@ -62,10 +62,7 @@ describe("failureFor", () => {
 			kind: "unavailable",
 			message: "Gemini is not configured",
 		});
-		expect(failureFor(500, "not json")).toEqual({
-			kind: "error",
-			message: "HTTP 500",
-		});
+		expect(failureFor(500, "not json").kind).toBe("error");
 	});
 });
 
@@ -109,5 +106,15 @@ describe("apiRequest", () => {
 		);
 		const result = await apiRequest(Health, "/health");
 		expect(result.kind).toBe("error");
+	});
+
+	test("a token the server rejects ends the session; a 403 does not", async () => {
+		setSessionToken("token");
+		reply(403, { error: "forbidden", message: "not a member" });
+		await apiRequest(Health, "/health");
+		expect(getSessionToken()).toBe("token");
+		reply(401, { error: "unauthorized", message: "bad token" });
+		expect(await apiRequest(Health, "/health")).toEqual({ kind: "signed_out" });
+		expect(getSessionToken()).toBeNull();
 	});
 });

@@ -2,6 +2,7 @@
 // isolated in-memory database, publishes, sets SPACETIMEDB_URI and SPACETIMEDB_DATABASE, and runs
 // this file. Each connection below is a separate identity issued by that database.
 import { describe, expect, test } from "bun:test";
+import { CareScope } from "@health/contracts/care-profile";
 import { Effect } from "effect";
 import { Identity, Timestamp } from "spacetimedb";
 import {
@@ -164,6 +165,54 @@ describe.skipIf(config === undefined)("family-scoped database", () => {
 					);
 
 					expect(readFamilyRecords(owner)).toEqual(before);
+				}),
+			),
+		));
+
+	test("a new family's founder holds every care scope, a later member none, and only the operator runs the backfill", () =>
+		run((config) =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const token = process.env.SPACETIMEDB_OPERATOR_TOKEN;
+					if (token === undefined)
+						throw new Error("db:test passes SPACETIMEDB_OPERATOR_TOKEN");
+					const owner = yield* openFamilyDb(config);
+					const relative = yield* openFamilyDb(config);
+					const operator = yield* openFamilyDb({ ...config, token });
+					const mine = owner.connection.reducers;
+					yield* Effect.promise(() => mine.createFamily({ name: "Nakamura" }));
+					const [home] = readFamilyRecords(owner).families;
+					if (home === undefined) throw new Error("family was not created");
+					const familyId = BigInt(home.id);
+					yield* Effect.promise(() =>
+						mine.addFamilyMember({
+							familyId,
+							member: Identity.fromString(relative.identity),
+						}),
+					);
+					const grants = () =>
+						[...owner.connection.db.myCareGrants.iter()]
+							.filter((g) => g.familyId === familyId)
+							.map((g) => [g.member.toHexString(), g.scope, g.granted])
+							.sort();
+					const founder = CareScope.literals
+						.map((scope) => [owner.identity, scope, true])
+						.sort();
+					expect(grants()).toEqual(founder);
+
+					const refused = yield* Effect.promise(() =>
+						mine.backfillFounderCareGrants({}).then(String, String),
+					);
+					expect(refused).toBe("SenderError: not the delivery operator");
+					// A family that has grant events is left as it is.
+					yield* Effect.promise(() =>
+						operator.connection.reducers.backfillFounderCareGrants({}),
+					);
+					// The owner's own call after the backfill sees every earlier commit.
+					yield* Effect.promise(() =>
+						mine.sendMessage({ familyId, clientId: "sync", body: "Synced" }),
+					);
+					expect(grants()).toEqual(founder);
 				}),
 			),
 		));

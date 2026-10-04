@@ -17,6 +17,7 @@ import {
 	familyApp,
 	openFamily,
 	send,
+	setOwnScopes,
 	withDb,
 } from "./test-family";
 
@@ -102,18 +103,10 @@ describe.skipIf(dbConfig === undefined)("guided exercise", () => {
 					send(app, "POST", `/exercise/plans/${id}/verify`);
 				// Verifying reads the care profile (#26): it needs health_records access, and the
 				// profile must record the activity restrictions.
+				yield* setOwnScopes(db, familyId, ["health_records"], false);
 				expect(failure(yield* verify(planId))).toEqual([403, "forbidden"]);
 				const care = familyApp(db, familyId, careProfileRoutes());
-				for (const scope of [
-					"family_access",
-					"health_records",
-					"care_plan_edit",
-				])
-					yield* send(care, "POST", "/care-access", {
-						identity: db.identity,
-						scope,
-						granted: true,
-					});
+				yield* setOwnScopes(db, familyId, ["health_records"], true);
 				yield* send(care, "PUT", "/care-profile", profile(null));
 				expect(failure(yield* verify(planId))).toEqual([409, "conflict"]);
 				yield* send(
