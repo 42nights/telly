@@ -463,6 +463,7 @@ export const MedicineArPin = __t.object("MedicineArPin", {
   savedBy: __t.identity(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  personId: __t.identity(),
 });
 export type MedicineArPin = __Infer<typeof MedicineArPin>;
 
@@ -496,6 +497,9 @@ export const MedicineSighting = __t.object("MedicineSighting", {
   savedBy: __t.identity(),
   notFoundAt: __t.option(__t.timestamp()),
   personId: __t.identity(),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()),
 });
 export type MedicineSighting = __Infer<typeof MedicineSighting>;
 

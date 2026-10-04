@@ -22,4 +22,7 @@ export default __t.row({
   savedBy: __t.identity().name("saved_by"),
   notFoundAt: __t.option(__t.timestamp()).name("not_found_at"),
   personId: __t.identity().name("person_id"),
+  category: __t.string(),
+  thumbnail: __t.string(),
+  pastPlaces: __t.array(__t.string()).name("past_places"),
 });

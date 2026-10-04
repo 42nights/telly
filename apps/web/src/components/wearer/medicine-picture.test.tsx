@@ -8,7 +8,7 @@ import {
 	setSystemTime,
 	test,
 } from "bun:test";
-import type { MedicineDetection } from "@health/contracts/vision";
+import type { ObjectDetection } from "@health/contracts/vision";
 import { installDom, render } from "../test/dom";
 
 import type { CheckResult, PictureCheck } from "./medicine-check";
@@ -23,9 +23,10 @@ afterEach(() => setSystemTime());
 const detection = (
 	label: string | null,
 	needsVerification: boolean,
-	box: MedicineDetection["box"],
+	box: ObjectDetection["box"],
 	confidence = 0.8,
-): MedicineDetection => ({ label, needsVerification, confidence, box });
+	category: ObjectDetection["category"] = "medicine",
+): ObjectDetection => ({ category, label, needsVerification, confidence, box });
 
 const check = (result: CheckResult, capturedAt = NOW): PictureCheck => ({
 	id: "c1",
@@ -102,6 +103,21 @@ describe("CheckedPicture", () => {
 				height: 40,
 			}),
 			detection(null, false, { x: 100, y: 200, width: 30, height: 30 }),
+			// Any other thing is named; an unsure one asks the person to check it is theirs.
+			detection(
+				"car keys",
+				false,
+				{ x: 10, y: 250, width: 20, height: 20 },
+				0.9,
+				"keys",
+			),
+			detection(
+				null,
+				true,
+				{ x: 50, y: 250, width: 20, height: 20 },
+				0.6,
+				"glasses",
+			),
 			// Outside the frame: no marker.
 			detection("Gone", false, { x: 500, y: 10, width: 20, height: 20 }),
 		];
@@ -116,6 +132,8 @@ describe("CheckedPicture", () => {
 			"? Check the label",
 			"? Very long medicine name… · check label",
 			"✓ Medicine box",
+			"✓ car keys",
+			"? glasses · check it",
 		]);
 		const tags = [...view.container.querySelectorAll("svg text")];
 		// Above a box that has room, below one at the top edge.
@@ -126,6 +144,6 @@ describe("CheckedPicture", () => {
 		expect(view.container.querySelectorAll("svg polygon").length).toBe(1);
 		expect(
 			view.container.querySelectorAll("svg rect[stroke-dasharray]").length,
-		).toBe(2);
+		).toBe(3);
 	});
 });

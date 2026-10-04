@@ -1,9 +1,10 @@
-// Proves the AR medicine pin storage (contract telly-ar-pin) through the real server and the real
-// SpacetimeDB: the creator remembers a container, pins it with a world map, reads the same bytes
-// back, replaces and deletes it, cannot store a map over 16 MB, and turning medicine memory off
-// deletes every pin row and stored map of that member. A signed-in non-member is refused, and another
-// member without care access cannot see or change the pin (#291). Only the OIDC issuer and the R2
-// bucket are fake. The world maps are random bytes.
+// Proves the AR object pin storage (contract telly-ar-pin, generalized to any object in #301)
+// through the real server and the real SpacetimeDB: the creator remembers an object, pins it with a
+// world map, reads the same bytes back, replaces and deletes it, cannot store a map over 16 MB, and
+// turning their memory off deletes their pin rows and stored maps. The first `containers` path still
+// names the same pin. A member without care access cannot touch another member's pin, and a
+// signed-in non-member is refused. Only the OIDC issuer and the R2 bucket are fake. The world maps
+// are random bytes.
 import { beforeAll, describe, expect, test } from "bun:test";
 import {
 	MAX_WORLD_MAP_BYTES,
@@ -31,31 +32,31 @@ const harness = () => {
 const worldMap = (bytes: number, seed = 0) =>
 	new Uint8Array(bytes).map((_, i) => (i * 31 + seed) % 256);
 
-describe.skipIf(!integration)("medicine AR pins", () => {
+describe.skipIf(!integration)("object AR pins", () => {
 	let owner: User;
+	let relative: User;
 	let outsider: User;
 	let family: { id: string; path: string };
 	const sightingIds: string[] = [];
 	const pinPath = (index: number) =>
-		`${family.path}/medicine-memory/containers/${sightingIds[index]}/ar-pin`;
+		`${family.path}/medicine-memory/objects/${sightingIds[index]}/ar-pin`;
+	// Each member's maps are in their own folder (#301).
 	const stored = (index: number) =>
-		harness().bucket.get(`ar-pins/${family.id}/${sightingIds[index]}.worldmap`);
+		harness().bucket.get(
+			`ar-pins/${family.id}/${owner.identity}/${sightingIds[index]}.worldmap`,
+		);
 	const first = worldMap(4096);
 
 	beforeAll(async () => {
 		const { signIn } = harness();
 		const run = crypto.randomUUID();
 		owner = await signIn(`ar-pin-owner-${run}`);
+		relative = await signIn(`ar-pin-relative-${run}`);
 		outsider = await signIn(`ar-pin-outsider-${run}`);
 		family = await createFamily(owner, "AR pins");
-		await json(
-			MedicineMemory,
-			await owner.call("PUT", `${family.path}/medicine-memory`, {
-				enabled: true,
-				places: ["Kitchen"],
-			}),
-		);
-		for (const container of ["Synthetic pill box", "Synthetic inhaler"]) {
+		await addMember(owner, family.path, relative);
+		// No setting first: remembering is on for every member (#301).
+		for (const container of ["Synthetic pill box", "Synthetic keys"]) {
 			const memory = await json(
 				MedicineMemory,
 				await owner.call("POST", `${family.path}/medicine-memory/sightings`, {
@@ -91,7 +92,8 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 		const pin = await json(MedicineArPin, response);
 		expect(pin).toMatchObject({
 			familyId: family.id,
-			containerId: sightingIds[0],
+			objectId: sightingIds[0],
+			personId: owner.identity,
 			anchorId: "anchor-1",
 			mapBytes: first.length,
 		});
@@ -104,6 +106,28 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 			await owner.call("GET", pinPath(0)),
 		);
 		expect(read).toEqual({ ...pin, worldMap: base64 });
+
+		// The first path names the same pin, so the pins saved before #301 stay readable.
+		const legacy = await json(
+			StoredMedicineArPin,
+			await owner.call(
+				"GET",
+				`${family.path}/medicine-memory/containers/${sightingIds[0]}/ar-pin`,
+			),
+		);
+		expect(legacy).toEqual(read);
+
+		// The object list says which things have a pin, so the iPhone can start AR find for them.
+		const memory = await json(
+			MedicineMemory,
+			await owner.call("GET", `${family.path}/medicine-memory`),
+		);
+		const pinned = (id: string | undefined) =>
+			memory.sightings.find((s) => s.id === id)?.pinned;
+		expect([pinned(sightingIds[0]), pinned(sightingIds[1])]).toEqual([
+			true,
+			false,
+		]);
 	});
 
 	test("a new pin replaces the anchor and map and keeps when it was first made", async () => {
@@ -163,10 +187,23 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 		expect(stored(0)?.body).toBe(before);
 	});
 
-	test("a pin is refused for a container that is not a sighting of the family", async () => {
+	test("a member without care access cannot read, replace, or delete another member's pin", async () => {
+		const before = stored(0)?.body;
+		for (const [method, body] of [
+			["GET", undefined],
+			["PUT", { anchorId: "theirs", worldMap: worldMap(16).toBase64() }],
+			["DELETE", undefined],
+		] as const)
+			expect(
+				await errorOf(await relative.call(method, pinPath(0), body)),
+			).toEqual([404, "not_found"]);
+		expect(stored(0)?.body).toBe(before);
+	});
+
+	test("a pin is refused for an object that is not a sighting of the family", async () => {
 		const response = await owner.call(
 			"PUT",
-			`${family.path}/medicine-memory/containers/999999999/ar-pin`,
+			`${family.path}/medicine-memory/objects/999999999/ar-pin`,
 			{ anchorId: "anchor", worldMap: first.toBase64() },
 		);
 		expect(await errorOf(response)).toEqual([404, "not_found"]);
@@ -182,58 +219,64 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 		]);
 	});
 
-	test("another member without care access cannot see or change a pin, and their memory off keeps it", async () => {
-		const member = await harness().signIn(
-			`ar-pin-member-${crypto.randomUUID()}`,
-		);
-		await addMember(owner, family.path, member);
+	test("forgetting one thing deletes its pin and its map, also at the key of a pin from before #301", async () => {
 		await json(
 			MedicineArPin,
 			await owner.call("PUT", pinPath(1), {
-				anchorId: "anchor-5",
+				anchorId: "anchor-keys",
 				worldMap: first.toBase64(),
 			}),
 		);
-		await json(
+		// A map left at the first key, without the member, as pins saved before #301 have it.
+		const legacy = `ar-pins/${family.id}/${sightingIds[1]}.worldmap`;
+		harness().bucket.set(legacy, {
+			body: first,
+			type: "application/octet-stream",
+			lastModified: new Date().toISOString(),
+		});
+		const forgot = await json(
 			MedicineMemory,
-			await member.call("PUT", `${family.path}/medicine-memory`, {
-				enabled: true,
-				places: [],
-			}),
+			await owner.call(
+				"DELETE",
+				`${family.path}/medicine-memory/sightings/${sightingIds[1]}`,
+			),
 		);
-		expect(await errorOf(await member.call("GET", pinPath(1)))).toEqual([
+		expect(forgot.sightings.map((s) => s.id)).not.toContain(sightingIds[1]);
+		expect(stored(1)).toBeUndefined();
+		expect(harness().bucket.get(legacy)).toBeUndefined();
+		expect(await errorOf(await owner.call("GET", pinPath(1)))).toEqual([
 			404,
 			"not_found",
 		]);
-		const replaced = await member.call("PUT", pinPath(1), {
-			anchorId: "anchor-6",
-			worldMap: worldMap(64, 9).toBase64(),
-		});
-		expect(await errorOf(replaced)).toEqual([404, "not_found"]);
-		expect(await errorOf(await member.call("DELETE", pinPath(1)))).toEqual([
-			403,
-			"forbidden",
-		]);
-		await json(
-			MedicineMemory,
-			await member.call("PUT", `${family.path}/medicine-memory`, {
-				enabled: false,
-				places: [],
-			}),
-		);
-		const kept = await json(
-			StoredMedicineArPin,
-			await owner.call("GET", pinPath(1)),
-		);
-		expect(kept.anchorId).toBe("anchor-5");
-		expect(stored(1)?.body).toEqual(first);
 	});
 
-	test("turning medicine memory off deletes every pin row and map of that member", async () => {
+	test("forgetting everything of a member deletes their pin rows and maps, and no one else's", async () => {
 		await json(
 			MedicineArPin,
 			await owner.call("PUT", pinPath(0), {
 				anchorId: "anchor-3",
+				worldMap: first.toBase64(),
+			}),
+		);
+		// The relative pins their own object, with no setting first.
+		const theirs = await json(
+			MedicineMemory,
+			await relative.call("POST", `${family.path}/medicine-memory/sightings`, {
+				container: "Synthetic glasses",
+				place: "Desk",
+				seenAt: new Date().toISOString(),
+				source: "camera_check",
+				confidence: 0.9,
+				labelRead: true,
+				category: "glasses",
+			}),
+		);
+		const theirId = theirs.sightings[0]?.id;
+		const theirPin = `${family.path}/medicine-memory/objects/${theirId}/ar-pin`;
+		await json(
+			MedicineArPin,
+			await relative.call("PUT", theirPin, {
+				anchorId: "anchor-relative",
 				worldMap: first.toBase64(),
 			}),
 		);
@@ -249,7 +292,10 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 				places: [],
 			}),
 		);
-		expect(keys()).toEqual([]);
+		expect(keys()).toEqual([
+			`${prefix}${relative.identity}/${theirId}.worldmap`,
+		]);
+		// The objects are deleted with the memory, so their pins are gone too.
 		for (const index of [0, 1])
 			expect(await errorOf(await owner.call("GET", pinPath(index)))).toEqual([
 				404,
@@ -259,7 +305,10 @@ describe.skipIf(!integration)("medicine AR pins", () => {
 			anchorId: "anchor-4",
 			worldMap: first.toBase64(),
 		});
-		expect(await errorOf(refused)).toEqual([409, "conflict"]);
-		expect(keys()).toEqual([]);
+		expect(await errorOf(refused)).toEqual([404, "not_found"]);
+		expect(
+			(await json(StoredMedicineArPin, await relative.call("GET", theirPin)))
+				.anchorId,
+		).toBe("anchor-relative");
 	});
 });
