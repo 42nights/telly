@@ -17,6 +17,9 @@ import { useFamily } from "@/lib/family";
 import { newestUnseen } from "./logic";
 
 const POLL_MS = 15_000;
+/** Records carry the live WHOOP heart rate, which the phone pushes every 15-30 s (#208). */
+// ponytail: every poll re-reads all family samples; read only the newest if the payload grows slow.
+export const RECORDS_POLL_MS = 5_000;
 
 /** The selected family and everything both family screens read about it. */
 export type FamilyData = {
@@ -49,7 +52,10 @@ export function useFamilyData(): FamilyData {
 		path("/alert-thresholds"),
 		options,
 	);
-	const records = useApi(FamilyRecords, path(""), options);
+	const records = useApi(FamilyRecords, path(""), {
+		pollMs: RECORDS_POLL_MS,
+		refreshKey,
+	});
 	const me = useApi(Me, "/api/me");
 	useDemoWarning(
 		records.kind === "ready" ? records.value.samples : null,
