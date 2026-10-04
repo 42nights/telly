@@ -1,5 +1,5 @@
 // The wearer's way to a person: Call family and the help panel. Calls open the phone's own dialer
-// through `tel:` links; the app never calls anyone by itself and simulates no dispatch.
+// through `tel:` links; the app never calls anyone by itself.
 import { Button, buttonVariants } from "@health/ui/components/button";
 import { cn } from "@health/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
