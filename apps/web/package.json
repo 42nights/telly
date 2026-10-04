@@ -27,10 +27,13 @@
 		"varlock": "catalog:"
 	},
 	"devDependencies": {
+		"@happy-dom/global-registrator": "^20.14.5",
 		"@health/config": "workspace:*",
 		"@playwright/test": "1.63.0",
 		"@tanstack/react-router-devtools": "^1.167.1",
 		"@tanstack/router-plugin": "^1.168.35",
+		"@testing-library/dom": "^10.4.2",
+		"@testing-library/react": "^16.3.3",
 		"@types/bun": "1.4.2",
 		"@types/node": "catalog:",
 		"@types/react": "^19.2.18",
