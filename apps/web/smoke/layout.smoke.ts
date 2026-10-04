@@ -1,6 +1,8 @@
 // Layout smoke test (captain: "it should fill the box its in ... if its too big then thats probably
-// a sign to compact or break it apart"): no page scrolls as a whole at two desktop sizes and on a
-// phone. Only long lists scroll, inside their own box. Wearer Home is out of scope here.
+// a sign to compact or break it apart"): no page scrolls as a whole at two desktop sizes. Only long
+// lists scroll, inside their own box. On a phone a taller screen scrolls instead of squeezing its
+// content (captain: "i cannot see today at a glance ... it just doesnt scroll down on mobile"), so
+// the phone is not checked here. Wearer Home is out of scope.
 import { expect, test } from "@playwright/test";
 
 import { family, replies, signIn, watch } from "./fake-api";
@@ -57,6 +59,7 @@ const routes: Record<string, unknown> = {
 const paths = [
 	"/family",
 	"/family/daily",
+	"/family/reminders",
 	"/family/exercise",
 	"/family/cooking",
 	"/family/alerts",
@@ -88,14 +91,9 @@ const paths = [
 // The wearer view has its own menu and Settings rows, so its screens are checked in that view too.
 const wearerPaths = ["/find", "/trip", "/settings"];
 
-// Open product decision (PR #314): the big-button Meal screen does not fit a 390 px phone without
-// a redesign into steps. Desktop sizes are checked; the phone is not yet.
-const phonePending = ["/meal"];
-
 for (const [width, height] of [
 	[1440, 900],
 	[1280, 800],
-	[390, 844],
 ] as const)
 	for (const view of ["family", "wearer"] as const)
 		test(`no page scrolls as a whole at ${width}x${height} in the ${view} view`, async ({
@@ -113,7 +111,6 @@ for (const [width, height] of [
 			await watch(page, baseURL, routes);
 			const overflow: string[] = [];
 			for (const path of view === "family" ? paths : wearerPaths) {
-				if (width === 390 && phonePending.includes(path)) continue;
 				await page.goto(path);
 				// Every read has answered and the screen has its final content, then measure.
 				await page.waitForLoadState("networkidle");

@@ -26,7 +26,7 @@ const tagText = ({ category, label, needsVerification }: ObjectDetection) => {
  * One box in frame pixels with a tag, and the arrow when the person's attention is on it. A box
  * that needs a check is yellow and dashed and its tag starts with "?"; a sure one is white with "✓".
  */
-function Marker({
+export function Marker({
 	detection,
 	frame,
 	arrow,
@@ -138,8 +138,7 @@ function PictureTag({
 
 /**
  * The checked picture in place of the live video, with marker boxes drawn in frame pixels: the
- * SVG viewBox is the frame, so the boxes scale with the picture exactly. A cleared check shows
- * nothing, so the live video comes back without markers.
+ * SVG viewBox is the frame, so the boxes scale with the picture exactly.
  */
 export function CheckedPicture({
 	check,
@@ -148,7 +147,6 @@ export function CheckedPicture({
 	check: PictureCheck;
 	best: ObjectDetection | null;
 }) {
-	if (check.result.kind === "cleared") return null;
 	const detections =
 		check.result.kind === "done" ? check.result.detections : [];
 	return (

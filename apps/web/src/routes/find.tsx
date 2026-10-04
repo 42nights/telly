@@ -1,19 +1,25 @@
+import type { ObjectDetection } from "@health/contracts/vision";
 import { buttonVariants } from "@health/ui/components/button";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ScanSearch } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { CameraPreview, useCamera } from "@/components/hud/camera-preview";
-import { Window } from "@/components/hud/window";
+import { Page } from "@/components/hud/window";
 import {
 	RememberPlace,
 	SavedThings,
 	useArSupported,
 } from "@/components/wearer/last-seen";
 import { LinkedFinder } from "@/components/wearer/linked-finder";
+import { LockOn } from "@/components/wearer/lock-on";
 import { categoryOfRequest, itemFromRequest } from "@/components/wearer/logic";
 import { ObjectAnswer } from "@/components/wearer/medicine-answer";
-import { useArrow, usePictureCheck } from "@/components/wearer/medicine-check";
+import {
+	type PictureCheck,
+	useArrow,
+	usePictureCheck,
+} from "@/components/wearer/medicine-check";
 import { CheckedPicture } from "@/components/wearer/medicine-picture";
 import { Tip } from "@/components/win95";
 import { useFamily } from "@/lib/family";
@@ -87,82 +93,130 @@ function FindThingsPage({
 
 	const category = categoryOfRequest(q);
 	const { best, choice, saving } = useArrow(check, category, mode === "add");
+	const live = camera.state.kind === "live";
+	// The lock-on follows one object of one check; its live direction belongs to that pair.
+	const lockKey = `${check?.id}:${choice.skipped}`;
+	const way = useLiveWay(lockKey);
 
 	return (
-		<main className="mx-auto w-full max-w-6xl p-2 md:p-4">
-			<Window
-				icon={ScanSearch}
-				title={mode === "add" ? "Add a thing" : "Find things"}
-			>
-				<div className="grid gap-4 p-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:gap-x-8 md:p-5">
-					<div className="flex flex-wrap items-end justify-between gap-3 md:col-span-2">
-						<Link
-							className={buttonVariants({
-								variant: "ghost",
-								className: "h-12 text-[18px] [&_svg]:size-5",
-							})}
-							data-slot="button"
-							to="/hud"
-						>
-							<ArrowLeft aria-hidden />
-							Home
-						</Link>
-						<WhoseMedicinesPicker
-							choose={choose}
-							className="[&_select]:min-w-0 [&_select]:flex-1"
-							memory={memory}
-						/>
-						<YouAsked q={q} />
-					</div>
-
-					<div className="win95-inset relative aspect-[4/3] min-w-0 overflow-hidden bg-card md:row-span-2">
-						<CameraPreview
-							camera={camera}
-							onVideo={(element) => {
-								video.current = element;
-								showVideo();
-							}}
-						/>
-						{check !== null && <CheckedPicture best={best} check={check} />}
-					</div>
-
-					<div
-						aria-live="polite"
-						className="grid min-w-0 content-start gap-3 text-[20px]"
+		<Page
+			icon={ScanSearch}
+			title={mode === "add" ? "Add a thing" : "Find things"}
+		>
+			{/* Fills the window: the camera takes the room left, and the answer scrolls in its own box. */}
+			<div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-2 p-1 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] md:grid-rows-[auto_minmax(0,1fr)] md:gap-x-6 md:p-3">
+				<div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 md:col-span-2">
+					<Link
+						className={buttonVariants({
+							variant: "ghost",
+							className: "h-12 text-[18px] [&_svg]:size-5",
+						})}
+						data-slot="button"
+						to="/hud"
 					>
-						<ObjectAnswer
+						<ArrowLeft aria-hidden />
+						Home
+					</Link>
+					<WhoseMedicinesPicker
+						choose={choose}
+						className="[&_select]:min-w-0 [&_select]:flex-1"
+						memory={memory}
+					/>
+					<YouAsked q={q} />
+				</div>
+
+				{/* The camera is the finder: edge to edge on a phone, the large left area on a desktop. */}
+				<div className="win95-inset relative -mx-1 min-h-48 min-w-0 overflow-hidden bg-card md:mx-0">
+					<CameraPreview
+						camera={camera}
+						onVideo={(element) => {
+							video.current = element;
+							showVideo();
+						}}
+					/>
+					{check !== null && (
+						<OverCamera
 							best={best}
 							check={check}
-							choice={choice}
 							familyId={familyId}
-							live={camera.state.kind === "live"}
-							look={lookNow}
-							name={<AskedItem q={q} />}
-							startCamera={camera.start}
-							stop={stop}
+							key={lockKey}
+							live={live}
+							onWay={way.set}
+							video={video}
 						/>
-						{best !== null && saving && check !== null && (
-							<RememberPlace
-								ar={ar ? familyId : null}
-								best={best}
-								change={change}
-								check={check}
-								key={`${check.id}:${choice.skipped}`}
-								memory={memory}
-							/>
-						)}
-						<SavedThings
-							ar={ar}
-							asked={category}
-							change={change}
-							familyId={familyId}
-							memory={memory}
-							open={object ?? null}
-						/>
-					</div>
+					)}
 				</div>
-			</Window>
-		</main>
+
+				<div
+					aria-live="polite"
+					className="grid max-h-[24dvh] min-w-0 content-start gap-3 overflow-y-auto text-[20px] md:max-h-none"
+				>
+					<ObjectAnswer
+						best={best}
+						check={check}
+						choice={choice}
+						familyId={familyId}
+						live={live}
+						look={lookNow}
+						name={<AskedItem q={q} />}
+						startCamera={camera.start}
+						way={way.text}
+						stop={stop}
+					/>
+					{best !== null && saving && check !== null && (
+						<RememberPlace
+							ar={ar ? familyId : null}
+							best={best}
+							change={change}
+							check={check}
+							key={`${check.id}:${choice.skipped}`}
+							memory={memory}
+						/>
+					)}
+					<SavedThings
+						ar={ar}
+						asked={category}
+						change={change}
+						familyId={familyId}
+						memory={memory}
+						open={object ?? null}
+					/>
+				</div>
+			</div>
+		</Page>
+	);
+}
+
+/** The lock-on's live direction words for `key` (one check and object); null for any other. */
+function useLiveWay(key: string) {
+	const [way, setWay] = useState({ key: "", text: "" });
+	return {
+		text: way.key === key ? way.text : null,
+		set: (text: string) => setWay({ key, text }),
+	};
+}
+
+/**
+ * Over the camera: the checked picture while it is checked or nothing was found, and the live
+ * lock-on once an object was found (#348). With the camera off, the checked picture stays.
+ */
+function OverCamera({
+	check,
+	best,
+	live,
+	...lock
+}: {
+	check: PictureCheck;
+	best: ObjectDetection | null;
+	live: boolean;
+	familyId: string | null;
+	video: RefObject<HTMLVideoElement | null>;
+	onWay: (way: string) => void;
+}) {
+	return live && check.result.kind === "done" && best !== null ? (
+		<LockOn best={best} check={check} {...lock} />
+	) : (
+		<CheckedPicture best={best} check={check} />
 	);
 }
 
@@ -185,7 +239,7 @@ function useFirstLook(ready: boolean, lookNow: () => void) {
 function YouAsked({ q }: { q: string }) {
 	if (q.trim() === "") return null;
 	return (
-		<p className="ml-auto grid min-w-0 justify-items-end text-right">
+		<p className="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-2 text-right md:grid md:justify-items-end">
 			<span className="text-[16px] text-muted-foreground">You asked</span>
 			<b className="break-words text-[20px]">“{q}”</b>
 		</p>

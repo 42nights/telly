@@ -445,14 +445,29 @@ body {
 
 /*
  * Each screen fills the desktop area with one even 8 px gap, and its last window stretches to the
- * bottom (captain: no page scroll). Unlayered, so it wins over each screen's own padding.
+ * bottom. Unlayered, so it wins over each screen's own padding and height.
  */
+.win95-desktop {
+	-webkit-overflow-scrolling: touch;
+}
 .win95-desktop > main {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 	height: 100%;
 	padding: 0.5rem;
+}
+/*
+ * On a phone a screen taller than the area makes the area scroll: nothing is squeezed into a small
+ * inner box that seems clipped (captain: "i cannot see today at a glance ... it just doesnt scroll
+ * down on mobile"; "i cant scroll down here" on wearer Home). A desktop has room for each list's
+ * own scroll box.
+ */
+@media (max-width: 899px) {
+	.win95-desktop > main {
+		height: auto;
+		min-height: 100%;
+	}
 }
 .win95-desktop > main > .win95-window:last-child {
 	flex-grow: 1;

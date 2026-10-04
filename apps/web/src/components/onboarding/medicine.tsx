@@ -113,13 +113,12 @@ async function saveMedicine(
 	return reminder.kind === "ready" ? null : failureText(reminder);
 }
 
-/** The one-line reason a picture check failed, or null while it looks, is done, or was cleared. */
+/** The one-line reason a picture check failed, or null while it looks or is done. */
 function checkFailure(result: PictureCheck["result"] | undefined) {
 	if (
 		result === undefined ||
 		result.kind === "done" ||
-		result.kind === "looking" ||
-		result.kind === "cleared"
+		result.kind === "looking"
 	)
 		return null;
 	if (result.kind !== "signed_out") return result.message;
