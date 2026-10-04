@@ -14,7 +14,8 @@
 		"./chat": "./src/chat.ts",
 		"./cues": "./src/cues.ts",
 		"./ask": "./src/ask.ts",
-		"./care": "./src/care.ts"
+		"./care": "./src/care.ts",
+		"./meal-facts": "./src/meal-facts.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",

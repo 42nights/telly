@@ -232,6 +232,22 @@ const finchnodeLink = table(
 	},
 );
 
+// One fact about one meal (#33), as its own row: a photo was taken, a food estimate, an intake
+// report, or caregiver help. The photo itself is never stored. The server validates `fact` against
+// `MealFact` in `@health/contracts/meal-facts` and records a photo or an estimate only as itself.
+const mealFact = table(
+	{ name: "meal_fact" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64().index("btree"),
+		// The client's id for one meal occasion; it groups the meal's facts.
+		mealId: t.string(),
+		fact: t.string(),
+		recordedBy: t.identity(),
+		recordedAt: t.timestamp(),
+	},
+);
+
 // The family contact ladder (issue #30). A care need goes to one contact at a time, in order, then
 // the backup. Only a contact's acceptance and then confirmed help close it; a sent message never does.
 const NeedKind = t.enum("NeedKind", {
@@ -401,6 +417,7 @@ const spacetimedb = schema({
 	careNeed,
 	contactAttempt,
 	ladderTimer,
+	mealFact,
 });
 export default spacetimedb;
 
@@ -1030,6 +1047,21 @@ export const linkFinchnodeSubject = spacetimedb.reducer(
 	},
 );
 
+export const recordMealFact = spacetimedb.reducer(
+	{ familyId: t.u64(), mealId: t.string(), fact: t.string() },
+	(ctx, recorded) => {
+		requireMember(ctx, recorded.familyId);
+		requireText("mealId", recorded.mealId);
+		requireText("fact", recorded.fact);
+		ctx.db.mealFact.insert({
+			...recorded,
+			id: 0n,
+			recordedBy: ctx.sender,
+			recordedAt: ctx.timestamp,
+		});
+	},
+);
+
 const MAX_CONTACTS = 5;
 
 export const setContactLadder = spacetimedb.reducer(
@@ -1383,6 +1415,15 @@ export const myFinchnodeLinks = spacetimedb.view(
 			.rightSemijoin(ctx.from.finchnodeLink, (m, l) =>
 				m.familyId.eq(l.familyId),
 			),
+);
+
+export const myMealFacts = spacetimedb.view(
+	{ name: "my_meal_facts", public: true },
+	t.array(mealFact.rowType),
+	(ctx) =>
+		ctx.from.familyMember
+			.where((m) => m.member.eq(ctx.sender))
+			.rightSemijoin(ctx.from.mealFact, (m, f) => m.familyId.eq(f.familyId)),
 );
 
 export const myContactLadders = spacetimedb.view(

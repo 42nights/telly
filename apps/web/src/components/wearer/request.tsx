@@ -33,7 +33,7 @@ const failureTitle = {
 type Recording = { readonly stop: () => void; readonly cancel: () => void };
 
 /** Records the microphone until stop (or the cap), then hands over the audio. A string is a problem. */
-const startRecording = async (
+export const startRecording = async (
 	onAudio: (audio: Blob) => void,
 ): Promise<Recording | string> => {
 	let stream: MediaStream;
