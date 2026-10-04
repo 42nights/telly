@@ -158,6 +158,65 @@ export const apiBlob = async (
 };
 
 /**
+ * How long a starting API gets before its failure shows: a cold container start takes about 35 s,
+ * and the Worker gives up after 60 s. Screen tests that check failure notices set it to 0.
+ */
+export const apiStart = { windowMs: 60_000 };
+
+/** A failure that means the API may still be starting, not that it refused or broke. */
+const coldStart = (failure: ApiFailure) =>
+	(failure.kind === "error" && failure.unreachable === true) ||
+	(failure.kind === "unavailable" &&
+		failure.message === "The API did not start");
+
+/**
+ * Retries while the API may be starting: after 1, 2, 4, then every 8 s, until `windowMs` has passed
+ * since the first failure. `schedule` is false once the window is over; `reset` after a success.
+ */
+type StartRetry = {
+	readonly schedule: () => boolean;
+	readonly reset: () => void;
+	readonly cancel: () => void;
+};
+
+const startRetry = (windowMs: number, retry: () => void): StartRetry => {
+	let since: number | undefined;
+	let attempt = 0;
+	let timer: number | undefined;
+	return {
+		schedule: () => {
+			since ??= Date.now();
+			if (Date.now() - since >= windowMs) return false;
+			window.clearTimeout(timer);
+			timer = window.setTimeout(retry, Math.min(1000 * 2 ** attempt++, 8000));
+			return true;
+		},
+		reset: () => {
+			since = undefined;
+			attempt = 0;
+		},
+		cancel: () => window.clearTimeout(timer),
+	};
+};
+
+/** The state a finished read shows, or undefined while a starting API is retried (`waiting`). */
+const settled = <T>(
+	result: ApiResult<T>,
+	retry: StartRetry,
+	waiting: () => void,
+): ApiState<T> | undefined => {
+	if (result.kind === "ready") {
+		retry.reset();
+		return { ...result, at: Date.now() };
+	}
+	if (coldStart(result) && retry.schedule()) {
+		waiting();
+		return undefined;
+	}
+	return result;
+};
+
+/**
  * Reads `path` with `schema`, again every `pollMs` when given, and again when the session changes.
  * `path === null` skips the read (for example, no family is selected yet). A failed re-read keeps
  * its failure visible: the last good value is not shown as current. A new `path` (such as another
@@ -167,17 +226,27 @@ export const apiBlob = async (
  * still on it. So a lost network shows a failure at once, a polled read that takes longer than
  * `pollMs` fails, and a return to the screen or to the network reads again. A value older than two
  * polls is not shown while that read runs.
+ *
+ * The API container starts in about 35 s after a deploy or an idle period (the Worker waits up to
+ * 60 s, then answers 503 "The API did not start"). So a read that times out, cannot reach the
+ * server, or gets that 503 is retried with backoff and shows loading ("Waiting for the server") for
+ * up to `connectMs` from the first such failure; only then does the failure show.
  */
 export function useApi<T>(
 	schema: Schema.Decoder<T>,
 	path: string | null,
-	options: { readonly pollMs?: number; readonly refreshKey?: unknown } = {},
+	options: {
+		readonly pollMs?: number;
+		readonly refreshKey?: unknown;
+		/** How long a server that is starting gets before its failure shows. Tests shorten it. */
+		readonly connectMs?: number;
+	} = {},
 ): ApiState<T> {
 	const [read, setRead] = useState<{
 		readonly path: string;
 		readonly state: ApiState<T>;
 	} | null>(null);
-	const { pollMs, refreshKey } = options;
+	const { pollMs, refreshKey, connectMs = apiStart.windowMs } = options;
 	useEffect(() => {
 		void refreshKey;
 		if (path === null) return;
@@ -187,7 +256,11 @@ export function useApi<T>(
 		// Both local failures (no network, no answer in time) mean the server was not reached.
 		const fail = (message: string) =>
 			setRead({ path, state: { kind: "error", message, unreachable: true } });
+		const retry = startRetry(connectMs, () => load());
+		// While the server may be starting, the screen shows loading ("Waiting for the server").
+		const waiting = () => setRead({ path, state: { kind: "loading" } });
 		const load = () => {
+			retry.cancel();
 			controller.abort();
 			controller = new AbortController();
 			const { signal } = controller;
@@ -200,16 +273,14 @@ export function useApi<T>(
 			})
 				.then((result) => {
 					if (signal.aborted) return;
-					setRead({
-						path,
-						state:
-							result.kind === "ready" ? { ...result, at: Date.now() } : result,
-					});
+					const state = settled(result, retry, waiting);
+					if (state !== undefined) setRead({ path, state });
 				})
 				.catch(() => {
 					// Only the timeout gets here without this read being replaced or unmounted.
 					if (signal.aborted) return;
-					fail("The server did not answer in time.");
+					if (retry.schedule()) waiting();
+					else fail("The server did not answer in time.");
 				})
 				.finally(() => {
 					if (!signal.aborted) pending = false;
@@ -251,13 +322,14 @@ export function useApi<T>(
 		document.addEventListener("visibilitychange", resume);
 		return () => {
 			stop();
+			retry.cancel();
 			clearInterval(timer);
 			window.removeEventListener("offline", offline);
 			window.removeEventListener("online", load);
 			document.removeEventListener("visibilitychange", resume);
 			controller.abort();
 		};
-	}, [schema, path, pollMs, refreshKey]);
+	}, [schema, path, pollMs, refreshKey, connectMs]);
 	return read !== null && read.path === path ? read.state : { kind: "loading" };
 }
 
