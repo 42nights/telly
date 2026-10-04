@@ -206,17 +206,17 @@ describe("AlertSection without an alert to show", () => {
 		[
 			"every threshold live",
 			monitoring(row("in_range")),
-			"Every threshold has a fresh validated reading.",
+			"Every threshold has a fresh validated or WHOOP reading.",
 		],
 		[
 			"some thresholds unavailable",
 			monitoring(row("in_range"), row("unavailable")),
-			"Some thresholds have no fresh validated reading, so an alert could be missed.",
+			"Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed.",
 		],
 		[
 			"no live threshold",
 			monitoring(),
-			"Monitoring is stopped: no threshold has a fresh validated reading.",
+			"Monitoring is stopped: no threshold has a fresh validated or WHOOP reading.",
 		],
 	])(
 		"with %s, it says what is watched, never 'all clear'",

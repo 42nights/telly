@@ -1,9 +1,11 @@
 # Checks for the health application at the repository root (apps/, packages/, agents/, root manifests).
 # NOOP's own workflows are separate and cover noop/.
 #
-# Every job runs on every PR so that `health / required` always reports: it passes when the app is
-# untouched (all checks skipped on purpose), and otherwise only when every check succeeded. Make
-# `health / required` the one required status check; never require the individual jobs.
+# `changes` picks the checks whose files changed (one paths filter per check; the shared root files
+# in `&all` run every check) and the rest are skipped, so docs- or data-only PRs run nothing heavy.
+# Every PR still gets `health / required`: it passes only when each picked check succeeded and each
+# other check was skipped. Make `health / required` the one required status check; never require
+# the individual jobs.
 #
 # `check` and `structure` run on the runner named by the repository variable HEALTH_RUNNER (a
 # Namespace label, see README.md) and on ubuntu-latest when it is unset. `changes` and
@@ -40,77 +42,116 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      health: ${{ steps.filter.outputs.health }}
+      # JSON lists, for example ["lint","db"] and ["apps/web"]; everything on a manual run.
+      checks: ${{ steps.pick.outputs.checks }}
+      workspaces: ${{ steps.pick.outputs.workspaces }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request'
+      # A pull request is compared with its base. A push is compared with the commit before the push
+      # (github.event.before..github.sha), because base is the pushed branch itself, so a UI-only
+      # merge runs only the UI checks on main.
+      # A filter name without `./` is a check. `lint` and `structure` have the same files, so the
+      # `check` matrix is never empty when `structure` runs. A filter name with `./` is a workspace:
+      # its `check-types` and `bun test` run when it or a workspace it imports changed.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.ref_name || '' }}
           filters: |
-            health:
+            lint: &source
+              - &all
+                - '.github/workflows/health.yml'
+                - 'package.json'
+                - 'bun.lock'
+                - 'bunfig.toml'
+                - 'tsconfig.json'
+                - 'packages/config/**'
+                - 'patches/**'
               - 'apps/**'
               - 'packages/**'
               - 'agents/**'
               - 'spacetimedb/**'
-              - 'patches/**'
-              - 'package.json'
-              - 'bun.lock'
-              - 'bunfig.toml'
-              - 'tsconfig.json'
+              - 'scripts/**'
               - 'biome.json'
               - 'bts.jsonc'
               - '.fallowrc.json'
               - '.sentrux/**'
-              - 'scripts/**'
               - '.gitignore'
-              - '.github/workflows/health.yml'
+            quality: *source
+            structure: *source
+            ./apps/web:
+              - *all
+              - 'apps/web/**'
+              - 'packages/ui/**'
+              - 'packages/contracts/**'
+            ./apps/server:
+              - *all
+              - 'apps/server/**'
+              - 'packages/contracts/**'
+              - 'packages/db/**'
+            ./apps/native:
+              - *all
+              - 'apps/native/**'
+              - 'packages/contracts/**'
+            ./packages/ui:
+              - *all
+              - 'packages/ui/**'
+            ./packages/contracts:
+              - *all
+              - 'packages/contracts/**'
+            # Generated from the module.
+            ./packages/db:
+              - *all
+              - 'packages/db/**'
+              - 'spacetimedb/**'
+            ./spacetimedb:
+              - *all
+              - 'spacetimedb/**'
+            build-smoke:
+              - *all
+              - 'apps/server/**'
+              - 'packages/contracts/**'
+              - 'packages/db/**'
+            web-smoke:
+              - *all
+              - 'apps/web/**'
+              - 'packages/ui/**'
+              - 'packages/contracts/**'
+            # db:test runs the server's route and integration tests against the module.
+            db:
+              - *all
+              - 'spacetimedb/**'
+              - 'packages/db/**'
+              - 'packages/contracts/**'
+              - 'apps/server/**'
+              - 'scripts/db-test.sh'
+              - 'scripts/coverage-summary.ts'
+            # contract.json is generated from the shared schemas in packages/contracts.
+            fetch-agent:
+              - *all
+              - 'agents/fetch/**'
+              - 'packages/contracts/**'
+      # `types` and `test` run when a workspace changed.
+      - id: pick
+        env:
+          CHANGED: ${{ github.event_name == 'workflow_dispatch' && '["lint","quality","structure","build-smoke","web-smoke","db","fetch-agent","./apps/web","./apps/server","./apps/native","./packages/ui","./packages/contracts","./packages/db","./spacetimedb"]' || steps.filter.outputs.changes }}
+        run: |
+          echo "$CHANGED" | jq -c 'map(select(startswith("./")))' | sed 's/^/workspaces=/' >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" | jq -c 'map(select(startswith("./") | not)) + (if any(startswith("./")) then ["types","test"] else [] end)' |
+            sed 's/^/checks=/' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
 
   check:
     needs: changes
-    if: needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.changes.outputs.checks != '[]'
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: lint
-            run: bun run lint
-          - name: types
-            run: bun run check-types
-          - name: test
-            run: bun run test
-          - name: quality
-            run: bun run check:quality
-          - name: build-smoke
-            run: bun run --filter server build && bun run smoke && bun run --filter web build
-          # Headless Chromium against the built web app with a faked server and sign-in.
-          - name: web-smoke
-            run: >-
-              (cd apps/web && bunx playwright install --with-deps chromium) &&
-              bun run --filter web smoke
-          # Fails when packages/db is stale against spacetimedb/, then `bun run coverage`: the unit
-          # tests, then the family-access, connection-recovery, server-lifecycle (the built server
-          # under Node), and integration tests (real sign-in and user paths, fake providers) against
-          # an isolated in-memory local database, then per-package coverage of both. Last, the
-          # crash-restart and backup/restore drill. db:test runs its files at the same time, one
-          # database each; see scripts/db-test.sh.
-          - name: db
-            run: >-
-              bun run db:generate &&
-              git diff --exit-code -- packages/db &&
-              test -z "$(git status --porcelain -- packages/db)" &&
-              bun run coverage &&
-              bun run db:drill
-          # Fails when agents/fetch/contract.json is stale against the shared schemas, then runs the
-          # Python worker's tests with its pinned requirements.
-          - name: fetch-agent
-            run: >-
-              bun run --filter @health/contracts agent-contract &&
-              git diff --exit-code -- agents/fetch/contract.json &&
-              python -m venv agents/fetch/.venv &&
-              agents/fetch/.venv/bin/pip install -r agents/fetch/requirements.txt &&
-              cd agents/fetch && .venv/bin/python -m unittest -v
+        name: ${{ fromJSON(needs.changes.outputs.checks) }}
+        exclude:
+          - name: structure
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,7 +198,49 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: ${{ matrix.run }}
+      - if: matrix.name == 'lint'
+        run: bun run lint
+      # Only the workspaces that `changes` picked.
+      - if: matrix.name == 'types'
+        env:
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bun run $(echo "$WORKSPACES" | jq -r '.[] | "--filter " + .') check-types
+      - if: matrix.name == 'test'
+        env:
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bun test $(echo "$WORKSPACES" | jq -r '.[]')
+      - if: matrix.name == 'quality'
+        run: bun run check:quality
+      # The web build runs in `types` (apps/web check-types) and in `web-smoke`.
+      - if: matrix.name == 'build-smoke'
+        run: bun run --filter server build && bun run smoke
+      # Headless Chromium against the built web app with a faked server and sign-in.
+      - if: matrix.name == 'web-smoke'
+        run: >-
+          (cd apps/web && bunx playwright install --with-deps chromium) &&
+          bun run --filter web smoke
+      # Fails when packages/db is stale against spacetimedb/, then `bun run coverage`: the unit
+      # tests, then the family-access, connection-recovery, server-lifecycle (the built server
+      # under Node), and integration tests (real sign-in and user paths, fake providers) against
+      # an isolated in-memory local database, then per-package coverage of both. Last, the
+      # crash-restart and backup/restore drill. db:test runs its files at the same time, one
+      # database each; see scripts/db-test.sh.
+      - if: matrix.name == 'db'
+        run: >-
+          bun run db:generate &&
+          git diff --exit-code -- packages/db &&
+          test -z "$(git status --porcelain -- packages/db)" &&
+          bun run coverage &&
+          bun run db:drill
+      # Fails when agents/fetch/contract.json is stale against the shared schemas, then runs the
+      # Python worker's tests with its pinned requirements.
+      - if: matrix.name == 'fetch-agent'
+        run: >-
+          bun run --filter @health/contracts agent-contract &&
+          git diff --exit-code -- agents/fetch/contract.json &&
+          python -m venv agents/fetch/.venv &&
+          agents/fetch/.venv/bin/pip install -r agents/fetch/requirements.txt &&
+          cd agents/fetch && .venv/bin/python -m unittest -v
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && matrix.name == 'db'
         with:
@@ -172,7 +255,7 @@ jobs:
 
   structure:
     needs: changes
-    if: needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch'
+    if: contains(fromJSON(needs.changes.outputs.checks), 'structure')
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -203,16 +286,15 @@ jobs:
     runs-on: ${{ vars.HEALTH_RUNNER || 'ubuntu-latest' }}
     steps:
       - env:
-          CHANGED: ${{ needs.changes.outputs.health == 'true' || github.event_name == 'workflow_dispatch' }}
+          CHECKS: ${{ needs.changes.outputs.checks }}
           CHANGES: ${{ needs.changes.result }}
           CHECK: ${{ needs.check.result }}
           STRUCTURE: ${{ needs.structure.result }}
         run: |
-          echo "changed=$CHANGED changes=$CHANGES check=$CHECK structure=$STRUCTURE"
+          echo "checks=$CHECKS changes=$CHANGES check=$CHECK structure=$STRUCTURE"
           [ "$CHANGES" = success ] || { echo "::error::change detection did not succeed"; exit 1; }
-          if [ "$CHANGED" = true ]; then
-            [ "$CHECK" = success ] && [ "$STRUCTURE" = success ] && exit 0
-            echo "::error::a health check failed, was cancelled, or was skipped"; exit 1
-          fi
-          [ "$CHECK" = skipped ] && [ "$STRUCTURE" = skipped ] && exit 0
-          echo "::error::checks ran although the health app did not change"; exit 1
+          # A picked check must succeed; a check that was not picked must be skipped.
+          want_check=skipped; [ "$CHECKS" = '[]' ] || want_check=success
+          want_structure=skipped; case "$CHECKS" in *'"structure"'*) want_structure=success ;; esac
+          [ "$CHECK" = "$want_check" ] && [ "$STRUCTURE" = "$want_structure" ] && exit 0
+          echo "::error::check is $CHECK (want $want_check), structure is $STRUCTURE (want $want_structure)"; exit 1

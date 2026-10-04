@@ -1389,7 +1389,13 @@ export const recordSample = spacetimedb.reducer(
 			receivedAt: ctx.timestamp,
 			recordedBy: ctx.sender,
 		});
-		if (stored.quality.tag === "Validated") raiseThresholdAlerts(ctx, stored);
+		// Validated samples raise alerts, and so do real WHOOP readings through NOOP (`noop:` sources):
+		// a captain decision for the demo. They stay labelled unvalidated everywhere they are shown.
+		if (
+			stored.quality.tag === "Validated" ||
+			(!stored.synthetic && stored.source.startsWith("noop:"))
+		)
+			raiseThresholdAlerts(ctx, stored);
 	},
 );
 

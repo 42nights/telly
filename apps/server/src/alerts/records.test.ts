@@ -75,4 +75,14 @@ describe("monitoring never reports in range without fresh validated data", () =>
 			"out_of_range",
 		);
 	});
+
+	test("a real WHOOP reading through NOOP drives monitoring; synthetic NOOP data does not", () => {
+		const whoop = { source: "noop:my-whoop", quality: "unvalidated" as const };
+		expect(
+			stateOf([sample(10, 150, { ...whoop, synthetic: false })]).state,
+		).toBe("out_of_range");
+		expect(
+			stateOf([sample(10, 150, { ...whoop, synthetic: true })]).reason,
+		).toBe("missing");
+	});
 });

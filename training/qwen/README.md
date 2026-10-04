@@ -1,6 +1,6 @@
 # Qwen health-cue post-training on River
 
-This folder trains and serves the model that turns validated health readings into one short cue, such as a walk reminder.
+This folder trains and serves the model that turns health readings into one short cue, such as a walk reminder.
 River AI runs the training and the inference. The model never runs on the glasses.
 Plan: [`docs/board.html`](../../docs/board.html) (`sys-training`, `sys-models`). Issues: [#9](https://github.com/ayaangazali/telly/issues/9) (River access) and [#10](https://github.com/ayaangazali/telly/issues/10) (training and inference).
 
