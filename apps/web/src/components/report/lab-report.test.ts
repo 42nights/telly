@@ -39,6 +39,23 @@ describe("lab report contract", () => {
 		expect(report.synthetic).toBe(true);
 		// No result dropped from the source's 40.
 		expect(report.results.length).toBe(40);
+		// Without results there is no report.
+		expect(rejects(LabReport, { ...json, results: [] })).toBe(true);
+	});
+
+	test("a real record and a text result decode; an empty text result does not", async () => {
+		const json = await Bun.file(
+			new URL(
+				"../../../public/fixtures/lab-report.synthetic.json",
+				import.meta.url,
+			),
+		).json();
+		const text = { ...json.results[0], value: "Negative", unit: null };
+		expect(rejects(LabReport, { ...json, synthetic: false })).toBe(false);
+		expect(rejects(LabReport, { ...json, results: [text] })).toBe(false);
+		expect(
+			rejects(LabReport, { ...json, results: [{ ...text, value: "" }] }),
+		).toBe(true);
 	});
 
 	test("a range with no bound, or with low above high, is rejected", () => {

@@ -4,6 +4,7 @@ import {
 	type LabReport,
 	type ReferenceRange,
 } from "@health/contracts/lab-report";
+import type { ReactNode } from "react";
 
 type LabResult = LabReport["results"][number];
 
@@ -58,13 +59,17 @@ function Reading({
 	return (
 		<div>
 			{String(shown)}
-			{range && <Flag value={shown} range={range} />}
+			{range && typeof shown === "number" && (
+				<Flag value={shown} range={range} />
+			)}
 			{correction && (
 				<>
 					{" (corrected)"}
 					<span className="block text-sm">
 						Record value: {String(result.value)}
-						{range && <Flag value={result.value} range={range} />}
+						{range && typeof result.value === "number" && (
+							<Flag value={result.value} range={range} />
+						)}
 					</span>
 				</>
 			)}
@@ -74,10 +79,45 @@ function Reading({
 
 const cell = "border border-black p-2 text-left align-top";
 
+/** Every report table: scrolls sideways on a phone, prints in full. */
+function ReportTable({
+	caption,
+	children,
+}: {
+	caption: string;
+	children: ReactNode;
+}) {
+	return (
+		<div className="relative overflow-x-auto print:overflow-visible">
+			<table className="w-full border-collapse text-base print:text-[10pt]">
+				<caption className="caption-top pb-2 text-left">{caption}</caption>
+				{children}
+			</table>
+		</div>
+	);
+}
+
+/** Body-system grouping. TSH is the only
+ * hormone here, so its section is named Thyroid. A code not listed goes under "Other results". */
+const GROUPS: readonly (readonly [string, readonly string[]])[] = [
+	["Heart and lipids", ["2093-3", "2085-9", "13457-7", "2571-8"]],
+	["Metabolic", ["4548-4"]],
+	["Thyroid", ["3016-3"]],
+	[
+		"Kidney and electrolytes",
+		["2160-0", "98979-8", "3094-0", "2951-2", "2823-3"],
+	],
+	["Blood count", ["718-7", "6690-2", "777-3"]],
+];
+const groupOf = (loinc: string) =>
+	GROUPS.find(([, codes]) => codes.includes(loinc))?.[0] ?? "Other results";
+
 export function LabTable({
 	results,
 	corrections,
+	synthetic,
 }: {
+	synthetic: boolean;
 	results: readonly LabResult[];
 	corrections: ReadonlyMap<string, LabCorrection>;
 }) {
@@ -93,89 +133,102 @@ export function LabTable({
 
 	return (
 		<>
-			<div className="relative overflow-x-auto print:overflow-visible">
-				<table className="w-full border-collapse text-base print:text-[10pt]">
-					<caption className="caption-top pb-2 text-left">
-						Synthetic demo data. Values, units, and ranges as written in the
-						source record. Columns are specimen collection dates.
-					</caption>
-					<thead>
-						<tr>
-							<th scope="col" className={cell}>
-								Test
+			<ReportTable
+				caption={`${synthetic ? "Synthetic demo data. " : ""}Values, units, and ranges as written in the source record. Columns are specimen collection dates. Rows are grouped by body system.`}
+			>
+				<thead>
+					<tr>
+						<th scope="col" className={cell}>
+							Test
+						</th>
+						{dates.map((date) => (
+							<th
+								key={date}
+								scope="col"
+								className={`${cell} whitespace-nowrap`}
+							>
+								<time dateTime={date}>{formatDate(date)}</time>
 							</th>
-							{dates.map((date) => (
-								<th
-									key={date}
-									scope="col"
-									className={`${cell} whitespace-nowrap`}
-								>
-									<time dateTime={date}>{formatDate(date)}</time>
-								</th>
-							))}
-							<th scope="col" className={cell}>
-								Units
-							</th>
-							<th scope="col" className={cell}>
-								Range in the record
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{[...rows].map(([key, row]) => {
-							const [first] = row;
-							if (first === undefined) return null;
-							return (
-								<tr key={key} className="break-inside-avoid">
-									<th scope="row" className={cell}>
-										<span className="block font-bold">
-											{shortName(first.name)}
-										</span>
-										<span className="block font-normal text-sm">
-											LOINC {first.loinc}
-										</span>
+						))}
+						<th scope="col" className={cell}>
+							Units
+						</th>
+						<th scope="col" className={cell}>
+							Range in the record
+						</th>
+					</tr>
+				</thead>
+				{[...GROUPS.map(([name]) => name), "Other results"].map((group) => {
+					const inGroup = [...rows].filter(
+						([, [first]]) => groupOf(first?.loinc ?? "") === group,
+					);
+					return (
+						inGroup.length > 0 && (
+							<tbody key={group}>
+								<tr>
+									<th
+										colSpan={dates.length + 3}
+										scope="rowgroup"
+										className={`${cell} font-bold`}
+									>
+										{group}
 									</th>
-									{dates.map((date) => {
-										const drawn = row.filter((r) => r.collectedAt === date);
-										return (
-											<td key={date} className={cell}>
-												{drawn.length === 0 ? (
-													<>
-														<span aria-hidden>—</span>
-														<span className="sr-only">
-															not tested on this date
-														</span>
-													</>
-												) : (
-													drawn.map((result) => (
-														<Reading
-															key={result.id}
-															result={result}
-															correction={corrections.get(result.id)}
-														/>
-													))
-												)}
-											</td>
-										);
-									})}
-									<td className={cell}>{first.unit}</td>
-									<td className={cell}>
-										{first.referenceRange?.text ?? "No range in the record"}
-									</td>
 								</tr>
-							);
-						})}
-					</tbody>
-				</table>
-			</div>
+								{inGroup.map(([key, row]) => {
+									const [first] = row;
+									if (first === undefined) return null;
+									return (
+										<tr key={key} className="break-inside-avoid">
+											<th scope="row" className={cell}>
+												<span className="block font-bold">
+													{shortName(first.name)}
+												</span>
+												<span className="block font-normal text-sm">
+													LOINC {first.loinc}
+												</span>
+											</th>
+											{dates.map((date) => {
+												const drawn = row.filter((r) => r.collectedAt === date);
+												return (
+													<td key={date} className={cell}>
+														{drawn.length === 0 ? (
+															<>
+																<span aria-hidden>—</span>
+																<span className="sr-only">
+																	not tested on this date
+																</span>
+															</>
+														) : (
+															drawn.map((result) => (
+																<Reading
+																	key={result.id}
+																	result={result}
+																	correction={corrections.get(result.id)}
+																/>
+															))
+														)}
+													</td>
+												);
+											})}
+											<td className={cell}>{first.unit ?? ""}</td>
+											<td className={cell}>
+												{first.referenceRange?.text ?? ""}
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						)
+					);
+				})}
+			</ReportTable>
 			<p>
 				▲ H: above the range in the record · ▼ L: below the range in the record
 				· no mark: within the range in the record · —: not tested on this date
 			</p>
 			<p>
 				Flags compare each value with the range in its own record, bounds
-				included. No interpretation is given. Measurement uncertainty is not
-				provided in the record.
+				included. No interpretation is given.
 			</p>
 		</>
 	);

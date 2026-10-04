@@ -88,11 +88,13 @@ export function CorrectionForm({
 				onChange={(event) => setResultId(event.currentTarget.value)}
 				className={`win95-inset bg-card px-2 ${field}`}
 			>
-				{results.map((r) => (
-					<option key={r.id} value={r.id}>
-						{`${shortName(r.name)} · ${formatDate(r.collectedAt)} · ${r.value} ${r.unit}`}
-					</option>
-				))}
+				{results
+					.filter((r) => typeof r.value === "number")
+					.map((r) => (
+						<option key={r.id} value={r.id}>
+							{`${shortName(r.name)} · ${formatDate(r.collectedAt)} · ${r.value} ${r.unit ?? ""}`}
+						</option>
+					))}
 			</select>
 			<Label htmlFor={`${id}-value`} className="text-base">
 				Corrected value
@@ -111,19 +113,31 @@ export function CorrectionForm({
 	);
 }
 
-export function NoteSection({
+/** Caregiver observations or questions for a clinician, with who wrote each and when. Prints. */
+export function NoteList({ notes }: { notes: readonly ReviewNote[] }) {
+	return (
+		<ul className="grid gap-2">
+			{notes.map((note) => (
+				<li key={`${note.at}|${note.text}`}>
+					<p className="whitespace-pre-wrap">{note.text}</p>
+					<p className="text-base">
+						{note.by} · {formatTime(note.at)}
+					</p>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** Screen only, while drafting: adds one note. */
+export function NoteForm({
 	label,
-	emptyText,
-	notes,
 	reviewer,
 	onAdd,
 }: {
 	label: string;
-	emptyText: string;
-	notes: readonly ReviewNote[];
 	reviewer: string;
-	/** `undefined` once the report is reviewed: the list stays, the form goes. */
-	onAdd: ((note: ReviewNote) => void) | undefined;
+	onAdd: (note: ReviewNote) => void;
 }) {
 	const id = useId();
 	const input = useRef<HTMLTextAreaElement>(null);
@@ -144,40 +158,22 @@ export function NoteSection({
 		setError(undefined);
 		setText("");
 		input.current?.focus();
-		onAdd?.(note);
+		onAdd(note);
 	};
 
 	return (
-		<>
-			{notes.length === 0 ? (
-				<p>{emptyText}</p>
-			) : (
-				<ul className="grid gap-2">
-					{notes.map((note) => (
-						<li key={`${note.at}|${note.text}`}>
-							<p className="whitespace-pre-wrap">{note.text}</p>
-							<p className="text-base">
-								{note.by} · {formatTime(note.at)}
-							</p>
-						</li>
-					))}
-				</ul>
-			)}
-			{onAdd && (
-				<form onSubmit={submit} className="grid gap-2 print:hidden">
-					<Label htmlFor={id} className="text-base">
-						{label}
-					</Label>
-					<Textarea
-						id={id}
-						ref={input}
-						value={text}
-						onChange={(event) => setText(event.currentTarget.value)}
-						className="min-h-24 text-base md:text-base"
-					/>
-					<Submit error={error} label="Add" />
-				</form>
-			)}
-		</>
+		<form onSubmit={submit} className="mt-8 grid gap-2 print:hidden">
+			<Label htmlFor={id} className="text-base">
+				{label}
+			</Label>
+			<Textarea
+				id={id}
+				ref={input}
+				value={text}
+				onChange={(event) => setText(event.currentTarget.value)}
+				className="min-h-24 text-base md:text-base"
+			/>
+			<Submit error={error} label="Add" />
+		</form>
 	);
 }

@@ -40,9 +40,10 @@ const LabResult = Schema.Struct({
 	loinc: Schema.String.check(Schema.isPattern(/^\d{1,7}-\d$/)),
 	/** The record's test name, verbatim. */
 	name: Schema.NonEmptyString,
-	value: Schema.Finite,
-	/** UCUM, verbatim. */
-	unit: Schema.NonEmptyString,
+	/** A number gets a flag; a text result (such as "Negative") is shown as written. */
+	value: Schema.Union([Schema.Finite, Schema.NonEmptyString]),
+	/** UCUM, verbatim. `null`: the record gives no unit (usual for text results). */
+	unit: Schema.NullOr(Schema.NonEmptyString),
 	/** Specimen collection time. */
 	collectedAt: UtcTime,
 	/** `null`: the record has no range, so no flag is shown. */
@@ -52,8 +53,8 @@ const LabResult = Schema.Struct({
 /** Layout version 1. A newer version fails decoding instead of rendering wrongly. */
 export const LabReport = Schema.Struct({
 	layoutVersion: Schema.Literal(1),
-	/** Layout v1 renders synthetic demo data only: a real record fails decoding instead of being mislabelled. */
-	synthetic: Schema.Literal(true),
+	/** `true` shows the synthetic banner and captions; a real record renders without them. */
+	synthetic: Schema.Boolean,
 	source: Schema.Struct({
 		name: Schema.NonEmptyString,
 		url: Schema.NonEmptyString,
@@ -66,8 +67,8 @@ export const LabReport = Schema.Struct({
 		birthDate: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
 		recordId: Schema.NonEmptyString,
 	}),
-	/** Empty: the results section shows "Not available". */
-	results: Schema.Array(LabResult),
+	/** At least one: without results there is no report, so an empty record fails decoding. */
+	results: Schema.NonEmptyArray(LabResult),
 });
 export type LabReport = typeof LabReport.Type;
 

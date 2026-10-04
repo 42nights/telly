@@ -18,7 +18,11 @@ import {
 	LabTable,
 	shortName,
 } from "@/components/report/lab-table";
-import { CorrectionForm, NoteSection } from "@/components/report/review-forms";
+import {
+	CorrectionForm,
+	NoteForm,
+	NoteList,
+} from "@/components/report/review-forms";
 
 export const Route = createFileRoute("/reports")({
 	component: ReportsComponent,
@@ -50,7 +54,7 @@ function ReportsComponent() {
 	return (
 		<main className="min-h-0 overflow-y-auto p-2 print:overflow-visible print:bg-white print:p-0">
 			{state === undefined && <p>Loading the report…</p>}
-			{/* An unreadable report is unavailable, never blank and never "all clear". */}
+			{/* An unreadable report, or one with no results, is unavailable: never blank, never "all clear". */}
 			{state?.kind === "error" && (
 				<p role="alert">Report unavailable: {state.message}</p>
 			)}
@@ -152,10 +156,7 @@ function Toolbar({
 				<Button type="button" disabled className="px-4 text-base">
 					Send to hospital (Finchnode)
 				</Button>
-				<p>
-					Not available yet: Finchnode reads records but cannot deliver a
-					report.
-				</p>
+				<p>Finchnode reads records but cannot deliver a report.</p>
 			</div>
 		</div>
 	);
@@ -172,28 +173,26 @@ function Meta({
 	reviewed: Review | undefined;
 }) {
 	const { patient, source } = report;
-	const latest = report.results
-		.map((r) => r.collectedAt)
-		.sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+	// The contract requires at least one result, so this is a real collection time.
+	const latest = Math.max(
+		...report.results.map((r) => Date.parse(r.collectedAt)),
+	);
 	const lines: [string, string][] = [
 		[
 			"Patient",
 			`${patient.name} · ${patient.sex} · Born ${patient.birthDate} · Record ID ${patient.recordId}`,
 		],
 		[
-			"Source record",
+			"Blood results source",
 			`${source.name}, fetched ${formatUtc(source.fetchedAt)} · SHA-256 ${source.sha256.slice(0, 12)}…`,
 		],
-		["Performing laboratory", "None (synthetic demo data)"],
 		[
 			"Summary generated",
 			`${formatTime(generatedAt)}. This is a summary of existing results, not a new lab test. Each result keeps its own collection date.`,
 		],
 		[
-			"Most recent result",
-			latest === undefined
-				? "Not available. The source record has no laboratory results."
-				: `${formatDate(latest)} (${Math.floor((generatedAt.getTime() - Date.parse(latest)) / DAY_MS)} days before this summary)`,
+			"Most recent blood result",
+			`${formatDate(new Date(latest).toISOString())} (${Math.floor((generatedAt.getTime() - latest) / DAY_MS)} days before this summary)`,
 		],
 		["Layout", `v${report.layoutVersion}`],
 		[
@@ -202,10 +201,7 @@ function Meta({
 				? `Reviewed by ${reviewed.by} on ${formatTime(reviewed.at)}. A family member's review is not a clinician review.`
 				: "Draft. Not reviewed.",
 		],
-		[
-			"Delivery",
-			"Not sent. Sending to a hospital through Finchnode is not available yet.",
-		],
+		["Delivery", "Not sent."],
 	];
 	return (
 		<dl className="mt-4 grid gap-1">
@@ -219,7 +215,7 @@ function Meta({
 	);
 }
 
-/** Prints. `onRemove` is `undefined` once the report is reviewed. */
+/** Prints; rendered only when there is a correction. `onRemove` is `undefined` once the report is reviewed. */
 function Corrections({
 	results,
 	corrections,
@@ -234,33 +230,39 @@ function Corrections({
 			<h3 className="break-after-avoid font-bold text-xl">
 				Corrections by the reviewer (record values kept)
 			</h3>
-			{corrections.size === 0 ? (
-				<p>No corrections were made. Values are as recorded.</p>
-			) : (
-				<ul className="grid gap-2">
-					{results.map((result) => {
-						const c = corrections.get(result.id);
-						return (
-							c && (
-								<li key={result.id}>
-									{`${shortName(result.name)} · ${formatDate(result.collectedAt)}: record ${result.value} ${result.unit}, corrected to ${c.value} ${result.unit} · by ${c.correctedBy} · ${formatTime(c.correctedAt)}`}
-									{onRemove && (
-										<Button
-											type="button"
-											onClick={() => onRemove(result.id)}
-											aria-label={`Remove correction to ${shortName(result.name)}, ${formatDate(result.collectedAt)}`}
-											className="ml-2 px-4 text-base print:hidden"
-										>
-											Remove
-										</Button>
-									)}
-								</li>
-							)
-						);
-					})}
-				</ul>
-			)}
+			<ul className="grid gap-2">
+				{results.map((result) => {
+					const c = corrections.get(result.id);
+					return (
+						c && (
+							<li key={result.id}>
+								{`${shortName(result.name)} · ${formatDate(result.collectedAt)}: record ${result.value} ${result.unit ?? ""}, corrected to ${c.value} ${result.unit ?? ""} · by ${c.correctedBy} · ${formatTime(c.correctedAt)}`}
+								{onRemove && (
+									<Button
+										type="button"
+										onClick={() => onRemove(result.id)}
+										aria-label={`Remove correction to ${shortName(result.name)}, ${formatDate(result.collectedAt)}`}
+										className="ml-2 px-4 text-base print:hidden"
+									>
+										Remove
+									</Button>
+								)}
+							</li>
+						)
+					);
+				})}
+			</ul>
 		</>
+	);
+}
+
+/** Shown only when the source marks the record synthetic; a real record has no banner. */
+function SyntheticBanner({ synthetic }: { synthetic: boolean }) {
+	if (!synthetic) return null;
+	return (
+		<p className="border-2 border-black border-solid p-2 font-bold">
+			Synthetic demo data · Not a real person · Not from a laboratory
+		</p>
 	);
 }
 
@@ -296,88 +298,66 @@ function Report({ report }: { report: LabReport }) {
 				aria-labelledby={headingId}
 				className="mx-auto max-w-5xl bg-card p-4 text-card-foreground text-lg md:p-8 print:max-w-none print:p-0 print:text-[11pt]"
 			>
-				<p className="border-2 border-black border-solid p-2 font-bold">
-					Synthetic demo data · Not a real person · Not from a laboratory
-				</p>
+				<SyntheticBanner synthetic={report.synthetic} />
 				<h1 id={headingId} className="mt-4 font-bold text-3xl">
-					Lab results summary
+					Health summary: blood results
 				</h1>
 				<Meta report={report} generatedAt={generatedAt} reviewed={reviewed} />
 
-				<Section n={1} title="Dated laboratory results">
-					{results.length === 0 ? (
-						<p>Not available. The source record has no laboratory results.</p>
-					) : (
-						<>
-							<LabTable results={results} corrections={corrections} />
-							<Corrections
-								results={results}
-								corrections={corrections}
-								onRemove={draft ? removeCorrection : undefined}
-							/>
-							{draft && (
-								<CorrectionForm
-									results={results}
-									reviewer={reviewer}
-									onCorrect={(c) =>
-										setCorrections((previous) =>
-											new Map(previous).set(c.resultId, c),
-										)
-									}
-								/>
-							)}
-						</>
+				<Section n={1} title="Blood results">
+					<LabTable
+						results={results}
+						corrections={corrections}
+						synthetic={report.synthetic}
+					/>
+					{corrections.size > 0 && (
+						<Corrections
+							results={results}
+							corrections={corrections}
+							onRemove={draft ? removeCorrection : undefined}
+						/>
+					)}
+					{draft && (
+						<CorrectionForm
+							results={results}
+							reviewer={reviewer}
+							onCorrect={(c) =>
+								setCorrections((previous) =>
+									new Map(previous).set(c.resultId, c),
+								)
+							}
+						/>
 					)}
 				</Section>
 
-				{/* ponytail: sections 2, 3, 5, and 6 stay static text until a connected source and its contract exist. */}
-				<Section n={2} title="Wearable observations">
-					<p>
-						Not available. NOOP is not connected, so no wearable readings are
-						included. A wearable score is not a blood test.
-					</p>
-				</Section>
-				<Section n={3} title="Wearer reports">
-					<p>
-						Not available. No source for the wearer's own reports is connected
-						yet.
-					</p>
-				</Section>
-				<Section n={4} title="Caregiver observations">
-					<NoteSection
+				{/* A section with no entries is left out; its screen-only form still shows while drafting. */}
+				{observations.length > 0 && (
+					<Section n={2} title="Caregiver observations">
+						<NoteList notes={observations} />
+					</Section>
+				)}
+				{draft && (
+					<NoteForm
 						label="New caregiver observation"
-						emptyText="Not available. No caregiver observations were added."
-						notes={observations}
 						reviewer={reviewer}
-						onAdd={
-							draft
-								? (note) => setObservations((previous) => [...previous, note])
-								: undefined
-						}
+						onAdd={(note) => setObservations((previous) => [...previous, note])}
 					/>
-				</Section>
-				<Section n={5} title="Nutrition estimates">
-					<p>Not available. No nutrition source is connected yet.</p>
-				</Section>
-				<Section n={6} title="Unresolved events">
-					<p>
-						Not available. No event source is connected yet, so this section
-						cannot say whether anything is unresolved.
-					</p>
-				</Section>
-				<Section n={7} title="Questions for a clinician">
-					<NoteSection
+				)}
+				{questions.length > 0 && (
+					<Section
+						n={observations.length > 0 ? 3 : 2}
+						title="Questions for a clinician"
+					>
+						<NoteList notes={questions} />
+					</Section>
+				)}
+				{draft && (
+					<NoteForm
 						label="New question for a clinician"
-						emptyText="Not available. No questions were added."
-						notes={questions}
 						reviewer={reviewer}
-						onAdd={
-							draft
-								? (note) => setQuestions((previous) => [...previous, note])
-								: undefined
-						}
+						onAdd={(note) => setQuestions((previous) => [...previous, note])}
 					/>
-				</Section>
+				)}
 
 				<footer className="mt-8 border-black border-t-2 pt-4">
 					Demonstration only, made from synthetic data. This is not a laboratory
