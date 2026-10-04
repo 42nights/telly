@@ -3,10 +3,9 @@
     python train.py validate DATASET [--base-model MODEL]   local, free
     python train.py check --base-model MODEL                 free River access check
     python train.py train DATASET --base-model MODEL --name NAME --confirm-paid
-    python train.py deploy --checkpoint river://... --confirm-paid
 
 The prompt and output format comes from packages/contracts/src/cue-format.json, the same file the
-server sends to the deployment. Paid commands refuse to run without --confirm-paid. See
+server sends to River. Paid commands refuse to run without --confirm-paid. See
 training/qwen/README.md.
 """
 
@@ -254,25 +253,6 @@ def cmd_train(args):
     print(json.dumps(manifest, indent=2))
 
 
-def cmd_deploy(args):
-    require_paid(args)
-    _, client = river_client()
-    with closing(client):
-        deployment = client.create_deployment(
-            checkpoint=args.checkpoint,
-            unified_replicas=1,
-            idempotency_key=args.checkpoint,
-            wait=True,
-        )
-    if not deployment.is_serving:
-        fail(f"deployment {deployment.id} is {deployment.phase}: {deployment.phase_reason or 'no reason given'}")
-    print(f"Deployment {deployment.id} is serving.")
-    print("Set these on the server (RIVER_API_KEY too, from your secret store):")
-    print(f"QWEN_BASE_URL={deployment.base_url}")
-    print(f"QWEN_DEPLOYMENT={deployment.model}")
-    print(f"QWEN_CHECKPOINT={deployment.checkpoint}")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -291,11 +271,8 @@ def main():
     train.add_argument("--rank", type=int, default=16)
     train.add_argument("--seed", type=int, default=0)
     train.add_argument("--confirm-paid", action="store_true")
-    deploy = sub.add_parser("deploy", help="serve a checkpoint on a River dedicated deployment (paid)")
-    deploy.add_argument("--checkpoint", required=True)
-    deploy.add_argument("--confirm-paid", action="store_true")
     args = parser.parse_args()
-    {"validate": cmd_validate, "check": cmd_check, "train": cmd_train, "deploy": cmd_deploy}[args.command](args)
+    {"validate": cmd_validate, "check": cmd_check, "train": cmd_train}[args.command](args)
 
 
 if __name__ == "__main__":

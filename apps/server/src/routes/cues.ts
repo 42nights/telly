@@ -33,7 +33,7 @@ export const pickSamples = (
 
 /**
  * Qwen cue routes, relative to `/api/families/:familyId`: `POST /cues`. A cue is advice only; it
- * never touches thresholds or alerts. Without a configured deployment every request gets
+ * never touches thresholds or alerts. Without a configured River checkpoint every request gets
  * `unavailable`, never a canned cue.
  */
 export const cueRoutes = (qwen: QwenConfig | undefined) =>
@@ -57,7 +57,7 @@ export const cueRoutes = (qwen: QwenConfig | undefined) =>
 				format: "health-cue-v1",
 				model: {
 					provider: "river",
-					deployment: qwen.deployment,
+					baseModel: qwen.baseModel,
 					checkpoint: qwen.checkpoint,
 				},
 				input: {

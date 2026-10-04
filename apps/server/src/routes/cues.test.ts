@@ -1,7 +1,15 @@
-// The provider tests talk HTTP to a local protocol server that speaks the OpenAI-compatible chat
-// API River deployments expose. They prove this server's side of the protocol, not a live River
-// deployment or a trained checkpoint.
+// The provider tests talk gRPC to a local server that speaks River's queued chat API
+// (`river.api.v1.RiverService`). They prove this server's side of the protocol, not live River or
+// a trained checkpoint.
 import { afterAll, describe, expect, test } from "bun:test";
+import { BinaryReader, BinaryWriter, WireType } from "@bufbuild/protobuf/wire";
+import {
+	Server,
+	ServerCredentials,
+	type ServerUnaryCall,
+	type sendUnaryData,
+	status,
+} from "@grpc/grpc-js";
 import { ApiError, type HealthSample } from "@health/contracts";
 import { CueKind, cueFormat } from "@health/contracts/cues";
 import { Effect, Exit, Schema } from "effect";
@@ -9,42 +17,103 @@ import { Hono } from "hono";
 import type { FamilyDb } from "../db";
 import { ApiFailure, errorStatus, type FamilyEnv } from "../http";
 import {
+	encodeStrings,
 	type QwenConfig,
 	renderCueInput,
 	requestCue,
 } from "../integrations/qwen";
 import { cueRoutes, pickSamples } from "./cues";
 
-let reply: (signal: AbortSignal) => Response | Promise<Response> = () =>
-	new Response(null);
-let seen: { authorization: string | null; body: unknown } | undefined;
-const provider = Bun.serve({
-	port: 0,
-	async fetch(request) {
+// Each RetrieveFuture poll takes the next answer: a chat reply, `try_again`, `failed`, or a gRPC
+// error. With none left, the poll never answers.
+type Answer =
+	| { readonly status: number; readonly body: string }
+	| "pending"
+	| "failed"
+	| { readonly code: status };
+let answers: Array<Answer> = [];
+let seen:
+	| { key: unknown; checkpoint: string; baseModel: string; request: unknown }
+	| undefined;
+let polled = Promise.withResolvers<void>();
+let cancelled = Promise.withResolvers<void>();
+
+const LD = WireType.LengthDelimited;
+const raw = (bytes: Buffer) => bytes;
+const river = new Server();
+river.register(
+	"/river.api.v1.RiverService/ChatCompleteFromCheckpoint",
+	(call: ServerUnaryCall<Buffer, Buffer>, done: sendUnaryData<Buffer>) => {
+		const fields = new Map<number, string>();
+		const reader = new BinaryReader(call.request);
+		while (reader.pos < reader.len)
+			fields.set(reader.tag()[0], reader.string());
 		seen = {
-			authorization: request.headers.get("authorization"),
-			body: await request.json(),
+			key: call.metadata.get("x-api-key")[0],
+			checkpoint: fields.get(1) ?? "",
+			baseModel: fields.get(2) ?? "",
+			request: JSON.parse(fields.get(3) ?? "null"),
 		};
-		return reply(request.signal);
+		done(null, encodeStrings([[1, "request-1"]]));
 	},
-});
-afterAll(() => provider.stop(true));
+	raw,
+	raw,
+	"unary",
+);
+river.register(
+	"/river.api.v1.RiverService/RetrieveFuture",
+	(call: ServerUnaryCall<Buffer, Buffer>, done: sendUnaryData<Buffer>) => {
+		const answer = answers.shift();
+		polled.resolve();
+		if (answer === undefined)
+			return void call.on("cancelled", () => cancelled.resolve());
+		if (typeof answer === "object" && "code" in answer)
+			return done({ code: answer.code, details: "bad key test-key" }, null);
+		const writer = new BinaryWriter();
+		if (answer === "pending")
+			writer.tag(1, LD).fork().tag(1, LD).string("request-1").join();
+		else if (answer === "failed")
+			writer.tag(2, LD).fork().tag(2, LD).string("test-key").join();
+		else
+			writer
+				.tag(12, LD)
+				.fork()
+				.tag(1, LD)
+				.string(answer.body)
+				.tag(2, WireType.Varint)
+				.int32(answer.status)
+				.join();
+		done(null, Buffer.from(writer.finish()));
+	},
+	raw,
+	raw,
+	"unary",
+);
+const port = await new Promise<number>((resolve, reject) =>
+	river.bindAsync(
+		"127.0.0.1:0",
+		ServerCredentials.createInsecure(),
+		(error, bound) => (error ? reject(error) : resolve(bound)),
+	),
+);
+afterAll(() => river.forceShutdown());
 
 const qwen: QwenConfig = {
-	baseUrl: `${provider.url.origin}/v1/`,
-	deployment: "dep-test",
+	baseUrl: `http://127.0.0.1:${port}`,
+	baseModel: "Qwen/Qwen3.5-9B",
 	checkpoint: "river://run-test/sampler_weights/health-cue-v1-test",
 	apiKey: "test-key",
 };
 
-const completion = (content: string, finish_reason = "stop") =>
-	Response.json({
+const completion = (content: string, finish_reason = "stop") => ({
+	status: 200,
+	body: JSON.stringify({
 		id: "x",
-		model: "dep-test",
 		choices: [
 			{ index: 0, message: { role: "assistant", content }, finish_reason },
 		],
-	});
+	}),
+});
 
 const sample = (overrides: Partial<HealthSample>): HealthSample => ({
 	id: "1",
@@ -164,17 +233,22 @@ describe("cue route", () => {
 	});
 });
 
-describe("Qwen deployment adapter", () => {
-	test("sends the trained prompt with the key and decodes one cue", async () => {
-		reply = () =>
-			completion('{"kind":"walk","text":"A short walk may feel good."}');
+describe("River queued chat adapter", () => {
+	test("sends the trained prompt with the key, polls, and decodes one cue", async () => {
+		answers = [
+			"pending",
+			completion('{"kind":"walk","text":"A short walk may feel good."}'),
+		];
 		const cue = await Effect.runPromise(requestCue(qwen, [sample({})]));
 		expect(cue).toEqual({ kind: "walk", text: "A short walk may feel good." });
-		expect(seen?.authorization).toBe("Bearer test-key");
-		expect(seen?.body).toMatchObject({
-			model: "dep-test",
+		expect(answers).toEqual([]);
+		expect(seen?.key).toBe("test-key");
+		expect(seen?.checkpoint).toBe(qwen.checkpoint);
+		expect(seen?.baseModel).toBe(qwen.baseModel);
+		expect(seen?.request).toMatchObject({
+			model: qwen.baseModel,
 			temperature: 0,
-			stream: false,
+			chat_template_kwargs: { enable_thinking: false },
 			messages: [
 				{ role: "system", content: cueFormat.system },
 				{ role: "user", content: renderCueInput([sample({})]) },
@@ -188,54 +262,50 @@ describe("Qwen deployment adapter", () => {
 		expect(seen).toBeUndefined();
 	});
 
-	test("a deployment that is not serving is unavailable", async () => {
-		reply = () => new Response("scaled to zero", { status: 503 });
+	test.each<[string, Answer]>([
+		["a 503 chat reply", { status: 503, body: "" }],
+		["gRPC UNAVAILABLE", { code: status.UNAVAILABLE }],
+		["gRPC RESOURCE_EXHAUSTED", { code: status.RESOURCE_EXHAUSTED }],
+	])("%s is unavailable", async (_, answer) => {
+		answers = [answer];
 		expect((await failureOf(qwen))._tag).toBe("QwenUnavailable");
 	});
 
-	test.each([
-		[
-			"an auth failure",
-			() => new Response("bad key test-key", { status: 401 }),
-		],
-		["a non-JSON cue", () => completion("Take a walk!")],
-		["an unknown kind", () => completion('{"kind":"diagnose","text":"x"}')],
-		[
-			"an extra field",
-			() => completion('{"kind":"walk","text":"x","why":"y"}'),
-		],
+	test.each<[string, Answer]>([
+		["an auth failure", { code: status.UNAUTHENTICATED }],
+		["a failed request", "failed"],
+		["a 400 chat reply", { status: 400, body: '{"error":"test-key"}' }],
+		["a non-JSON cue", completion("Take a walk!")],
+		["an unknown kind", completion('{"kind":"diagnose","text":"x"}')],
+		["an extra field", completion('{"kind":"walk","text":"x","why":"y"}')],
 		[
 			"an over-long cue",
-			() => completion(`{"kind":"walk","text":"${"x".repeat(161)}"}`),
+			completion(`{"kind":"walk","text":"${"x".repeat(161)}"}`),
 		],
-		[
-			"a truncated reply",
-			() => completion('{"kind":"walk","text":"x"}', "length"),
-		],
-		["a malformed completion", () => Response.json({ choices: [] })],
-	])("%s is an upstream error that leaks no provider body", async (_, make) => {
-		reply = make;
-		const failure = await failureOf(qwen);
-		expect(failure._tag).toBe("QwenUpstreamError");
-		expect(failure.message).not.toContain("test-key");
-	});
+		["a truncated reply", completion('{"kind":"walk","text":"x"}', "length")],
+		["a malformed completion", { status: 200, body: '{"choices":[]}' }],
+	])(
+		"%s is an upstream error that leaks no provider body",
+		async (_, answer) => {
+			answers = [answer];
+			const failure = await failureOf(qwen);
+			expect(failure._tag).toBe("QwenUpstreamError");
+			expect(failure.message).not.toContain("test-key");
+		},
+	);
 
-	test("interrupting the request aborts the provider call", async () => {
-		const { promise: arrived, resolve: arrive } = Promise.withResolvers<void>();
-		const { promise: closed, resolve: close } = Promise.withResolvers<void>();
-		reply = (signal) => {
-			signal.addEventListener("abort", () => close());
-			arrive();
-			return new Promise<Response>(() => {});
-		};
+	test("interrupting the request cancels the River call", async () => {
+		answers = [];
+		polled = Promise.withResolvers<void>();
+		cancelled = Promise.withResolvers<void>();
 		const controller = new AbortController();
 		const run = Effect.runPromiseExit(requestCue(qwen, [sample({})]), {
 			signal: controller.signal,
 		});
-		await arrived;
+		await polled.promise;
 		controller.abort();
 		const exit = await run;
-		await closed;
+		await cancelled.promise;
 		expect(Exit.isFailure(exit)).toBe(true);
 	});
 });
