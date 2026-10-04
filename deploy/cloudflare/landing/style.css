@@ -205,6 +205,15 @@ h3 {
 	font-size: 1.125rem;
 }
 
+.doc {
+	max-width: 46rem;
+}
+
+.doc h2 {
+	font-size: 1.25rem;
+	padding-top: 0.5rem;
+}
+
 .taskbar {
 	padding: 0.625rem 1rem;
 	background: var(--face);
