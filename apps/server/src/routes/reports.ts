@@ -21,6 +21,7 @@ import type { R2Bucket } from "../integrations/r2";
 import type { Mailer } from "../integrations/resend";
 import { readReminderHistory } from "../reminders/records";
 import { reportPdf } from "../report-pdf";
+import { issuePdfLink } from "../report-pdf-links";
 import { readAccess, requireHealthRecords } from "./care-profile";
 import { readMeals } from "./meal-facts";
 
@@ -270,6 +271,16 @@ export const reportRoutes = (storage?: R2Bucket, mailer?: Mailer) =>
 				"Content-Disposition": `inline; filename="lab-report-${report.id.slice(0, 8)}.pdf"`,
 				"Cache-Control": "private, no-store",
 			});
+		})
+		// A one-use link to the same PDF, for the iOS app's system viewer (#364).
+		.post("/reports/:reportId/pdf-link", (c) => {
+			const report = findReport(c);
+			return c.json(
+				issuePdfLink(
+					emailedPdf(report),
+					`Telly lab report ${report.createdAt.slice(0, 10)}.pdf`,
+				) satisfies ReportPdfLink,
+			);
 		})
 		.post("/reports/:reportId/fields", async (c) => {
 			const fields = await decodeBody(c, ReportFields);

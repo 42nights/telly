@@ -127,7 +127,13 @@ describe("Preview PDF", () => {
 		const made = spyOn(URL, "createObjectURL").mockReturnValue(url);
 		const freed = spyOn(URL, "revokeObjectURL").mockReturnValue();
 		const calls = serve({ [PREVIEW]: { status: 200 } });
-		const view = renderActions();
+		const view = render(
+			<PdfActions
+				familyId="f1"
+				reportId="r 1"
+				reports={[{ ...report, id: "r 1" }]}
+			/>,
+		);
 		fireEvent.click(view.getByRole("button", { name: "Preview PDF" }));
 		const dialog = view.getByRole("dialog", { name: "Preview PDF" });
 		const frame = await within(dialog).findByTitle("Lab report PDF");
@@ -136,7 +142,9 @@ describe("Preview PDF", () => {
 		expect(open.getAttribute("href")).toBe(url);
 		expect(open.getAttribute("target")).toBe("_blank");
 		const download = within(dialog).getByRole("link", { name: "Download" });
-		expect(download.getAttribute("download")).toBe("lab-report-r 1.pdf");
+		expect(download.getAttribute("download")).toBe(
+			"Telly lab report 2026-03-01.pdf",
+		);
 		expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([PREVIEW]);
 		fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
 		expect(view.queryByRole("dialog")).toBeNull();
@@ -157,6 +165,72 @@ describe("Preview PDF", () => {
 		const alert = await view.findByRole("alert");
 		expect(alert.textContent).toStartWith("Not previewed:");
 		expect(view.queryByRole("link")).toBeNull();
+	});
+
+	describe("in the iOS app", () => {
+		const LINK = "POST /api/families/f1/reports/r%201/pdf-link";
+		let assign: Mock<Location["assign"]>;
+		let made: Mock<typeof URL.createObjectURL>;
+		beforeEach(() => {
+			assign = spyOn(window.location, "assign").mockImplementation(() => {});
+			// happy-dom cannot load blob: URLs into a frame.
+			made = spyOn(URL, "createObjectURL").mockReturnValue("about:blank#pdf");
+			globalThis.ReactNativeWebView = { postMessage: () => {} };
+		});
+		afterEach(() => {
+			assign.mockRestore();
+			made.mockRestore();
+			globalThis.ReactNativeWebView = undefined;
+		});
+
+		test.each([
+			["Open", ""],
+			["Download", "?download"],
+		])(
+			"%s leaves for a one-use link, which the shell opens",
+			async (name, query) => {
+				const calls = serve({
+					[PREVIEW]: { status: 200 },
+					[LINK]: {
+						json: {
+							url: "/api/report-pdf-links/t1",
+							expiresAt: "2026-03-01T09:05:00Z",
+						},
+					},
+				});
+				const view = renderActions();
+				fireEvent.click(view.getByRole("button", { name: "Preview PDF" }));
+				const dialog = view.getByRole("dialog", { name: "Preview PDF" });
+				fireEvent.click(await within(dialog).findByRole("button", { name }));
+				await waitFor(() =>
+					expect(assign).toHaveBeenCalledWith(
+						`http://server.test/api/report-pdf-links/t1${query}`,
+					),
+				);
+				expect(within(dialog).queryByRole("link")).toBeNull();
+				expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+					PREVIEW,
+					LINK,
+				]);
+			},
+		);
+
+		test("a refused link says why and leaves the page alone", async () => {
+			serve({
+				[PREVIEW]: { status: 200 },
+				[LINK]: {
+					status: 403,
+					body: { error: "forbidden", message: "No health records access" },
+				},
+			});
+			const view = renderActions();
+			fireEvent.click(view.getByRole("button", { name: "Preview PDF" }));
+			fireEvent.click(await view.findByRole("button", { name: "Open" }));
+			expect((await view.findByRole("alert")).textContent).toBe(
+				"Not opened: No health records access",
+			);
+			expect(assign).not.toHaveBeenCalled();
+		});
 	});
 });
 
