@@ -8,11 +8,14 @@
 # `check` and `structure` run on the runner named by the repository variable HEALTH_RUNNER (a
 # Namespace label, see README.md) and on ubuntu-latest when it is unset. `changes` and
 # `required` always use ubuntu-latest, so the gate reports even when no Namespace runner is available.
+#
+# `pull_request` has no branch filter so a `gh stack` PR, whose base is the PR below it, is checked
+# too. On pull_request, paths-filter lists the PR's files from the API, so the diff is against the
+# PR's own base. `github.ref` is `refs/pull/<n>/merge`, so one PR never cancels a sibling's run.
 name: health
 
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
