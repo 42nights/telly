@@ -12,11 +12,10 @@ import {
 	ago,
 	clock,
 	deliveryText,
-	metricLabel,
 	monitoringLevel,
-	newestNoopSample,
 	newestPerMetric,
 	newestUnseen,
+	oldAge,
 	seenText,
 } from "./logic";
 
@@ -71,27 +70,12 @@ describe("monitoringLevel", () => {
 describe("newestPerMetric", () => {
 	const now = Date.parse("2026-01-01T12:00:00Z");
 	test("keeps the newest by source time, per metric", () => {
-		const glance = newestPerMetric(
-			[
-				sample("old", "heart_rate", "2026-01-01T11:00:00Z"),
-				sample("new", "heart_rate", "2026-01-01T11:58:00Z"),
-				sample("steps", "steps", "2026-01-01T10:00:00Z"),
-			],
-			[threshold],
-			now,
-		);
-		expect(glance.map((g) => [g.sample?.id, g.stale])).toEqual([
-			["new", false],
-			["steps", false],
+		const glance = newestPerMetric([
+			sample("old", "heart_rate", "2026-01-01T11:00:00Z"),
+			sample("new", "heart_rate", "2026-01-01T11:58:00Z"),
+			sample("steps", "steps", "2026-01-01T10:00:00Z"),
 		]);
-	});
-	test("threshold max age marks stale", () => {
-		const [hr] = newestPerMetric(
-			[sample("hr", "heart_rate", "2026-01-01T11:00:00Z")],
-			[threshold],
-			now,
-		);
-		expect(hr?.stale).toBe(true);
+		expect(glance.map((g) => g.sample?.id)).toEqual(["new", "steps"]);
 	});
 	test("synthetic samples never count as a reading", () => {
 		const samples = [
@@ -103,10 +87,7 @@ describe("newestPerMetric", () => {
 			{ ...sample("hrv", "hrv", "2026-01-01T11:59:00Z"), synthetic: true },
 		];
 		expect(
-			newestPerMetric(samples, [threshold], now).map((g) => [
-				g.metric,
-				g.sample?.id ?? null,
-			]),
+			newestPerMetric(samples).map((g) => [g.metric, g.sample?.id ?? null]),
 		).toEqual([
 			["heart_rate", "real"],
 			["hrv", null],
@@ -139,22 +120,12 @@ describe("deliveryText", () => {
 	});
 });
 
-describe("newestPerMetric without a threshold", () => {
-	test("a reading is stale after a day", () => {
-		const now = Date.parse("2026-01-02T12:00:00Z");
-		const glance = newestPerMetric(
-			[
-				sample("old", "steps", "2026-01-01T11:00:00Z"),
-				sample("day", "weight", "2026-01-01T13:00:00Z"),
-			],
-			[threshold],
-			now,
-		);
-		expect(glance.map((g) => [g.metric, g.stale])).toEqual([
-			["steps", true],
-			["weight", false],
-		]);
-	});
+test("a reading shows its age only once it is over an hour old", () => {
+	const now = Date.parse("2026-01-02T12:00:00Z");
+	expect(oldAge("2026-01-02T11:01:00Z", now)).toBeNull();
+	expect(oldAge("2026-01-02T11:00:00Z", now)).toBeNull();
+	expect(oldAge("2026-01-02T10:59:00Z", now)).toBe("1 h ago");
+	expect(oldAge("2026-01-02T08:00:00Z", now)).toBe("4 h ago");
 });
 
 test("a queued delivery with no try yet says only Queued", () => {
@@ -205,25 +176,6 @@ describe("newestUnseen", () => {
 	});
 });
 
-describe("newestNoopSample", () => {
-	test("the newest NOOP sample of this family only", () => {
-		const noop = (id: string, familyId: string, sourceTime: string) => ({
-			...sample(id, "strain", sourceTime),
-			familyId,
-			source: "noop:whoop",
-		});
-		const samples = [
-			noop("old", "1", "2026-01-01T10:00:00Z"),
-			noop("new", "1", "2026-01-01T11:00:00Z"),
-			noop("older", "1", "2026-01-01T09:00:00Z"),
-			noop("other", "2", "2026-01-01T12:00:00Z"),
-			sample("phone", "heart_rate", "2026-01-01T12:00:00Z"),
-		];
-		expect(newestNoopSample(samples, "1")?.id).toBe("new");
-		expect(newestNoopSample(samples, "3")).toBeNull();
-	});
-});
-
 describe("ago", () => {
 	const now = Date.parse("2026-01-10T12:00:00Z");
 	const before = (ms: number) => new Date(now - ms).toISOString();
@@ -263,12 +215,6 @@ describe("seenText", () => {
 			`Member aaaaaa, ${clock(first)}`,
 		);
 	});
-});
-
-test("metricLabel turns a metric id into words", () => {
-	expect(metricLabel("heart_rate")).toBe("Heart rate");
-	expect(metricLabel("resting_heart_rate")).toBe("Resting heart rate");
-	expect(metricLabel("")).toBe("");
 });
 
 test("a reading's age counts seconds under a minute", () => {

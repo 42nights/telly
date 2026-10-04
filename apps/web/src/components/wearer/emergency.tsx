@@ -8,6 +8,7 @@ import { Button } from "@health/ui/components/button";
 import { Loader2, Phone, Siren, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { Hint } from "@/components/win95";
 import { type ApiFailure, apiRequest, familyPath } from "@/lib/api";
 
 import { xl } from "./answer";
@@ -269,9 +270,13 @@ export function Emergency({
 		<section aria-label="Emergency" className="win95-raised grid gap-3 p-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<h2 className="font-bold text-[22px]">Emergency</h2>
-				<span className="win95-inset bg-[#ffffe1] px-2 py-0.5 font-bold text-[14px] text-black">
-					Practice mode · calls are simulated
-				</span>
+				<Hint
+					text="Calls are simulated."
+					align="end"
+					className="win95-inset bg-[#ffffe1] px-2 py-0.5 font-bold text-[14px] text-black"
+				>
+					Practice mode
+				</Hint>
 			</div>
 
 			{step.kind === "checking" ? (
