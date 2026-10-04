@@ -60,8 +60,8 @@ const grant = (
 	});
 
 describe.skipIf(!integration)("care access", () => {
-	// #188: a new family has no care grants; flip to test() when #188 merges.
-	test.failing("a family's creator can use its care features at once", async () => {
+	// #188: a new family's founder holds every care scope from the start.
+	test("a family's creator can use its care features at once", async () => {
 		const owner = await user("founder");
 		const { path } = await createFamily(owner);
 		expect((await accessOf(owner, path)).mine).toEqual(
@@ -86,7 +86,7 @@ describe.skipIf(!integration)("care access", () => {
 			"care_plan_edit",
 		] as const)
 			expect((await grant(owner, path, owner, scope, true)).status).toBe(204);
-		// At least these; after #188 the founder also holds every other scope.
+		// The founder holds these and every other scope (#188).
 		expect((await accessOf(owner, path)).mine).toEqual(
 			expect.arrayContaining([
 				"care_plan_edit",

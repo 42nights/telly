@@ -130,8 +130,8 @@ const recordMeal = async (owner: User, path: string) => {
 };
 
 describe.skipIf(!integration)("meals", () => {
-	// #188: a new family has no care grants; flip to test() when #188 merges.
-	test.failing("the family creator records a meal", async () => {
+	// #188: a new family's founder holds every care scope from the start.
+	test("the family creator records a meal", async () => {
 		if (it === undefined) return;
 		const owner = await it.signIn(`meals-owner-${crypto.randomUUID()}`);
 		const { path } = await createFamily(owner);

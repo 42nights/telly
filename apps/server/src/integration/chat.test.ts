@@ -4,9 +4,10 @@
 // for the session only). With "Family only", Send is `POST /messages`: Gemini is never called and
 // the member reads the message. Real server and SpacetimeDB; the issuer and Gemini are fake.
 import { describe, expect, test } from "bun:test";
-import { FamilyMessage } from "@health/contracts";
+import { ApiError, FamilyMessage } from "@health/contracts";
 import { FamilyAnswer } from "@health/contracts/ask";
 import { FamilyMessages } from "@health/contracts/chat";
+import { Schema } from "effect";
 import {
 	addMember,
 	createFamily,
@@ -110,7 +111,8 @@ describe.skipIf(!it)("family chat flow", () => {
 		expect(await thread(member, path)).toEqual([]);
 	});
 
-	test("Gemini overloaded: AI on tries the fallback model, then answers 502 upstream_error", async () => {
+	// #187: each overloaded round goes to the fallback model, then both again after 1 s and 3 s.
+	test("Gemini overloaded: AI on retries both models with backoff, then says it is busy", async () => {
 		if (!it) return;
 		it.providers.gemini = () =>
 			Response.json({ error: { code: 503 } }, { status: 503 });
@@ -119,11 +121,16 @@ describe.skipIf(!it)("family chat flow", () => {
 			question: "Is Mom's heart rate normal?",
 			timeZone: "Europe/Berlin",
 		});
-		expect(await errorOf(reply)).toEqual([502, "upstream_error"]);
-		expect(geminiCalls(it.calls, from).map((call) => call.model)).toEqual([
-			"gemini-3.8-flash",
-			"gemini-3.5-flash",
-		]);
+		expect(reply.status).toBe(502);
+		const error = Schema.decodeUnknownSync(ApiError)(await reply.json());
+		expect(error.error).toBe("upstream_error");
+		expect(error.message).toContain("busy");
+		expect(geminiCalls(it.calls, from).map((call) => call.model)).toEqual(
+			Array.from({ length: 3 }, () => [
+				"gemini-3.8-flash",
+				"gemini-3.5-flash",
+			]).flat(),
+		);
 		expect(await thread(member, path)).toEqual([]);
 	});
 

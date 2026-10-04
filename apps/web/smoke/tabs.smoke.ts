@@ -118,13 +118,18 @@ test("a signed-out deep link leads to the sign-in screen", async ({
 }) => {
 	const problems = await watch(page, baseURL);
 	await page.goto("/reports");
-	await expect(page.getByText("Sign-in required")).toBeVisible();
-	await page.getByRole("link", { name: "Go to Sign in" }).click();
-	await expect(page).toHaveURL(/\/sign-in$/);
+	// #206: the app redirects to sign-in and keeps the requested page to return to.
+	await expect(page).toHaveURL(/\/sign-in\?redirect=%2Freports$/);
 	await expect(
 		page.getByRole("heading", { name: "Sign in to Telly" }),
 	).toBeVisible();
-	await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Continue with Google" }),
+	).toBeVisible();
+	// No nav tab or family data shows before sign-in.
+	await expect(page.getByRole("navigation", { name: "Screens" })).toHaveCount(
+		0,
+	);
 	expect(problems).toEqual([]);
 });
 

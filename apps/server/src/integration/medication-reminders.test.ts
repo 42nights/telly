@@ -210,8 +210,8 @@ describe.skipIf(!integration)("medication reminders", () => {
 		expect(reread.sightings).toEqual(saved.sightings);
 	});
 
-	// #188: a new family has no care grants; flip to test() when #188 merges.
-	test.failing("the creator adds a medication instruction to the family's plan", async () => {
+	// #188: a new family's founder holds every care scope from the start.
+	test("the creator adds a medication instruction to the family's plan", async () => {
 		// Its own name, so the instruction the reminder uses below never depends on this test.
 		const first = { ...instruction, name: "Synthetic Metformin" };
 		const added = await owner.call(
