@@ -122,10 +122,11 @@ The published worker runs as systemd user services on the team host, so it keeps
 | `telly-fetch.target` | All units below. Stop or start this one. |
 | `telly-fetch-stdb.service` | SpacetimeDB, data in `~/.local/share/telly-fetch/stdb` |
 | `telly-fetch-issuer.service` | The demo sign-in issuer (`issuer.ts`) |
-| `telly-fetch-server.service` | The bundled server (`server/index.mjs`), settings in `server.env` |
+| `telly-fetch-server.service` | The bundled server (`server/index.mjs`), settings in `server.env`; its `TELLY_FETCH_BRIDGE_URL` is the bridge |
 | `telly-fetch-worker.service` | `worker.sh`: mints a demo token, then runs `agent/main.py` with `worker.env` |
+| `telly-fetch-bridge.service` | `agent/bridge.py` with `bridge.env`, on `127.0.0.1:8002`, with its own Agentverse mailbox (`agent1qvnemyxpflwxzqnwaw33uq2pf4ney3m8ef9p8y4aulrayajkvekyshemnht`) |
 
-Files are in `~/.local/share/telly-fetch/` (mode 700). `worker.env` holds the seed and the grants, and `server.env` holds the database operator token; both are mode 600. Each service restarts 3 s after it stops.
+Files are in `~/.local/share/telly-fetch/` (mode 700). `worker.env` holds the worker seed and the grants (the ASI:One sender and the bridge, each for the synthetic family only). `bridge.env` holds the bridge seed and token, and `server.env` holds the same bridge token and the database operator token. All three are mode 600. Each service restarts 3 s after it stops.
 
 ```sh
 systemctl --user start telly-fetch.target     # start everything
