@@ -276,3 +276,86 @@ test("familyPath encodes the family id", () => {
 	expect(familyPath("a/b c", "/alerts")).toBe("/api/families/a%2Fb%20c/alerts");
 	expect(familyPath("123")).toBe("/api/families/123");
 });
+
+describe("session renewal (issue #222)", () => {
+	// A JWT whose `exp` is `inSeconds` from now. Google ID tokens last one hour.
+	const idToken = (name: string, inSeconds: number) =>
+		`h.${Buffer.from(
+			JSON.stringify({
+				sub: name,
+				exp: Math.floor(Date.now() / 1000) + inSeconds,
+			}),
+		).toString("base64url")}.s`;
+	const renewed = idToken("renewed", 3600);
+	// The server: `/api/sign-in/refresh` answers `renewal`. Each call is recorded as `refresh`, or as
+	// the bearer token that a `/health` read sent.
+	const server = (renewal: () => Response) => {
+		const calls: string[] = [];
+		globalThis.fetch = Object.assign(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				if (String(input).endsWith("/api/sign-in/refresh")) {
+					calls.push("refresh");
+					return renewal();
+				}
+				calls.push(new Headers(init?.headers).get("Authorization") ?? "none");
+				return Response.json({ status: "ok", service: "server" });
+			},
+			{ preconnect: realFetch.preconnect },
+		);
+		return calls;
+	};
+
+	test("an ID token that expires soon is renewed once, before the requests that need it", async () => {
+		setSessionToken(idToken("old", 60), "refresh-1");
+		const calls = server(() => Response.json({ idToken: renewed }));
+		await Promise.all([
+			apiRequest(Health, "/health"),
+			apiRequest(Health, "/health"),
+		]);
+		expect(calls).toEqual([
+			"refresh",
+			`Bearer ${renewed}`,
+			`Bearer ${renewed}`,
+		]);
+		expect(getSessionToken()).toBe(renewed);
+	});
+
+	test("an expired ID token with a refresh token is still a session, and a fresh one is not renewed", async () => {
+		setSessionToken(idToken("old", -60), "refresh-1");
+		expect(getSessionToken()).not.toBeNull();
+		const fresh = idToken("fresh", 3600);
+		setSessionToken(fresh, "refresh-1");
+		const calls = server(() => Response.json({ idToken: renewed }));
+		await apiRequest(Health, "/health");
+		expect(calls).toEqual([`Bearer ${fresh}`]);
+	});
+
+	test("a refused refresh token ends the session", async () => {
+		setSessionToken(idToken("old", -60), "revoked");
+		const calls = server(() =>
+			Response.json(
+				{ error: "unauthorized", message: "Sign in again." },
+				{ status: 401 },
+			),
+		);
+		expect(await apiRequest(Health, "/health")).toEqual({ kind: "signed_out" });
+		expect(calls).toEqual(["refresh"]);
+		expect(getSessionToken()).toBeNull();
+	});
+
+	test("when renewal fails, the session stays and the next request retries", async () => {
+		const old = idToken("old", 60);
+		setSessionToken(old, "refresh-1");
+		const failed = server(() =>
+			Response.json(
+				{ error: "upstream_error", message: "down" },
+				{ status: 502 },
+			),
+		);
+		await apiRequest(Health, "/health");
+		expect(failed).toEqual(["refresh", `Bearer ${old}`]);
+		const calls = server(() => Response.json({ idToken: renewed }));
+		await apiRequest(Health, "/health");
+		expect(calls).toEqual(["refresh", `Bearer ${renewed}`]);
+	});
+});

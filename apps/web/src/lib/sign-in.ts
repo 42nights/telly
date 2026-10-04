@@ -100,13 +100,16 @@ export const finishSignIn = async (
 	const pending = takePending();
 	if (pending === null || pending.state !== reply.state)
 		throw new Error("This sign-in reply is not from this tab. Sign in again.");
-	const idToken = await exchangeSignInCode(ENV.VITE_SERVER_URL, {
-		code: reply.code,
-		codeVerifier: pending.verifier,
-		redirectUri: redirectUri(),
-	});
+	const { idToken, refreshToken } = await exchangeSignInCode(
+		ENV.VITE_SERVER_URL,
+		{
+			code: reply.code,
+			codeVerifier: pending.verifier,
+			redirectUri: redirectUri(),
+		},
+	);
 	if (!tokenMatches(idToken, config.issuer, pending.nonce))
 		throw new Error("The sign-in server sent a token for another sign-in.");
-	setSessionToken(idToken);
+	setSessionToken(idToken, refreshToken);
 	return pending.returnTo;
 };

@@ -1,5 +1,5 @@
-// The code exchange and the phone return, against a test-only issuer on 127.0.0.1. Google itself is
-// not called here; this proves what the server sends and what it never gives to a client.
+// The code exchange, the renewal, and the phone return, against a test-only issuer on 127.0.0.1.
+// Google itself is not called here; this proves what the server sends and what it never gives to a client.
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { ApiError } from "@health/contracts";
 import { Schema } from "effect";
@@ -10,8 +10,8 @@ const exchanges: URLSearchParams[] = [];
 let tokenStatus = 200;
 // `null` leaves the token endpoint out of discovery; a string replaces it.
 let tokenEndpoint: string | null | undefined;
-const idToken = JSON.stringify({ id_token: "header.payload.signature" });
-let tokenBody = idToken;
+// A string replaces the issuer's reply; `undefined` answers like Google.
+let tokenBody: string | undefined;
 const issuerServer = Bun.serve({
 	hostname: "127.0.0.1",
 	port: 0,
@@ -26,12 +26,26 @@ const issuerServer = Bun.serve({
 				}),
 			});
 		if (pathname === "/token") {
-			exchanges.push(new URLSearchParams(await request.text()));
-			return tokenStatus === 200
-				? new Response(tokenBody, {
-						headers: { "Content-Type": "application/json" },
-					})
-				: Response.json({ error: "invalid_grant" }, { status: tokenStatus });
+			const grant = new URLSearchParams(await request.text());
+			exchanges.push(grant);
+			if (tokenStatus !== 200)
+				return Response.json(
+					{ error: "invalid_grant" },
+					{ status: tokenStatus },
+				);
+			if (tokenBody !== undefined)
+				return new Response(tokenBody, {
+					headers: { "Content-Type": "application/json" },
+				});
+			// Like Google: a code gives a refresh token, a renewal gives only a new ID token.
+			return Response.json(
+				grant.get("grant_type") === "refresh_token"
+					? { id_token: "renewed.payload.signature" }
+					: {
+							id_token: "header.payload.signature",
+							refresh_token: "refresh-1",
+						},
+			);
 		}
 		return new Response(null, { status: 404 });
 	},
@@ -59,8 +73,12 @@ const exchange = {
 	codeVerifier: "v".repeat(43),
 	redirectUri: "http://localhost:3001/sign-in",
 };
-const post = (signIn: AuthConfig | undefined, body: unknown) =>
-	createApp({ ...base, auth: signIn }).request("/api/sign-in/token", {
+const post = (
+	signIn: AuthConfig | undefined,
+	body: unknown,
+	path = "/api/sign-in/token",
+) =>
+	createApp({ ...base, auth: signIn }).request(path, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
@@ -76,13 +94,16 @@ describe("sign-in routes", () => {
 	beforeEach(() => {
 		tokenStatus = 200;
 		tokenEndpoint = undefined;
-		tokenBody = idToken;
+		tokenBody = undefined;
 	});
-	test("the exchange adds the client secret on the server and returns only the ID token", async () => {
+	test("the exchange adds the client secret on the server and returns the ID and refresh tokens", async () => {
 		const response = await post(auth, exchange);
 		expect(response.status).toBe(200);
 		const body = await response.text();
-		expect(JSON.parse(body)).toEqual({ idToken: "header.payload.signature" });
+		expect(JSON.parse(body)).toEqual({
+			idToken: "header.payload.signature",
+			refreshToken: "refresh-1",
+		});
 		expect(body).not.toContain("test-only-secret");
 		expect(Object.fromEntries(exchanges.at(-1) ?? [])).toEqual({
 			grant_type: "authorization_code",
@@ -154,6 +175,37 @@ describe("sign-in routes", () => {
 		])
 			expect((await post(auth, body)).status).toBe(400);
 		expect(exchanges.length).toBe(sent);
+	});
+
+	test("a renewal adds the client secret and returns only the new ID token", async () => {
+		tokenStatus = 200;
+		const response = await post(
+			auth,
+			{ refreshToken: "refresh-1" },
+			"/api/sign-in/refresh",
+		);
+		expect(response.status).toBe(200);
+		const body = await response.text();
+		expect(JSON.parse(body)).toEqual({ idToken: "renewed.payload.signature" });
+		expect(body).not.toContain("test-only-secret");
+		expect(Object.fromEntries(exchanges.at(-1) ?? [])).toEqual({
+			grant_type: "refresh_token",
+			refresh_token: "refresh-1",
+			client_id: "telly-web",
+			client_secret: "test-only-secret",
+		});
+	});
+
+	test("a refused refresh token is a 401, so the client signs out; a provider failure is a 502", async () => {
+		const renew = () =>
+			post(auth, { refreshToken: "revoked" }, "/api/sign-in/refresh");
+		tokenStatus = 400;
+		expect(await errorOf(await renew())).toEqual([401, "unauthorized"]);
+		tokenStatus = 500;
+		expect(await errorOf(await renew())).toEqual([502, "upstream_error"]);
+		expect(
+			(await post(auth, { refreshToken: "" }, "/api/sign-in/refresh")).status,
+		).toBe(400);
 	});
 
 	test("the phone return forwards only code, state, and error to the app", async () => {
