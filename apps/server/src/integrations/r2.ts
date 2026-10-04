@@ -30,6 +30,8 @@ export type R2Bucket = {
 	) => Promise<string>;
 	/** Every object whose key starts with `prefix`. */
 	readonly list: (prefix: string) => Promise<StoredObject[]>;
+	/** Deletes one object; a missing object is already deleted. */
+	readonly remove: (key: string) => Promise<void>;
 };
 
 const failed = (action: string, status: number) =>
@@ -76,6 +78,12 @@ export const r2Bucket = (config: R2Config): R2Bucket => {
 			if (response.status === 404) return false;
 			if (!response.ok) throw failed("read the PDF", response.status);
 			return true;
+		},
+		remove: async (key) => {
+			const response = await send(url(key), { method: "DELETE" });
+			await response.body?.cancel();
+			if (!response.ok && response.status !== 404)
+				throw failed("delete the PDF", response.status);
 		},
 		presign: async (key, filename, seconds) => {
 			const link = new URL(url(key));

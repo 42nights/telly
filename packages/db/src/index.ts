@@ -48,6 +48,7 @@ import CreateExercisePlanReducer from "./create_exercise_plan_reducer";
 import CreateFamilyReducer from "./create_family_reducer";
 import CreateReminderReducer from "./create_reminder_reducer";
 import CreateReportReducer from "./create_report_reducer";
+import DeleteFamilyReducer from "./delete_family_reducer";
 import DeleteReminderReducer from "./delete_reminder_reducer";
 import LinkFinchnodeSubjectReducer from "./link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "./mark_alert_delivery_failed_reducer";
@@ -378,6 +379,7 @@ const reducersSchema = __reducers(
   __reducerSchema("create_family", CreateFamilyReducer),
   __reducerSchema("create_reminder", CreateReminderReducer),
   __reducerSchema("create_report", CreateReportReducer),
+  __reducerSchema("delete_family", DeleteFamilyReducer),
   __reducerSchema("delete_reminder", DeleteReminderReducer),
   __reducerSchema("link_finchnode_subject", LinkFinchnodeSubjectReducer),
   __reducerSchema("mark_alert_delivery_failed", MarkAlertDeliveryFailedReducer),

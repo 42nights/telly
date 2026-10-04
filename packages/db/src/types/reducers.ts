@@ -20,6 +20,7 @@ import CreateExercisePlanReducer from "../create_exercise_plan_reducer";
 import CreateFamilyReducer from "../create_family_reducer";
 import CreateReminderReducer from "../create_reminder_reducer";
 import CreateReportReducer from "../create_report_reducer";
+import DeleteFamilyReducer from "../delete_family_reducer";
 import DeleteReminderReducer from "../delete_reminder_reducer";
 import LinkFinchnodeSubjectReducer from "../link_finchnode_subject_reducer";
 import MarkAlertDeliveryFailedReducer from "../mark_alert_delivery_failed_reducer";
@@ -74,6 +75,7 @@ export type CreateExercisePlanParams = __Infer<typeof CreateExercisePlanReducer>
 export type CreateFamilyParams = __Infer<typeof CreateFamilyReducer>;
 export type CreateReminderParams = __Infer<typeof CreateReminderReducer>;
 export type CreateReportParams = __Infer<typeof CreateReportReducer>;
+export type DeleteFamilyParams = __Infer<typeof DeleteFamilyReducer>;
 export type DeleteReminderParams = __Infer<typeof DeleteReminderReducer>;
 export type LinkFinchnodeSubjectParams = __Infer<typeof LinkFinchnodeSubjectReducer>;
 export type MarkAlertDeliveryFailedParams = __Infer<typeof MarkAlertDeliveryFailedReducer>;

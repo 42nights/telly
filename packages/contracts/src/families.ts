@@ -37,6 +37,13 @@ export type FamilyList = typeof FamilyList.Type;
 export const NewFamily = Schema.Struct({ name: Text });
 export type NewFamily = typeof NewFamily.Type;
 
+/**
+ * `DELETE /api/families/:familyId`: deletes the family, every record in it, and its stored files,
+ * for good. Only a member with `family_access` may. `name` must be the family's exact name.
+ */
+export const DeleteFamily = Schema.Struct({ name: Text });
+export type DeleteFamily = typeof DeleteFamily.Type;
+
 /** `POST /api/families/:familyId/members`: adds another signed-in person by identity. */
 export const NewFamilyMember = Schema.Struct({ identity: IdentityHex });
 export type NewFamilyMember = typeof NewFamilyMember.Type;

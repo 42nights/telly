@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { SpeakerSettingsWindow } from "@/components/reminders/speaker-settings";
+import { DeleteFamilySettings } from "@/components/settings/delete-family";
 import { MedicineMemorySettings } from "@/components/settings/medicine-memory";
 import { SettingsForm } from "@/components/settings/settings-form";
 
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/settings")({
 			<SettingsForm />
 			<SpeakerSettingsWindow />
 			<MedicineMemorySettings />
+			<DeleteFamilySettings />
 		</main>
 	),
 });

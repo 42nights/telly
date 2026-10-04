@@ -300,6 +300,14 @@ export const Family = __t.object("Family", {
 });
 export type Family = __Infer<typeof Family>;
 
+export const FamilyDeletion = __t.object("FamilyDeletion", {
+  id: __t.u64(),
+  familyId: __t.u64(),
+  deletedBy: __t.identity(),
+  deletedAt: __t.timestamp(),
+});
+export type FamilyDeletion = __Infer<typeof FamilyDeletion>;
+
 export const FamilyMember = __t.object("FamilyMember", {
   id: __t.u64(),
   familyId: __t.u64(),

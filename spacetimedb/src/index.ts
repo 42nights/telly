@@ -835,6 +835,17 @@ const cookingProfile = table(
 	},
 );
 
+// Who deleted which family, and when (`deleteFamily`). It keeps no name and no health data.
+const familyDeletion = table(
+	{ name: "family_deletion" },
+	{
+		id: t.u64().primaryKey().autoInc(),
+		familyId: t.u64(),
+		deletedBy: t.identity(),
+		deletedAt: t.timestamp(),
+	},
+);
+
 const spacetimedb = schema({
 	family,
 	familyMember,
@@ -874,6 +885,7 @@ const spacetimedb = schema({
 	appointment,
 	clinicianShare,
 	cookingProfile,
+	familyDeletion,
 });
 export default spacetimedb;
 
@@ -3519,4 +3531,80 @@ export const myCookingProfiles = spacetimedb.view(
 			const row = ctx.db.cookingProfile.familyId.find(familyId);
 			return row === null ? [] : [row];
 		}),
+);
+
+/**
+ * Deletes a family and every row it owns, for good. Only a `family_access` holder may, and only
+ * with the family's exact name, so a wrong id deletes nothing. The server deletes the family's
+ * stored files first. `familyDeletion` records who did it and when.
+ */
+export const deleteFamily = spacetimedb.reducer(
+	{ familyId: t.u64(), name: t.string() },
+	(ctx, { familyId, name }) => {
+		requireCareScope(ctx, familyId, "family_access");
+		if (ctx.db.family.id.find(familyId)?.name !== name)
+			throw new SenderError("the name does not match this family");
+		const { db } = ctx;
+		// Rows keyed by another table's id go first, while those ids can still be read.
+		const ids = (rows: Iterable<{ id: bigint }>) =>
+			new Set([...rows].map((row) => row.id));
+		const alerts = ids(db.alert.familyId.filter(familyId));
+		const needs = ids(db.careNeed.familyId.filter(familyId));
+		const occurrences = ids(db.reminderOccurrence.familyId.filter(familyId));
+		// ponytail: full scans of these key-only tables; index them if they grow large.
+		for (const row of [...db.thresholdTrigger.iter()])
+			if (alerts.has(row.alertId)) db.thresholdTrigger.key.delete(row.key);
+		for (const row of [...db.ladderTimer.iter()])
+			if (needs.has(row.needId))
+				db.ladderTimer.scheduledId.delete(row.scheduledId);
+		for (const row of [...db.reminderTimer.iter()])
+			if (occurrences.has(row.occurrenceId))
+				db.reminderTimer.scheduledId.delete(row.scheduledId);
+		// The key starts with the occurrence id (`seenRequest`).
+		for (const row of [...db.reminderRequest.iter()])
+			if (occurrences.has(BigInt(row.key.slice(0, row.key.indexOf(":")))))
+				db.reminderRequest.key.delete(row.key);
+		for (const index of [
+			db.familyMember.familyId,
+			db.healthSample.familyId,
+			db.alert.familyId,
+			db.message.familyId,
+			db.acknowledgement.familyId,
+			db.alertThreshold.familyId,
+			db.alertDelivery.familyId,
+			db.report.familyId,
+			db.finchnodeLink.familyId,
+			db.tripEvent.familyId,
+			db.location.familyId,
+			db.locationShare.familyId,
+			db.mealFact.familyId,
+			db.medicineMemory.familyId,
+			db.medicineSighting.familyId,
+			db.contactLadder.familyId,
+			db.careNeed.familyId,
+			db.contactAttempt.familyId,
+			db.reminderSettings.familyId,
+			db.reminder.familyId,
+			db.reminderOccurrence.familyId,
+			db.reminderEvent.familyId,
+			db.speakerSettings.familyId,
+			db.careProfileVersion.familyId,
+			db.careInstruction.familyId,
+			db.careGrantEvent.familyId,
+			db.exercisePlan.familyId,
+			db.exerciseEvent.familyId,
+			db.deliveryEvent.familyId,
+			db.appointment.familyId,
+			db.clinicianShare.familyId,
+			db.cookingProfile.familyId,
+		])
+			index.delete(familyId);
+		db.family.id.delete(familyId);
+		db.familyDeletion.insert({
+			id: 0n,
+			familyId,
+			deletedBy: ctx.sender,
+			deletedAt: ctx.timestamp,
+		});
+	},
 );

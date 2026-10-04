@@ -37,7 +37,10 @@ import { voiceRoutes } from "./voice";
 export const familyDomainRoutes = (config: ServerConfig): FamilyRoutes => {
 	const voice = elevenLabsVoice(config.voice);
 	return new Hono<FamilyEnv>()
-		.route("/", familyRoutes())
+		.route(
+			"/",
+			familyRoutes(config.r2 === undefined ? undefined : r2Bucket(config.r2)),
+		)
 		.route("/", alertRoutes())
 		.route("/", voiceRoutes(voice))
 		.route(
