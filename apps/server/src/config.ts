@@ -7,7 +7,7 @@ import { type GemmaConfig, gemmaConfigFrom } from "./integrations/gemma";
 import type { R2Config } from "./integrations/r2";
 
 export type ServerConfig = {
-	readonly corsOrigin: string;
+	readonly corsOrigin: string | string[];
 	/** Undefined when sign-in is not configured: protected routes then answer `unavailable`. */
 	readonly auth: AuthConfig | undefined;
 	/** Without `apiKey`, voice routes answer `unavailable`. */
@@ -108,7 +108,7 @@ export const serverConfig = (env: Env): ServerConfig => {
 		env.FINCHNODE_API_KEY,
 	);
 	const base = {
-		corsOrigin: env.CORS_ORIGIN,
+		corsOrigin: env.CORS_ORIGIN.split(","),
 		voice: {
 			apiKey: env.ELEVENLABS_API_KEY,
 			voiceId: env.ELEVENLABS_VOICE_ID,

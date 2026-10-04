@@ -48,8 +48,8 @@ jq -n --arg image "$image" --arg web "$tmp/web" --arg id "$(date -u +%Y%m%dT%H%M
 	containers: [{ class_name: "Api", image: $image, max_instances: 2, instance_type: "basic" }],
 	durable_objects: { bindings: [{ name: "API", class_name: "Api" }] },
 	migrations: [{ tag: "v1", new_sqlite_classes: ["Api"] }],
-	vars: (env | {CORS_ORIGIN: .HEALTH_SERVER_URL, TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
-		"TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
+	vars: (env | {TELLY_DEPLOY_ID: $id} + with_entries(select(.key | IN(
+		"CORS_ORIGIN", "TELLY_SECRETS_URL", "TELLY_PULL_KEYS", "OIDC_ISSUER", "OIDC_AUDIENCE", "SPACETIMEDB_URI",
 		"SPACETIMEDB_DATABASE", "FINCHNODE_MODE", "TELLY_R2_ACCOUNT_ID", "TELLY_R2_BUCKET",
 		"TELLY_R2_ACCESS_KEY_ID")))),
 }' >"$tmp/wrangler.json"
