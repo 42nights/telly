@@ -17,6 +17,34 @@ import { type ApiState, useApi } from "./api";
 
 const KEY = "telly.family";
 
+type Listed = FamilyList["families"][number];
+
+/**
+ * The family to show: one picked in this tab; else the one remembered on this device, unless it has
+ * no real data while another family does; else the family with the newest real data; else the first.
+ */
+export const chooseFamily = (
+	families: readonly Listed[],
+	picked: string | null,
+	remembered: string | null,
+): Listed | null => {
+	const live = families
+		.filter((f) => f.newestSampleAt)
+		.sort((a, b) =>
+			(b.newestSampleAt ?? "").localeCompare(a.newestSampleAt ?? ""),
+		)[0];
+	const kept = families.find((f) => f.id === remembered);
+	return (
+		families.find((f) => f.id === picked) ??
+		(kept !== undefined && (kept.newestSampleAt || live === undefined)
+			? kept
+			: undefined) ??
+		live ??
+		families[0] ??
+		null
+	);
+};
+
 type FamilyContext = {
 	readonly state: ApiState<FamilyList>;
 	/** The selected family, or null while loading, on failure, or when the caller has none. */
@@ -34,17 +62,16 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
 	const state: ApiState<FamilyList> =
 		read.kind === "ready" && read.at <= reloadAt ? { kind: "loading" } : read;
 	const [remembered, setRemembered] = useState<string | null>(null);
+	const [picked, setPicked] = useState<string | null>(null);
 	useEffect(() => setRemembered(localStorage.getItem(KEY)), []);
-	// The remembered family while it is still listed, otherwise the first.
 	const family =
 		state.kind === "ready"
-			? (state.value.families.find((option) => option.id === remembered) ??
-				state.value.families[0] ??
-				null)
+			? chooseFamily(state.value.families, picked, remembered)
 			: null;
 	const select = (familyId: string) => {
 		localStorage.setItem(KEY, familyId);
 		setRemembered(familyId);
+		setPicked(familyId);
 	};
 	const reload = () => setReloadAt(Date.now());
 	return (

@@ -37,8 +37,19 @@ export const Me = Schema.Struct({
 });
 export type Me = typeof Me.Type;
 
-/** `GET /api/families`: the caller's families. */
-export const FamilyList = Schema.Struct({ families: Schema.Array(Family) });
+/**
+ * `GET /api/families`: the caller's families. `newestSampleAt` is the source time of the family's
+ * newest real (not synthetic) health sample; null or absent means none. The app opens the family
+ * with live data first.
+ */
+export const FamilyList = Schema.Struct({
+	families: Schema.Array(
+		Schema.Struct({
+			...Family.fields,
+			newestSampleAt: Schema.optional(Schema.NullOr(UtcTime)),
+		}),
+	),
+});
 export type FamilyList = typeof FamilyList.Type;
 
 /** `POST /api/families`: creates a family with the caller as its first member. */
