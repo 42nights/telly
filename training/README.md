@@ -15,10 +15,10 @@ Plan: [`docs/board.html`](../docs/board.html) (`sys-training`, `sys-models`). Is
 
 Git ignores `gemma/data/` (datasets), `gemma/runs/` (run manifests), and model weight files. Do not commit training data, recordings, or weights.
 
-## Prerequisites (human tasks)
+## Prerequisites (not yet confirmed)
 
 1. **Your own River account.** Sign up at [river.ai](https://river.ai) and create your own API key on the **API Keys** page of the [River Console](https://console.river.ai/). Do not share a login or a key, and do not put a key in the repository or in an issue.
-2. **Gemma access on River.** River's [public model list](https://docs.river.ai/guides/models/) (checked 2026-10-04) has no Gemma model. Ask River for Gemma access (support@river.ai or their Discord), then confirm it with `train.py check`. If River cannot enable Gemma, the captain must choose a different base model.
+2. **Gemma access on River (not confirmed).** River's [public model list](https://docs.river.ai/guides/models/) (checked 2026-10-04) has no Gemma model. Ask River for Gemma access (support@river.ai or their Discord), then confirm it with `train.py check`. If River cannot enable Gemma, the captain must choose a different base model.
 3. **Hugging Face access to the Gemma tokenizer.** Gemma repositories are gated. Accept the Gemma license on Hugging Face and set `HF_TOKEN` before `train` runs.
 4. **Cost approval.** `train` and `deploy` use paid River capacity. Run them only after the owner approves the cost. Both refuse to start without `--confirm-paid`.
 5. **Deployment access.** Serving needs a River team API key with dedicated-deployment access for the base model. Personal keys cannot create deployments. Ask River to enable it.
