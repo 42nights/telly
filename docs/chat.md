@@ -23,7 +23,7 @@ The client makes a `clientId` (letters, digits, `_`, `-`, at most 128) one time 
 
 By captain decision, Gemini is the only chat model for family questions, and ElevenLabs stays for speech. Grok is not used. The Gemini adapter and the question routes belong to the Gemini integration task. The provider-independent family tools belong to this area.
 
-- The agent's data tools go through Fetch.ai Agentverse with `callAgentTool(config.fetchAgent, familyId, request, signal)` from PR #65. They never call the tool helper directly.
+- `familyTools(fetchAgent, familyId, now, timeZone?)` in `apps/server/src/family-tools.ts` gives the chat adapter `rules` (instructions that keep the answer tied to the records), `tools` (JSON Schema function specs from `@health/contracts/tools`), `run(name, args, signal?)`, and `cited()` (`CitedRecords` in `@health/contracts/chat`: each sample read with source and a `stale` flag, each alert read, and each metric with no records). Every `run` goes through Fetch.ai Agentverse with `callAgentTool` from PR #65. Bad arguments return `{ error }` to the model without a call. A Fetch.ai or server failure rejects with `ApiFailure`, so the answer stops instead of continuing without the data.
 - An answer gives each value with its source and source time, says when data is synthetic, unvalidated, or stale, and reports missing data as unavailable. NOOP stays not connected.
 - A family message that must reach a person outside the app will use the alert outbox seam (`AlertTransport` in `apps/server/src/alerts/outbox.ts`). That keeps delivery durable and keeps "sent" separate from "acknowledged".
 
