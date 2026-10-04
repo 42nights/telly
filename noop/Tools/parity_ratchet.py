@@ -25,6 +25,7 @@ from typing import Iterable
 
 import issue_ref
 import parity_ledger
+from git_base import archive_treeish, base_location
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -70,18 +71,19 @@ def _read_current_dispositions(root: Path) -> dict:
 
 
 def _read_base(root: Path, base: str, relative: str) -> dict | None:
+    top, prefix = base_location(root, base)
     try:
         raw = subprocess.check_output(
-            ["git", "show", f"{base}:./{relative}"],
-            cwd=root,
+            ["git", "show", f"{base}:{prefix}{relative}"],
+            cwd=top,
             text=True,
             stderr=subprocess.DEVNULL,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         try:
             listed = subprocess.check_output(
-                ["git", "ls-tree", "--name-only", base, "--", relative],
-                cwd=root,
+                ["git", "ls-tree", "--name-only", base, "--", f"{prefix}{relative}"],
+                cwd=top,
                 text=True,
                 stderr=subprocess.DEVNULL,
             ).strip()
@@ -322,9 +324,12 @@ def exemption_issue_is_bound(
 @contextmanager
 def _base_tree(root: Path, base: str):
     """Materialize the exact base tree; unavailable/shallow bases fail closed."""
+    top, prefix = base_location(root, base)
     try:
         archive = subprocess.check_output(
-            ["git", "archive", "--format=tar", base], cwd=root, stderr=subprocess.STDOUT
+            ["git", "archive", "--format=tar", archive_treeish(base, prefix)],
+            cwd=top,
+            stderr=subprocess.STDOUT,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         detail = exc.output.decode(errors="replace").strip() if isinstance(exc, subprocess.CalledProcessError) else str(exc)
