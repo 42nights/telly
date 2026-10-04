@@ -12,13 +12,15 @@ import {
 	type FamilyRoutes,
 } from "./http";
 import { noopConnection } from "./integrations/noop";
+import { alertRoutes } from "./routes/alerts";
 import { accountRoutes, familyRoutes } from "./routes/families";
 
 export const createApp = (config: ServerConfig) => {
 	// Mount domain route factories here; each path is relative to `/api/families/:familyId`.
 	const family: FamilyRoutes = new Hono<FamilyEnv>()
 		.use(requireFamilyMember)
-		.route("/", familyRoutes());
+		.route("/", familyRoutes())
+		.route("/", alertRoutes());
 
 	const app = new Hono()
 		.use(logger())
@@ -26,7 +28,7 @@ export const createApp = (config: ServerConfig) => {
 			"/*",
 			cors({
 				origin: config.corsOrigin,
-				allowMethods: ["GET", "POST", "OPTIONS"],
+				allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 			}),
 		)
 		.get("/health", (c) =>
