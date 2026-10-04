@@ -23,7 +23,7 @@ export class DeliveryFailure extends Data.TaggedError("DeliveryFailure")<{
 	readonly reason: string;
 }> {}
 
-/** A family delivery channel, such as the Grokbot family agent. */
+/** A family delivery channel, such as family messages in the app. */
 export type AlertTransport = (
 	message: AlertMessage,
 ) => Effect.Effect<void, DeliveryFailure>;
