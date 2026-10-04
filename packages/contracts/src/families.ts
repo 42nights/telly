@@ -68,6 +68,20 @@ export const NewFamilyMember = Schema.Struct({ identity: IdentityHex });
 export type NewFamilyMember = typeof NewFamilyMember.Type;
 
 /**
+ * `GET /api/families/:familyId/members`: the people in the family. `name` is the name each person
+ * signed in with, stored when they open the app (`GET /api/me`); null until they do.
+ */
+export const FamilyMembers = Schema.Struct({
+	members: Schema.Array(
+		Schema.Struct({
+			identity: IdentityHex,
+			name: Schema.NullOr(Schema.String),
+		}),
+	),
+});
+export type FamilyMembers = typeof FamilyMembers.Type;
+
+/**
  * `POST /api/families/:familyId/invites`: a one-time join code, shown once. The database keeps only
  * its SHA-256. It works for one person and ends at `expiresAt` (7 days).
  */
