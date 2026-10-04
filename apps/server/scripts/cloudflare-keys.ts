@@ -2,12 +2,13 @@
 //   bun run secrets:push <env-file>  upload the server keys in a private env file, with your own
 //                                    member API token from ~/.config/telly/cloudflare.env
 //   bun run secrets:pull [dest]      write every stored key to dest (default apps/server/.env.local)
-//                                    through the telly-secrets Worker, with the service token in
+//                                    through the telly-secrets Worker, with the pull token in
 //                                    ~/.config/telly/secrets-pull.env
 // Credentials and values come only from mode-600 files, never arguments or the environment.
 // Output names keys, never values.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
+	existsSync,
 	readFileSync,
 	renameSync,
 	rmSync,
@@ -20,6 +21,8 @@ import { fileURLToPath } from "node:url";
 
 const worker = "telly-secrets";
 const comment = "telly";
+// The store secret that the Worker accepts as `Authorization: Bearer …`; never served itself.
+const pullToken = "TELLY_SECRETS_PULL_TOKEN";
 const config = join(homedir(), ".config/telly");
 const schemaPath = fileURLToPath(new URL("../.env.schema", import.meta.url));
 // Unquoted dotenv values that every parser reads the same way. Provider keys and tokens fit.
@@ -125,29 +128,16 @@ const push = async (source: string) => {
 		return out.result;
 	};
 
-	// The Worker checks the Access JWT against these, so they are looked up, never hand-set.
-	const { auth_domain: team } = await api<{ auth_domain: string }>(
-		"GET",
-		"/access/organizations",
-	);
-	const app = (
-		await api<{ name: string; aud: string }[]>("GET", "/access/apps")
-	).find((a) => a.name === worker);
-	const pull = (
-		await api<{ name: string; client_id: string }[]>(
-			"GET",
-			"/access/service_tokens",
-		)
-	).find((t) => t.name === `${worker}-pull`);
-	if (!app || !pull)
-		throw new Error(
-			`Create the Access app ${worker} and service token ${worker}-pull first (docs/cloudflare-keys.md)`,
-		);
 	const [store] = await api<{ id: string }[]>("GET", "/secrets_store/stores");
 	if (!store)
 		throw new Error(
 			"Create the account Secrets Store first (docs/cloudflare-keys.md)",
 		);
+	const { subdomain } = await api<{ subdomain: string }>(
+		"GET",
+		"/workers/subdomain",
+	);
+	const url = `https://${worker}.${subdomain}.workers.dev/`;
 	const secrets = `/secrets_store/stores/${store.id}/secrets`;
 	// ponytail: one page; an account holds at most 100 secrets during the Secrets Store beta.
 	const list = () => api<Secret[]>("GET", `${secrets}?per_page=100`);
@@ -158,8 +148,23 @@ const push = async (source: string) => {
 	);
 	if (foreign.length > 0)
 		throw new Error(
-			`Not Telly secrets, refusing to overwrite: ${foreign.join(", ")}`,
+			`Not uploaded by this script, refusing to overwrite: ${foreign.join(", ")}`,
 		);
+	// The first push creates the pull token, and writes it to this member's pull file only.
+	if (!existing.has(pullToken)) {
+		const value = randomBytes(32).toString("hex");
+		await api("POST", secrets, [
+			{ name: pullToken, value, scopes: ["workers"], comment },
+		]);
+		const pullFile = join(config, "secrets-pull.env");
+		if (!existsSync(pullFile))
+			writeFileSync(
+				pullFile,
+				`TELLY_SECRETS_URL=${url}\n${pullToken}=${value}\n`,
+				{ mode: 0o600, flag: "wx" },
+			);
+		console.log(`Created ${pullToken}; wrote it to ${pullFile}`);
+	}
 	const created = [...keys].filter(([name]) => !existing.has(name));
 	if (created.length > 0)
 		await api(
@@ -182,10 +187,8 @@ const push = async (source: string) => {
 			});
 	}
 
-	// Bind every Telly secret, including ones other members uploaded.
-	const stored = (await list()).filter(
-		(s) => s.comment === comment && names.has(s.name),
-	);
+	// Bind every server key in the store, including ones other members uploaded.
+	const stored = (await list()).filter((s) => names.has(s.name));
 	const form = new FormData();
 	form.append(
 		"metadata",
@@ -203,9 +206,12 @@ const push = async (source: string) => {
 							store_id: store.id,
 							secret_name: s.name,
 						})),
-						{ type: "plain_text", name: "team_domain", text: team },
-						{ type: "plain_text", name: "aud", text: app.aud },
-						{ type: "plain_text", name: "client_id", text: pull.client_id },
+						{
+							type: "secrets_store_secret",
+							name: "pull_token",
+							store_id: store.id,
+							secret_name: pullToken,
+						},
 					],
 				}),
 			],
@@ -224,9 +230,13 @@ const push = async (source: string) => {
 		"index.js",
 	);
 	await api("PUT", `/workers/scripts/${worker}`, form);
-	// A file without server keys only redeploys the Worker, such as after a pull token change.
+	await api("POST", `/workers/scripts/${worker}/subdomain`, {
+		enabled: true,
+		previews_enabled: false,
+	});
+	// A file without server keys only redeploys the Worker.
 	console.log(`Uploaded: ${[...keys.keys()].join(", ") || "none"}`);
-	console.log(`Worker ${worker} binds ${stored.length} Telly secrets:`);
+	console.log(`Worker ${worker} at ${url} binds ${stored.length} keys:`);
 	for (const s of stored)
 		console.log(`  ${s.name}  modified ${s.modified ?? "?"}`);
 };
@@ -237,18 +247,8 @@ const pull = async (dest: string) => {
 	const url = need(creds, "TELLY_SECRETS_URL", credsFile);
 	const response = await fetch(url, {
 		headers: {
-			"CF-Access-Client-Id": need(
-				creds,
-				"TELLY_SECRETS_ACCESS_CLIENT_ID",
-				credsFile,
-			),
-			"CF-Access-Client-Secret": need(
-				creds,
-				"TELLY_SECRETS_ACCESS_CLIENT_SECRET",
-				credsFile,
-			),
+			Authorization: `Bearer ${need(creds, pullToken, credsFile)}`,
 		},
-		// Access answers a rejected token with a login redirect; treat it as the failure it is.
 		redirect: "manual",
 	});
 	if (response.status !== 200)

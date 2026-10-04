@@ -2,7 +2,9 @@
 
 Plan: [board section 08](board.html#keys) (`#keys`, `#key-rules`, `#key-operations`). Issue: #23.
 
-The team keeps the server keys in the Secrets Store of one shared Telly Cloudflare account. Each teammate signs in as an individual account member with MFA. Nobody uses a shared password or the Global API Key.
+The team keeps the server keys in the Secrets Store of one shared Telly Cloudflare account: the account of `vexzyl@pm.me`. Each teammate signs in as an individual account member with MFA. Nobody uses a shared password, and teammates do not use the Global API Key.
+
+The paid Cloudflare resources, such as the deployment and the `telly-reports` R2 bucket, are in the separate 42nights account. Their credentials are stored in the shared store too.
 
 Never put a key value in this repository, an issue, a PR, a log, CI output, an agent prompt, or a `VITE_*` / `EXPO_PUBLIC_*` variable. Compare copies by sha256 only.
 
@@ -25,8 +27,8 @@ The teammate who holds the provider account owns its key. Record the owner and k
 
 Secrets Store gives values only to a Worker binding; the dashboard and the API return metadata. Cloudflare bindings do not reach the Node server. So the one retrieval path is:
 
-1. The Worker `telly-secrets` (`apps/server/scripts/cloudflare-keys-worker.ts`) binds every Telly secret and answers `GET` with `NAME=value` lines.
-2. A Cloudflare Access app protects its hostname. Only the service token `telly-secrets-pull` gets in. The Worker also verifies the Access JWT: issuer, audience, expiry, signature, and the token's client id. Anything else gets `403`.
+1. The Worker `telly-secrets` (`apps/server/scripts/cloudflare-keys-worker.ts`) at `https://telly-secrets.telly-keys.workers.dev/` binds every server key in the store and answers `GET` with `NAME=value` lines.
+2. Only a request with `Authorization: Bearer <pull token>` gets an answer. The pull token is the store secret `TELLY_SECRETS_PULL_TOKEN` (32 random bytes). The Worker compares SHA-256 digests in constant time, never serves the pull token, and answers anything else with `403`.
 3. `bun run secrets:pull` writes the lines to a mode-600 env file, plus `TELLY_REQUIRED_KEYS` with each key it wrote.
 4. The server loads that file. If a key in `TELLY_REQUIRED_KEYS` is missing or empty, startup fails and names the key, never the value.
 
@@ -36,18 +38,14 @@ Varlock redacts the keys in logs, because every server key is `@sensitive`. Reda
 
 1. Invite each teammate under **Manage Account → Members** with only the roles they need. Each teammate turns on MFA.
 2. Create the account Secrets Store (**Secrets Store → Create store**) if it does not exist.
-3. Pick the Worker hostname: a route on a Telly zone, or the account's `workers.dev` subdomain.
-4. Create the service token `telly-secrets-pull` (**Zero Trust → Access → Service credentials → Service Tokens**). Give its client id and secret to the server operator by hand; never through chat, an issue, or a repository.
-5. Create the self-hosted Access app `telly-secrets` on the Worker hostname. Its only policy: action **Service Auth**, include only the service token `telly-secrets-pull`.
+3. Create the account `workers.dev` subdomain (**Workers & Pages → Settings**).
+4. Run the first `bun run secrets:push` (below). It creates `TELLY_SECRETS_PULL_TOKEN` and writes it, with the Worker URL, to your own `~/.config/telly/secrets-pull.env` at mode 600. Give that file to the server operator by hand; never through chat, an issue, or a repository.
 
 ## Upload keys (each teammate)
 
 1. Create your own API token under **My Profile → API Tokens**, for the Telly account only, with:
    - Account › Secrets Store › Edit
    - Account › Workers Scripts › Edit
-   - Account › Access: Apps and Policies › Read
-   - Account › Access: Service Tokens › Read
-   - Account › Access: Organizations, Identity Providers, and Groups › Read
 2. Write it to `~/.config/telly/cloudflare.env` at mode 600:
 
    ```bash
@@ -62,18 +60,17 @@ Varlock redacts the keys in logs, because every server key is `@sensitive`. Reda
    bun run secrets:push /path/to/keys.env
    ```
 
-The script uploads only server keys and lists every other name as skipped. It refuses an empty value and a value that needs quotes. It refuses to overwrite a same-named secret that it did not create (comment `telly`). Then it redeploys the Worker with a binding for every Telly secret, including the ones that other teammates uploaded, and lists their names and change times.
+The script uploads only server keys and lists every other name as skipped. It refuses an empty value and a value that needs quotes. It refuses to overwrite a same-named secret that it did not create (comment `telly`). Then it redeploys the Worker with a binding for every server key in the store, including the ones that other teammates uploaded, turns on its `workers.dev` URL without preview URLs, and lists the bound names and change times.
 
 Anyone who can deploy the Worker can make it read the secrets, so give the Workers Scripts permission only to teammates who upload keys.
 
 ## Retrieve keys (server operator)
 
-1. Write the pull credentials to `~/.config/telly/secrets-pull.env` at mode 600, in the same way as the upload token:
+1. Put the pull file from the account administrator at `~/.config/telly/secrets-pull.env`, mode 600:
 
    ```text
-   TELLY_SECRETS_URL=https://<worker hostname>/
-   TELLY_SECRETS_ACCESS_CLIENT_ID=…
-   TELLY_SECRETS_ACCESS_CLIENT_SECRET=…
+   TELLY_SECRETS_URL=https://telly-secrets.telly-keys.workers.dev/
+   TELLY_SECRETS_PULL_TOKEN=…
    ```
 
 2. Pull, then start the server:
@@ -100,4 +97,4 @@ If a key is exposed, revoke it immediately. Removing it from a comment or from G
 
 ## Revoke server access
 
-Delete the service token `telly-secrets-pull` in Zero Trust. Retrieval then stops for every host. Create a new token with the same name and put it in the Access app policy. Run `bun run secrets:push` again so that the Worker accepts its client id, then give the new credentials to the remaining servers. A lost host still holds the keys that it pulled, so rotate each of them.
+Replace the store secret `TELLY_SECRETS_PULL_TOKEN` in the dashboard (**Secrets Store**) with a new random value of at least 32 characters, then run `bun run secrets:push` with an empty key file to redeploy. Retrieval with the old token then stops for every host. Give the new pull file to the remaining servers. A lost host still holds the keys that it pulled, so rotate each of them.

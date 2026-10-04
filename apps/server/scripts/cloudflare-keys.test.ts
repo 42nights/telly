@@ -1,62 +1,29 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { serverConfig } from "../src/config";
 import { parseEnv, secretNames, serverKeys } from "./cloudflare-keys";
 import worker from "./cloudflare-keys-worker";
 
-const team = "telly.cloudflareaccess.com";
-const algo = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" };
-const { publicKey, privateKey } = await crypto.subtle.generateKey(
-	{ ...algo, modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) },
-	true,
-	["sign", "verify"],
-);
-const jwk = { ...(await crypto.subtle.exportKey("jwk", publicKey)), kid: "k1" };
-const b64 = (data: string) => Buffer.from(data).toString("base64url");
-
-const jwt = async (claims: Record<string, unknown>) => {
-	const signed = `${b64(JSON.stringify({ alg: "RS256", kid: "k1" }))}.${b64(JSON.stringify(claims))}`;
-	const sig = await crypto.subtle.sign(
-		algo,
-		privateKey,
-		new TextEncoder().encode(signed),
-	);
-	return `${signed}.${Buffer.from(sig).toString("base64url")}`;
-};
-
 const secret = (value: string) => ({ get: async () => value });
+const pull = "p".repeat(64);
 const env = {
-	team_domain: team,
-	aud: "app-aud",
-	client_id: "pull.access",
+	pull_token: secret(pull),
 	GEMINI_API_KEY: secret("gemini-test-value"),
 	ELEVENLABS_API_KEY: secret("eleven-test-value"),
 };
-const valid = {
-	iss: `https://${team}`,
-	aud: ["app-aud"],
-	exp: Date.now() / 1000 + 60,
-	common_name: "pull.access",
-};
-const call = async (claims: Record<string, unknown>, method = "GET") =>
+const ask = (
+	headers: Record<string, string>,
+	method = "GET",
+	bindings: Readonly<Record<string, unknown>> = env,
+) =>
 	worker.fetch(
-		new Request("https://secrets.example/", {
-			method,
-			headers: { "Cf-Access-Jwt-Assertion": await jwt(claims) },
-		}),
-		env,
+		new Request("https://secrets.example/", { method, headers }),
+		bindings,
 	);
 
 describe("telly-secrets Worker", () => {
-	afterEach(() => spyOn(globalThis, "fetch").mockRestore());
-	const certs = () =>
-		spyOn(globalThis, "fetch").mockResolvedValue(
-			Response.json({ keys: [jwk] }),
-		);
-
-	test("returns every bound secret to the pull service token", async () => {
-		certs();
-		const response = await call(valid);
+	test("returns every upper-case secret binding, never the pull token", async () => {
+		const response = await ask({ Authorization: `Bearer ${pull}` });
 		expect(response.status).toBe(200);
 		expect(response.headers.get("Cache-Control")).toBe("no-store");
 		expect(await response.text()).toBe(
@@ -65,24 +32,28 @@ describe("telly-secrets Worker", () => {
 	});
 
 	test.each([
-		["another service token", { ...valid, common_name: "other.access" }],
-		["another Access app", { ...valid, aud: ["other-aud"] }],
-		["another team", { ...valid, iss: "https://evil.cloudflareaccess.com" }],
-		["an expired token", { ...valid, exp: Date.now() / 1000 - 1 }],
-	])("refuses %s", async (_, claims) => {
-		certs();
-		expect((await call(claims)).status).toBe(403);
+		["no token", {}],
+		["a wrong token", { Authorization: `Bearer ${"q".repeat(64)}` }],
+		["a token prefix", { Authorization: `Bearer ${pull.slice(0, 63)}` }],
+		["another scheme", { Authorization: `Basic ${pull}` }],
+	])("refuses %s", async (_, headers) => {
+		const response = await ask(headers);
+		expect(response.status).toBe(403);
+		expect(await response.text()).toBe("");
 	});
 
-	test("refuses a forged signature, a missing JWT, and other methods", async () => {
-		certs();
-		const [head, , sig] = (await jwt(valid)).split(".");
-		const forged = `${head}.${b64(JSON.stringify({ ...valid, aud: "x" }))}.${sig}`;
-		const ask = (headers: Record<string, string>) =>
-			worker.fetch(new Request("https://secrets.example/", { headers }), env);
-		expect((await ask({ "Cf-Access-Jwt-Assertion": forged })).status).toBe(403);
-		expect((await ask({})).status).toBe(403);
-		expect((await call(valid, "POST")).status).toBe(403);
+	test("refuses other methods, and serves nothing without a long pull token", async () => {
+		expect(
+			(await ask({ Authorization: `Bearer ${pull}` }, "POST")).status,
+		).toBe(403);
+		const short = { ...env, pull_token: secret("short") };
+		expect(
+			(await ask({ Authorization: "Bearer short" }, "GET", short)).status,
+		).toBe(403);
+		const { pull_token: _, ...unbound } = env;
+		expect(
+			(await ask({ Authorization: `Bearer ${pull}` }, "GET", unbound)).status,
+		).toBe(403);
 	});
 });
 
