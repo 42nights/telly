@@ -271,10 +271,10 @@ function NoAlert({ monitoring }: { monitoring: ApiState<Monitoring> }) {
 				{level === null
 					? "Monitoring state is unknown, so an alert could be missed."
 					: level === "on"
-						? "Every threshold has a fresh validated reading."
+						? "Every threshold has a fresh validated or WHOOP reading."
 						: level === "partial"
-							? "Some thresholds have no fresh validated reading, so an alert could be missed."
-							: "Monitoring is stopped: no threshold has a fresh validated reading."}
+							? "Some thresholds have no fresh validated or WHOOP reading, so an alert could be missed."
+							: "Monitoring is stopped: no threshold has a fresh validated or WHOOP reading."}
 			</p>
 		</div>
 	);
