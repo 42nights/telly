@@ -78,9 +78,12 @@ Anyone who can deploy the Worker can make it read the secrets, so give the Worke
    ```bash
    bun run secrets:pull                       # writes apps/server/.env.local
    bun run secrets:pull /run/secrets/telly.env  # or a host path for a deployment
+   bun run secrets:pull /run/secrets/telly.env GEMINI_API_KEY,ELEVENLABS_API_KEY  # only these keys
    ```
 
 On an HTTP status other than `200`, or on any invalid line, the existing file stays unchanged. The pull replaces the whole file, so keep local non-secret settings in `apps/server/.env`.
+
+Give each process only the keys it uses. A key without its other settings stops startup: for example, `RIVER_API_KEY` needs the `GEMMA_*` settings, and `TELLY_FETCH_BRIDGE_TOKEN` needs `TELLY_FETCH_BRIDGE_URL`. The Cloudflare deployment pulls the list in `TELLY_PULL_KEYS` (docs/deploy.md).
 
 Existing environment variables override the file. Remove a stale injected key before you rotate it; otherwise it hides the pulled value, and an empty one stops startup.
 

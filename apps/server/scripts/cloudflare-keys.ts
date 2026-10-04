@@ -241,7 +241,8 @@ const push = async (source: string) => {
 		console.log(`  ${s.name}  modified ${s.modified ?? "?"}`);
 };
 
-const pull = async (dest: string) => {
+/** `only`: the keys this process needs; the board says not to give every process every key. */
+const pull = async (dest: string, only?: readonly string[]) => {
 	const credsFile = join(config, "secrets-pull.env");
 	const creds = readPrivate(credsFile);
 	const url = need(creds, "TELLY_SECRETS_URL", credsFile);
@@ -262,7 +263,15 @@ const pull = async (dest: string) => {
 		throw new Error(
 			`Not server keys: ${unknown.join(", ")}; ${dest} left unchanged`,
 		);
-	const keys = serverKeys(pulled, names);
+	const all = serverKeys(pulled, names);
+	const missing = (only ?? []).filter((name) => !all.has(name));
+	if (missing.length > 0)
+		throw new Error(
+			`Not stored: ${missing.join(", ")}; ${dest} left unchanged`,
+		);
+	const keys = only
+		? new Map([...all].filter(([name]) => only.includes(name)))
+		: all;
 	if (keys.size === 0)
 		throw new Error(`No keys stored; ${dest} left unchanged`);
 	const text = [
@@ -285,14 +294,17 @@ const pull = async (dest: string) => {
 };
 
 if (import.meta.main) {
-	const [command, path] = process.argv.slice(2);
+	const [command, path, only] = process.argv.slice(2);
 	try {
 		if (command === "push" && path) await push(path);
 		else if (command === "pull")
-			await pull(path ?? join(import.meta.dir, "../.env.local"));
+			await pull(
+				path || join(import.meta.dirname, "../.env.local"),
+				only?.split(","),
+			);
 		else
 			throw new Error(
-				"Usage: cloudflare-keys.ts push <env-file> | pull [dest]",
+				"Usage: cloudflare-keys.ts push <env-file> | pull [dest] [NAME,NAME]",
 			);
 	} catch (error) {
 		// Messages name keys and files only; values never reach an error.
